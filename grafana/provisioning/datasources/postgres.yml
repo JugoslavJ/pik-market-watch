@@ -17,6 +17,10 @@ datasources:
     secureJsonData:
       password: ${POSTGRES_PASSWORD}
     jsonData:
+      # Required here (not just top-level): the PostgreSQL plugin used by
+      # Grafana >= 12/13 reads jsonData.database and refuses to query without
+      # it ("no default database configured"). Keep both in sync.
+      database: ${POSTGRES_DB}
       sslmode: disable
       postgresVersion: 1600
       maxOpenConns: 20
