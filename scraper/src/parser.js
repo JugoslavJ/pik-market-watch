@@ -78,37 +78,64 @@ function extractArticleId(url) {
   return m ? m[1] : null;
 }
 
-// ── Geolocation extraction (ad DETAIL pages) ──────────────────────────────
-// olx.ba embeds the ad's map pin in its Nuxt state as a literal, e.g.:
+// ── Ad DETAIL pages: map pin + floor area ─────────────────────────────────────
+// Strategy: fetch the page HTML once (page.evaluate can only serialize plain
+// data), then parse everything in Node so the regexes live in exactly one
+// place and are unit-testable.
+//
+// Map pin: olx.ba embeds the ad's coordinates in its Nuxt state as a literal,
 //   location:{lat:44.825690864477,lon:17.302538236771}
 // A quoted template default ({"lat":"43.1235","lon":"42.5426"}) also exists on
-// every page and MUST be discarded — the Bosnia bounding box enforced inside
-// extractGeoInPage() below (lat 42.4–46.4, lon 15.5–19.9) does that. Bounds
-// are hardcoded in-page: page.evaluate() callbacks cannot close over Node
-// constants.
+// every page and MUST be discarded — the Bosnia bounding box below does that.
+//
+// Floor area: characteristics are structured Nuxt attributes, e.g.
+//   {id:…,type:…,value:72,attr_code:"kvadrata",name:"Kvadrata"}
+// Search cards carry no m² tag for some categories (vikendice), so this is the
+// only reliable source. Plot size ("okucnica-kvadratura") is a separate code
+// and never matched here.
 
-async function extractGeo(page) {
-  return page.evaluate(extractGeoInPage);
+async function fetchDetailHtml(page) {
+  return page.evaluate(() => document.documentElement.outerHTML);
 }
 
-function extractGeoInPage() {
-  const html = document.documentElement.outerHTML;
-  const inBiH = (lat, lon) =>
-    lat >= 42.4 && lat <= 46.4 && lon >= 15.5 && lon <= 19.9;
+const BIH_BBOX = { latMin: 42.4, latMax: 46.4, lonMin: 15.5, lonMax: 19.9 };
 
-  const patterns = [
-    /location:\{lat:(-?\d{1,2}\.\d{3,}),lon:(-?\d{1,3}\.\d{3,})\}/g,  // Nuxt state literal
-    /"lat":\s*"?(-?\d{1,2}\.\d{3,})"?\s*,\s*"lon":\s*"?(-?\d{1,3}\.\d{3,})"?/g, // JSON fallback
-  ];
+const PIN_PATTERNS = [
+  /location:\{lat:(-?\d{1,2}\.\d{3,}),lon:(-?\d{1,3}\.\d{3,})\}/g,          // Nuxt state literal
+  /"lat":\s*"?(-?\d{1,2}\.\d{3,})"?\s*,\s*"lon":\s*"?(-?\d{1,3}\.\d{3,})"?/g // JSON fallback
+];
 
-  for (const re of patterns) {
+const KVADRATA_PATTERN =
+  /\{id:\d+,type:[A-Za-z0-9_$]+,value:(\d{1,4}(?:\.\d+)?),attr_code:"kvadrata"/;
+
+function inBiH(lat, lon) {
+  return lat >= BIH_BBOX.latMin && lat <= BIH_BBOX.latMax &&
+         lon >= BIH_BBOX.lonMin && lon <= BIH_BBOX.lonMax;
+}
+
+/** Parse an ad detail page's HTML → { latitude, longitude, sqm } (any may be null). */
+function parseDetail(html) {
+  let latitude = null, longitude = null;
+  for (const re of PIN_PATTERNS) {
     for (const m of html.matchAll(re)) {
       const lat = parseFloat(m[1]), lon = parseFloat(m[2]);
-      if (inBiH(lat, lon)) return { latitude: lat, longitude: lon };
+      if (inBiH(lat, lon)) { latitude = lat; longitude = lon; break; }
     }
+    if (latitude !== null) break;
   }
-  return { latitude: null, longitude: null };
+
+  let sqm = null;
+  const km = html.match(KVADRATA_PATTERN);
+  if (km) {
+    const v = parseFloat(km[1]);
+    if (v >= 5 && v <= 500) sqm = v;   // same sanity bounds as the card parser
+  }
+  return { latitude, longitude, sqm };
 }
 
-module.exports = { collectCards, extractArticleId, extractGeo };
+async function extractGeo(page) {
+  return parseDetail(await fetchDetailHtml(page));
+}
+
+module.exports = { collectCards, extractArticleId, extractGeo, parseDetail };
 

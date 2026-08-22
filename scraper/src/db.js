@@ -107,33 +107,59 @@ class Db {
   }
 
   /**
-   * Ids among the given set that still lack coordinates.
+   * Ids among the given set that still lack a map pin.
    * @param {number[]} ids
    * @returns {Promise<number[]>}
    */
   async unpinnedArticleIds(ids) {
     if (!ids.length) return [];
     const r = await this.pool.query(
-      'SELECT article_id FROM listings WHERE latitude IS NULL AND article_id = ANY($1::bigint[])',
+      `SELECT article_id FROM listings
+        WHERE latitude IS NULL AND closed_at IS NULL
+          AND article_id = ANY($1::bigint[])`,
       [ids]);
     return r.rows.map(row => Number(row.article_id));
   }
 
   /**
-   * Listings without coordinates, oldest first.
+   * Ids among the given set whose floor area (m²) is unknown although the ad
+   * is a priced sale listing. Search cards carry no m² tag for some
+   * categories (e.g. vikendice), so the area can only come from the ad's
+   * detail page — see enrichListings().
+   * @param {number[]} ids
+   * @returns {Promise<number[]>}
+   */
+  async listingsMissingSqm(ids) {
+    if (!ids.length) return [];
+    const r = await this.pool.query(
+      `SELECT article_id FROM listings
+        WHERE sqm IS NULL AND price IS NOT NULL AND NOT is_rent AND closed_at IS NULL
+          AND article_id = ANY($1::bigint[])`,
+      [ids]);
+    return r.rows.map(row => Number(row.article_id));
+  }
+
+  /**
+   * Listings needing a detail-page visit: no map pin, or no floor area on a
+   * priced sale ad. Oldest first.
    * @param {boolean} onlyActive — restrict to rows seen in the last 14 days
    */
-  async getUnpinnedListings(onlyActive = true) {
+  async getListingsNeedingDetails(onlyActive = true) {
     const sql = `SELECT article_id AS "articleId", url FROM listings
-                 WHERE latitude IS NULL
+                 WHERE (latitude IS NULL
+                        OR (sqm IS NULL AND price IS NOT NULL AND NOT is_rent))
                  ${onlyActive ? "AND last_seen > now() - INTERVAL '14 days'" : ''}
                  ORDER BY article_id`;
     return (await this.pool.query(sql)).rows;
   }
 
   /**
-   * Attach map-pin coordinates to listings (fetched from their detail pages).
-   * @param {Array<{articleId:number, latitude:number, longitude:number}>} rows
+   * Attach detail-page data to listings (fetched from their ad pages):
+   * map-pin coordinates and, when the card had none, the floor area in m².
+   * For newly-learned area on a priced sale listing, price-per-m² is derived
+   * here (same 1–15000 sanity bound as the card parser). Existing values are
+   * never overwritten.
+   * @param {Array<{articleId:number, latitude:?number, longitude:?number, sqm:?number}>} rows
    */
   async enrichListings(rows) {
     const client = await this.pool.connect();
@@ -141,8 +167,19 @@ class Db {
       await client.query('BEGIN');
       for (const r of rows) {
         await client.query(
-          'UPDATE listings SET latitude = $2, longitude = $3 WHERE article_id = $1',
-          [r.articleId, r.latitude, r.longitude]);
+          `UPDATE listings SET
+             latitude  = COALESCE($2::double precision, latitude),
+             longitude = COALESCE($3::double precision, longitude),
+             sqm  = COALESCE(sqm, $4::numeric),
+             ppm2 = CASE
+                      WHEN ppm2 IS NULL AND price IS NOT NULL AND NOT is_rent
+                           AND COALESCE(sqm, $4::numeric) IS NOT NULL
+                           AND round(price / COALESCE(sqm, $4::numeric)) BETWEEN 1 AND 15000
+                      THEN round(price / COALESCE(sqm, $4::numeric))::int
+                      ELSE ppm2
+                    END
+           WHERE article_id = $1`,
+          [r.articleId, r.latitude, r.longitude, r.sqm ?? null]);
       }
       await client.query('COMMIT');
     } catch (err) {

@@ -1,13 +1,15 @@
 'use strict';
-// One-off backfill: fetch map-pin coordinates for listings that don't have any.
+// One-off backfill: visit ad detail pages for listings that lack a map pin
+// or — when the search card showed no m² (e.g. vikendice) — a floor area.
 //
 // Usage:
-//   docker compose run --rm scraper node src/backfill-geo.js          # active listings (seen ≤ 14 d)
-//   docker compose run --rm scraper node src/backfill-geo.js --all    # every stored row
+//   docker compose run --rm scraper node src/backfill-geo.js              # active listings (seen ≤ 14 d)
+//   docker compose run --rm scraper node src/backfill-geo.js --all        # every stored row
+//   docker compose run --rm scraper node src/backfill-geo.js --max=100    # cap the number of visits
 //   docker compose run -d --name olx-backfill scraper node src/backfill-geo.js   # detached for long runs
 //
-// Resumable: rows that already have a pin are skipped, so an interrupted run
-// can simply be started again.
+// Resumable: rows that already have the missing data are skipped, so an
+// interrupted run can simply be started again.
 
 const { chromium } = require('playwright');
 const config = require('./config');
@@ -19,11 +21,14 @@ const log = (...args) => console.log(new Date().toISOString(), '[backfill]', ...
 
 (async () => {
   const onlyActive = !process.argv.includes('--all');
+  const maxArg = process.argv.find(a => /^--max=\d+$/.test(a));
+  const max = maxArg ? parseInt(maxArg.split('=')[1], 10) : Infinity;
+
   const db = new Db(config.databaseUrl);
   await db.waitUntilReady();
 
-  const targets = await db.getUnpinnedListings(onlyActive);
-  log(`${targets.length} listing(s) without coordinates (${onlyActive ? 'active ≤14d' : 'all rows'})`);
+  const targets = (await db.getListingsNeedingDetails(onlyActive)).slice(0, max);
+  log(`${targets.length} listing(s) to visit (${onlyActive ? 'active ≤14d' : 'all rows'}${max !== Infinity ? `, capped at ${max}` : ''})`);
   if (!targets.length) { await db.close(); return; }
 
   const browser = await chromium.launch({
@@ -31,7 +36,7 @@ const log = (...args) => console.log(new Date().toISOString(), '[backfill]', ...
     args: ['--disable-dev-shm-usage', '--no-sandbox'],
   });
 
-  let done = 0, pinned = 0, missed = 0;
+  let done = 0, enriched = 0, missed = 0;
   const t0 = Date.now();
 
   for (let i = 0; i < targets.length; i += config.geoConcurrency) {
@@ -46,17 +51,17 @@ const log = (...args) => console.log(new Date().toISOString(), '[backfill]', ...
       }
     }));
 
-    const good = results.filter(r => r && r.latitude != null);
+    const good = results.filter(r => r && (r.latitude != null || r.sqm != null));
     missed += results.length - good.length;
-    if (good.length) { await db.enrichListings(good); pinned += good.length; }
+    if (good.length) { await db.enrichListings(good); enriched += good.length; }
     done += batch.length;
 
     const rate = done / ((Date.now() - t0) / 1000);
     const etaMin = ((targets.length - done) / rate / 60).toFixed(1);
-    log(`progress ${done}/${targets.length} · pinned ${pinned} · no-pin ${missed} · ${rate.toFixed(2)} p/s · ETA ~${etaMin} min`);
+    log(`progress ${done}/${targets.length} · enriched ${enriched} · nothing learned ${missed} · ${rate.toFixed(2)} p/s · ETA ~${etaMin} min`);
   }
 
-  log(`DONE — pinned ${pinned}/${targets.length}, without pin: ${missed} (ad had no map or was removed)`);
+  log(`DONE — enriched ${enriched}/${targets.length}, nothing learned: ${missed} (ad removed or page had neither pin nor area)`);
   await browser.close();
   await db.close();
 })().catch(err => { console.error('[backfill] fatal:', err); process.exit(1); });

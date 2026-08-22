@@ -5,15 +5,7 @@
 // written to Postgres in a single transaction.
 
 const { collectCards, extractArticleId, extractGeo } = require('./parser');
-const { USER_AGENT, sleep } = require('./util');
-
-// Port of computeMedian() from the original extension (rounded).
-function computeMedian(values) {
-  if (!values.length) return null;
-  const s = [...values].sort((a, b) => a - b);
-  const m = s.length >> 1;
-  return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2);
-}
+const { USER_AGENT, sleep, computeMedian } = require('./util');
 
 async function scrapePage(browser, url, cfg) {
   const context = await browser.newContext({
@@ -33,7 +25,9 @@ async function scrapePage(browser, url, cfg) {
   }
 }
 
-// Ad DETAIL page → { latitude, longitude } from the embedded map pin (or nulls).
+// Ad DETAIL page → { latitude, longitude, sqm }: pin from the embedded map,
+// floor area from the Kvadrata characteristic (search cards omit both for
+// some categories).
 async function scrapeGeo(browser, url, cfg) {
   const context = await browser.newContext({
     viewport: { width: 1366, height: 900 },
@@ -131,19 +125,24 @@ async function scrapeSearch(browser, search, cfg, db, log) {
     const ids = allCards.map(c => extractArticleId(c.url)).filter(Boolean).map(Number);
     await db.refreshSearchResults(search.searchKey, ids);
 
-    // ── Geolocation pass: pin NEW listings + unpinned ones seen this run ──────
-    // Search cards carry no location; the pin lives on each ad page's Nuxt
-    // state. Visiting only what's missing keeps runs cheap, and every run
-    // gradually converges older unpinned rows until none remain.
-    let geoPinned = 0;
+    // ── Detail-page enrichment: map pins + floor area (m²) ───────────────────
+    // Search cards carry no coordinates, and some categories (vikendice) no
+    // m² tag either; both live on the ad's detail page. Visiting only what's
+    // missing keeps runs cheap, and every run gradually converges older rows
+    // until none remain.
+    let enrichedCount = 0;
     if (cfg.maxGeoFetches > 0 && ids.length) {
-      const unpinnedSeen = await db.unpinnedArticleIds(ids);
-      const candidateIds = [...new Set([...newIds, ...unpinnedSeen])];
+      const [unpinnedSeen, missingSqmSeen] = await Promise.all([
+        db.unpinnedArticleIds(ids),
+        db.listingsMissingSqm(ids),
+      ]);
+      const candidateIds = [...new Set([...newIds, ...unpinnedSeen, ...missingSqmSeen])];
       const byId = new Map(allCards.map(c => [Number(extractArticleId(c.url)), c]));
       const targets = candidateIds.slice(0, cfg.maxGeoFetches);
-      log(`⌖ fetching geolocation for ${targets.length}/${candidateIds.length} ` +
-          `listing(s) (${newIds.length} new, ${unpinnedSeen.length} previously unpinned)`);
-      const geoRows = [];
+      log(`⌖ detail-fetching ${targets.length}/${candidateIds.length} ` +
+          `listing(s) (${newIds.length} new, ${unpinnedSeen.length} unpinned, ` +
+          `${missingSqmSeen.length} without m²)`);
+      const detailRows = [];
       for (let i = 0; i < targets.length; i += cfg.geoConcurrency) {
         const batch = targets.slice(i, i + cfg.geoConcurrency);
         const results = await Promise.all(batch.map(async id => {
@@ -154,19 +153,19 @@ async function scrapeSearch(browser, search, cfg, db, log) {
             return { articleId: id, ...(await scrapeGeo(browser, card.url, cfg)) };
           } catch (_) { return null; }
         }));
-        for (const r of results) if (r && r.latitude != null) geoRows.push(r);
+        for (const r of results) if (r && (r.latitude != null || r.sqm != null)) detailRows.push(r);
       }
-      if (geoRows.length) await db.enrichListings(geoRows);
-      geoPinned = geoRows.length;
-      log(`⌖ geolocation pinned for ${geoPinned}/${targets.length} listing(s)`);
+      if (detailRows.length) await db.enrichListings(detailRows);
+      enrichedCount = detailRows.length;
+      log(`⌖ enriched ${enrichedCount}/${targets.length} listing(s) from their detail pages`);
     }
 
     await db.finishRun(runId, { status: 'ok', pages: pagesDone, cards: allCards.length });
 
     log(`✔ "${search.name}" — ${allCards.length} listings on ${pagesDone} page(s); ` +
         `${newCount} new, ${dropCount} price drop(s), median ${median ?? '—'} KM/m²` +
-        (newIds.length ? `, ${geoPinned} geo-pinned` : ''));
-    return { pages: pagesDone, cards: allCards.length, newCount, dropCount, geoPinned };
+        `, ${enrichedCount} enriched`);
+    return { pages: pagesDone, cards: allCards.length, newCount, dropCount, enriched: enrichedCount };
   } catch (err) {
     await db.finishRun(runId, {
       status: 'error', pages: pagesDone, cards: allCards.length,
