@@ -51,6 +51,8 @@ module.exports = {
   headless:        process.env.HEADLESS !== '0',
   healthPort:      num(process.env.HEALTH_PORT, 9100),
   maxGeoFetches:   num(process.env.MAX_GEO_FETCHES, 50),     // ad-detail visits per run for geo pins
+  geoConcurrency:  num(process.env.GEO_CONCURRENCY, 2),      // parallel ad-detail fetches
+  geoDelayMs:      num(process.env.GEO_DELAY_MS, 600),       // politeness gap between batches
 
   searches: loadSearches().map(s => {
     let name = s.name;

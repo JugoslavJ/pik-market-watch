@@ -378,7 +378,7 @@
           }
         ],
         "tooltip": { "mode": "details" },
-        "view": { "id": "fit", "allLayers": true, "lastOnly": false }
+        "view": { "id": "coords", "lat": 44.77, "lon": 17.2, "zoom": 9, "allLayers": true, "lastOnly": false }
       },
       "targets": [
         {

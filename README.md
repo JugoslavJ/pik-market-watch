@@ -109,6 +109,17 @@ docker compose down                                       # stop; add -v to ALSO
 
 Backup the database: `docker compose exec db pg_dump -U olx olx > backup.sql`
 
+### Geolocation backfill
+
+New listings get their map pin fetched automatically. To pin the existing stock
+(resumable — interrupted runs just start again where they left off):
+
+```bash
+docker compose run --rm scraper node src/backfill-geo.js           # active listings (≤ 14 d)
+docker compose run --rm scraper node src/backfill-geo.js --all     # everything ever stored
+# long runs: add -d --name olx-backfill and follow with `docker logs -f olx-backfill`
+```
+
 For a one-off scrape (testing, or scheduling from an external cron), run it ad hoc —
 `compose run` containers ignore the service's restart policy, so there is no loop risk:
 

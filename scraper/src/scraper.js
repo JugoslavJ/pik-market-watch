@@ -128,21 +128,25 @@ async function scrapeSearch(browser, search, cfg, db, log) {
     const ids = allCards.map(c => extractArticleId(c.url)).filter(Boolean).map(Number);
     await db.refreshSearchResults(search.searchKey, ids);
 
-    // ── Geolocation pass: visit NEW listings' detail pages once ──────────────
-    // The search cards carry no location; the pin lives on each ad page's
-    // Nuxt state. Only new articles are visited to keep runs cheap.
+    // ── Geolocation pass: pin NEW listings + unpinned ones seen this run ──────
+    // Search cards carry no location; the pin lives on each ad page's Nuxt
+    // state. Visiting only what's missing keeps runs cheap, and every run
+    // gradually converges older unpinned rows until none remain.
     let geoPinned = 0;
-    if (cfg.maxGeoFetches > 0 && newIds.length) {
+    if (cfg.maxGeoFetches > 0 && ids.length) {
+      const unpinnedSeen = await db.unpinnedArticleIds(ids);
+      const candidateIds = [...new Set([...newIds, ...unpinnedSeen])];
       const byId = new Map(allCards.map(c => [Number(extractArticleId(c.url)), c]));
-      const targets = newIds.slice(0, cfg.maxGeoFetches);
-      log(`⌖ fetching geolocation for ${targets.length}/${newIds.length} new listing(s)`);
+      const targets = candidateIds.slice(0, cfg.maxGeoFetches);
+      log(`⌖ fetching geolocation for ${targets.length}/${candidateIds.length} ` +
+          `listing(s) (${newIds.length} new, ${unpinnedSeen.length} previously unpinned)`);
       const geoRows = [];
-      for (let i = 0; i < targets.length; i += 2) {          // gentle pairs
-        const batch = targets.slice(i, i + 2);
+      for (let i = 0; i < targets.length; i += cfg.geoConcurrency) {
+        const batch = targets.slice(i, i + cfg.geoConcurrency);
         const results = await Promise.all(batch.map(async id => {
           const card = byId.get(id);
           if (!card) return null;
-          await sleep(600);
+          await sleep(cfg.geoDelayMs);
           try {
             return { articleId: id, ...(await scrapeGeo(browser, card.url, cfg)) };
           } catch (_) { return null; }
@@ -151,7 +155,7 @@ async function scrapeSearch(browser, search, cfg, db, log) {
       }
       if (geoRows.length) await db.enrichListings(geoRows);
       geoPinned = geoRows.length;
-      log(`⌖ geolocation pinned for ${geoPinned}/${targets.length} new listing(s)`);
+      log(`⌖ geolocation pinned for ${geoPinned}/${targets.length} listing(s)`);
     }
 
     await db.finishRun(runId, { status: 'ok', pages: pagesDone, cards: allCards.length });
@@ -169,4 +173,4 @@ async function scrapeSearch(browser, search, cfg, db, log) {
   }
 }
 
-module.exports = { scrapeSearch, computeMedian };
+module.exports = { scrapeSearch, computeMedian, scrapeGeo };

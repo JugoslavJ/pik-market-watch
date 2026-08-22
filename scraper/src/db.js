@@ -107,6 +107,31 @@ class Db {
   }
 
   /**
+   * Ids among the given set that still lack coordinates.
+   * @param {number[]} ids
+   * @returns {Promise<number[]>}
+   */
+  async unpinnedArticleIds(ids) {
+    if (!ids.length) return [];
+    const r = await this.pool.query(
+      'SELECT article_id FROM listings WHERE latitude IS NULL AND article_id = ANY($1::bigint[])',
+      [ids]);
+    return r.rows.map(row => Number(row.article_id));
+  }
+
+  /**
+   * Listings without coordinates, oldest first.
+   * @param {boolean} onlyActive — restrict to rows seen in the last 14 days
+   */
+  async getUnpinnedListings(onlyActive = true) {
+    const sql = `SELECT article_id AS "articleId", url FROM listings
+                 WHERE latitude IS NULL
+                 ${onlyActive ? "AND last_seen > now() - INTERVAL '14 days'" : ''}
+                 ORDER BY article_id`;
+    return (await this.pool.query(sql)).rows;
+  }
+
+  /**
    * Attach map-pin coordinates to listings (fetched from their detail pages).
    * @param {Array<{articleId:number, latitude:number, longitude:number}>} rows
    */
