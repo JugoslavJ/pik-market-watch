@@ -122,7 +122,7 @@ an exited one-shot container is relaunched immediately, i.e. it scrapes in an en
 
 ## Troubleshooting
 
-- **Zero cards scraped / 403-style blocks**: olx.ba may be throttling the datacenter-ish fingerprint. Raise `PAGE_DELAY_MS` (e.g. 4000), lower `CONCURRENCY` to 1, or set `HEADLESS=0`. Check http://localhost:9100 and the `scrape_runs` table for errors.
+- **Zero cards scraped / 403-style blocks**: olx.ba may be throttling the datacenter-ish fingerprint. Raise `PAGE_DELAY_MS` (e.g. 4000) and lower `CONCURRENCY` to 1. Check http://localhost:9100 and the `scrape_runs` table for errors. (The image ships only Chromium's headless shell, so `HEADLESS=0` is not available in-container.)
 - **Selector drift**: if OLX redesigns their markup, update the selectors in `scraper/src/parser.js` — they live in one place now.
 - **Grafana datasource fails**: the container needs `POSTGRES_*` env vars to render `grafana/provisioning/datasources/postgres.yml` — they are wired through `docker-compose.yml`.
 

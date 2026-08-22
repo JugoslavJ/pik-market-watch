@@ -56,7 +56,7 @@ services:
       # policy, a finished one-shot container would be relaunched forever
       # (= endless scrape loop). For one-off runs use:
       #   docker compose run --rm scraper node src/index.js --once
-      HEADLESS: ${HEADLESS:-1}
+      HEADLESS: ${HEADLESS:-1}   # only 1 is supported: image ships headless-shell Chromium
     volumes:
       - ./config:/config:ro      # scraper reads /config/searches.json
     shm_size: 512mb              # Chromium crashes with Docker's 64 MB default

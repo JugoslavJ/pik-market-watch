@@ -56,10 +56,20 @@ async function main() {
   log(`database ready · ${config.searches.length} search(es) · ` +
       `interval ${config.intervalMinutes} min · headless=${config.headless}`);
 
-  const browser = await chromium.launch({
-    headless: config.headless,
-    args: ['--disable-dev-shm-usage', '--no-sandbox'],
-  });
+  let browser;
+  try {
+    browser = await chromium.launch({
+      headless: config.headless,
+      args: ['--disable-dev-shm-usage', '--no-sandbox'],
+    });
+  } catch (err) {
+    if (/executable doesn't exist/i.test(String(err.message))) {
+      console.error(
+        '[scraper] Chromium binary not found. This image ships ONLY the headless\n' +
+        '[scraper] shell (headless:true), so HEADLESS=0 cannot work in-container.');
+    }
+    throw err;
+  }
 
   let timer = null;
   let stopping = false;

@@ -37,7 +37,10 @@ RUN useradd --create-home --uid 10001 scraper \
 USER scraper
 
 # Downloaded as `scraper`, so /opt/ms-playwright needs no ownership fix-up.
-RUN npx playwright install chromium
+# Headless shell ONLY: it's the binary Playwright uses for headless:true launches
+# (~400 MB smaller than the full Chromium build). Headed mode (HEADLESS=0) is
+# therefore unavailable — it had no display server in the container anyway.
+RUN npx playwright install chromium --only-shell
 
 CMD ["node", "src/index.js"]
 
