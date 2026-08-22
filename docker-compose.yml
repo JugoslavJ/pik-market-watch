@@ -60,6 +60,7 @@ services:
       HEADLESS: ${HEADLESS:-1}   # only 1 is supported: image ships headless-shell Chromium
     volumes:
       - ./config:/config:ro      # scraper reads /config/searches.json
+      - ./db/init:/db/init:ro    # scraper applies db/init/*.sql on startup
     shm_size: 512mb              # Chromium crashes with Docker's 64 MB default
     ports:
       - "127.0.0.1:9100:9100"   # health/status JSON endpoint

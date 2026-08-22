@@ -8,6 +8,11 @@ const path = require('path');
 const SEARCHES_FILE = process.env.SEARCHES_FILE || '/config/searches.json';
 const FALLBACK_FILE = path.join(__dirname, '..', 'searches.example.json');
 
+// Where db/init migrations live: container mount first, repo checkout second.
+const MIGRATIONS_DIR =
+  [process.env.MIGRATIONS_DIR, '/db/init', path.join(__dirname, '..', '..', 'db', 'init')]
+    .find(d => d && fs.existsSync(d)) || null;
+
 function num(v, def) {
   const n = parseInt(v, 10);
   return Number.isFinite(n) ? n : def;
@@ -41,6 +46,7 @@ function loadSearches() {
 
 module.exports = {
   databaseUrl:     process.env.DATABASE_URL || 'postgres://olx:olx@db:5432/olx',
+  migrationsDir:   MIGRATIONS_DIR,                            // db/init/*.sql applied on startup
   intervalMinutes: num(process.env.SCRAPE_INTERVAL_MINUTES, 720),
   runOnce:         process.env.RUN_ONCE === '1' || process.argv.includes('--once'),
   maxPages:        num(process.env.MAX_PAGES, 30),           // extension cap was 30

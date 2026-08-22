@@ -7,6 +7,7 @@ const http = require('http');
 const { chromium } = require('playwright');
 const config = require('./config');
 const Db = require('./db');
+const applyMigrations = require('./migrate');
 const { scrapeSearch } = require('./scraper');
 
 const log = (...args) => console.log(new Date().toISOString(), '[scraper]', ...args);
@@ -53,6 +54,7 @@ function startHealthServer() {
 async function main() {
   const db = new Db(config.databaseUrl);
   await db.waitUntilReady();
+  await applyMigrations(db.pool, config.migrationsDir, log);
   log(`database ready · ${config.searches.length} search(es) · ` +
       `interval ${config.intervalMinutes} min · headless=${config.headless}`);
 
