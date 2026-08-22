@@ -30,6 +30,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./db/init:/docker-entrypoint-initdb.d:ro   # runs on FIRST start only
+      - ./backups:/backups                          # host-visible dump target
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -95,6 +96,26 @@ services:
       - "3000:3000"
     mem_limit: 768m
     cpus: 1.0
+    logging: *logging
+
+  db-backup:
+    image: postgres:16-alpine        # same image as db → pg_dump always version-matched
+    container_name: olx-db-backup
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER:-olx}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:-olx}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+    volumes:
+      - ./backups:/backups
+      - ./db/backup.sh:/usr/local/bin/backup.sh:ro
+    entrypoint: ["sh", "/usr/local/bin/backup.sh"]
+    mem_limit: 256m
     logging: *logging
 
 volumes:

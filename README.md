@@ -107,7 +107,20 @@ docker compose restart scraper                            # pick up searches.jso
 docker compose down                                       # stop; add -v to ALSO delete pgdata/grafana data
 ```
 
-Backup the database: `docker compose exec db pg_dump -U olx olx > backup.sql`
+### Backups (automated)
+
+A `db-backup` sidecar dumps the database **daily** into `./backups/olx-YYYYMMDD.dump`
+(compressed custom format, integrity-verified, retention default 14 days via
+`BACKUP_RETENTION_DAYS`). It backs up at most once per day, so container restarts
+never duplicate archives.
+
+Restore into the running database:
+
+```bash
+docker compose exec db pg_restore -U olx -d olx --clean --if-exists /backups/olx-YYYYMMDD.dump
+```
+
+Manual out-of-band dump: `docker compose exec db pg_dump -U olx -Fc olx > manual.dump`
 
 ### Geolocation backfill
 
