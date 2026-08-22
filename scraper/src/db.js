@@ -63,7 +63,8 @@ class Db {
           }
           await client.query(
             `UPDATE listings SET url = $2, title = $3, sqm = $4, rooms = $5,
-                    price = $6, price_text = $7, ppm2 = $8, is_rent = $9, last_seen = now()
+                    price = $6, price_text = $7, ppm2 = $8, is_rent = $9, last_seen = now(),
+                    closed_at = NULL, closing_price = NULL, closing_ppm2 = NULL
               WHERE article_id = $1`,
             [id, card.url, card.title, card.sqm, card.rooms, price, card.priceText, ppm2, card.isRent]);
         } else {
@@ -89,6 +90,28 @@ class Db {
     } finally {
       client.release();
     }
+  }
+
+  /**
+   * Close listings that no configured search returned this cycle, freezing
+   * their last observed price / price-per-m² as the closing values. Result
+   * links of deconfigured searches are purged first, so their listings close
+   * too. Failed searches simply leave stale links behind, which keeps their
+   * listings open — an outage never causes false closures.
+   * @param {string[]} activeKeys — search keys from the current config
+   * @returns {Promise<number>} how many listings were closed now
+   */
+  async closeUnseenListings(activeKeys) {
+    if (!activeKeys.length) return 0;
+    await this.pool.query(
+      'DELETE FROM search_results WHERE search_key <> ALL($1::text[])', [activeKeys]);
+    const r = await this.pool.query(
+      `UPDATE listings l
+          SET closed_at = now(), closing_price = price, closing_ppm2 = ppm2
+        WHERE closed_at IS NULL
+          AND NOT EXISTS (SELECT 1 FROM search_results sr
+                           WHERE sr.article_id = l.article_id)`);
+    return r.rowCount;
   }
 
   /** Replace a search's result set with the freshly scraped article ids. */
@@ -148,6 +171,7 @@ class Db {
     const sql = `SELECT article_id AS "articleId", url FROM listings
                  WHERE (latitude IS NULL
                         OR (sqm IS NULL AND price IS NOT NULL AND NOT is_rent))
+                   AND closed_at IS NULL
                  ${onlyActive ? "AND last_seen > now() - INTERVAL '14 days'" : ''}
                  ORDER BY article_id`;
     return (await this.pool.query(sql)).rows;

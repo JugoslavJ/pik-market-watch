@@ -10,20 +10,23 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 
 CREATE TABLE listings (
-  article_id  BIGINT PRIMARY KEY,          -- from the /artikal/<id>/ URL
-  url         TEXT    NOT NULL,
-  title       TEXT    NOT NULL,
-  sqm         NUMERIC(8,2),                -- living area in m²
-  rooms       TEXT,                        -- '0' garsonjera, '1'..'3', '4+'
-  price       NUMERIC(12,2),               -- KM; NULL = 'Na upit'
-  price_text  TEXT,
-  ppm2        INTEGER,                     -- price/m²; NULL for rent & implausible parses
-  is_rent     BOOLEAN NOT NULL DEFAULT FALSE,
-  location    TEXT,                        -- free-form place label (from ad page, when present)
-  latitude    DOUBLE PRECISION,            -- pin coordinates from the ad's map, when set
-  longitude   DOUBLE PRECISION,
-  first_seen  TIMESTAMPTZ NOT NULL DEFAULT now(),
-  last_seen   TIMESTAMPTZ NOT NULL DEFAULT now()
+  article_id    BIGINT PRIMARY KEY,          -- from the /artikal/<id>/ URL
+  url           TEXT    NOT NULL,
+  title         TEXT    NOT NULL,
+  sqm           NUMERIC(8,2),                -- living area in m²
+  rooms         TEXT,                        -- '0' garsonjera, '1'..'3', '4+'
+  price         NUMERIC(12,2),               -- KM; NULL = 'Na upit'
+  price_text    TEXT,
+  ppm2          INTEGER,                     -- price/m²; NULL for rent & implausible parses
+  is_rent       BOOLEAN NOT NULL DEFAULT FALSE,
+  location      TEXT,                        -- free-form place label (from ad page, when present)
+  latitude      DOUBLE PRECISION,            -- pin coordinates from the ad's map, when set
+  longitude     DOUBLE PRECISION,
+  closed_at     TIMESTAMPTZ,                 -- set when the ad vanished from every search
+  closing_price NUMERIC(12,2),               -- last observed price at closure time
+  closing_ppm2  INTEGER,                     -- last observed price/m² at closure time
+  first_seen    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_seen     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX listings_geo_idx ON listings (latitude, longitude)
@@ -80,6 +83,8 @@ CREATE INDEX scrape_runs_started_idx ON scrape_runs (started_at DESC);
 -- plain SELECT * would silently miss columns added to `listings` later.
 CREATE VIEW v_active_listings AS
 SELECT article_id, url, title, sqm, rooms, price, price_text, ppm2, is_rent,
-       location, latitude, longitude, first_seen, last_seen
+       location, latitude, longitude, closed_at, closing_price, closing_ppm2,
+       first_seen, last_seen
 FROM listings
-WHERE last_seen > now() - INTERVAL '14 days';
+WHERE last_seen > now() - INTERVAL '14 days'
+  AND closed_at IS NULL;

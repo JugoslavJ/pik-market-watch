@@ -29,9 +29,11 @@ async function runAll(browser, db) {
     state.lastStatus = 'idle: no searches configured';
     return;
   }
+  let okRuns = 0;
   for (const search of config.searches) {
     try {
       await scrapeSearch(browser, search, config, db, log);
+      okRuns += 1;
       state.totalRuns += 1;
       state.lastStatus = 'ok';
     } catch (err) {
@@ -40,6 +42,18 @@ async function runAll(browser, db) {
       log(`✖ "${search.name}" failed: ${err.message || err}`);
     }
   }
+
+  // End of cycle: close listings that no successful search returned anymore,
+  // freezing their last price as the closing price. Failed searches leave
+  // their previous result links in place, so an outage never closes anything.
+  try {
+    const closed = await db.closeUnseenListings(config.searches.map(s => s.searchKey));
+    if (closed > 0) log(`✕ closed ${closed} listing(s) no longer seen on olx.ba (last price recorded)`);
+    else log(`no listings to close this cycle (${okRuns}/${config.searches.length} search(es) ok)`);
+  } catch (err) {
+    log(`✖ closing pass failed: ${err.message || err}`);
+  }
+
   state.lastRunAt = new Date().toISOString();
 }
 
