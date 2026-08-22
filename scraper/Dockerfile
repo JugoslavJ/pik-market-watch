@@ -27,8 +27,6 @@ RUN npx playwright install-deps chromium \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-COPY src ./src
-
 # Non-root; --create-home gives Chromium a writable HOME for crashpad/font caches.
 RUN useradd --create-home --uid 10001 scraper \
  && mkdir -p /opt/ms-playwright \
@@ -41,6 +39,11 @@ USER scraper
 # (~400 MB smaller than the full Chromium build). Headed mode (HEADLESS=0) is
 # therefore unavailable — it had no display server in the container anyway.
 RUN npx playwright install chromium --only-shell
+
+# App source LAST: editing src/ no longer busts the ~400 MB Chromium layer
+# above, so CI/CD rebuilds on the server stay fast. --chown replaces the old
+# post-COPY `chown -R /app` (the builder sets ownership without re-copying).
+COPY --chown=scraper:scraper src ./src
 
 CMD ["node", "src/index.js"]
 

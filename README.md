@@ -1,6 +1,6 @@
-# OLX.ba Price per m²
+# pik-market-watch
 
-A three-container Docker stack that watches olx.ba real-estate searches, stores every listing and price change in PostgreSQL, and visualises the market in Grafana dashboards.
+A three-container Docker stack that watches **olx.ba** real-estate searches, stores every listing and price change in PostgreSQL, and visualises the market in Grafana dashboards.
 
 It was reworked from the original **"OLX.ba Price per m²" Firefox extension** (v6.3 — preserved in git history, initial commit). The listing-parsing logic was ported verbatim, so results match exactly what the extension's panel showed.
 
@@ -168,6 +168,66 @@ docker compose run --rm scraper node src/index.js --once
 Never add a `RUN_ONCE` env back to the service: combined with `restart: unless-stopped`,
 an exited one-shot container is relaunched immediately, i.e. it scrapes in an endless loop.
 
+
+## CI/CD — deploy to Oracle Compute
+
+Every push to `main` runs `.github/workflows/ci.yml` in two stages:
+
+1. **test** — syntax lint + unit + integration suite (also runs on PRs).
+2. **deploy** — only if the tests passed for *that exact commit*: SSHes into the
+   Oracle Compute instance, ships the tracked files over with
+   `git archive | ssh tar`, rebuilds the stack in place
+   (`docker compose up -d --build`), and waits until `db` and `scraper` report
+   **healthy** (up to 6 min) before marking the deploy green.
+
+The image is built **on the instance** — native CPU arch (no amd64/arm64
+mismatch with GitHub's runners), no container registry, no extra PAT secret.
+Thanks to layer caching a code-only change rebuilds in well under a minute;
+touching `package.json` or the Dockerfile re-downloads Chromium once (~400 MB).
+
+### Required repo settings (Secrets and variables → Actions)
+
+| Name | Type | Value |
+|---|---|---|
+| `OCI_SSH_PRIVATE_KEY` | secret | full contents of the deploy key's **private** key file |
+| `OCI_HOST` | secret | instance's public IP |
+| `OCI_USER` | secret | SSH user — `ubuntu` on Ubuntu images, `opc` on Oracle Linux |
+| `DEPLOY_DIR` | variable (optional) | app dir on the instance, default `~/pik-market-watch` |
+
+### One-time instance setup
+
+```bash
+# Docker Engine + compose plugin, and let the deploy user run docker without sudo
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker "$USER" && exec newgrp docker   # group change needs re-login
+
+mkdir -p ~/pik-market-watch/config && cd ~/pik-market-watch
+cp .env.example .env                                    # then edit both passwords
+cp config/searches.example.json config/searches.json    # then add your searches
+```
+
+The deploy key's **public** half must be in `~/.ssh/authorized_keys`. The two
+files above are git-ignored, so deploys **never overwrite** them — the pipeline
+fails fast with instructions if they're missing.
+
+### Exposing Grafana (optional)
+
+The stack serves Grafana on `:3000`; db (5432) and the scraper health endpoint
+(9100) stay bound to `127.0.0.1`. Two firewalls sit in front of port 3000 on OCI:
+
+1. **Security List / NSG** in the OCI console — add an ingress rule for TCP 3000
+   (ideally restricted to your IP).
+2. **The instance's iptables** — OCI's Ubuntu images ship a restrictive ruleset:
+   ```bash
+   sudo iptables -I INPUT 6 -p tcp --dport 3000 -j ACCEPT
+   sudo netfilter-persistent save   # survive reboots
+   ```
+
+### Day-to-day
+
+- **Redeploy manually**: Actions → CI → *Run workflow* (re-tests, then deploys `main`).
+- **Rollback**: `git revert <commit> && git push` — the pipeline redeploys the reverted tree. Data is safe: `pgdata`/`grafana` volumes are untouched by deploys.
+- **Caveat**: `git archive | tar -x` never deletes files. If a *tracked* file is ever removed from the repo, `ssh` in and delete it on the instance once.
 
 ## Troubleshooting
 
