@@ -110,6 +110,12 @@ docker compose down                                       # stop; add -v to ALSO
 
 Backup the database: `docker compose exec db pg_dump -U olx olx > backup.sql`
 
+> **Note on `RUN_ONCE=1`:** because the service has `restart: unless-stopped`, an exited one-shot
+> container is started again immediately — so `RUN_ONCE=1` really means "scrape in a loop".
+> For a genuine one-shot run, keep `RUN_ONCE=0` in `.env` and execute
+> `docker compose run --rm scraper node src/index.js --once` instead (or set
+> `docker update --restart=no olx-scraper`).
+
 ## Troubleshooting
 
 - **Zero cards scraped / 403-style blocks**: olx.ba may be throttling the datacenter-ish fingerprint. Raise `PAGE_DELAY_MS` (e.g. 4000), lower `CONCURRENCY` to 1, or set `HEADLESS=0`. Check http://localhost:9100 and the `scrape_runs` table for errors.

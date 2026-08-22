@@ -99,15 +99,18 @@ async function scrapeSearch(browser, search, cfg, db, log) {
     }
 
     const { newCount, dropCount } = await db.saveCards(allCards);
-    const ids = allCards.map(c => extractArticleId(c.url)).filter(Boolean).map(Number);
-    await db.refreshSearchResults(search.searchKey, ids);
 
+    // The saved_searches row MUST be created before search_results rows
+    // reference it (FK search_results_search_key_fkey).
     const median = computeMedian(allCards.map(c => c.ppm2).filter(v => v != null));
     await db.upsertSavedSearch({
       searchKey: search.searchKey, name: search.name, url: base.href,
       category: search.category,
       listingCount: allCards.length, median, newCount, dropCount,
     });
+
+    const ids = allCards.map(c => extractArticleId(c.url)).filter(Boolean).map(Number);
+    await db.refreshSearchResults(search.searchKey, ids);
     await db.finishRun(runId, { status: 'ok', pages: pagesDone, cards: allCards.length });
 
     log(`✔ "${search.name}" — ${allCards.length} listings on ${pagesDone} page(s); ` +
