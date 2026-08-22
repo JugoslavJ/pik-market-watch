@@ -118,7 +118,7 @@ async function scrapeSearch(browser, search, cfg, db, log) {
 
     // The saved_searches row MUST be created before search_results rows
     // reference it (FK search_results_search_key_fkey).
-    const median = computeMedian(allCards.map(c => c.ppm2).filter(v => v != null));
+    const median = computeMedian(allCards.map(c => c.ppm2).filter(v => v != null && v > 0));
     await db.upsertSavedSearch({
       searchKey: search.searchKey, name: search.name, url: base.href,
       category: search.category,

@@ -51,7 +51,8 @@
               { "color": "red", "value": 3000 }
             ]
           },
-          "unit": "none"
+          "unit": "none",
+          "noValue": "—"
         },
         "overrides": []
       },
@@ -68,7 +69,7 @@
           "datasource": { "type": "postgres", "uid": "olx-postgres" },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT COALESCE(percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2), 0)\nFROM v_active_listings l\nWHERE l.ppm2 IS NOT NULL  AND CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])
+          "rawSql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)\nFROM v_active_listings l\nWHERE l.ppm2 > 0  AND CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])
   AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))",
           "refId": "A"
         }
@@ -131,7 +132,7 @@
           "datasource": { "type": "postgres", "uid": "olx-postgres" },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT date_trunc('day', ph.scraped_at) AS time,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY ph.ppm2) AS \"median KM/m2\"\nFROM price_history ph\nJOIN v_active_listings la ON la.article_id = ph.article_id\nWHERE ph.ppm2 IS NOT NULL\n  AND ph.scraped_at > now() - INTERVAL '90 days'  AND CASE WHEN COALESCE(la.rooms, '') = '' THEN 'unknown' WHEN la.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(la.rooms, '+', 1)::int >= 4 THEN '4+' ELSE la.rooms END = ANY (ARRAY[$rooms])
+          "rawSql": "SELECT date_trunc('day', ph.scraped_at) AS time,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY ph.ppm2) AS \"median KM/m2\"\nFROM price_history ph\nJOIN v_active_listings la ON la.article_id = ph.article_id\nWHERE ph.ppm2 > 0\n  AND ph.scraped_at > now() - INTERVAL '90 days'  AND CASE WHEN COALESCE(la.rooms, '') = '' THEN 'unknown' WHEN la.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(la.rooms, '+', 1)::int >= 4 THEN '4+' ELSE la.rooms END = ANY (ARRAY[$rooms])
   AND (la.sqm IS NULL OR la.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = ph.article_id AND ss.category = ANY (ARRAY[$category]))\nGROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
@@ -216,7 +217,7 @@
           "datasource": { "type": "postgres", "uid": "olx-postgres" },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT l.title, l.url, l.sqm, l.rooms, l.price, l.ppm2\nFROM v_active_listings l\nWHERE l.is_rent = FALSE AND l.ppm2 IS NOT NULL  AND CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])
+          "rawSql": "SELECT l.title, l.url, l.sqm, l.rooms, l.price, l.ppm2\nFROM v_active_listings l\nWHERE l.is_rent = FALSE AND l.ppm2 > 0  AND CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])
   AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))\nORDER BY l.ppm2 ASC\nLIMIT 50",
           "refId": "A"
         }
