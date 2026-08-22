@@ -53,6 +53,7 @@ module.exports = {
   maxGeoFetches:   num(process.env.MAX_GEO_FETCHES, 50),     // ad-detail visits per run for geo pins
   geoConcurrency:  num(process.env.GEO_CONCURRENCY, 2),      // parallel ad-detail fetches
   geoDelayMs:      num(process.env.GEO_DELAY_MS, 600),       // politeness gap between batches
+  geoSettleMs:     num(process.env.GEO_SETTLE_MS, 2500),     // hydration wait on each ad page
 
   searches: loadSearches().map(s => {
     let name = s.name;

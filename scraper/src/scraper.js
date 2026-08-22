@@ -49,7 +49,7 @@ async function scrapeGeo(browser, url, cfg) {
   try {
     const page = await context.newPage();
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: cfg.navTimeoutMs });
-    await page.waitForTimeout(2500);   // let the Nuxt state / map hydrate
+    await page.waitForTimeout(cfg.geoSettleMs);   // let the Nuxt state / map hydrate
     return (await extractGeo(page)) || { latitude: null, longitude: null };
   } finally {
     await context.close().catch(() => {});
