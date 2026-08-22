@@ -65,7 +65,6 @@ Categories are free-form labels for grouping kinds of real estate — apartments
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `olx` / — / `olx` | Database credentials (required password) |
 | `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD` | `admin` / required | Grafana login |
 | `SCRAPE_INTERVAL_MINUTES` | `720` | Minutes between scheduled scrapes |
-| `RUN_ONCE` | `0` | `1` = scrape once and exit (for testing or external cron) |
 
 Scraper-only tuning (set in `docker-compose.yml`'s `environment:` block): `MAX_PAGES` (30), `CONCURRENCY` (3 pages in parallel), `PAGE_DELAY_MS` (1500), `NAV_TIMEOUT_MS`, `CARD_TIMEOUT_MS`, `HEADLESS=0` for debugging, `SEARCH_URLS="url1,url2"` instead of the JSON file.
 
@@ -110,11 +109,16 @@ docker compose down                                       # stop; add -v to ALSO
 
 Backup the database: `docker compose exec db pg_dump -U olx olx > backup.sql`
 
-> **Note on `RUN_ONCE=1`:** because the service has `restart: unless-stopped`, an exited one-shot
-> container is started again immediately — so `RUN_ONCE=1` really means "scrape in a loop".
-> For a genuine one-shot run, keep `RUN_ONCE=0` in `.env` and execute
-> `docker compose run --rm scraper node src/index.js --once` instead (or set
-> `docker update --restart=no olx-scraper`).
+For a one-off scrape (testing, or scheduling from an external cron), run it ad hoc —
+`compose run` containers ignore the service's restart policy, so there is no loop risk:
+
+```bash
+docker compose run --rm scraper node src/index.js --once
+```
+
+Never add a `RUN_ONCE` env back to the service: combined with `restart: unless-stopped`,
+an exited one-shot container is relaunched immediately, i.e. it scrapes in an endless loop.
+
 
 ## Troubleshooting
 

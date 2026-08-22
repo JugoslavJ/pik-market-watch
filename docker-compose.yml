@@ -42,7 +42,10 @@ services:
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-olx}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-olx}
       SCRAPE_INTERVAL_MINUTES: ${SCRAPE_INTERVAL_MINUTES:-720}
-      RUN_ONCE: ${RUN_ONCE:-0}
+      # NOTE: do NOT add RUN_ONCE here. Combined with this service's restart
+      # policy, a finished one-shot container would be relaunched forever
+      # (= endless scrape loop). For one-off runs use:
+      #   docker compose run --rm scraper node src/index.js --once
       HEADLESS: ${HEADLESS:-1}
     volumes:
       - ./config:/config:ro      # scraper reads /config/searches.json
