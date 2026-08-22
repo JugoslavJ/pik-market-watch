@@ -75,7 +75,7 @@ services:
     logging: *logging
 
   grafana:
-    image: grafana/grafana-oss:11.3.0
+    image: grafana/grafana-oss:13.0.2
     container_name: olx-grafana
     restart: unless-stopped
     depends_on:
@@ -115,6 +115,7 @@ services:
     volumes:
       - ./backups:/backups
       - ./db/backup.sh:/usr/local/bin/backup.sh:ro
+      - grafana:/grafana-data:ro          # nightly tar of Grafana state (users/prefs/UI edits)
     entrypoint: ["sh", "/usr/local/bin/backup.sh"]
     mem_limit: 256m
     logging: *logging

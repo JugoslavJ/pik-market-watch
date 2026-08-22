@@ -166,10 +166,14 @@ docker compose down                                       # stop; add -v to ALSO
 
 ### Backups (automated)
 
-A `db-backup` sidecar dumps the database **daily** into `./backups/olx-YYYYMMDD.dump`
-(compressed custom format, integrity-verified, retention default 14 days via
-`BACKUP_RETENTION_DAYS`). It backs up at most once per day, so container restarts
-never duplicate archives.
+A `db-backup` sidecar produces **daily** archives in `./backups/` (at most once
+per day, so container restarts never duplicate them; retention default 14 days
+via `BACKUP_RETENTION_DAYS`):
+
+- `olx-YYYYMMDD.dump` — database, compressed custom format, integrity-verified
+- `grafana-YYYYMMDD.tar.gz` — Grafana state volume (users, prefs, UI-made
+  dashboard edits). Live snapshot; before **major Grafana upgrades** take a
+  cold copy instead: `docker compose stop grafana`, tar the volume, start.
 
 Restore into the running database:
 
