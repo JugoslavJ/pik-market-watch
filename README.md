@@ -1,9 +1,8 @@
 # OLX.ba Price per m²
 
-Two things live in this repo:
+A three-container Docker stack that watches olx.ba real-estate searches, stores every listing and price change in PostgreSQL, and visualises the market in Grafana dashboards.
 
-1. **`/` (root files)** — the original **Firefox browser extension** ("OLX.ba Price per m²", v6.3): an on-page panel that calculates price-per-m², scrapes all pages of a search into IndexedDB, tracks price history and saved searches directly in the browser.
-2. **Server stack** (`docker-compose.yml` + `db/`, `scraper/`, `grafana/`, `config/`) — the same idea reworked as **three Docker containers**: a PostgreSQL database, a scheduled headless-Chromium scraper, and Grafana dashboards. This runs headless 24/7, needs no browser open, and keeps history forever.
+It was reworked from the original **"OLX.ba Price per m²" Firefox extension** (v6.3 — preserved in git history, initial commit). The listing-parsing logic was ported verbatim, so results match exactly what the extension's panel showed.
 
 ---
 
@@ -19,7 +18,7 @@ Two things live in this repo:
         └─ health/status JSON on :9100
 ```
 
-- **scraper** opens each configured olx.ba search in a headless Chromium page (the same hidden-tab trick the extension used), parses listing cards with logic ported 1:1 from `model/card-parser.js`, then upserts listings and appends price history into Postgres. Runs at startup, then every `SCRAPE_INTERVAL_MINUTES` (default 720 = 12 h, matching the extension's alarm).
+- **scraper** opens each configured olx.ba search in a headless Chromium page, parses listing cards (logic ported 1:1 from the original extension's card parser), then upserts listings and appends price history into Postgres. Runs at startup, then every `SCRAPE_INTERVAL_MINUTES` (default 720 = 12 h).
 - **db** holds all state; the schema mirrors the extension's IndexedDB stores.
 - **grafana** ships with a provisioned Postgres datasource and a prebuilt dashboard.
 
@@ -103,11 +102,7 @@ Backup the database: `docker compose exec db pg_dump -U olx olx > backup.sql`
 ## Troubleshooting
 
 - **Zero cards scraped / 403-style blocks**: olx.ba may be throttling the datacenter-ish fingerprint. Raise `PAGE_DELAY_MS` (e.g. 4000), lower `CONCURRENCY` to 1, or set `HEADLESS=0`. Check http://localhost:9100 and the `scrape_runs` table for errors.
-- **Selector drift**: if OLX redesigns their markup, update `scraper/src/parser.js` — it intentionally mirrors `model/card-parser.js`, so keep both in sync.
+- **Selector drift**: if OLX redesigns their markup, update the selectors in `scraper/src/parser.js` — they live in one place now.
 - **Grafana datasource fails**: the container needs `POSTGRES_*` env vars to render `grafana/provisioning/datasources/postgres.yml` — they are wired through `docker-compose.yml`.
-
-## The browser extension
-
-The original extension is untouched and still works independently of the server stack. Tests: `npm install && npm test` at the repo root. Its parsing logic lives on inside the scraper (`scraper/src/parser.js`) so both frontends stay consistent.
 
 > Note: scraping olx.ba is for personal analysis only — keep intervals polite.

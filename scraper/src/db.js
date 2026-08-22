@@ -1,7 +1,8 @@
 'use strict';
 // PostgreSQL access layer (node-postgres).
 //
-// Write semantics mirror the extension's background.js:
+// Write semantics mirror the original extension's background script
+// (preserved in git history):
 //   - upsert the listing and bump last_seen on every sighting
 //   - append to price_history only when price/ppm² changed (and ppm² known)
 //   - count new listings and price drops per run

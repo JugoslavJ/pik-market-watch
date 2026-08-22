@@ -14,7 +14,7 @@ const USER_AGENT =
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// Port of computeMedian() from shared/utils.js (rounded, like the extension).
+// Port of computeMedian() from the original extension (rounded).
 function computeMedian(values) {
   if (!values.length) return null;
   const s = [...values].sort((a, b) => a - b);

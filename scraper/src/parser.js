@@ -1,11 +1,9 @@
 'use strict';
 // Parser: collectCardsInPage runs INSIDE the olx.ba page via page.evaluate().
 //
-// The logic is a 1:1 port of the browser extension so parsing behaves
-// identically to what shipped in the panel:
-//   parseNumber()       ← shared/utils.js
-//   parseCard()         ← model/card-parser.js (CardParser.parseCard)
-//   collectCardsInPage  ← model/card-parser.js (CardParser.collectAllCards)
+// The logic is a 1:1 port of the original browser extension's parser
+// (parseNumber / CardParser.parseCard / CardParser.collectAllCards —
+// preserved in git history) so results match what the panel showed.
 
 async function collectCards(page) {
   return page.evaluate(collectCardsInPage);

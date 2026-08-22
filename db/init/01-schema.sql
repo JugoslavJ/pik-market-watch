@@ -1,6 +1,7 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- OLX.ba price tracker — PostgreSQL schema
--- Mirrors the browser extension's IndexedDB model (model/listings-db.js):
+-- Data model carried over from the original browser extension's IndexedDB
+-- stores (preserved in git history, initial commit):
 --   STORE_LISTINGS → listings        one row per article (latest known state)
 --   priceHistory[] → price_history   append-only price snapshots
 --   STORE_SAVED    → saved_searches  watched searches + per-run stats

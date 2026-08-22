@@ -13,7 +13,7 @@ function num(v, def) {
   return Number.isFinite(n) ? n : def;
 }
 
-// Mirrors buildSearchCacheKey() in the extension (shared/utils.js):
+// Same normalization as buildSearchCacheKey() in the original extension:
 // same URL minus page/hash/scrape params → stable primary key per search.
 function normalizeSearchKey(href) {
   const u = new URL(href);
