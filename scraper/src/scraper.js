@@ -25,9 +25,9 @@ async function scrapePage(browser, url, cfg) {
   }
 }
 
-// Ad DETAIL page → { latitude, longitude, sqm }: pin from the embedded map,
-// floor area from the Kvadrata characteristic (search cards omit both for
-// some categories).
+// Ad DETAIL page → parseDetail() facts: map pin, floor area, plus publish
+// date, seller type, characteristics and view/favorite counters (search
+// cards carry none of those).
 async function scrapeGeo(browser, url, cfg) {
   const context = await browser.newContext({
     viewport: { width: 1366, height: 900 },
@@ -125,23 +125,26 @@ async function scrapeSearch(browser, search, cfg, db, log) {
     const ids = allCards.map(c => extractArticleId(c.url)).filter(Boolean).map(Number);
     await db.refreshSearchResults(search.searchKey, ids);
 
-    // ── Detail-page enrichment: map pins + floor area (m²) ───────────────────
-    // Search cards carry no coordinates, and some categories (vikendice) no
-    // m² tag either; both live on the ad's detail page. Visiting only what's
-    // missing keeps runs cheap, and every run gradually converges older rows
-    // until none remain.
+    // ── Detail-page enrichment ────────────────────────────────────────────────
+    // Search cards carry no coordinates, some categories no m² tag either, and
+    // none of the detail facts (publish date, seller type, characteristics,
+    // view counters); all of that lives on each ad's own page. Visiting only
+    // what's missing keeps runs cheap; every run converges older rows until
+    // none remain.
     let enrichedCount = 0;
     if (cfg.maxGeoFetches > 0 && ids.length) {
-      const [unpinnedSeen, missingSqmSeen] = await Promise.all([
+      const [unpinnedSeen, missingSqmSeen, missingDetailsSeen] = await Promise.all([
         db.unpinnedArticleIds(ids),
         db.listingsMissingSqm(ids),
+        db.listingsMissingDetails(ids),
       ]);
-      const candidateIds = [...new Set([...newIds, ...unpinnedSeen, ...missingSqmSeen])];
+      const candidateIds = [...new Set(
+        [...newIds, ...unpinnedSeen, ...missingSqmSeen, ...missingDetailsSeen])];
       const byId = new Map(allCards.map(c => [Number(extractArticleId(c.url)), c]));
       const targets = candidateIds.slice(0, cfg.maxGeoFetches);
       log(`⌖ detail-fetching ${targets.length}/${candidateIds.length} ` +
           `listing(s) (${newIds.length} new, ${unpinnedSeen.length} unpinned, ` +
-          `${missingSqmSeen.length} without m²)`);
+          `${missingSqmSeen.length} without m², ${missingDetailsSeen.length} never detailed)`);
       const detailRows = [];
       for (let i = 0; i < targets.length; i += cfg.geoConcurrency) {
         const batch = targets.slice(i, i + cfg.geoConcurrency);
@@ -153,7 +156,9 @@ async function scrapeSearch(browser, search, cfg, db, log) {
             return { articleId: id, ...(await scrapeGeo(browser, card.url, cfg)) };
           } catch (_) { return null; }
         }));
-        for (const r of results) if (r && (r.latitude != null || r.sqm != null)) detailRows.push(r);
+        // A visited page always counts — even without a pin/m² it may have
+        // yielded publish date, characteristics or counters.
+        for (const r of results) if (r) detailRows.push(r);
       }
       if (detailRows.length) await db.enrichListings(detailRows);
       enrichedCount = detailRows.length;

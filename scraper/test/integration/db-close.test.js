@@ -32,7 +32,7 @@ async function seenVia(key, articleId, over = {}) {
   await db.refreshSearchResults(key, [articleId]);
 }
 const rowOf = async id => (await db.pool.query(
-  'SELECT closed_at, closing_price::text AS closing_price, closing_ppm2, price FROM listings WHERE article_id = $1',
+  'SELECT closed_at, closing_price::text AS closing_price, closing_ppm2, price, closing_category FROM listings WHERE article_id = $1',
   [id])).rows[0];
 
 needsDb('listings returned by a live search are never closed', async () => {
@@ -52,6 +52,28 @@ needsDb('a vanished ad closes with its last price recorded', async () => {
   assert.ok(r.closed_at);
   assert.equal(r.closing_price, '95000.00');
   assert.equal(r.closing_ppm2, 1900);
+});
+
+needsDb('closure freezes closing_category; reopening clears it', async () => {
+  await db.registerSavedSearch({ searchKey: KEY_B, name: 'search B',
+                                 url: 'https://olx.ba' + KEY_B, category: 'houses' });
+  await seenVia(KEY_A, 6010);                       // category apartments via KEY_A
+  await db.refreshSearchResults(KEY_A, []);         // last link gone → stamp
+  await db.closeUnseenListings([KEY_A]);
+  let r = await rowOf(6010);
+  assert.ok(r.closed_at);
+  assert.equal(r.closing_category, 'apartments');
+
+  // The frozen category survives while the raw row sits closed…
+  await db.closeUnseenListings([KEY_A]);
+  assert.equal((await rowOf(6010)).closing_category, 'apartments');
+
+  // …and is cleared when the ad reappears:
+  await db.saveCards([{ url: 'https://olx.ba/artikal/6010/x', title: 'back', sqm: 50,
+                        rooms: '2', price: 90000, priceText: '', ppm2: 1800, isRent: false }]);
+  r = await rowOf(6010);
+  assert.equal(r.closed_at, null);
+  assert.equal(r.closing_category, null);
 });
 
 needsDb('closure is idempotent — closing values are frozen, not refreshed', async () => {

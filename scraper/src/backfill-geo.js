@@ -1,6 +1,7 @@
 'use strict';
-// One-off backfill: visit ad detail pages for listings that lack a map pin
-// or — when the search card showed no m² (e.g. vikendice) — a floor area.
+// One-off backfill: visit ad detail pages for listings that lack a map pin,
+// a floor area (when the card showed none), or have never been detail-fetched
+// at all (publish date, seller type, characteristics, view counters).
 //
 // Usage:
 //   docker compose run --rm scraper node src/backfill-geo.js              # active listings (seen ≤ 14 d)
@@ -8,8 +9,9 @@
 //   docker compose run --rm scraper node src/backfill-geo.js --max=100    # cap the number of visits
 //   docker compose run -d --name olx-backfill scraper node src/backfill-geo.js   # detached for long runs
 //
-// Resumable: rows that already have the missing data are skipped, so an
-// interrupted run can simply be started again.
+// Resumable: rows whose missing data has since arrived are skipped, and every
+// visited page gets details_fetched_at stamped, so an interrupted run can
+// simply be started again.
 
 const { chromium } = require('playwright');
 const config = require('./config');
@@ -51,17 +53,19 @@ const log = (...args) => console.log(new Date().toISOString(), '[backfill]', ...
       }
     }));
 
-    const good = results.filter(r => r && (r.latitude != null || r.sqm != null));
+    // A visited page counts as done even when nothing new was learned — the
+    // details_fetched_at stamp prevents endlessly re-visiting barren pages.
+    const good = results.filter(r => r);
     missed += results.length - good.length;
     if (good.length) { await db.enrichListings(good); enriched += good.length; }
     done += batch.length;
 
     const rate = done / ((Date.now() - t0) / 1000);
     const etaMin = ((targets.length - done) / rate / 60).toFixed(1);
-    log(`progress ${done}/${targets.length} · enriched ${enriched} · nothing learned ${missed} · ${rate.toFixed(2)} p/s · ETA ~${etaMin} min`);
+    log(`progress ${done}/${targets.length} · enriched ${enriched} · fetch failed ${missed} · ${rate.toFixed(2)} p/s · ETA ~${etaMin} min`);
   }
 
-  log(`DONE — enriched ${enriched}/${targets.length}, nothing learned: ${missed} (ad removed or page had neither pin nor area)`);
+  log(`DONE — enriched ${enriched}/${targets.length}, failed fetches: ${missed}`);
   await browser.close();
   await db.close();
 })().catch(err => { console.error('[backfill] fatal:', err); process.exit(1); });

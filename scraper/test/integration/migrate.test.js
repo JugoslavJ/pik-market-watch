@@ -37,11 +37,11 @@ needsDb('migrations: fresh database applies all files; second pass is a no-op', 
   const pool = new Pool({ connectionString: await recreateDb('mig_fresh') });
   await applyMigrations(pool, FULL_DIR, log);
   assert.equal(await fnCount(pool), 2);
-  assert.equal(await recorded(pool), 4);          // 01…04
+  assert.equal(await recorded(pool), 6);          // 01…06
 
   await applyMigrations(pool, FULL_DIR, log);           // second boot
   assert.equal(await fnCount(pool), 2);
-  assert.equal(await recorded(pool), 4);
+  assert.equal(await recorded(pool), 6);
 
   // Dashboard panel query runs through the freshly created function:
   const r = await pool.query(
@@ -68,7 +68,7 @@ needsDb('migrations: legacy database (hand-applied 01+02) is upgraded safely', a
   // Upgrade against the full set:
   await applyMigrations(pool, FULL_DIR, log);
   assert.equal(await fnCount(pool), 2);
-  assert.equal(await recorded(pool), 4);
+  assert.equal(await recorded(pool), 6);
 
   // Old data remains queryable through the dashboard's exact filter call,
   // and the upgrade added the closure columns:
@@ -79,5 +79,28 @@ needsDb('migrations: legacy database (hand-applied 01+02) is upgraded safely', a
     WHERE table_name = 'listings'
       AND column_name IN ('closed_at','closing_price','closing_ppm2')`);
   assert.equal(cols.rows[0].n, 3);
+  await pool.end();
+});
+
+needsDb('migrations: detail columns, analytics views and view columns exist', async () => {
+  const pool = new Pool({ connectionString: await recreateDb('mig_details') });
+  await applyMigrations(pool, FULL_DIR, log);
+
+  const cols = await pool.query(`SELECT count(*)::int AS n FROM information_schema.columns
+    WHERE table_name = 'listings' AND column_name IN (
+      'closing_category','published_at','seller_type','rooms_detail','bathrooms',
+      'floor_num','floors_total','unit_levels','heating','furnished','condition',
+      'parking','garage','elevator','year_built','plot_sqm','orientation','views',
+      'favorites','characteristics','details_fetched_at')`);
+  assert.equal(cols.rows[0].n, 21);
+
+  const views = await pool.query(`SELECT count(*)::int AS n FROM information_schema.views
+    WHERE table_name IN ('v_active_listings','v_listing_lifecycle','v_market_daily')`);
+  assert.equal(views.rows[0].n, 3);
+
+  // v_active_listings must expose the new columns (views snapshot column lists):
+  const vc = await pool.query(`SELECT count(*)::int AS n FROM information_schema.columns
+    WHERE table_name = 'v_active_listings' AND column_name = 'details_fetched_at'`);
+  assert.equal(vc.rows[0].n, 1);
   await pool.end();
 });

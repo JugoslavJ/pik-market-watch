@@ -12,8 +12,10 @@ const vikendicaHtml = `
   {id:1101,type:A,value:72,attr_code:"kvadrata",name:"Kvadrata"}`;
 
 test('parseDetail: Nuxt pin literal + kvadrata', () => {
-  assert.deepEqual(parseDetail(vikendicaHtml),
-    { latitude: 44.812345, longitude: 17.198765, sqm: 72 });
+  const r = parseDetail(vikendicaHtml);
+  assert.equal(r.latitude, 44.812345);
+  assert.equal(r.longitude, 17.198765);
+  assert.equal(r.sqm, 72);
 });
 
 test('parseDetail: quoted-template default is rejected (outside BiH)', () => {
@@ -27,18 +29,28 @@ test('parseDetail: quoted-template default is rejected (outside BiH)', () => {
 test('parseDetail: JSON-fallback pin pattern works', () => {
   const html = `"lat":"44.900123","lon":"17.300456"
     {id:901,type:A,value:88,attr_code:"kvadrata",name:"Kvadrata"}`;
-  assert.deepEqual(parseDetail(html),
-    { latitude: 44.900123, longitude: 17.300456, sqm: 88 });
+  const r = parseDetail(html);
+  assert.equal(r.latitude, 44.900123);
+  assert.equal(r.longitude, 17.300456);
+  assert.equal(r.sqm, 88);
 });
 
 test('parseDetail: pins outside the BiH bounding box are rejected', () => {
   const html = 'location:{lat:51.5074,lon:-0.1278}';   // London
-  assert.deepEqual(parseDetail(html), { latitude: null, longitude: null, sqm: null });
+  const r = parseDetail(html);
+  assert.equal(r.latitude, null);
+  assert.equal(r.longitude, null);
+  assert.equal(r.sqm, null);
 });
 
 test('parseDetail: no data at all → all nulls', () => {
-  assert.deepEqual(parseDetail('<html>nothing</html>'),
-    { latitude: null, longitude: null, sqm: null });
+  const r = parseDetail('<html>nothing</html>');
+  assert.equal(r.latitude, null);
+  assert.equal(r.longitude, null);
+  assert.equal(r.sqm, null);
+  assert.equal(r.publishedAt, null);
+  assert.equal(r.views, null);
+  assert.deepEqual(r.characteristics, {});
 });
 
 test('parseDetail: kvadrata sanity bounds (5–500 m²)', () => {
