@@ -7,15 +7,15 @@
   "scripts": {
     "start": "node src/index.js",
     "once": "node src/index.js --once",
-    "test": "node --test test/unit/",
+    "test": "node --test \"test/unit/*.test.js\"",
     "test:integration": "node scripts/run-integration-tests.js",
     "lint:syntax": "node -e \"const fs=require('fs');let bad=0;for(const f of fs.readdirSync('src')){if(!f.endsWith('.js'))continue;try{require('child_process').execSync(process.execPath+' --check src/'+f,{stdio:'pipe'})}catch(e){bad=1;console.error(e.stderr.toString())}};process.exit(bad)\""
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "dependencies": {
-    "playwright": "1.49.1",
-    "pg": "^8.13.1"
+    "playwright": "1.62.1",
+    "pg": "^8.23.0"
   }
 }

@@ -41,7 +41,9 @@ if (up.status !== 0) {
 try {
   waitUntilReady();
   const r = spawnSync(process.execPath,
-    ['--test', '--test-concurrency=1', 'test/integration/'],   // files share one DB → serialize
+    // Node ≥24 dropped directory args for --test — pass an explicit glob
+    // (the runner resolves it itself, so this stays Windows-safe).
+    ['--test', '--test-concurrency=1', 'test/integration/*.test.js'],   // files share one DB → serialize
     { stdio: 'inherit', env: { ...process.env, TEST_DATABASE_URL: DB_URL } });
   exit = r.status ?? 1;
 } finally {

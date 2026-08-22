@@ -7,7 +7,7 @@
 # Chromium build installed below — npm ci installs exactly that CLI version,
 # whose `install` command then fetches the matching browser.
 # ─────────────────────────────────────────────────────────────────────────────
-FROM node:20-bookworm-slim
+FROM node:24-bookworm-slim
 
 ENV NODE_ENV=production \
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \

@@ -11,7 +11,7 @@ It was reworked from the original **"OLX.ba Price per m²" Firefox extension** (
 ```
 ┌────────────────────┐      ┌──────────────────────┐      ┌───────────────────┐
 │ scraper            │ SQL  │ db                   │ SQL  │ grafana           │
-│ Node 20 + Playwright│────▶│ PostgreSQL 16        │◀─────│ :3000 dashboards  │
+│ Node 24 + Playwright│────▶│ PostgreSQL 16        │◀─────│ :3000 dashboards  │
 │ headless Chromium   │     │ volume: pgdata       │      │ volume: grafana   │
 └────────────────────┘      └──────────────────────┘      └───────────────────┘
         │                         ▲ auto-initialized from db/init/*.sql
