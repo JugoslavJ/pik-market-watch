@@ -1,5 +1,7 @@
 {
-  "annotations": { "list": [] },
+  "annotations": {
+    "list": []
+  },
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -7,31 +9,61 @@
   "links": [],
   "panels": [
     {
-      "datasource": { "type": "postgres", "uid": "olx-postgres" },
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
-          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null } ] },
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
           "unit": "short",
           "noValue": "—"
         },
         "overrides": []
       },
-      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 0 },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 0,
+        "y": 0
+      },
       "id": 1,
       "options": {
-        "colorMode": "value", "graphMode": "none", "justifyMode": "auto",
-        "orientation": "auto", "percentChangeColorMode": "standard",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto", "wideLayout": true
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
       },
       "targets": [
         {
-          "datasource": { "type": "postgres", "uid": "olx-postgres" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT count(*) FROM v_active_listings l\nWHERE l.is_rent = FALSE  AND CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])
-  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))",
+          "rawSql": "SELECT count(*) FROM v_active_listings l\nWHERE l.is_rent = FALSE  AND CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])\n  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))\n  AND ( ( ${min_lat:number} <= 42.4 AND ${max_lat:number} >= 46.4 AND ${min_lon:number} <= 15.5 AND ${max_lon:number} >= 19.6 ) OR ( l.latitude IS NOT NULL AND l.latitude BETWEEN ${min_lat:number} AND ${max_lat:number} AND l.longitude BETWEEN ${min_lon:number} AND ${max_lon:number} ) )",
           "refId": "A"
         }
       ],
@@ -39,16 +71,30 @@
       "type": "stat"
     },
     {
-      "datasource": { "type": "postgres", "uid": "olx-postgres" },
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "#EAB839", "value": 2000 },
-              { "color": "red", "value": 3000 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 2000
+              },
+              {
+                "color": "red",
+                "value": 3000
+              }
             ]
           },
           "unit": "none",
@@ -56,21 +102,38 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 0 },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 8,
+        "y": 0
+      },
       "id": 2,
       "options": {
-        "colorMode": "value", "graphMode": "none", "justifyMode": "auto",
-        "orientation": "auto", "percentChangeColorMode": "standard",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto", "wideLayout": true
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
       },
       "targets": [
         {
-          "datasource": { "type": "postgres", "uid": "olx-postgres" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)\nFROM v_active_listings l\nWHERE l.ppm2 > 0  AND CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])
-  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))",
+          "rawSql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)\nFROM v_active_listings l\nWHERE l.ppm2 > 0  AND CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])\n  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))\n  AND ( ( ${min_lat:number} <= 42.4 AND ${max_lat:number} >= 46.4 AND ${min_lon:number} <= 15.5 AND ${max_lon:number} >= 19.6 ) OR ( l.latitude IS NOT NULL AND l.latitude BETWEEN ${min_lat:number} AND ${max_lat:number} AND l.longitude BETWEEN ${min_lon:number} AND ${max_lon:number} ) )",
           "refId": "A"
         }
       ],
@@ -78,31 +141,61 @@
       "type": "stat"
     },
     {
-      "datasource": { "type": "postgres", "uid": "olx-postgres" },
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
-          "thresholds": { "mode": "absolute", "steps": [ { "color": "purple", "value": null } ] },
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "purple",
+                "value": null
+              }
+            ]
+          },
           "unit": "short",
           "noValue": "—"
         },
         "overrides": []
       },
-      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 0 },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
       "id": 3,
       "options": {
-        "colorMode": "value", "graphMode": "none", "justifyMode": "auto",
-        "orientation": "auto", "percentChangeColorMode": "standard",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto", "wideLayout": true
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
       },
       "targets": [
         {
-          "datasource": { "type": "postgres", "uid": "olx-postgres" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT count(*) FROM v_active_listings l\nWHERE l.is_rent = TRUE  AND CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])
-  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))",
+          "rawSql": "SELECT count(*) FROM v_active_listings l\nWHERE l.is_rent = TRUE  AND CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])\n  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))\n  AND ( ( ${min_lat:number} <= 42.4 AND ${max_lat:number} >= 46.4 AND ${min_lon:number} <= 15.5 AND ${max_lon:number} >= 19.6 ) OR ( l.latitude IS NOT NULL AND l.latitude BETWEEN ${min_lat:number} AND ${max_lat:number} AND l.longitude BETWEEN ${min_lon:number} AND ${max_lon:number} ) )",
           "refId": "A"
         }
       ],
@@ -110,30 +203,50 @@
       "type": "stat"
     },
     {
-      "datasource": { "type": "postgres", "uid": "olx-postgres" },
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
       "fieldConfig": {
         "defaults": {
           "custom": {
-            "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2,
-            "showPoints": "never", "spanNulls": true
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "showPoints": "never",
+            "spanNulls": true
           },
           "unit": "none"
         },
         "overrides": []
       },
-      "gridPos": { "h": 9, "w": 16, "x": 0, "y": 4 },
+      "gridPos": {
+        "h": 9,
+        "w": 16,
+        "x": 0,
+        "y": 4
+      },
       "id": 4,
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
-        "tooltip": { "mode": "single", "sort": "none" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
       },
       "targets": [
         {
-          "datasource": { "type": "postgres", "uid": "olx-postgres" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT date_trunc('day', ph.scraped_at) AS time,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY ph.ppm2) AS \"median KM/m2\"\nFROM price_history ph\nJOIN v_active_listings la ON la.article_id = ph.article_id\nWHERE ph.ppm2 > 0\n  AND ph.scraped_at > now() - INTERVAL '90 days'  AND CASE WHEN COALESCE(la.rooms, '') = '' THEN 'unknown' WHEN la.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(la.rooms, '+', 1)::int >= 4 THEN '4+' ELSE la.rooms END = ANY (ARRAY[$rooms])
-  AND (la.sqm IS NULL OR la.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = ph.article_id AND ss.category = ANY (ARRAY[$category]))\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT date_trunc('day', ph.scraped_at) AS time,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY ph.ppm2) AS \"median KM/m2\"\nFROM price_history ph\nJOIN v_active_listings la ON la.article_id = ph.article_id\nWHERE ph.ppm2 > 0\n  AND ph.scraped_at > now() - INTERVAL '90 days'  AND CASE WHEN COALESCE(la.rooms, '') = '' THEN 'unknown' WHEN la.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(la.rooms, '+', 1)::int >= 4 THEN '4+' ELSE la.rooms END = ANY (ARRAY[$rooms])\n  AND (la.sqm IS NULL OR la.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = ph.article_id AND ss.category = ANY (ARRAY[$category]))\n  AND ( ( ${min_lat:number} <= 42.4 AND ${max_lat:number} >= 46.4 AND ${min_lon:number} <= 15.5 AND ${max_lon:number} >= 19.6 ) OR ( la.latitude IS NOT NULL AND la.latitude BETWEEN ${min_lat:number} AND ${max_lat:number} AND la.longitude BETWEEN ${min_lon:number} AND ${max_lon:number} ) )\nGROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -141,84 +254,168 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "postgres", "uid": "olx-postgres" },
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
-          "thresholds": { "mode": "absolute", "steps": [ { "color": "blue", "value": null } ] }
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
         },
         "overrides": []
       },
-      "gridPos": { "h": 9, "w": 8, "x": 16, "y": 4 },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 16,
+        "y": 4
+      },
       "id": 5,
       "options": {
         "displayMode": "gradient",
-        "minVizHeight": 10, "minVizWidth": 0,
+        "minVizHeight": 10,
+        "minVizWidth": 0,
         "namePlacement": "auto",
         "orientation": "horizontal",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": true },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        },
         "showUnfilled": true,
         "sizing": "auto",
         "valueMode": "color"
       },
       "targets": [
         {
-          "datasource": { "type": "postgres", "uid": "olx-postgres" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT COALESCE(l.rooms, '?') AS bucket, count(*) AS listings\nFROM v_active_listings l\nWHERE l.is_rent = FALSE  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT COALESCE(l.rooms, '?') AS bucket, count(*) AS listings\nFROM v_active_listings l\nWHERE l.is_rent = FALSE  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))\n  AND ( ( ${min_lat:number} <= 42.4 AND ${max_lat:number} >= 46.4 AND ${min_lon:number} <= 15.5 AND ${max_lon:number} >= 19.6 ) OR ( l.latitude IS NOT NULL AND l.latitude BETWEEN ${min_lat:number} AND ${max_lat:number} AND l.longitude BETWEEN ${min_lon:number} AND ${max_lon:number} ) )\nGROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
       "transformations": [
-        { "id": "rowsToFields", "options": { "nameField": "bucket", "valueField": "listings" } }
+        {
+          "id": "rowsToFields",
+          "options": {
+            "nameField": "bucket",
+            "valueField": "listings"
+          }
+        }
       ],
       "title": "Sale listings by room count",
       "type": "bargauge"
     },
     {
-      "datasource": { "type": "postgres", "uid": "olx-postgres" },
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
       "fieldConfig": {
         "defaults": {
-          "custom": { "align": "auto", "cellOptions": { "type": "auto" }, "inspect": false },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
           "unit": "none"
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "url" },
+            "matcher": {
+              "id": "byName",
+              "options": "url"
+            },
             "properties": [
-              { "id": "custom.hidden", "value": true }
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "title" },
+            "matcher": {
+              "id": "byName",
+              "options": "title"
+            },
             "properties": [
-              { "id": "custom.width", "value": 360 },
+              {
+                "id": "custom.width",
+                "value": 360
+              },
               {
                 "id": "links",
                 "value": [
-                  { "targetBlank": true, "title": "open on olx.ba", "url": "${__data.fields.url}" }
+                  {
+                    "targetBlank": true,
+                    "title": "open on olx.ba",
+                    "url": "${__data.fields.url}"
+                  }
                 ]
               }
             ]
           },
-          { "matcher": { "id": "byName", "options": "price" }, "properties": [ { "id": "unit", "value": "none" } ] }
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "price"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              }
+            ]
+          }
         ]
       },
-      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 13 },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 13
+      },
       "id": 6,
       "options": {
         "cellHeight": "sm",
-        "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
         "showHeader": true
       },
       "targets": [
         {
-          "datasource": { "type": "postgres", "uid": "olx-postgres" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT l.title, l.url, l.sqm, l.rooms, l.price, l.ppm2\nFROM v_active_listings l\nWHERE l.is_rent = FALSE AND l.ppm2 > 0  AND CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])
-  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))\nORDER BY l.ppm2 ASC\nLIMIT 50",
+          "rawSql": "SELECT l.title, l.url, l.sqm, l.rooms, l.price, l.ppm2\nFROM v_active_listings l\nWHERE l.is_rent = FALSE AND l.ppm2 > 0  AND CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])\n  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))\n  AND ( ( ${min_lat:number} <= 42.4 AND ${max_lat:number} >= 46.4 AND ${min_lon:number} <= 15.5 AND ${max_lon:number} >= 19.6 ) OR ( l.latitude IS NOT NULL AND l.latitude BETWEEN ${min_lat:number} AND ${max_lat:number} AND l.longitude BETWEEN ${min_lon:number} AND ${max_lon:number} ) )\nORDER BY l.ppm2 ASC\nLIMIT 50",
           "refId": "A"
         }
       ],
@@ -226,48 +423,101 @@
       "type": "table"
     },
     {
-      "datasource": { "type": "postgres", "uid": "olx-postgres" },
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
       "fieldConfig": {
         "defaults": {
-          "custom": { "align": "auto", "cellOptions": { "type": "auto" }, "inspect": false }
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          }
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "url" },
-            "properties": [ { "id": "custom.hidden", "value": true } ]
+            "matcher": {
+              "id": "byName",
+              "options": "url"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
           },
           {
-            "matcher": { "id": "byName", "options": "title" },
+            "matcher": {
+              "id": "byName",
+              "options": "title"
+            },
             "properties": [
-              { "id": "custom.width", "value": 300 },
+              {
+                "id": "custom.width",
+                "value": 300
+              },
               {
                 "id": "links",
                 "value": [
-                  { "targetBlank": true, "title": "open on olx.ba", "url": "${__data.fields.url}" }
+                  {
+                    "targetBlank": true,
+                    "title": "open on olx.ba",
+                    "url": "${__data.fields.url}"
+                  }
                 ]
               }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "drop" },
-            "properties": [ { "id": "custom.width", "value": 90 }, { "id": "custom.filterable", "value": false } ]
+            "matcher": {
+              "id": "byName",
+              "options": "drop"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 90
+              },
+              {
+                "id": "custom.filterable",
+                "value": false
+              }
+            ]
           }
         ]
       },
-      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 13 },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 13
+      },
       "id": 7,
       "options": {
         "cellHeight": "sm",
-        "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
         "showHeader": true
       },
       "targets": [
         {
-          "datasource": { "type": "postgres", "uid": "olx-postgres" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH h AS (\n  SELECT ph.article_id, ph.price, ph.scraped_at,\n         lag(ph.price) OVER (PARTITION BY ph.article_id ORDER BY ph.scraped_at) AS prev_price\n  FROM price_history ph WHERE ph.price IS NOT NULL\n)\nSELECT l.title, l.url, h.prev_price AS was, h.price AS now,\n       (h.prev_price - h.price) AS drop, h.scraped_at AS seen\nFROM h JOIN listings l ON l.article_id = h.article_id\nWHERE h.prev_price IS NOT NULL AND h.price < h.prev_price  AND CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])
-  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = h.article_id AND ss.category = ANY (ARRAY[$category]))\nORDER BY h.scraped_at DESC\nLIMIT 50",
+          "rawSql": "WITH h AS (\n  SELECT ph.article_id, ph.price, ph.scraped_at,\n         lag(ph.price) OVER (PARTITION BY ph.article_id ORDER BY ph.scraped_at) AS prev_price\n  FROM price_history ph WHERE ph.price IS NOT NULL\n)\nSELECT l.title, l.url, h.prev_price AS was, h.price AS now,\n       (h.prev_price - h.price) AS drop, h.scraped_at AS seen\nFROM h JOIN listings l ON l.article_id = h.article_id\nWHERE h.prev_price IS NOT NULL AND h.price < h.prev_price  AND CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])\n  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = h.article_id AND ss.category = ANY (ARRAY[$category]))\n  AND ( ( ${min_lat:number} <= 42.4 AND ${max_lat:number} >= 46.4 AND ${min_lon:number} <= 15.5 AND ${max_lon:number} >= 19.6 ) OR ( l.latitude IS NOT NULL AND l.latitude BETWEEN ${min_lat:number} AND ${max_lat:number} AND l.longitude BETWEEN ${min_lon:number} AND ${max_lon:number} ) )\nORDER BY h.scraped_at DESC\nLIMIT 50",
           "refId": "A"
         }
       ],
@@ -275,27 +525,49 @@
       "type": "table"
     },
     {
-      "datasource": { "type": "postgres", "uid": "olx-postgres" },
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
       "fieldConfig": {
         "defaults": {
-          "custom": { "drawStyle": "bars", "fillOpacity": 40, "lineWidth": 1, "spanNulls": true },
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 40,
+            "lineWidth": 1,
+            "spanNulls": true
+          },
           "unit": "short"
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 23 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 23
+      },
       "id": 8,
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
-        "tooltip": { "mode": "single", "sort": "none" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
       },
       "targets": [
         {
-          "datasource": { "type": "postgres", "uid": "olx-postgres" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT date_trunc('day', l.first_seen) AS time,\n       count(*) AS \"new listings\"\nFROM v_active_listings l\nWHERE CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])
-  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT date_trunc('day', l.first_seen) AS time,\n       count(*) AS \"new listings\"\nFROM v_active_listings l\nWHERE CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])\n  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))\n  AND ( ( ${min_lat:number} <= 42.4 AND ${max_lat:number} >= 46.4 AND ${min_lon:number} <= 15.5 AND ${max_lon:number} >= 19.6 ) OR ( l.latitude IS NOT NULL AND l.latitude BETWEEN ${min_lat:number} AND ${max_lat:number} AND l.longitude BETWEEN ${min_lon:number} AND ${max_lon:number} ) )\nGROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -303,23 +575,47 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "postgres", "uid": "olx-postgres" },
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
       "fieldConfig": {
         "defaults": {
-          "custom": { "align": "auto", "cellOptions": { "type": "auto" }, "inspect": false }
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          }
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 23 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 23
+      },
       "id": 9,
       "options": {
         "cellHeight": "sm",
-        "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
         "showHeader": true
       },
       "targets": [
         {
-          "datasource": { "type": "postgres", "uid": "olx-postgres" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
           "editorMode": "code",
           "format": "table",
           "rawSql": "SELECT name, COALESCE(category, '(none)') AS category, listing_count AS listings,\n       COALESCE(median_ppm2, 0) AS median, new_count AS new, drop_count AS drops,\n       last_scraped_at AS last_scraped\nFROM saved_searches\nWHERE category = ANY (ARRAY[$category])\nORDER BY name",
@@ -330,35 +626,84 @@
       "type": "table"
     },
     {
-      "datasource": { "type": "postgres", "uid": "olx-postgres" },
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
       "fieldConfig": {
         "defaults": {
-          "custom": { "align": "auto", "cellOptions": { "type": "auto" }, "inspect": false },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
           "mappings": [
             {
               "options": {
-                "ok":    { "color": "green", "index": 0 },
-                "error": { "color": "red", "index": 1 }
+                "ok": {
+                  "color": "green",
+                  "index": 0
+                },
+                "error": {
+                  "color": "red",
+                  "index": 1
+                }
               },
               "type": "value"
             }
           ],
-          "thresholds": { "mode": "absolute", "steps": [ { "color": "text", "value": null } ] }
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
         },
         "overrides": [
-          { "matcher": { "id": "byName", "options": "error" }, "properties": [ { "id": "custom.width", "value": 300 } ] }
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "error"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 300
+              }
+            ]
+          }
         ]
       },
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 31 },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 31
+      },
       "id": 10,
       "options": {
         "cellHeight": "sm",
-        "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
         "showHeader": true
       },
       "targets": [
         {
-          "datasource": { "type": "postgres", "uid": "olx-postgres" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
           "editorMode": "code",
           "format": "table",
           "rawSql": "SELECT r.id, COALESCE(ss.category, '(none)') AS category, r.search_key, r.status,\n       r.pages, r.cards, r.started_at AS started, r.finished_at AS finished, r.error\nFROM scrape_runs r\nLEFT JOIN saved_searches ss ON ss.search_key = r.search_key\nWHERE ss.category IS NULL OR ss.category = ANY (ARRAY[$category])\nORDER BY r.id DESC\nLIMIT 20",
@@ -369,49 +714,104 @@
       "type": "table"
     },
     {
-      "datasource": { "type": "postgres", "uid": "olx-postgres" },
-      "gridPos": { "h": 14, "w": 24, "x": 0, "y": 39 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "gridPos": {
+        "h": 14,
+        "w": 24,
+        "x": 0,
+        "y": 39
+      },
       "id": 11,
       "options": {
-        "basemap": { "type": "default" },
-        "controls": { "mouseWheelZoom": true },
+        "basemap": {
+          "type": "default"
+        },
+        "controls": {
+          "mouseWheelZoom": true
+        },
         "layers": [
           {
             "config": {
               "showLegend": false,
-              "style": { "color": { "fixed": "dark-green" }, "opacity": 0.7, "size": { "fixed": 6 } }
+              "style": {
+                "color": {
+                  "fixed": "dark-green"
+                },
+                "opacity": 0.7,
+                "size": {
+                  "fixed": 6
+                }
+              }
             },
-            "location": { "mode": "auto" },
+            "location": {
+              "mode": "auto"
+            },
             "name": "Listings",
             "tooltip": true,
             "type": "markers"
           }
         ],
-        "tooltip": { "mode": "details" },
-        "view": { "id": "coords", "lat": 44.77, "lon": 17.2, "zoom": 9, "allLayers": true, "lastOnly": false }
+        "tooltip": {
+          "mode": "details"
+        },
+        "view": {
+          "id": "coords",
+          "lat": 44.77,
+          "lon": 17.2,
+          "zoom": 9,
+          "allLayers": true,
+          "lastOnly": false
+        }
       },
       "targets": [
         {
-          "datasource": { "type": "postgres", "uid": "olx-postgres" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT l.latitude, l.longitude, l.title\nFROM v_active_listings l\nWHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL\n    AND CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])
-  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})",
+          "rawSql": "SELECT l.latitude, l.longitude, l.title, l.url\nFROM v_active_listings l\nWHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL\n    AND CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])\n  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND ( ( ${min_lat:number} <= 42.4 AND ${max_lat:number} >= 46.4 AND ${min_lon:number} <= 15.5 AND ${max_lon:number} >= 19.6 ) OR ( l.latitude IS NOT NULL AND l.latitude BETWEEN ${min_lat:number} AND ${max_lat:number} AND l.longitude BETWEEN ${min_lon:number} AND ${max_lon:number} ) )",
           "refId": "A"
         }
       ],
       "title": "Listing map — pinned locations",
-      "type": "geomap"
+      "type": "geomap",
+      "fieldConfig": {
+        "defaults": {
+          "links": [
+            {
+              "title": "Open ad on olx.ba",
+              "url": "${__data.fields.url}",
+              "targetBlank": true
+            }
+          ]
+        },
+        "overrides": []
+      }
     }
   ],
   "refresh": "5m",
   "schemaVersion": 39,
-  "tags": ["olx", "real-estate"],
+  "tags": [
+    "olx",
+    "real-estate"
+  ],
   "templating": {
     "list": [
       {
-        "current": { "selected": true, "text": "All", "value": "$__all" },
-        "datasource": { "type": "postgres", "uid": "olx-postgres" },
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "postgres",
+          "uid": "olx-postgres"
+        },
         "definition": "SELECT category AS __value, category AS __text FROM saved_searches WHERE category IS NOT NULL GROUP BY category ORDER BY 1",
         "includeAll": true,
         "label": "Category",
@@ -426,8 +826,15 @@
         "type": "query"
       },
       {
-        "current": { "selected": true, "text": "All", "value": "$__all" },
-        "datasource": { "type": "postgres", "uid": "olx-postgres" },
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "postgres",
+          "uid": "olx-postgres"
+        },
         "definition": "SELECT bucket AS __value, bucket AS __text FROM (\n  SELECT CASE WHEN COALESCE(rooms, '') = '' THEN 'unknown'\n              WHEN rooms !~ '^[0-9]' THEN 'other'\n              WHEN split_part(rooms, '+', 1)::int >= 4 THEN '4+'\n              ELSE rooms END AS bucket\n  FROM v_active_listings WHERE is_rent = FALSE\n) s GROUP BY bucket ORDER BY bucket",
         "includeAll": true,
         "label": "Rooms",
@@ -442,22 +849,71 @@
         "type": "query"
       },
       {
-        "current": { "text": "0", "value": "0" },
+        "current": {
+          "text": "0",
+          "value": "0"
+        },
         "label": "Min m²",
         "name": "min_sqm",
         "skipUrlSync": false,
         "type": "textbox"
       },
       {
-        "current": { "text": "99999", "value": "99999" },
+        "current": {
+          "text": "99999",
+          "value": "99999"
+        },
         "label": "Max m²",
         "name": "max_sqm",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "text": "42.4",
+          "value": "42.4"
+        },
+        "label": "Min lat",
+        "name": "min_lat",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "text": "46.4",
+          "value": "46.4"
+        },
+        "label": "Max lat",
+        "name": "max_lat",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "text": "15.5",
+          "value": "15.5"
+        },
+        "label": "Min lon",
+        "name": "min_lon",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "text": "19.6",
+          "value": "19.6"
+        },
+        "label": "Max lon",
+        "name": "max_lon",
         "skipUrlSync": false,
         "type": "textbox"
       }
     ]
   },
-  "time": { "from": "now-90d", "to": "now" },
+  "time": {
+    "from": "now-90d",
+    "to": "now"
+  },
   "timezone": "browser",
   "title": "OLX.ba Market Overview",
   "uid": "olx-overview",
