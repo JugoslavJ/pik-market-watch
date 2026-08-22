@@ -12,14 +12,9 @@
 const { chromium } = require('playwright');
 const config = require('./config');
 const Db = require('./db');
-const { extractGeo } = require('./parser');
 const { scrapeGeo } = require('./scraper');
+const { sleep } = require('./util');
 
-const USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
-  'Chrome/131.0.0.0 Safari/537.36';
-
-const sleep = ms => new Promise(r => setTimeout(r, ms));
 const log = (...args) => console.log(new Date().toISOString(), '[backfill]', ...args);
 
 (async () => {

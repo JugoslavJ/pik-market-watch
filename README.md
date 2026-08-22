@@ -79,13 +79,14 @@ Scraper-only tuning (set in `docker-compose.yml`'s `environment:` block): `MAX_P
 | `scrape_runs` | *(new)* | Run observability: status, pages, cards, error |
 | `v_active_listings` | *(new)* | View: anything seen by a scrape within 14 days |
 
-The schema is created automatically on **first** start only (`db/init/01-schema.sql` via the Postgres entrypoint). To change it later, write a new migration file in `db/init/` and apply it manually — the init dir is not re-run on existing volumes.
-
-Already initialized a volume from before the `category` column existed? Apply it once:
+The schema is created automatically on **first** start only (`db/init/*.sql`, alphabetical order, via the Postgres entrypoint). To change it later, add a new **idempotent** migration file there — the init dir is not re-run on existing volumes, so apply new files once manually:
 
 ```bash
-docker compose exec db psql -U olx -c "ALTER TABLE saved_searches ADD COLUMN IF NOT EXISTS category TEXT"
+docker exec -i olx-db psql -U olx -d olx < db/init/02-add-geolocation.sql    # geolocation columns
+docker exec -i olx-db psql -U olx -d olx < db/init/03-listing-filters.sql   # dashboard filter functions
 ```
+
+The provisioned Grafana dashboard's SQL calls the `listings_filtered()` / `room_bucket()` functions from `03-listing-filters.sql` — apply that file once when upgrading an existing volume, before restarting Grafana.
 
 ## Dashboard panels
 

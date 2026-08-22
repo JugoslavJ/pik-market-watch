@@ -78,13 +78,14 @@ function extractArticleId(url) {
   return m ? m[1] : null;
 }
 
-// ── Geolocation extraction (ad DETAIL pages) ──────────────────────────────────
+// ── Geolocation extraction (ad DETAIL pages) ──────────────────────────────
 // olx.ba embeds the ad's map pin in its Nuxt state as a literal, e.g.:
 //   location:{lat:44.825690864477,lon:17.302538236771}
 // A quoted template default ({"lat":"43.1235","lon":"42.5426"}) also exists on
-// every page and MUST be discarded — the Bosnia bounding box below does that.
-
-const GEO_BBOX = { latMin: 42.4, latMax: 46.4, lonMin: 15.5, lonMax: 19.9 };
+// every page and MUST be discarded — the Bosnia bounding box enforced inside
+// extractGeoInPage() below (lat 42.4–46.4, lon 15.5–19.9) does that. Bounds
+// are hardcoded in-page: page.evaluate() callbacks cannot close over Node
+// constants.
 
 async function extractGeo(page) {
   return page.evaluate(extractGeoInPage);

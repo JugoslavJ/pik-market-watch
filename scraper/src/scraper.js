@@ -5,14 +5,7 @@
 // written to Postgres in a single transaction.
 
 const { collectCards, extractArticleId, extractGeo } = require('./parser');
-
-// Playwright's headless UA advertises "HeadlessChrome", which some bot
-// filters reject outright; a plain, current Chrome UA does not.
-const USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
-  'Chrome/131.0.0.0 Safari/537.36';
-
-const sleep = ms => new Promise(r => setTimeout(r, ms));
+const { USER_AGENT, sleep } = require('./util');
 
 // Port of computeMedian() from the original extension (rounded).
 function computeMedian(values) {
@@ -126,8 +119,8 @@ async function scrapeSearch(browser, search, cfg, db, log) {
 
     const { newCount, dropCount, newIds } = await db.saveCards(allCards);
 
-    // The saved_searches row MUST be created before search_results rows
-    // reference it (FK search_results_search_key_fkey).
+    // Row existence + identity were already guaranteed at run start
+    // (registerSavedSearch); this upsert refreshes the per-run stats.
     const median = computeMedian(allCards.map(c => c.ppm2).filter(v => v != null && v > 0));
     await db.upsertSavedSearch({
       searchKey: search.searchKey, name: search.name, url: base.href,
@@ -183,4 +176,4 @@ async function scrapeSearch(browser, search, cfg, db, log) {
   }
 }
 
-module.exports = { scrapeSearch, computeMedian, scrapeGeo };
+module.exports = { scrapeSearch, scrapeGeo };
