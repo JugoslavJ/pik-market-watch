@@ -1,0 +1,24 @@
+# ── Secrets & personal config ─────────────────────────────────────────
+# Compose env with DB passwords etc. (.env.example IS committed)
+.env
+.env.local
+# User's own saved-search list (the committed template is searches.example.json)
+config/searches.json
+
+# ── Node / build artifacts ────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-error.log*
+*.log
+coverage/
+
+# ── Runtime data (bind-mounted volumes, scraped dumps) ────────────────
+pgdata/
+data/
+
+# ── OS / editor junk ──────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/

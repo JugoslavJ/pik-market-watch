@@ -1,0 +1,294 @@
+/* OLX.ba Price per m² — settings / config tab */
+
+/* ── Section ───────────────────────────────────────────────────────────── */
+
+.olx-cfg-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+.olx-cfg-section:last-child { border-bottom: none; padding-bottom: 0; }
+
+.olx-cfg-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.olx-cfg-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: #6b7280;
+}
+.olx-cfg-hint {
+  font-size: 11px;
+  color: #9ca3af;
+  line-height: 1.5;
+  margin-top: -2px;
+}
+
+/* ── 4-column compact grid for finance fields ──────────────────────────── */
+
+.olx-cfg-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 2fr;
+  gap: 8px 12px;
+  align-items: end;
+}
+
+.olx-cfg-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.olx-cfg-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+
+.olx-cfg-input {
+  width: 100%;
+  padding: 6px 9px;
+  border: 1px solid #e5e7eb;
+  border-radius: 7px;
+  font-size: 13px;
+  color: #111827;
+  background: #fff;
+  transition: border-color .15s;
+  box-sizing: border-box;
+}
+.olx-cfg-input:focus {
+  outline: none;
+  border-color: #002f34;
+  box-shadow: 0 0 0 2px rgba(0,47,52,.08);
+}
+
+.olx-cfg-input-group {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.olx-cfg-input-group .olx-cfg-input { flex: 1; min-width: 0; }
+.olx-cfg-unit {
+  font-size: 11px;
+  color: #9ca3af;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Loan term radio buttons — inline compact ──────────────────────────── */
+
+.olx-cfg-radio-group {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.olx-cfg-radio-btn {
+  all: unset;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  background: #f3f4f6;
+  border: 1px solid transparent;
+  transition: all .15s ease;
+  white-space: nowrap;
+}
+.olx-cfg-radio-btn:hover { background: #e5e7eb; color: #374151; }
+.olx-cfg-radio-btn.olx-cfg-radio-active {
+  background: #002f34;
+  color: #fff;
+  border-color: #002f34;
+}
+
+/* ── Loan preview card ─────────────────────────────────────────────────── */
+
+.olx-cfg-loan-preview {
+  background: #f9fafb;
+  border: 1px solid #eef0f2;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.olx-cfg-preview-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin-bottom: 8px;
+}
+.olx-cfg-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px 14px;
+}
+.olx-cfg-preview-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.olx-cfg-preview-label {
+  font-size: 10px;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+.olx-cfg-preview-val {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+}
+.olx-cfg-preview-highlight .olx-cfg-preview-val {
+  font-size: 14px;
+  color: #002f34;
+}
+.olx-cfg-preview-ok   { color: #15803d !important; }
+.olx-cfg-preview-over { color: #b91c1c !important; }
+
+/* ── Owned properties ──────────────────────────────────────────────────── */
+
+.olx-cfg-add-btn {
+  all: unset;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 11px;
+  border-radius: 6px;
+  background: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+  transition: background .15s;
+}
+.olx-cfg-add-btn:hover { background: #dcfce7; }
+
+.olx-cfg-empty {
+  font-size: 12px;
+  color: #9ca3af;
+  text-align: center;
+  padding: 14px 0;
+  border: 1px dashed #e5e7eb;
+  border-radius: 8px;
+}
+
+.olx-cfg-prop-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid #eef0f2;
+  border-radius: 8px;
+  background: #fff;
+  margin-bottom: 5px;
+}
+.olx-cfg-prop-name { flex: 1; min-width: 0; }
+.olx-cfg-prop-sm   { flex: 0 0 80px; }
+
+.olx-cfg-delete-btn {
+  all: unset;
+  cursor: pointer;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  font-size: 10px;
+  color: #9ca3af;
+  flex-shrink: 0;
+  transition: background .15s, color .15s;
+}
+.olx-cfg-delete-btn:hover { background: #fee2e2; color: #b91c1c; }
+
+/* ── Owned income summary ──────────────────────────────────────────────── */
+
+.olx-cfg-owned-summary {
+  margin-top: 6px;
+  border: 1px solid #eef0f2;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.olx-cfg-income-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1px;
+  background: #eef0f2;
+  border-bottom: 1px solid #eef0f2;
+}
+
+.olx-cfg-income-cell {
+  background: #fafafa;
+  padding: 7px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.olx-cfg-income-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.olx-cfg-income-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+}
+
+.olx-cfg-owned-label  { font-size: 12px; font-weight: 600; color: #374151; }
+.olx-cfg-owned-est    { font-size: 12px; font-weight: 700; color: #002f34; white-space: nowrap; }
+.olx-cfg-owned-method { font-size: 10px; color: #9ca3af; }
+
+.olx-cfg-owned-totals {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7px 10px;
+  background: #fff;
+  font-size: 12px;
+  color: #374151;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.olx-cfg-owned-budget {
+  color: #15803d;
+  font-size: 12px;
+}
+.olx-cfg-owned-budget strong { color: #15803d; }
+
+.olx-cfg-owned-neighbour {
+  font-size: 10px;
+  color: #6b7280;
+  background: #f3f4f6;
+  border-radius: 4px;
+  padding: 1px 5px;
+  white-space: nowrap;
+}
+
+/* Price quick-pick buttons in loan preview */
+.olx-cfg-price-picks    { display:inline-flex; gap:4px; margin:0 6px; }
+.olx-cfg-price-btn {
+  all: unset;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: #f3f4f6;
+  color: #374151;
+  transition: background .12s;
+}
+.olx-cfg-price-btn:hover         { background: #e5e7eb; }
+.olx-cfg-price-btn-active        { background: #002f34; color: #fff; }

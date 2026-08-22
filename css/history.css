@@ -1,0 +1,18 @@
+/* OLX.ba Price per m² — price history expanded row */
+
+.olx-history-row td {
+  padding: 10px 14px !important;
+  background: #f9fafb;
+  border-top: none !important;
+}
+.olx-history-inner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.olx-history-label {
+  font-size: 11px;
+  color: #6b7280;
+  white-space: nowrap;
+}
+.olx-history-canvas-wrap { flex: 1; }
