@@ -72,21 +72,42 @@ Scraper-only tuning (set in `docker-compose.yml`'s `environment:` block): `MAX_P
 
 | Table | Mirrors | Contents |
 |---|---|---|
-| `listings` | `STORE_LISTINGS` | One row per article: title, url, sqm, rooms, price, ppm², is_rent, first/last seen |
+| `listings` | `STORE_LISTINGS` | One row per article: title, url, sqm, rooms, price, ppm², is_rent, first/last seen. Ads gone from every search are closed automatically (`closed_at` + frozen `closing_price`/`closing_ppm2`) |
 | `price_history` | `priceHistory[]` | Append-only snapshots; a row is added only when price/ppm² actually changed |
 | `saved_searches` | `STORE_SAVED` | Watched searches + per-run stats (count, median ppm², new/drop counts) + free-form `category` label for the dashboard filter |
 | `search_results` | `STORE_SEARCH` | Which articles each search returned (refreshed every run) |
 | `scrape_runs` | *(new)* | Run observability: status, pages, cards, error |
 | `v_active_listings` | *(new)* | View: anything seen by a scrape within 14 days |
 
-The schema is created automatically on **first** start only (`db/init/*.sql`, alphabetical order, via the Postgres entrypoint). To change it later, add a new **idempotent** migration file there — the init dir is not re-run on existing volumes, so apply new files once manually:
+Schema migrations live in `db/init/*.sql` and are applied in filename order. The Postgres entrypoint runs them on **first** volume start, and the scraper re-checks and applies any *unapplied* ones on every startup — tracked in a `schema_migrations` table. To change the schema later, drop a new **idempotent** migration file into `db/init/` and restart the scraper (`docker compose restart scraper`) — nothing else to do.
+
+Manual application still works if you ever need it:
 
 ```bash
-docker exec -i olx-db psql -U olx -d olx < db/init/02-add-geolocation.sql    # geolocation columns
 docker exec -i olx-db psql -U olx -d olx < db/init/03-listing-filters.sql   # dashboard filter functions
 ```
 
-The provisioned Grafana dashboard's SQL calls the `listings_filtered()` / `room_bucket()` functions from `03-listing-filters.sql` — apply that file once when upgrading an existing volume, before restarting Grafana.
+### Listing lifecycle
+
+Every scraping cycle ends with a closing pass: any listing that none of the configured searches returned anymore gets `closed_at` set, freezing its last observed price into `closing_price` / `closing_ppm2`. Closed ads drop out of every dashboard panel immediately but stay in `listings` for later analysis. If an ad reappears on olx.ba it reopens automatically on its next sighting. A failed scrape never causes closures — its stale result links keep that search's listings open until a successful run sees them gone.
+
+## Development & testing
+
+```bash
+cd scraper
+npm install                # once
+npm test                   # hermetic unit tests (parser, config keys, utils) — no services needed
+npm run test:integration   # DB-backed tests; boots a throwaway Postgres container via Docker
+npm run lint:syntax        # node --check over every src file
+```
+
+The integration suite exercises the real SQL against a real database: the write
+semantics of `saveCards` (history-append gates, drop counting), detail-page
+enrichment (`sqm` / `ppm²` derivation with never-overwrite rules),
+saved-search identity vs stats separation, the run lifecycle, and the startup
+migration runner on fresh *and* legacy-shaped databases. It is skipped
+gracefully when no database is configured, so plain `npm test` works anywhere.
+GitHub Actions runs all three commands on every push and pull request.
 
 ## Dashboard panels
 
@@ -123,14 +144,17 @@ docker compose exec db pg_restore -U olx -d olx --clean --if-exists /backups/olx
 
 Manual out-of-band dump: `docker compose exec db pg_dump -U olx -Fc olx > manual.dump`
 
-### Geolocation backfill
+### Detail-page backfill (map pins + floor area)
 
-New listings get their map pin fetched automatically. To pin the existing stock
+New listings get their map pin fetched automatically, and ads whose search
+card shows no m² (vikendice don't) get their floor area — and with it
+price-per-m² — from the ad's detail page. To fill in the existing stock
 (resumable — interrupted runs just start again where they left off):
 
 ```bash
-docker compose run --rm scraper node src/backfill-geo.js           # active listings (≤ 14 d)
-docker compose run --rm scraper node src/backfill-geo.js --all     # everything ever stored
+docker compose run --rm scraper node src/backfill-geo.js             # active listings (≤ 14 d)
+docker compose run --rm scraper node src/backfill-geo.js --all       # everything ever stored
+docker compose run --rm scraper node src/backfill-geo.js --max=100   # cap the run size
 # long runs: add -d --name olx-backfill and follow with `docker logs -f olx-backfill`
 ```
 

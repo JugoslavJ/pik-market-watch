@@ -47,6 +47,7 @@ function loadSearches() {
 module.exports = {
   databaseUrl:     process.env.DATABASE_URL || 'postgres://olx:olx@db:5432/olx',
   migrationsDir:   MIGRATIONS_DIR,                            // db/init/*.sql applied on startup
+  normalizeSearchKey,                                         // stable per-search primary key
   intervalMinutes: num(process.env.SCRAPE_INTERVAL_MINUTES, 720),
   runOnce:         process.env.RUN_ONCE === '1' || process.argv.includes('--once'),
   maxPages:        num(process.env.MAX_PAGES, 30),           // extension cap was 30
