@@ -742,9 +742,16 @@
                 },
                 "opacity": 0.7,
                 "size": {
-                  "fixed": 6
+                  "fixed": 9
                 }
-              }
+              },
+              "links": [
+                {
+                  "title": "Open ad on olx.ba",
+                  "url": "${__data.fields.url}",
+                  "targetBlank": true
+                }
+              ]
             },
             "location": {
               "mode": "auto"
@@ -774,7 +781,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT l.latitude, l.longitude, l.title, l.url\nFROM v_active_listings l\nWHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL\n    AND CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])\n  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND ( ( ${min_lat:number} <= 42.4 AND ${max_lat:number} >= 46.4 AND ${min_lon:number} <= 15.5 AND ${max_lon:number} >= 19.6 ) OR ( l.latitude IS NOT NULL AND l.latitude BETWEEN ${min_lat:number} AND ${max_lat:number} AND l.longitude BETWEEN ${min_lon:number} AND ${max_lon:number} ) )",
+          "rawSql": "SELECT l.latitude, l.longitude, l.title, l.url,\n       l.price, l.sqm, l.rooms, l.ppm2,\n       l.location AS location\nFROM v_active_listings l\nWHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL\n    AND CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])\n  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND ( ( ${min_lat:number} <= 42.4 AND ${max_lat:number} >= 46.4 AND ${min_lon:number} <= 15.5 AND ${max_lon:number} >= 19.6 ) OR ( l.latitude IS NOT NULL AND l.latitude BETWEEN ${min_lat:number} AND ${max_lat:number} AND l.longitude BETWEEN ${min_lon:number} AND ${max_lon:number} ) )",
           "refId": "A"
         }
       ],
@@ -790,7 +797,20 @@
             }
           ]
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "url"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          }
+        ]
       }
     }
   ],
