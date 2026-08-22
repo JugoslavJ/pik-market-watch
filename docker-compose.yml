@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# OLX.ba price tracker — 3-container stack
+# pik-market-watch — OLX.ba price tracker, 3-container stack
 #   db      : PostgreSQL 16, schema auto-created on first start (db/init/*.sql)
 #   scraper : Node + Playwright headless Chromium; scrapes configured searches
 #             into Postgres on a schedule (default every 12 h)
@@ -120,5 +120,10 @@ services:
     logging: *logging
 
 volumes:
+  # Explicit names: Compose derives them from the repo FOLDER name when left
+  # implicit, so renaming olx-price-ext → pik-market-watch would otherwise
+  # abandon the existing pgdata/grafana volumes on the next `up`.
   pgdata:
+    name: olx-price-ext_pgdata
   grafana:
+    name: olx-price-ext_grafana
