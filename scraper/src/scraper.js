@@ -57,8 +57,22 @@ async function scrapeGeo(browser, url, cfg) {
 }
 
 async function scrapeSearch(browser, search, cfg, db, log) {
+  // Canonical page-1 URL for this search (pagination params stripped).
+  const base = new URL(search.url);
+  base.searchParams.delete('page');
+  base.searchParams.delete('olx_scrape');
+
   const runId = await db.startRun(search.searchKey);
   log(`▶ "${search.name}" started (run #${runId})`);
+
+  // Register the search identity (name/url/category) BEFORE scraping so the
+  // dashboard can classify this run while it is still 'running' — and even if
+  // it fails midway. Per-run stats are still only written on successful
+  // completion by upsertSavedSearch() below.
+  await db.registerSavedSearch({
+    searchKey: search.searchKey, name: search.name, url: base.href,
+    category: search.category,
+  });
 
   const seen = new Set();
   const allCards = [];
@@ -73,10 +87,6 @@ async function scrapeSearch(browser, search, cfg, db, log) {
   };
 
   try {
-    const base = new URL(search.url);
-    base.searchParams.delete('page');
-    base.searchParams.delete('olx_scrape');
-
     const fetchPage = async pageNo => {
       const u = new URL(base.href);
       if (pageNo > 1) u.searchParams.set('page', String(pageNo));

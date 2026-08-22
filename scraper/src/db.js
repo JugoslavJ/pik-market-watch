@@ -153,6 +153,23 @@ class Db {
     }
   }
 
+  /**
+   * Create/update ONLY the identity columns of a saved search (name/url/
+   * category), leaving stats and last_scraped_at untouched. Called at the
+   * START of a run so dashboards can attribute 'running' (or failed) runs to
+   * a category instead of showing '(none)'; upsertSavedSearch() fills in the
+   * numbers when the run completes. Also guarantees the row exists before
+   * search_results references it (FK search_results_search_key_fkey).
+   */
+  async registerSavedSearch({ searchKey, name, url, category }) {
+    await this.pool.query(
+      `INSERT INTO saved_searches (search_key, name, url, category)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (search_key) DO UPDATE SET
+         name = EXCLUDED.name, url = EXCLUDED.url, category = EXCLUDED.category`,
+      [searchKey, name, url, category ?? null]);
+  }
+
   async upsertSavedSearch({ searchKey, name, url, category, listingCount, median, newCount, dropCount }) {
     await this.pool.query(
       `INSERT INTO saved_searches

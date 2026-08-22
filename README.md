@@ -148,6 +148,14 @@ an exited one-shot container is relaunched immediately, i.e. it scrapes in an en
 
 - **Zero cards scraped / 403-style blocks**: olx.ba may be throttling the datacenter-ish fingerprint. Raise `PAGE_DELAY_MS` (e.g. 4000) and lower `CONCURRENCY` to 1. Check http://localhost:9100 and the `scrape_runs` table for errors. (The image ships only Chromium's headless shell, so `HEADLESS=0` is not available in-container.)
 - **Selector drift**: if OLX redesigns their markup, update the selectors in `scraper/src/parser.js` — they live in one place now.
+- **“Recent scrape runs” shows category `(none)`**: run rows inherit their category from `saved_searches`, and that row used to be written only when a run *finished* — brand-new searches (and every attempt that failed before the first success) therefore appeared unclassified. The scraper now registers each search's name/category at run start, so this self-heals after `docker compose up -d --build scraper`. To label rows already sitting in the database without rebuilding:
+
+  ```bash
+  docker compose exec db psql -U olx -c "SELECT search_key, name, category FROM saved_searches ORDER BY name;"
+  docker compose exec db psql -U olx -c "UPDATE saved_searches SET category = 'apartments' WHERE search_key = '/pretraga?category_id=23&canton=11&cities=79'"
+  ```
+
+  (repeat the `UPDATE` once per search with its own key/category)
 - **Grafana datasource fails**: the container needs `POSTGRES_*` env vars to render `grafana/provisioning/datasources/postgres.yml` — they are wired through `docker-compose.yml`.
 
 > Note: scraping olx.ba is for personal analysis only — keep intervals polite.
