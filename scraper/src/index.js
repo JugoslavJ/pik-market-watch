@@ -75,6 +75,10 @@ async function main() {
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT',  () => shutdown('SIGINT'));
 
+  // Serve the health endpoint from t=0 so container healthchecks pass while
+  // the initial scrape is still running.
+  startHealthServer();
+
   await runAll(browser, db);
 
   if (config.runOnce) {
@@ -87,7 +91,6 @@ async function main() {
   timer = setInterval(
     () => runAll(browser, db).catch(err => log('scheduled run failed:', err.message || err)),
     config.intervalMinutes * 60000);
-  startHealthServer();
   log('scheduler running — waiting for the next interval');
 }
 

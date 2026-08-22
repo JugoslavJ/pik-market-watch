@@ -29,7 +29,7 @@
           "datasource": { "type": "postgres", "uid": "olx-postgres" },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT count(*) FROM v_active_listings l\nWHERE l.is_rent = FALSE\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category])))",
+          "rawSql": "SELECT count(*) FROM v_active_listings l\nWHERE l.is_rent = FALSE\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))",
           "refId": "A"
         }
       ],
@@ -66,7 +66,7 @@
           "datasource": { "type": "postgres", "uid": "olx-postgres" },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)\nFROM v_active_listings l\nWHERE l.ppm2 IS NOT NULL\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category])))",
+          "rawSql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)\nFROM v_active_listings l\nWHERE l.ppm2 IS NOT NULL\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))",
           "refId": "A"
         }
       ],
@@ -96,7 +96,7 @@
           "datasource": { "type": "postgres", "uid": "olx-postgres" },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT count(*) FROM v_active_listings l\nWHERE l.is_rent = TRUE\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category])))",
+          "rawSql": "SELECT count(*) FROM v_active_listings l\nWHERE l.is_rent = TRUE\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))",
           "refId": "A"
         }
       ],
@@ -126,7 +126,7 @@
           "datasource": { "type": "postgres", "uid": "olx-postgres" },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT date_trunc('day', ph.scraped_at) AS time,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY ph.ppm2) AS \"median KM/m2\"\nFROM price_history ph\nWHERE ph.ppm2 IS NOT NULL\n  AND ph.scraped_at > now() - INTERVAL '90 days'\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = ph.article_id AND ss.category = ANY (ARRAY[$category])))\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT date_trunc('day', ph.scraped_at) AS time,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY ph.ppm2) AS \"median KM/m2\"\nFROM price_history ph\nWHERE ph.ppm2 IS NOT NULL\n  AND ph.scraped_at > now() - INTERVAL '90 days'\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = ph.article_id AND ss.category = ANY (ARRAY[$category]))\nGROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -159,7 +159,7 @@
           "datasource": { "type": "postgres", "uid": "olx-postgres" },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT COALESCE(l.rooms, '?') AS bucket, count(*) AS listings\nFROM v_active_listings l\nWHERE l.is_rent = FALSE\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category])))\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT COALESCE(l.rooms, '?') AS bucket, count(*) AS listings\nFROM v_active_listings l\nWHERE l.is_rent = FALSE\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))\nGROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -210,7 +210,7 @@
           "datasource": { "type": "postgres", "uid": "olx-postgres" },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT l.title, l.url, l.sqm, l.rooms, l.price, l.ppm2\nFROM v_active_listings l\nWHERE l.is_rent = FALSE AND l.ppm2 IS NOT NULL\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category])))\nORDER BY l.ppm2 ASC\nLIMIT 50",
+          "rawSql": "SELECT l.title, l.url, l.sqm, l.rooms, l.price, l.ppm2\nFROM v_active_listings l\nWHERE l.is_rent = FALSE AND l.ppm2 IS NOT NULL\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))\nORDER BY l.ppm2 ASC\nLIMIT 50",
           "refId": "A"
         }
       ],
@@ -258,7 +258,7 @@
           "datasource": { "type": "postgres", "uid": "olx-postgres" },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH h AS (\n  SELECT ph.article_id, ph.price, ph.scraped_at,\n         lag(ph.price) OVER (PARTITION BY ph.article_id ORDER BY ph.scraped_at) AS prev_price\n  FROM price_history ph WHERE ph.price IS NOT NULL\n)\nSELECT l.title, l.url, h.prev_price AS was, h.price AS now,\n       (h.prev_price - h.price) AS drop, h.scraped_at AS seen\nFROM h JOIN listings l ON l.article_id = h.article_id\nWHERE h.prev_price IS NOT NULL AND h.price < h.prev_price\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = h.article_id AND ss.category = ANY (ARRAY[$category])))\nORDER BY h.scraped_at DESC\nLIMIT 50",
+          "rawSql": "WITH h AS (\n  SELECT ph.article_id, ph.price, ph.scraped_at,\n         lag(ph.price) OVER (PARTITION BY ph.article_id ORDER BY ph.scraped_at) AS prev_price\n  FROM price_history ph WHERE ph.price IS NOT NULL\n)\nSELECT l.title, l.url, h.prev_price AS was, h.price AS now,\n       (h.prev_price - h.price) AS drop, h.scraped_at AS seen\nFROM h JOIN listings l ON l.article_id = h.article_id\nWHERE h.prev_price IS NOT NULL AND h.price < h.prev_price\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = h.article_id AND ss.category = ANY (ARRAY[$category]))\nORDER BY h.scraped_at DESC\nLIMIT 50",
           "refId": "A"
         }
       ],
@@ -285,7 +285,7 @@
           "datasource": { "type": "postgres", "uid": "olx-postgres" },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT date_trunc('day', l.first_seen) AS time,\n       count(*) AS \"new listings\"\nFROM v_active_listings l\nWHERE EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category])))\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT date_trunc('day', l.first_seen) AS time,\n       count(*) AS \"new listings\"\nFROM v_active_listings l\nWHERE EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))\nGROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
