@@ -1,0 +1,76 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# OLX.ba price tracker — 3-container stack
+#   db      : PostgreSQL 16, schema auto-created on first start (db/init/*.sql)
+#   scraper : Node + Playwright headless Chromium; scrapes configured searches
+#             into Postgres on a schedule (default every 12 h, like the ext.)
+#   grafana : dashboards over the database → http://localhost:3000
+#
+# First run:
+#   cp .env.example .env                                   (edit the passwords)
+#   cp config/searches.example.json config/searches.json   (add your searches)
+#   docker compose up -d --build
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: olx-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-olx}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-olx}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro   # runs on FIRST start only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    ports:
+      - "127.0.0.1:5432:5432"   # host access for psql/GUIs; delete line to keep internal
+
+  scraper:
+    build: ./scraper
+    container_name: olx-scraper
+    restart: unless-stopped
+    init: true                   # proper signal handling + reaps chromium zombies
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-olx}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-olx}
+      SCRAPE_INTERVAL_MINUTES: ${SCRAPE_INTERVAL_MINUTES:-720}
+      RUN_ONCE: ${RUN_ONCE:-0}
+      HEADLESS: ${HEADLESS:-1}
+    volumes:
+      - ./config:/config:ro      # scraper reads /config/searches.json
+    shm_size: 512mb              # Chromium crashes with Docker's 64 MB default
+    ports:
+      - "127.0.0.1:9100:9100"   # health/status JSON endpoint
+
+  grafana:
+    image: grafana/grafana-oss:11.3.0
+    container_name: olx-grafana
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+      # Consumed by env interpolation in grafana/provisioning/datasources/postgres.yml
+      POSTGRES_USER: ${POSTGRES_USER:-olx}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-olx}
+    volumes:
+      - grafana:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:
+  grafana:

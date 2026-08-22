@@ -1,0 +1,25 @@
+# Grafana datasource, provisioned on startup.
+# ${POSTGRES_*} are interpolated from the environment (set in docker-compose.yml).
+apiVersion: 1
+
+deleteDatasources:
+  - name: OLX Postgres
+    orgId: 1
+
+datasources:
+  - name: OLX Postgres
+    uid: olx-postgres
+    type: postgres
+    access: proxy
+    url: db:5432
+    database: ${POSTGRES_DB}
+    user: ${POSTGRES_USER}
+    secureJsonData:
+      password: ${POSTGRES_PASSWORD}
+    jsonData:
+      sslmode: disable
+      postgresVersion: 1600
+      maxOpenConns: 20
+      maxIdleConns: 5
+    isDefault: true
+    editable: false

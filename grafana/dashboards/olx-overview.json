@@ -1,0 +1,372 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "postgres", "uid": "olx-postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null } ] },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 0 },
+      "id": 1,
+      "options": {
+        "colorMode": "value", "graphMode": "none", "justifyMode": "auto",
+        "orientation": "auto", "percentChangeColorMode": "standard",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto", "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "olx-postgres" },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT count(*) FROM v_active_listings WHERE is_rent = FALSE",
+          "refId": "A"
+        }
+      ],
+      "title": "Active sale listings (seen ≤ 14 d)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "olx-postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "#EAB839", "value": 2000 },
+              { "color": "red", "value": 3000 }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 0 },
+      "id": 2,
+      "options": {
+        "colorMode": "value", "graphMode": "none", "justifyMode": "auto",
+        "orientation": "auto", "percentChangeColorMode": "standard",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto", "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "olx-postgres" },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FROM v_active_listings WHERE ppm2 IS NOT NULL",
+          "refId": "A"
+        }
+      ],
+      "title": "Median KM/m² — sale listings",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "olx-postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "purple", "value": null } ] },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 0 },
+      "id": 3,
+      "options": {
+        "colorMode": "value", "graphMode": "none", "justifyMode": "auto",
+        "orientation": "auto", "percentChangeColorMode": "standard",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto", "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "olx-postgres" },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT count(*) FROM v_active_listings WHERE is_rent = TRUE",
+          "refId": "A"
+        }
+      ],
+      "title": "Rent listings tracked",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "olx-postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2,
+            "showPoints": "never", "spanNulls": true
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 9, "w": 16, "x": 0, "y": 4 },
+      "id": 4,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "olx-postgres" },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "SELECT date_trunc('day', scraped_at) AS time,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) AS \"median KM/m2\"\nFROM price_history\nWHERE ppm2 IS NOT NULL AND scraped_at > now() - INTERVAL '90 days'\nGROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Median KM/m² trend — all price snapshots, 90 days",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "olx-postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "blue", "value": null } ] }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 9, "w": 8, "x": 16, "y": 4 },
+      "id": 5,
+      "options": {
+        "displayMode": "gradient",
+        "minVizHeight": 10, "minVizWidth": 0,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": true },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "color"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "olx-postgres" },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT COALESCE(rooms, '?') AS bucket, count(*) AS listings\nFROM v_active_listings\nWHERE is_rent = FALSE\nGROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        { "id": "rowsToFields", "options": { "nameField": "bucket", "valueField": "listings" } }
+      ],
+      "title": "Sale listings by room count",
+      "type": "bargauge"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "olx-postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "align": "auto", "cellOptions": { "type": "auto" }, "inspect": false },
+          "unit": "none"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "url" },
+            "properties": [
+              { "id": "custom.hidden", "value": true }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "title" },
+            "properties": [
+              { "id": "custom.width", "value": 360 },
+              {
+                "id": "links",
+                "value": [
+                  { "targetBlank": true, "title": "open on olx.ba", "url": "${__data.fields.url}" }
+                ]
+              }
+            ]
+          },
+          { "matcher": { "id": "byName", "options": "price" }, "properties": [ { "id": "unit", "value": "none" } ] }
+        ]
+      },
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 13 },
+      "id": 6,
+      "options": {
+        "cellHeight": "sm",
+        "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "olx-postgres" },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT title, url, sqm, rooms, price, ppm2\nFROM v_active_listings\nWHERE is_rent = FALSE AND ppm2 IS NOT NULL\nORDER BY ppm2 ASC\nLIMIT 50",
+          "refId": "A"
+        }
+      ],
+      "title": "Best value — lowest KM/m² (click title to open)",
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "olx-postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "align": "auto", "cellOptions": { "type": "auto" }, "inspect": false }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "url" },
+            "properties": [ { "id": "custom.hidden", "value": true } ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "title" },
+            "properties": [
+              { "id": "custom.width", "value": 300 },
+              {
+                "id": "links",
+                "value": [
+                  { "targetBlank": true, "title": "open on olx.ba", "url": "${__data.fields.url}" }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "drop" },
+            "properties": [ { "id": "custom.width", "value": 90 }, { "id": "custom.filterable", "value": false } ]
+          }
+        ]
+      },
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 13 },
+      "id": 7,
+      "options": {
+        "cellHeight": "sm",
+        "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "olx-postgres" },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH h AS (\n  SELECT article_id, price, scraped_at,\n         lag(price) OVER (PARTITION BY article_id ORDER BY scraped_at) AS prev_price\n  FROM price_history WHERE price IS NOT NULL\n)\nSELECT l.title, l.url, h.prev_price AS was, h.price AS now,\n       (h.prev_price - h.price) AS drop, h.scraped_at AS seen\nFROM h JOIN listings l ON l.article_id = h.article_id\nWHERE h.prev_price IS NOT NULL AND h.price < h.prev_price\nORDER BY h.scraped_at DESC\nLIMIT 50",
+          "refId": "A"
+        }
+      ],
+      "title": "Recent price drops (30 d of history)",
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "olx-postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "bars", "fillOpacity": 40, "lineWidth": 1, "spanNulls": true },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 23 },
+      "id": 8,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "olx-postgres" },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "SELECT date_trunc('day', first_seen) AS time,\n       count(*) AS \"new listings\"\nFROM v_active_listings\nGROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "title": "New listings first seen per day",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "olx-postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "align": "auto", "cellOptions": { "type": "auto" }, "inspect": false }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 23 },
+      "id": 9,
+      "options": {
+        "cellHeight": "sm",
+        "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "olx-postgres" },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT name, listing_count AS listings, median_ppm2 AS median,\n       new_count AS new, drop_count AS drops, last_scraped_at AS last_scraped\nFROM saved_searches\nORDER BY name",
+          "refId": "A"
+        }
+      ],
+      "title": "Saved searches",
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "olx-postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "align": "auto", "cellOptions": { "type": "auto" }, "inspect": false },
+          "mappings": [
+            {
+              "options": {
+                "ok":    { "color": "green", "index": 0 },
+                "error": { "color": "red", "index": 1 }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "text", "value": null } ] }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "error" }, "properties": [ { "id": "custom.width", "value": 300 } ] }
+        ]
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 31 },
+      "id": 10,
+      "options": {
+        "cellHeight": "sm",
+        "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "olx-postgres" },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT id, search_key, status, pages, cards,\n       started_at AS started, finished_at AS finished, error\nFROM scrape_runs\nORDER BY id DESC\nLIMIT 20",
+          "refId": "A"
+        }
+      ],
+      "title": "Recent scrape runs",
+      "type": "table"
+    }
+  ],
+  "refresh": "5m",
+  "schemaVersion": 39,
+  "tags": ["olx", "real-estate"],
+  "templating": { "list": [] },
+  "time": { "from": "now-90d", "to": "now" },
+  "timezone": "browser",
+  "title": "OLX.ba Market Overview",
+  "uid": "olx-overview",
+  "version": 1,
+  "weekStart": ""
+}
