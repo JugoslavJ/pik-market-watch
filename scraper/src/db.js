@@ -354,6 +354,22 @@ class Db {
       [runId, status, pages, cards, error]);
   }
 
+  /**
+   * True when some scrape run started successfully within the given number of
+   * minutes. Used to skip redundant full cycles after rapid container
+   * restarts (every deploy fires one at boot).
+   * @param {number} minutes
+   * @returns {Promise<boolean>}
+   */
+  async hasRecentFinishedRun(minutes) {
+    const r = await this.pool.query(
+      `SELECT 1 FROM scrape_runs
+        WHERE status = 'ok' AND started_at > now() - make_interval(mins => $1::int)
+        LIMIT 1`,
+      [Math.max(0, Math.round(minutes || 0))]);
+    return r.rowCount > 0;
+  }
+
   close() { return this.pool.end(); }
 }
 

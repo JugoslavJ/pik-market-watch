@@ -57,10 +57,11 @@ module.exports = {
   cardTimeoutMs:   num(process.env.CARD_TIMEOUT_MS, 25000),  // extension fallback was 25 s
   headless:        process.env.HEADLESS !== '0',
   healthPort:      num(process.env.HEALTH_PORT, 9100),
-  maxGeoFetches:   num(process.env.MAX_GEO_FETCHES, 50),     // ad-detail visits per run for geo pins
+  maxGeoFetches:   num(process.env.MAX_GEO_FETCHES, 25),     // ad-detail visits per run (was 50; lower footprint)
   geoConcurrency:  num(process.env.GEO_CONCURRENCY, 2),      // parallel ad-detail fetches
-  geoDelayMs:      num(process.env.GEO_DELAY_MS, 600),       // politeness gap between batches
+  geoDelayMs:      num(process.env.GEO_DELAY_MS, 1200),      // politeness gap between batches
   geoSettleMs:     num(process.env.GEO_SETTLE_MS, 2500),     // hydration wait on each ad page
+  minRunGapMinutes: num(process.env.SCRAPE_MIN_GAP_MINUTES, 45), // skip boot cycle if a run finished this recently
 
   searches: loadSearches().map(s => {
     let name = s.name;

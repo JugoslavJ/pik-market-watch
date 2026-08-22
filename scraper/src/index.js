@@ -29,10 +29,25 @@ async function runAll(browser, db) {
     state.lastStatus = 'idle: no searches configured';
     return;
   }
+
+  // Deploy-restart protection: containers are recreated on every deploy and
+  // each boot fires a full scrape cycle (~40 search pages + up to dozens of
+  // detail visits). Several deploys in one evening are enough to trip olx.ba's
+  // rate limiter, which then serves empty pages. Skip the cycle when another
+  // run finished very recently. (RUN_ONCE is exempt — explicit intent.)
+  if (!config.runOnce &&
+      await db.hasRecentFinishedRun(config.minRunGapMinutes)) {
+    log(`a successful run finished less than ${config.minRunGapMinutes} min ago — skipping this cycle (SCRAPE_MIN_GAP_MINUTES)`);
+    state.lastStatus = 'skipped: recent run';
+    return;
+  }
+
   let okRuns = 0;
+  let totalCards = 0;
   for (const search of config.searches) {
     try {
-      await scrapeSearch(browser, search, config, db, log);
+      const res = await scrapeSearch(browser, search, config, db, log);
+      totalCards += res.cards;
       okRuns += 1;
       state.totalRuns += 1;
       state.lastStatus = 'ok';
@@ -46,12 +61,22 @@ async function runAll(browser, db) {
   // End of cycle: close listings that no successful search returned anymore,
   // freezing their last price as the closing price. Failed searches leave
   // their previous result links in place, so an outage never closes anything.
-  try {
-    const closed = await db.closeUnseenListings(config.searches.map(s => s.searchKey));
-    if (closed > 0) log(`✕ closed ${closed} listing(s) no longer seen on olx.ba (last price recorded)`);
-    else log(`no listings to close this cycle (${okRuns}/${config.searches.length} search(es) ok)`);
-  } catch (err) {
-    log(`✖ closing pass failed: ${err.message || err}`);
+  //
+  // Extra guard: a cycle that returned ZERO listings everywhere is almost
+  // certainly throttling/blocking (empty page shells), not a vanished market.
+  // Closing then would freeze every listing in the database with bogus exit
+  // prices — skip the closing pass instead.
+  if (totalCards === 0) {
+    log(`⚠ cycle yielded 0 listings across all ${config.searches.length} search(es) — ` +
+        `likely throttled or blocked; SKIPPING the closing pass`);
+  } else {
+    try {
+      const closed = await db.closeUnseenListings(config.searches.map(s => s.searchKey));
+      if (closed > 0) log(`✕ closed ${closed} listing(s) no longer seen on olx.ba (last price recorded)`);
+      else log(`no listings to close this cycle (${okRuns}/${config.searches.length} search(es) ok)`);
+    } catch (err) {
+      log(`✖ closing pass failed: ${err.message || err}`);
+    }
   }
 
   state.lastRunAt = new Date().toISOString();
