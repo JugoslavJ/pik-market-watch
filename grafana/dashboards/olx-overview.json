@@ -720,17 +720,21 @@
       },
       "gridPos": {
         "h": 14,
-        "w": 24,
+        "w": 16,
         "x": 0,
         "y": 39
       },
       "id": 11,
       "options": {
         "basemap": {
-          "type": "default"
+          "type": "default",
+          "label": "Road map"
         },
         "controls": {
-          "mouseWheelZoom": true
+          "mouseWheelZoom": true,
+          "showLegend": false,
+          "showScale": false,
+          "zoomDelta": 0.5
         },
         "layers": [
           {
@@ -757,7 +761,6 @@
               "mode": "auto"
             },
             "name": "Listings",
-            "tooltip": true,
             "type": "markers"
           }
         ],
@@ -811,6 +814,78 @@
             ]
           }
         ]
+      }
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "gridPos": {
+        "h": 14,
+        "w": 8,
+        "x": 16,
+        "y": 39
+      },
+      "id": 12,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT l.title, l.url, l.price, l.sqm, l.rooms, l.ppm2, l.latitude, l.longitude\nFROM v_active_listings l\nWHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL\n    AND CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])\n  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND ( ( ${min_lat:number} <= 42.4 AND ${max_lat:number} >= 46.4 AND ${min_lon:number} <= 15.5 AND ${max_lon:number} >= 19.6 ) OR ( l.latitude IS NOT NULL AND l.latitude BETWEEN ${min_lat:number} AND ${max_lat:number} AND l.longitude BETWEEN ${min_lon:number} AND ${max_lon:number} ) )\nORDER BY l.last_seen DESC\nLIMIT 100",
+          "refId": "A"
+        }
+      ],
+      "title": "Pinned listings on map — click to open",
+      "type": "table",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "links": [
+            {
+              "targetBlank": true,
+              "title": "open on olx.ba",
+              "url": "${__data.fields.url}"
+            }
+          ],
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "url"
+              },
+              "properties": [
+                {
+                  "id": "custom.hidden",
+                  "value": true
+                }
+              ]
+            }
+          ]
+        },
+        "overrides": []
       }
     }
   ],
@@ -937,6 +1012,6 @@
   "timezone": "browser",
   "title": "OLX.ba Market Overview",
   "uid": "olx-overview",
-  "version": 1,
+  "version": 16,
   "weekStart": ""
 }
