@@ -12,7 +12,8 @@
         "defaults": {
           "color": { "mode": "thresholds" },
           "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null } ] },
-          "unit": "short"
+          "unit": "short",
+          "noValue": "—"
         },
         "overrides": []
       },
@@ -29,7 +30,8 @@
           "datasource": { "type": "postgres", "uid": "olx-postgres" },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT count(*) FROM v_active_listings l\nWHERE l.is_rent = FALSE\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))",
+          "rawSql": "SELECT count(*) FROM v_active_listings l\nWHERE l.is_rent = FALSE  AND CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])
+  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))",
           "refId": "A"
         }
       ],
@@ -66,7 +68,8 @@
           "datasource": { "type": "postgres", "uid": "olx-postgres" },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)\nFROM v_active_listings l\nWHERE l.ppm2 IS NOT NULL\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))",
+          "rawSql": "SELECT COALESCE(percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2), 0)\nFROM v_active_listings l\nWHERE l.ppm2 IS NOT NULL  AND CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])
+  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))",
           "refId": "A"
         }
       ],
@@ -79,7 +82,8 @@
         "defaults": {
           "color": { "mode": "thresholds" },
           "thresholds": { "mode": "absolute", "steps": [ { "color": "purple", "value": null } ] },
-          "unit": "short"
+          "unit": "short",
+          "noValue": "—"
         },
         "overrides": []
       },
@@ -96,7 +100,8 @@
           "datasource": { "type": "postgres", "uid": "olx-postgres" },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT count(*) FROM v_active_listings l\nWHERE l.is_rent = TRUE\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))",
+          "rawSql": "SELECT count(*) FROM v_active_listings l\nWHERE l.is_rent = TRUE  AND CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])
+  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))",
           "refId": "A"
         }
       ],
@@ -126,7 +131,8 @@
           "datasource": { "type": "postgres", "uid": "olx-postgres" },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT date_trunc('day', ph.scraped_at) AS time,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY ph.ppm2) AS \"median KM/m2\"\nFROM price_history ph\nWHERE ph.ppm2 IS NOT NULL\n  AND ph.scraped_at > now() - INTERVAL '90 days'\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = ph.article_id AND ss.category = ANY (ARRAY[$category]))\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT date_trunc('day', ph.scraped_at) AS time,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY ph.ppm2) AS \"median KM/m2\"\nFROM price_history ph\nJOIN v_active_listings la ON la.article_id = ph.article_id\nWHERE ph.ppm2 IS NOT NULL\n  AND ph.scraped_at > now() - INTERVAL '90 days'  AND CASE WHEN COALESCE(la.rooms, '') = '' THEN 'unknown' WHEN la.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(la.rooms, '+', 1)::int >= 4 THEN '4+' ELSE la.rooms END = ANY (ARRAY[$rooms])
+  AND (la.sqm IS NULL OR la.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = ph.article_id AND ss.category = ANY (ARRAY[$category]))\nGROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -159,7 +165,7 @@
           "datasource": { "type": "postgres", "uid": "olx-postgres" },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT COALESCE(l.rooms, '?') AS bucket, count(*) AS listings\nFROM v_active_listings l\nWHERE l.is_rent = FALSE\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT COALESCE(l.rooms, '?') AS bucket, count(*) AS listings\nFROM v_active_listings l\nWHERE l.is_rent = FALSE  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))\nGROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -210,7 +216,8 @@
           "datasource": { "type": "postgres", "uid": "olx-postgres" },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT l.title, l.url, l.sqm, l.rooms, l.price, l.ppm2\nFROM v_active_listings l\nWHERE l.is_rent = FALSE AND l.ppm2 IS NOT NULL\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))\nORDER BY l.ppm2 ASC\nLIMIT 50",
+          "rawSql": "SELECT l.title, l.url, l.sqm, l.rooms, l.price, l.ppm2\nFROM v_active_listings l\nWHERE l.is_rent = FALSE AND l.ppm2 IS NOT NULL  AND CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])
+  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))\nORDER BY l.ppm2 ASC\nLIMIT 50",
           "refId": "A"
         }
       ],
@@ -258,7 +265,8 @@
           "datasource": { "type": "postgres", "uid": "olx-postgres" },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH h AS (\n  SELECT ph.article_id, ph.price, ph.scraped_at,\n         lag(ph.price) OVER (PARTITION BY ph.article_id ORDER BY ph.scraped_at) AS prev_price\n  FROM price_history ph WHERE ph.price IS NOT NULL\n)\nSELECT l.title, l.url, h.prev_price AS was, h.price AS now,\n       (h.prev_price - h.price) AS drop, h.scraped_at AS seen\nFROM h JOIN listings l ON l.article_id = h.article_id\nWHERE h.prev_price IS NOT NULL AND h.price < h.prev_price\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = h.article_id AND ss.category = ANY (ARRAY[$category]))\nORDER BY h.scraped_at DESC\nLIMIT 50",
+          "rawSql": "WITH h AS (\n  SELECT ph.article_id, ph.price, ph.scraped_at,\n         lag(ph.price) OVER (PARTITION BY ph.article_id ORDER BY ph.scraped_at) AS prev_price\n  FROM price_history ph WHERE ph.price IS NOT NULL\n)\nSELECT l.title, l.url, h.prev_price AS was, h.price AS now,\n       (h.prev_price - h.price) AS drop, h.scraped_at AS seen\nFROM h JOIN listings l ON l.article_id = h.article_id\nWHERE h.prev_price IS NOT NULL AND h.price < h.prev_price  AND CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])
+  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = h.article_id AND ss.category = ANY (ARRAY[$category]))\nORDER BY h.scraped_at DESC\nLIMIT 50",
           "refId": "A"
         }
       ],
@@ -285,7 +293,8 @@
           "datasource": { "type": "postgres", "uid": "olx-postgres" },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT date_trunc('day', l.first_seen) AS time,\n       count(*) AS \"new listings\"\nFROM v_active_listings l\nWHERE EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT date_trunc('day', l.first_seen) AS time,\n       count(*) AS \"new listings\"\nFROM v_active_listings l\nWHERE CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])
+  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))\nGROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -312,7 +321,7 @@
           "datasource": { "type": "postgres", "uid": "olx-postgres" },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT name, COALESCE(category, '(none)') AS category, listing_count AS listings,\n       median_ppm2 AS median, new_count AS new, drop_count AS drops,\n       last_scraped_at AS last_scraped\nFROM saved_searches\nWHERE category = ANY (ARRAY[$category])\nORDER BY name",
+          "rawSql": "SELECT name, COALESCE(category, '(none)') AS category, listing_count AS listings,\n       COALESCE(median_ppm2, 0) AS median, new_count AS new, drop_count AS drops,\n       last_scraped_at AS last_scraped\nFROM saved_searches\nWHERE category = ANY (ARRAY[$category])\nORDER BY name",
           "refId": "A"
         }
       ],
@@ -385,7 +394,8 @@
           "datasource": { "type": "postgres", "uid": "olx-postgres" },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT l.latitude, l.longitude, l.title\nFROM v_active_listings l\nWHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL",
+          "rawSql": "SELECT l.latitude, l.longitude, l.title\nFROM v_active_listings l\nWHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL\n    AND CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])
+  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})",
           "refId": "A"
         }
       ],
@@ -413,6 +423,36 @@
         "skipUrlSync": false,
         "sort": 1,
         "type": "query"
+      },
+      {
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "datasource": { "type": "postgres", "uid": "olx-postgres" },
+        "definition": "SELECT bucket AS __value, bucket AS __text FROM (\n  SELECT CASE WHEN COALESCE(rooms, '') = '' THEN 'unknown'\n              WHEN rooms !~ '^[0-9]' THEN 'other'\n              WHEN split_part(rooms, '+', 1)::int >= 4 THEN '4+'\n              ELSE rooms END AS bucket\n  FROM v_active_listings WHERE is_rent = FALSE\n) s GROUP BY bucket ORDER BY bucket",
+        "includeAll": true,
+        "label": "Rooms",
+        "multi": false,
+        "name": "rooms",
+        "options": [],
+        "query": "SELECT bucket AS __value, bucket AS __text FROM (\n  SELECT CASE WHEN COALESCE(rooms, '') = '' THEN 'unknown'\n              WHEN rooms !~ '^[0-9]' THEN 'other'\n              WHEN split_part(rooms, '+', 1)::int >= 4 THEN '4+'\n              ELSE rooms END AS bucket\n  FROM v_active_listings WHERE is_rent = FALSE\n) s GROUP BY bucket ORDER BY bucket",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 2,
+        "type": "query"
+      },
+      {
+        "current": { "text": "0", "value": "0" },
+        "label": "Min m²",
+        "name": "min_sqm",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "current": { "text": "99999", "value": "99999" },
+        "label": "Max m²",
+        "name": "max_sqm",
+        "skipUrlSync": false,
+        "type": "textbox"
       }
     ]
   },
