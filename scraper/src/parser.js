@@ -78,4 +78,36 @@ function extractArticleId(url) {
   return m ? m[1] : null;
 }
 
-module.exports = { collectCards, extractArticleId };
+// ── Geolocation extraction (ad DETAIL pages) ──────────────────────────────────
+// olx.ba embeds the ad's map pin in its Nuxt state as a literal, e.g.:
+//   location:{lat:44.825690864477,lon:17.302538236771}
+// A quoted template default ({"lat":"43.1235","lon":"42.5426"}) also exists on
+// every page and MUST be discarded — the Bosnia bounding box below does that.
+
+const GEO_BBOX = { latMin: 42.4, latMax: 46.4, lonMin: 15.5, lonMax: 19.9 };
+
+async function extractGeo(page) {
+  return page.evaluate(extractGeoInPage);
+}
+
+function extractGeoInPage() {
+  const html = document.documentElement.outerHTML;
+  const inBiH = (lat, lon) =>
+    lat >= 42.4 && lat <= 46.4 && lon >= 15.5 && lon <= 19.9;
+
+  const patterns = [
+    /location:\{lat:(-?\d{1,2}\.\d{3,}),lon:(-?\d{1,3}\.\d{3,})\}/g,  // Nuxt state literal
+    /"lat":\s*"?(-?\d{1,2}\.\d{3,})"?\s*,\s*"lon":\s*"?(-?\d{1,3}\.\d{3,})"?/g, // JSON fallback
+  ];
+
+  for (const re of patterns) {
+    for (const m of html.matchAll(re)) {
+      const lat = parseFloat(m[1]), lon = parseFloat(m[2]);
+      if (inBiH(lat, lon)) return { latitude: lat, longitude: lon };
+    }
+  }
+  return { latitude: null, longitude: null };
+}
+
+module.exports = { collectCards, extractArticleId, extractGeo };
+

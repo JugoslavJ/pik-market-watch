@@ -19,9 +19,15 @@ CREATE TABLE listings (
   price_text  TEXT,
   ppm2        INTEGER,                     -- price/m²; NULL for rent & implausible parses
   is_rent     BOOLEAN NOT NULL DEFAULT FALSE,
+  location    TEXT,                        -- free-form place label (from ad page, when present)
+  latitude    DOUBLE PRECISION,            -- pin coordinates from the ad's map, when set
+  longitude   DOUBLE PRECISION,
   first_seen  TIMESTAMPTZ NOT NULL DEFAULT now(),
   last_seen   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE INDEX listings_geo_idx ON listings (latitude, longitude)
+  WHERE latitude IS NOT NULL AND longitude IS NOT NULL;
 
 CREATE INDEX listings_ppm2_idx      ON listings (ppm2) WHERE ppm2 IS NOT NULL;
 CREATE INDEX listings_is_rent_idx   ON listings (is_rent);
@@ -70,5 +76,10 @@ CREATE TABLE scrape_runs (
 CREATE INDEX scrape_runs_started_idx ON scrape_runs (started_at DESC);
 
 -- Convenience view for dashboards: anything seen by a scrape in the last 14 days.
+-- NOTE: explicit column list — views snapshot columns at creation time, so a
+-- plain SELECT * would silently miss columns added to `listings` later.
 CREATE VIEW v_active_listings AS
-SELECT * FROM listings WHERE last_seen > now() - INTERVAL '14 days';
+SELECT article_id, url, title, sqm, rooms, price, price_text, ppm2, is_rent,
+       location, latitude, longitude, first_seen, last_seen
+FROM listings
+WHERE last_seen > now() - INTERVAL '14 days';

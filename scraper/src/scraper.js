@@ -4,7 +4,7 @@
 // one browser page per search page, cards collected, deduped by URL, then
 // written to Postgres in a single transaction.
 
-const { collectCards, extractArticleId } = require('./parser');
+const { collectCards, extractArticleId, extractGeo } = require('./parser');
 
 // Playwright's headless UA advertises "HeadlessChrome", which some bot
 // filters reject outright; a plain, current Chrome UA does not.
@@ -35,6 +35,22 @@ async function scrapePage(browser, url, cfg) {
     } catch (_) { /* genuinely empty result page or slow site — collect what is there */ }
     await page.waitForTimeout(1500);   // settle delay for late client-side rendering
     return (await collectCards(page)) || [];
+  } finally {
+    await context.close().catch(() => {});
+  }
+}
+
+// Ad DETAIL page → { latitude, longitude } from the embedded map pin (or nulls).
+async function scrapeGeo(browser, url, cfg) {
+  const context = await browser.newContext({
+    viewport: { width: 1366, height: 900 },
+    userAgent: USER_AGENT,
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: cfg.navTimeoutMs });
+    await page.waitForTimeout(2500);   // let the Nuxt state / map hydrate
+    return (await extractGeo(page)) || { latitude: null, longitude: null };
   } finally {
     await context.close().catch(() => {});
   }
@@ -98,7 +114,7 @@ async function scrapeSearch(browser, search, cfg, db, log) {
       await sleep(cfg.pageDelayMs);
     }
 
-    const { newCount, dropCount } = await db.saveCards(allCards);
+    const { newCount, dropCount, newIds } = await db.saveCards(allCards);
 
     // The saved_searches row MUST be created before search_results rows
     // reference it (FK search_results_search_key_fkey).
@@ -111,11 +127,39 @@ async function scrapeSearch(browser, search, cfg, db, log) {
 
     const ids = allCards.map(c => extractArticleId(c.url)).filter(Boolean).map(Number);
     await db.refreshSearchResults(search.searchKey, ids);
+
+    // ── Geolocation pass: visit NEW listings' detail pages once ──────────────
+    // The search cards carry no location; the pin lives on each ad page's
+    // Nuxt state. Only new articles are visited to keep runs cheap.
+    let geoPinned = 0;
+    if (cfg.maxGeoFetches > 0 && newIds.length) {
+      const byId = new Map(allCards.map(c => [Number(extractArticleId(c.url)), c]));
+      const targets = newIds.slice(0, cfg.maxGeoFetches);
+      log(`⌖ fetching geolocation for ${targets.length}/${newIds.length} new listing(s)`);
+      const geoRows = [];
+      for (let i = 0; i < targets.length; i += 2) {          // gentle pairs
+        const batch = targets.slice(i, i + 2);
+        const results = await Promise.all(batch.map(async id => {
+          const card = byId.get(id);
+          if (!card) return null;
+          await sleep(600);
+          try {
+            return { articleId: id, ...(await scrapeGeo(browser, card.url, cfg)) };
+          } catch (_) { return null; }
+        }));
+        for (const r of results) if (r && r.latitude != null) geoRows.push(r);
+      }
+      if (geoRows.length) await db.enrichListings(geoRows);
+      geoPinned = geoRows.length;
+      log(`⌖ geolocation pinned for ${geoPinned}/${targets.length} new listing(s)`);
+    }
+
     await db.finishRun(runId, { status: 'ok', pages: pagesDone, cards: allCards.length });
 
     log(`✔ "${search.name}" — ${allCards.length} listings on ${pagesDone} page(s); ` +
-        `${newCount} new, ${dropCount} price drop(s), median ${median ?? '—'} KM/m²`);
-    return { pages: pagesDone, cards: allCards.length, newCount, dropCount };
+        `${newCount} new, ${dropCount} price drop(s), median ${median ?? '—'} KM/m²` +
+        (newIds.length ? `, ${geoPinned} geo-pinned` : ''));
+    return { pages: pagesDone, cards: allCards.length, newCount, dropCount, geoPinned };
   } catch (err) {
     await db.finishRun(runId, {
       status: 'error', pages: pagesDone, cards: allCards.length,

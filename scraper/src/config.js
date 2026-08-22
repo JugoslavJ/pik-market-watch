@@ -50,6 +50,7 @@ module.exports = {
   cardTimeoutMs:   num(process.env.CARD_TIMEOUT_MS, 25000),  // extension fallback was 25 s
   headless:        process.env.HEADLESS !== '0',
   healthPort:      num(process.env.HEALTH_PORT, 9100),
+  maxGeoFetches:   num(process.env.MAX_GEO_FETCHES, 50),     // ad-detail visits per run for geo pins
 
   searches: loadSearches().map(s => {
     let name = s.name;

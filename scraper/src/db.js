@@ -34,6 +34,7 @@ class Db {
   async saveCards(cards) {
     const client = await this.pool.connect();
     let newCount = 0, dropCount = 0;
+    const newIds = [];
     try {
       await client.query('BEGIN');
 
@@ -76,11 +77,12 @@ class Db {
             'INSERT INTO price_history (article_id, price, ppm2) VALUES ($1, $2, $3)',
             [id, price, ppm2]);
           newCount++;
+          newIds.push(id);
         }
       }
 
       await client.query('COMMIT');
-      return { newCount, dropCount };
+      return { newCount, dropCount, newIds };
     } catch (err) {
       await client.query('ROLLBACK').catch(() => {});
       throw err;
@@ -101,6 +103,28 @@ class Db {
          SELECT $1, x FROM unnest($2::bigint[]) AS x
          ON CONFLICT (search_key, article_id) DO NOTHING`,
         [searchKey, ids]);
+    }
+  }
+
+  /**
+   * Attach map-pin coordinates to listings (fetched from their detail pages).
+   * @param {Array<{articleId:number, latitude:number, longitude:number}>} rows
+   */
+  async enrichListings(rows) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const r of rows) {
+        await client.query(
+          'UPDATE listings SET latitude = $2, longitude = $3 WHERE article_id = $1',
+          [r.articleId, r.latitude, r.longitude]);
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally {
+      client.release();
     }
   }
 

@@ -357,6 +357,40 @@
       ],
       "title": "Recent scrape runs",
       "type": "table"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "olx-postgres" },
+      "gridPos": { "h": 14, "w": 24, "x": 0, "y": 39 },
+      "id": 11,
+      "options": {
+        "basemap": { "type": "default" },
+        "controls": { "mouseWheelZoom": true },
+        "layers": [
+          {
+            "config": {
+              "showLegend": false,
+              "style": { "color": { "fixed": "dark-green" }, "opacity": 0.7, "size": { "fixed": 6 } }
+            },
+            "location": { "mode": "auto" },
+            "name": "Listings",
+            "tooltip": true,
+            "type": "markers"
+          }
+        ],
+        "tooltip": { "mode": "details" },
+        "view": { "id": "fit", "allLayers": true, "lastOnly": false }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "olx-postgres" },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT l.latitude, l.longitude, l.title\nFROM v_active_listings l\nWHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL",
+          "refId": "A"
+        }
+      ],
+      "title": "Listing map — pinned locations",
+      "type": "geomap"
     }
   ],
   "refresh": "5m",
