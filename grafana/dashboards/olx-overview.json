@@ -307,7 +307,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT COALESCE(l.rooms, '?') AS bucket, count(*) AS listings\nFROM v_active_listings l\nWHERE l.is_rent = FALSE  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))\n  AND ( ( ${min_lat:number} <= 42.4 AND ${max_lat:number} >= 46.4 AND ${min_lon:number} <= 15.5 AND ${max_lon:number} >= 19.6 ) OR ( l.latitude IS NOT NULL AND l.latitude BETWEEN ${min_lat:number} AND ${max_lat:number} AND l.longitude BETWEEN ${min_lon:number} AND ${max_lon:number} ) )\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT COALESCE(l.rooms, '?') AS bucket, count(*) AS listings\nFROM v_active_listings l\nWHERE l.is_rent = FALSE  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))\n  AND ( ( ${min_lat:number} <= 42.4 AND ${max_lat:number} >= 46.4 AND ${min_lon:number} <= 15.5 AND ${max_lon:number} >= 19.6 ) OR ( l.latitude IS NOT NULL AND l.latitude BETWEEN ${min_lat:number} AND ${max_lat:number} AND l.longitude BETWEEN ${min_lon:number} AND ${max_lon:number} ) )\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[$deal])\nGROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -320,7 +320,7 @@
           }
         }
       ],
-      "title": "Sale listings by room count",
+      "title": "Listings by room count",
       "type": "bargauge"
     },
     {
@@ -517,7 +517,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH h AS (\n  SELECT ph.article_id, ph.price, ph.scraped_at,\n         lag(ph.price) OVER (PARTITION BY ph.article_id ORDER BY ph.scraped_at) AS prev_price\n  FROM price_history ph WHERE ph.price IS NOT NULL\n)\nSELECT l.title, l.url, h.prev_price AS was, h.price AS now,\n       (h.prev_price - h.price) AS drop, h.scraped_at AS seen\nFROM h JOIN listings l ON l.article_id = h.article_id\nWHERE h.prev_price IS NOT NULL AND h.price < h.prev_price  AND CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])\n  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = h.article_id AND ss.category = ANY (ARRAY[$category]))\n  AND ( ( ${min_lat:number} <= 42.4 AND ${max_lat:number} >= 46.4 AND ${min_lon:number} <= 15.5 AND ${max_lon:number} >= 19.6 ) OR ( l.latitude IS NOT NULL AND l.latitude BETWEEN ${min_lat:number} AND ${max_lat:number} AND l.longitude BETWEEN ${min_lon:number} AND ${max_lon:number} ) )\nORDER BY h.scraped_at DESC\nLIMIT 50",
+          "rawSql": "WITH h AS (\n  SELECT ph.article_id, ph.price, ph.scraped_at,\n         lag(ph.price) OVER (PARTITION BY ph.article_id ORDER BY ph.scraped_at) AS prev_price\n  FROM price_history ph WHERE ph.price IS NOT NULL\n)\nSELECT l.title, l.url, h.prev_price AS was, h.price AS now,\n       (h.prev_price - h.price) AS drop, h.scraped_at AS seen\nFROM h JOIN listings l ON l.article_id = h.article_id\nWHERE h.prev_price IS NOT NULL AND h.price < h.prev_price  AND CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])\n  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = h.article_id AND ss.category = ANY (ARRAY[$category]))\n  AND ( ( ${min_lat:number} <= 42.4 AND ${max_lat:number} >= 46.4 AND ${min_lon:number} <= 15.5 AND ${max_lon:number} >= 19.6 ) OR ( l.latitude IS NOT NULL AND l.latitude BETWEEN ${min_lat:number} AND ${max_lat:number} AND l.longitude BETWEEN ${min_lon:number} AND ${max_lon:number} ) )\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[$deal])\nORDER BY h.scraped_at DESC\nLIMIT 50",
           "refId": "A"
         }
       ],
@@ -567,7 +567,7 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT date_trunc('day', l.first_seen) AS time,\n       count(*) AS \"new listings\"\nFROM v_active_listings l\nWHERE CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])\n  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))\n  AND ( ( ${min_lat:number} <= 42.4 AND ${max_lat:number} >= 46.4 AND ${min_lon:number} <= 15.5 AND ${max_lon:number} >= 19.6 ) OR ( l.latitude IS NOT NULL AND l.latitude BETWEEN ${min_lat:number} AND ${max_lat:number} AND l.longitude BETWEEN ${min_lon:number} AND ${max_lon:number} ) )\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT date_trunc('day', l.first_seen) AS time,\n       count(*) AS \"new listings\"\nFROM v_active_listings l\nWHERE CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])\n  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category = ANY (ARRAY[$category]))\n  AND ( ( ${min_lat:number} <= 42.4 AND ${max_lat:number} >= 46.4 AND ${min_lon:number} <= 15.5 AND ${max_lon:number} >= 19.6 ) OR ( l.latitude IS NOT NULL AND l.latitude BETWEEN ${min_lat:number} AND ${max_lat:number} AND l.longitude BETWEEN ${min_lon:number} AND ${max_lon:number} ) )\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[$deal])\nGROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -784,7 +784,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT l.latitude, l.longitude, l.title, l.url,\n       l.price, l.sqm, l.rooms, l.ppm2,\n       l.location AS location\nFROM v_active_listings l\nWHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL\n    AND CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])\n  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND ( ( ${min_lat:number} <= 42.4 AND ${max_lat:number} >= 46.4 AND ${min_lon:number} <= 15.5 AND ${max_lon:number} >= 19.6 ) OR ( l.latitude IS NOT NULL AND l.latitude BETWEEN ${min_lat:number} AND ${max_lat:number} AND l.longitude BETWEEN ${min_lon:number} AND ${max_lon:number} ) )",
+          "rawSql": "SELECT l.latitude, l.longitude, l.title, l.url,\n       l.price, l.sqm, l.rooms, l.ppm2,\n       l.location AS location\nFROM v_active_listings l\nWHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL\n    AND CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])\n  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND ( ( ${min_lat:number} <= 42.4 AND ${max_lat:number} >= 46.4 AND ${min_lon:number} <= 15.5 AND ${max_lon:number} >= 19.6 ) OR ( l.latitude IS NOT NULL AND l.latitude BETWEEN ${min_lat:number} AND ${max_lat:number} AND l.longitude BETWEEN ${min_lon:number} AND ${max_lon:number} ) )\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[$deal])",
           "refId": "A"
         }
       ],
@@ -848,7 +848,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT l.title, l.url, l.price, l.sqm, l.rooms, l.ppm2, l.latitude, l.longitude\nFROM v_active_listings l\nWHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL\n    AND CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])\n  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND ( ( ${min_lat:number} <= 42.4 AND ${max_lat:number} >= 46.4 AND ${min_lon:number} <= 15.5 AND ${max_lon:number} >= 19.6 ) OR ( l.latitude IS NOT NULL AND l.latitude BETWEEN ${min_lat:number} AND ${max_lat:number} AND l.longitude BETWEEN ${min_lon:number} AND ${max_lon:number} ) )\nORDER BY l.last_seen DESC\nLIMIT 100",
+          "rawSql": "SELECT l.title, l.url, l.price, l.sqm, l.rooms, l.ppm2, l.latitude, l.longitude\nFROM v_active_listings l\nWHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL\n    AND CASE WHEN COALESCE(l.rooms, '') = '' THEN 'unknown' WHEN l.rooms !~ '^[0-9]' THEN 'other' WHEN split_part(l.rooms, '+', 1)::int >= 4 THEN '4+' ELSE l.rooms END = ANY (ARRAY[$rooms])\n  AND (l.sqm IS NULL OR l.sqm BETWEEN ${min_sqm:int} AND ${max_sqm:int})\n  AND ( ( ${min_lat:number} <= 42.4 AND ${max_lat:number} >= 46.4 AND ${min_lon:number} <= 15.5 AND ${max_lon:number} >= 19.6 ) OR ( l.latitude IS NOT NULL AND l.latitude BETWEEN ${min_lat:number} AND ${max_lat:number} AND l.longitude BETWEEN ${min_lon:number} AND ${max_lon:number} ) )\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[$deal])\nORDER BY l.last_seen DESC\nLIMIT 100",
           "refId": "A"
         }
       ],
@@ -919,6 +919,33 @@
         "skipUrlSync": false,
         "sort": 1,
         "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "includeAll": true,
+        "label": "Deal",
+        "multi": false,
+        "name": "deal",
+        "options": [
+          {
+            "selected": false,
+            "text": "Sale",
+            "value": "sell"
+          },
+          {
+            "selected": false,
+            "text": "Rent",
+            "value": "rent"
+          }
+        ],
+        "query": "sell,rent",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "custom"
       },
       {
         "current": {
