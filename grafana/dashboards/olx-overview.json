@@ -29,7 +29,7 @@
           "datasource": { "type": "postgres", "uid": "olx-postgres" },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT count(*) FROM v_active_listings WHERE is_rent = FALSE",
+          "rawSql": "SELECT count(*) FROM v_active_listings l\nWHERE l.is_rent = FALSE\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category LIKE '$category')",
           "refId": "A"
         }
       ],
@@ -66,7 +66,7 @@
           "datasource": { "type": "postgres", "uid": "olx-postgres" },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FROM v_active_listings WHERE ppm2 IS NOT NULL",
+          "rawSql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)\nFROM v_active_listings l\nWHERE l.ppm2 IS NOT NULL\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category LIKE '$category')",
           "refId": "A"
         }
       ],
@@ -96,7 +96,7 @@
           "datasource": { "type": "postgres", "uid": "olx-postgres" },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT count(*) FROM v_active_listings WHERE is_rent = TRUE",
+          "rawSql": "SELECT count(*) FROM v_active_listings l\nWHERE l.is_rent = TRUE\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category LIKE '$category')",
           "refId": "A"
         }
       ],
@@ -126,7 +126,7 @@
           "datasource": { "type": "postgres", "uid": "olx-postgres" },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT date_trunc('day', scraped_at) AS time,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) AS \"median KM/m2\"\nFROM price_history\nWHERE ppm2 IS NOT NULL AND scraped_at > now() - INTERVAL '90 days'\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT date_trunc('day', ph.scraped_at) AS time,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY ph.ppm2) AS \"median KM/m2\"\nFROM price_history ph\nWHERE ph.ppm2 IS NOT NULL\n  AND ph.scraped_at > now() - INTERVAL '90 days'\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = ph.article_id AND ss.category LIKE '$category')\nGROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -159,7 +159,7 @@
           "datasource": { "type": "postgres", "uid": "olx-postgres" },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT COALESCE(rooms, '?') AS bucket, count(*) AS listings\nFROM v_active_listings\nWHERE is_rent = FALSE\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT COALESCE(l.rooms, '?') AS bucket, count(*) AS listings\nFROM v_active_listings l\nWHERE l.is_rent = FALSE\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category LIKE '$category')\nGROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -210,7 +210,7 @@
           "datasource": { "type": "postgres", "uid": "olx-postgres" },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT title, url, sqm, rooms, price, ppm2\nFROM v_active_listings\nWHERE is_rent = FALSE AND ppm2 IS NOT NULL\nORDER BY ppm2 ASC\nLIMIT 50",
+          "rawSql": "SELECT l.title, l.url, l.sqm, l.rooms, l.price, l.ppm2\nFROM v_active_listings l\nWHERE l.is_rent = FALSE AND l.ppm2 IS NOT NULL\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category LIKE '$category')\nORDER BY l.ppm2 ASC\nLIMIT 50",
           "refId": "A"
         }
       ],
@@ -258,7 +258,7 @@
           "datasource": { "type": "postgres", "uid": "olx-postgres" },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH h AS (\n  SELECT article_id, price, scraped_at,\n         lag(price) OVER (PARTITION BY article_id ORDER BY scraped_at) AS prev_price\n  FROM price_history WHERE price IS NOT NULL\n)\nSELECT l.title, l.url, h.prev_price AS was, h.price AS now,\n       (h.prev_price - h.price) AS drop, h.scraped_at AS seen\nFROM h JOIN listings l ON l.article_id = h.article_id\nWHERE h.prev_price IS NOT NULL AND h.price < h.prev_price\nORDER BY h.scraped_at DESC\nLIMIT 50",
+          "rawSql": "WITH h AS (\n  SELECT ph.article_id, ph.price, ph.scraped_at,\n         lag(ph.price) OVER (PARTITION BY ph.article_id ORDER BY ph.scraped_at) AS prev_price\n  FROM price_history ph WHERE ph.price IS NOT NULL\n)\nSELECT l.title, l.url, h.prev_price AS was, h.price AS now,\n       (h.prev_price - h.price) AS drop, h.scraped_at AS seen\nFROM h JOIN listings l ON l.article_id = h.article_id\nWHERE h.prev_price IS NOT NULL AND h.price < h.prev_price\n  AND EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = h.article_id AND ss.category LIKE '$category')\nORDER BY h.scraped_at DESC\nLIMIT 50",
           "refId": "A"
         }
       ],
@@ -285,7 +285,7 @@
           "datasource": { "type": "postgres", "uid": "olx-postgres" },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT date_trunc('day', first_seen) AS time,\n       count(*) AS \"new listings\"\nFROM v_active_listings\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT date_trunc('day', l.first_seen) AS time,\n       count(*) AS \"new listings\"\nFROM v_active_listings l\nWHERE EXISTS (\n    SELECT 1 FROM search_results sr\n    JOIN saved_searches ss ON ss.search_key = sr.search_key\n    WHERE sr.article_id = l.article_id AND ss.category LIKE '$category')\nGROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -312,7 +312,7 @@
           "datasource": { "type": "postgres", "uid": "olx-postgres" },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT name, listing_count AS listings, median_ppm2 AS median,\n       new_count AS new, drop_count AS drops, last_scraped_at AS last_scraped\nFROM saved_searches\nORDER BY name",
+          "rawSql": "SELECT name, COALESCE(category, '(none)') AS category, listing_count AS listings,\n       median_ppm2 AS median, new_count AS new, drop_count AS drops,\n       last_scraped_at AS last_scraped\nFROM saved_searches\nWHERE category LIKE '$category'\nORDER BY name",
           "refId": "A"
         }
       ],
@@ -351,7 +351,7 @@
           "datasource": { "type": "postgres", "uid": "olx-postgres" },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT id, search_key, status, pages, cards,\n       started_at AS started, finished_at AS finished, error\nFROM scrape_runs\nORDER BY id DESC\nLIMIT 20",
+          "rawSql": "SELECT r.id, COALESCE(ss.category, '(none)') AS category, r.search_key, r.status,\n       r.pages, r.cards, r.started_at AS started, r.finished_at AS finished, r.error\nFROM scrape_runs r\nLEFT JOIN saved_searches ss ON ss.search_key = r.search_key\nWHERE ss.category IS NULL OR ss.category LIKE '$category'\nORDER BY r.id DESC\nLIMIT 20",
           "refId": "A"
         }
       ],
@@ -362,7 +362,27 @@
   "refresh": "5m",
   "schemaVersion": 39,
   "tags": ["olx", "real-estate"],
-  "templating": { "list": [] },
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "datasource": { "type": "postgres", "uid": "olx-postgres" },
+        "definition": "SELECT category AS __value, category AS __text FROM saved_searches WHERE category IS NOT NULL GROUP BY category ORDER BY 1",
+        "includeAll": true,
+        "allValue": "%",
+        "label": "Category",
+        "multi": false,
+        "name": "category",
+        "options": [],
+        "query": "SELECT category AS __value, category AS __text FROM saved_searches WHERE category IS NOT NULL GROUP BY category ORDER BY 1",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
   "time": { "from": "now-90d", "to": "now" },
   "timezone": "browser",
   "title": "OLX.ba Market Overview",

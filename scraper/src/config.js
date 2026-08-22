@@ -57,6 +57,11 @@ module.exports = {
       try { name = decodeURIComponent(new URL(s.url).pathname.replace(/\/+$/, '').split('/').pop()); }
       catch (_) { name = s.url; }
     }
-    return { url: s.url, name: name || s.url, searchKey: normalizeSearchKey(s.url) };
+    return {
+      url: s.url,
+      name: name || s.url,
+      category: (s.category || '').trim() || null,   // free-form label used by dashboards
+      searchKey: normalizeSearchKey(s.url),
+    };
   }),
 };

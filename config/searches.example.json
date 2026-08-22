@@ -2,7 +2,13 @@
   "searches": [
     {
       "name": "Stanovi (example)",
+      "category": "apartments",
       "url": "https://www.olx.ba/pretraga?kat=16"
+    },
+    {
+      "name": "Kuce i vikendice (example)",
+      "category": "houses",
+      "url": "https://www.olx.ba/pretraga?kat=17"
     }
   ]
 }

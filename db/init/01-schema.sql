@@ -41,6 +41,7 @@ CREATE TABLE saved_searches (
   search_key      TEXT PRIMARY KEY,        -- normalized URL, mirrors buildSearchCacheKey()
   name            TEXT NOT NULL,
   url             TEXT NOT NULL,
+  category        TEXT,                    -- free-form label: 'apartments', 'houses', 'weekend-homes'…
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   last_scraped_at TIMESTAMPTZ,
   listing_count   INTEGER,

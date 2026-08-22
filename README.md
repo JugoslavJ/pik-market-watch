@@ -47,13 +47,16 @@ Open olx.ba in your browser, filter a search the way you like (e.g. Stanovi → 
 ```json
 {
   "searches": [
-    { "name": "Stanovi Sarajevo",    "url": "https://www.olx.ba/<your-search-url>" },
-    { "name": "Stanovi Mostar 2sob", "url": "https://www.olx.ba/<another-url>" }
+    { "name": "Stanovi Sarajevo",    "category": "apartments",    "url": "https://www.olx.ba/<your-search-url>" },
+    { "name": "Kuce Sarajevo",       "category": "houses",        "url": "https://www.olx.ba/<another-url>" },
+    { "name": "Vikendice Jablanica", "category": "weekend-homes", "url": "https://www.olx.ba/<one-more-url>" }
   ]
 }
 ```
 
-Then restart the scraper: `docker compose restart scraper`. The `name` is optional (derived from the URL if omitted).
+Then restart the scraper: `docker compose restart scraper`. `name` and `category` are optional (derived from the URL / left empty if omitted).
+
+Categories are free-form labels for grouping kinds of real estate — apartments, houses, weekend homes, land, whatever you like. The dashboard's **Category** dropdown filters every panel, and a listing that appears in several categories is counted in each of them.
 
 ## Configuration reference (`.env`)
 
@@ -72,14 +75,22 @@ Scraper-only tuning (set in `docker-compose.yml`'s `environment:` block): `MAX_P
 |---|---|---|
 | `listings` | `STORE_LISTINGS` | One row per article: title, url, sqm, rooms, price, ppm², is_rent, first/last seen |
 | `price_history` | `priceHistory[]` | Append-only snapshots; a row is added only when price/ppm² actually changed |
-| `saved_searches` | `STORE_SAVED` | Watched searches + per-run stats (count, median ppm², new/drop counts) |
+| `saved_searches` | `STORE_SAVED` | Watched searches + per-run stats (count, median ppm², new/drop counts) + free-form `category` label for the dashboard filter |
 | `search_results` | `STORE_SEARCH` | Which articles each search returned (refreshed every run) |
 | `scrape_runs` | *(new)* | Run observability: status, pages, cards, error |
 | `v_active_listings` | *(new)* | View: anything seen by a scrape within 14 days |
 
 The schema is created automatically on **first** start only (`db/init/01-schema.sql` via the Postgres entrypoint). To change it later, write a new migration file in `db/init/` and apply it manually — the init dir is not re-run on existing volumes.
 
+Already initialized a volume from before the `category` column existed? Apply it once:
+
+```bash
+docker compose exec db psql -U olx -c "ALTER TABLE saved_searches ADD COLUMN IF NOT EXISTS category TEXT"
+```
+
 ## Dashboard panels
+
+Every panel honours the **Category** dropdown at the top of the dashboard (default **All**).
 
 1. **Active sale listings / Median KM/m² / Rent listings** — headline stats
 2. **Median KM/m² trend (90 d)** — from all price-history snapshots

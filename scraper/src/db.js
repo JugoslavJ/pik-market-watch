@@ -104,16 +104,18 @@ class Db {
     }
   }
 
-  async upsertSavedSearch({ searchKey, name, url, listingCount, median, newCount, dropCount }) {
+  async upsertSavedSearch({ searchKey, name, url, category, listingCount, median, newCount, dropCount }) {
     await this.pool.query(
       `INSERT INTO saved_searches
-         (search_key, name, url, last_scraped_at, listing_count, median_ppm2, new_count, drop_count)
-       VALUES ($1, $2, $3, now(), $4, $5, $6, $7)
+         (search_key, name, url, category, last_scraped_at, listing_count, median_ppm2,
+          new_count, drop_count)
+       VALUES ($1, $2, $3, $4, now(), $5, $6, $7, $8)
        ON CONFLICT (search_key) DO UPDATE SET
-         name = EXCLUDED.name, url = EXCLUDED.url, last_scraped_at = now(),
+         name = EXCLUDED.name, url = EXCLUDED.url, category = EXCLUDED.category,
+         last_scraped_at = now(),
          listing_count = EXCLUDED.listing_count, median_ppm2 = EXCLUDED.median_ppm2,
          new_count = EXCLUDED.new_count, drop_count = EXCLUDED.drop_count`,
-      [searchKey, name, url, listingCount, median, newCount, dropCount]);
+      [searchKey, name, url, category ?? null, listingCount, median, newCount, dropCount]);
   }
 
   async startRun(searchKey) {

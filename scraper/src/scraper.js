@@ -105,6 +105,7 @@ async function scrapeSearch(browser, search, cfg, db, log) {
     const median = computeMedian(allCards.map(c => c.ppm2).filter(v => v != null));
     await db.upsertSavedSearch({
       searchKey: search.searchKey, name: search.name, url: base.href,
+      category: search.category,
       listingCount: allCards.length, median, newCount, dropCount,
     });
     await db.finishRun(runId, { status: 'ok', pages: pagesDone, cards: allCards.length });
