@@ -96,6 +96,14 @@ jobs:
           echo "▶ docker compose up -d --build (build output below, if any)"
           docker compose up -d --build --remove-orphans
 
+          # Provisioning files (datasources etc.) are read ONLY at Grafana
+          # startup, and bind-mount content changes don't trigger container
+          # recreation when the image tag is unchanged. Restart it so shipped
+          # provisioning edits always take effect. (Dashboard JSON files also
+          # hot-reload every 30 s via updateIntervalSeconds.)
+          echo "▶ Restarting grafana to re-read provisioning files…"
+          docker compose restart grafana
+
           echo "▶ Waiting for containers to become healthy (scraper start_period is 120 s)…"
           deadline=$((SECONDS + 360))
           while :; do
