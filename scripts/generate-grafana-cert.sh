@@ -52,6 +52,12 @@ openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -sha256 -nodes \
 
 chmod 600 "$KEY"
 chmod 644 "$CRT"
+# grafana image runs as uid 472 — hand over ownership when possible:
+if ! chown 472:472 "$CRT" "$KEY" 2>/dev/null; then
+  echo "NOTE: could not chown tls files to uid 472 (running unprivileged?)." >&2
+  echo "If grafana later fails with 'open /certs/grafana.key: permission denied', run:" >&2
+  echo "  sudo chown 472:472 tls/grafana.crt tls/grafana.key && docker compose up -d --force-recreate grafana" >&2
+fi
 
 
 echo
