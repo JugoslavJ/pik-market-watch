@@ -1,5 +1,6 @@
 # Grafana datasource, provisioned on startup.
 # ${POSTGRES_*} are interpolated from the environment (set in docker-compose.yml).
+# Connects as the READ-ONLY role — see db/init/zz-database-roles.sh.
 apiVersion: 1
 
 deleteDatasources:
@@ -13,9 +14,9 @@ datasources:
     access: proxy
     url: db:5432
     database: ${POSTGRES_DB}
-    user: ${POSTGRES_USER}
+    user: ${POSTGRES_READER_USER}
     secureJsonData:
-      password: ${POSTGRES_PASSWORD}
+      password: ${POSTGRES_READER_PASSWORD}
     jsonData:
       # Required here (not just top-level): the PostgreSQL plugin used by
       # Grafana >= 12/13 reads jsonData.database and refuses to query without

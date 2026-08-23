@@ -16,6 +16,10 @@ set -eu
 REPO_DIR="${OLX_REPO_DIR:-$HOME/pik-market-watch}"
 BACKUP_DIR="$REPO_DIR/backups"
 MIN_BYTES=20000
+# Restore as the least-privileged OWNING role (db/init/zz-database-roles.sh):
+# it must own the objects --clean drops/recreates. Name comes from .env.
+app_user="$(sed -n 's/^POSTGRES_APP_USER=//p' "$REPO_DIR/.env" 2>/dev/null | tr -d '\r')"
+app_user="${app_user:-olx_app}"
 
 was_running=0   # EXIT trap restarts the scraper if we stop it and then fail
 restore_ok=0
@@ -66,7 +70,7 @@ fi
 
 # pg_restore runs INSIDE the db container: address the archive by its mount
 # point (/backups), never by the host-side path.
-if ! docker compose exec -T db pg_restore -U olx -d olx --clean --if-exists /backups/olx-sync-incoming.dump; then
+if ! docker compose exec -T db pg_restore -U "$app_user" -d olx --clean --if-exists /backups/olx-sync-incoming.dump; then
   echo "RESTORE_ERROR: pg_restore failed - database unchanged, rollback snapshot kept ($BACKUP_DIR/olx-sync-$stamp.dump)" >&2
   exit 1
 fi

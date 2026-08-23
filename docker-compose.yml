@@ -1,7 +1,9 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # pik-market-watch — OLX.ba price tracker
 #   db      : PostgreSQL 16, schema auto-created on first start (db/init/*.sql)
-#   grafana : dashboards over the database → http://localhost:3000
+#   grafana : dashboards over the database → https://localhost:3000
+#             native TLS termination, self-signed cert from ./tls
+#             (scripts/generate-grafana-cert.sh)
 #   db-backup : nightly pg_dump + Grafana-state sidecar into ./backups
 #
 #   scraper : Node + Playwright headless Chromium — behind profile "scrape".
@@ -26,7 +28,13 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-olx}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
-      POSTGRES_DB: ${POSTGRES_DB:-olx}
+      # Runtime least-privilege roles (db/init/zz-database-roles.sh):
+      #   *APP*    owns schema/objects — scraper + remote restores connect as it
+      #   *READER* read-only — Grafana datasource + pg_dump backups
+      POSTGRES_APP_USER: ${POSTGRES_APP_USER:-olx_app}
+      POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:?set POSTGRES_APP_PASSWORD in .env}
+      POSTGRES_READER_USER: ${POSTGRES_READER_USER:-olx_reader}
+      POSTGRES_READER_PASSWORD: ${POSTGRES_READER_PASSWORD:?set POSTGRES_READER_PASSWORD in .env}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./db/init:/docker-entrypoint-initdb.d:ro   # runs on FIRST start only
@@ -52,7 +60,7 @@ services:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-olx}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-olx}
+      DATABASE_URL: postgres://${POSTGRES_APP_USER:-olx_app}:${POSTGRES_APP_PASSWORD}@db:5432/${POSTGRES_DB:-olx}
       SCRAPE_INTERVAL_MINUTES: ${SCRAPE_INTERVAL_MINUTES:-720}
       # NOTE: do NOT add RUN_ONCE here. Combined with this service's restart
       # policy, a finished one-shot container would be relaunched forever
@@ -86,14 +94,22 @@ services:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
       GF_ANALYTICS_REPORTUSAGE_ENABLED: "false"   # no usage telemetry
+      # Native HTTPS termination — self-signed cert mounted read-only from ./tls
+      GF_SERVER_PROTOCOL: https
+      GF_SERVER_CERT_FILE: /certs/grafana.crt
+      GF_SERVER_CERT_KEY: /certs/grafana.key
+      # Encrypts datasource secrets at rest inside grafana.db (.env: GRAFANA_SECRET_KEY)
+      GF_SECURITY_SECRET_KEY: ${GRAFANA_SECRET_KEY:?set GRAFANA_SECRET_KEY in .env}
       # Consumed by env interpolation in grafana/provisioning/datasources/postgres.yml
-      POSTGRES_USER: ${POSTGRES_USER:-olx}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # (read-only role — Grafana never needs write access)
+      POSTGRES_READER_USER: ${POSTGRES_READER_USER:-olx_reader}
+      POSTGRES_READER_PASSWORD: ${POSTGRES_READER_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-olx}
     volumes:
       - grafana:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./tls:/certs:ro                        # self-signed HTTPS cert (scripts/generate-grafana-cert.sh)
     ports:
       - "3000:3000"
     mem_limit: 768m
@@ -109,8 +125,8 @@ services:
         condition: service_healthy
     environment:
       PGHOST: db
-      PGUSER: ${POSTGRES_USER:-olx}
-      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGUSER: ${POSTGRES_READER_USER:-olx_reader}   # read-only is enough for pg_dump
+      PGPASSWORD: ${POSTGRES_READER_PASSWORD}
       PGDATABASE: ${POSTGRES_DB:-olx}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
     volumes:

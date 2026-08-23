@@ -89,6 +89,21 @@ jobs:
             fi
           done
 
+          # Least-privilege DB roles + Grafana TLS material live only on the
+          # machines (git-ignored): fail fast with fix instructions.
+          for v in POSTGRES_APP_PASSWORD POSTGRES_READER_PASSWORD GRAFANA_SECRET_KEY; do
+            grep -q "^$v=." .env || {
+              echo "✗ Missing $v in $DEPLOY_DIR/.env (see README §Database roles / §Exposing Grafana)."
+              exit 1
+            }
+          done
+          if [ ! -f tls/grafana.crt ] || [ ! -f tls/grafana.key ]; then
+            echo "✗ Missing tls/grafana.crt|key on the instance (Grafana native TLS)."
+            echo "  Fix once over SSH, then re-run this job:"
+            echo "    mkdir -p tls && bash scripts/generate-grafana-cert.sh <instance-ip>"
+            exit 1
+          fi
+
           # Refresh the prebuilt images (postgres/grafana pins) if the registry
           # is reachable; `up` below still works from the local cache otherwise.
           docker compose pull db grafana db-backup || echo "⚠ pull failed, using local images"
@@ -112,7 +127,7 @@ jobs:
             echo "   db=$db  grafana=$gr  (t=${SECONDS}s)"
             if [ "$db" = healthy ] && [ "$gr" = running ]; then
               echo "✓ Stack healthy — deployed ${GIT_SHA:-unknown} to the instance"
-              echo "  Grafana: http://${OCI_HOST:-<instance-ip>}:3000"
+              echo "  Grafana: https://${OCI_HOST:-<instance-ip>}:3000 (self-signed cert — expect a browser warning)"
               # The scraper moved to the home machine (compose profile "scrape").
               # --remove-orphans already deleted its container; drop its image too.
               docker images --format '{{.Repository}}:{{.Tag}}' \

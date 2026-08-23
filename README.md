@@ -21,14 +21,15 @@ HOME MACHINE (residential IP)                    OCI INSTANCE (datacenter IP)
 
 - **scraper** opens each configured olx.ba search in a headless Chromium page, parses listing cards (logic ported 1:1 from the original extension's card parser), then upserts listings and appends price history into Postgres. It lives behind the compose profile **`scrape`** and normally runs on the home machine only — Cloudflare hard-blocks datacenter IPs like Oracle's. Its results reach the instance via `scripts/sync-to-instance.ps1`.
 - **db** holds all state; the schema mirrors the extension's IndexedDB stores.
-- **grafana** ships with a provisioned Postgres datasource and two prebuilt dashboards (**Market Overview**, **Exits & Price Endings**).
+- **grafana** ships with a provisioned Postgres datasource and two prebuilt dashboards (**Market Overview**, **Exits & Price Endings**). It serves **HTTPS** with a self-signed certificate (scripts/generate-grafana-cert.sh) and queries Postgres through a **read-only role**.
 - **db-backup** produces nightly dumps into `./backups/`.
 
 ## Quick start
 
 ```bash
-cp .env.example .env                                   # then edit both passwords
+cp .env.example .env                                   # then edit all passwords
 cp config/searches.example.json config/searches.json   # then add your searches
+bash scripts/generate-grafana-cert.sh                  # once per machine: self-signed TLS cert for Grafana
 echo 'COMPOSE_PROFILES=scrape' >> .env                 # run the scraper HERE (home machine)
 docker compose up -d --build
 ```
@@ -37,7 +38,7 @@ Then:
 
 | URL | What |
 |---|---|
-| http://localhost:3000 | Grafana (login = `GRAFANA_ADMIN_*` from `.env`). Dashboards: **OLX → OLX.ba Market Overview** and **OLX → OLX.ba Exits & Price Endings** |
+| https://localhost:3000 | Grafana over HTTPS — self-signed cert, expect a one-time browser warning (login = `GRAFANA_ADMIN_*` from `.env`). Dashboards: **OLX → OLX.ba Market Overview** and **OLX → OLX.ba Exits & Price Endings** |
 | http://localhost:9100 | Scraper health/status JSON *(with the scrape profile)* |
 | `docker compose logs -f scraper` | Live scraping progress *(with the scrape profile)* |
 
@@ -285,8 +286,9 @@ curl -fsSL https://get.docker.com | sudo sh
 sudo usermod -aG docker "$USER" && exec newgrp docker   # group change needs re-login
 
 mkdir -p ~/pik-market-watch/config && cd ~/pik-market-watch
-cp .env.example .env                                    # then edit both passwords
+cp .env.example .env                                    # then edit all passwords
 cp config/searches.example.json config/searches.json    # then add your searches
+mkdir -p tls && bash scripts/generate-grafana-cert.sh <instance-public-ip>   # self-signed TLS cert for Grafana
 ```
 
 The deploy key's **public** half must be in `~/.ssh/authorized_keys`. The two
@@ -295,16 +297,59 @@ fails fast with instructions if they're missing.
 
 ### Exposing Grafana (optional)
 
-The stack serves Grafana on `:3000`; db (5432) and the scraper health endpoint
-(9100) stay bound to `127.0.0.1`. Two firewalls sit in front of port 3000 on OCI:
+Grafana serves **HTTPS on `:3000`**, terminating TLS itself with a self-signed
+certificate from `./tls` (generate once per machine with
+`scripts/generate-grafana-cert.sh`; git-ignored). Browsers show a one-time
+warning — compare the certificate fingerprint the script prints against what
+the browser displays, or import `tls/grafana.crt` into your OS trust store to
+silence it. Datasource secrets inside `grafana.db` are additionally encrypted
+with `GRAFANA_SECRET_KEY` (`.env`), so the nightly Grafana-state backups in
+`./backups/` don't hand over usable credentials either. db (5432) and the
+scraper health endpoint (9100) stay bound to `127.0.0.1`.
 
-1. **Security List / NSG** in the OCI console — add an ingress rule for TCP 3000
-   (ideally restricted to your IP).
+Two firewalls sit in front of port 3000 on OCI — restrict both to your IP:
+
+1. **Security List / NSG** in the OCI console — ingress rule for TCP 3000 with
+   source = your address (**not** `0.0.0.0/0`).
 2. **The instance's iptables** — OCI's Ubuntu images ship a restrictive ruleset:
    ```bash
-   sudo iptables -I INPUT 6 -p tcp --dport 3000 -j ACCEPT
+   sudo iptables -I INPUT 6 -p tcp -s <your-ip>/32 --dport 3000 -j ACCEPT
    sudo netfilter-persistent save   # survive reboots
    ```
+
+Regenerate the certificate any time (new key, extra SANs, nearing expiry), then
+recreate the container: `docker compose up -d --force-recreate grafana`.
+
+### Database roles (least privilege)
+
+Everything no longer talks to Postgres as the bootstrap superuser:
+
+| Role | Access | Used by |
+|---|---|---|
+| `<user>` (e.g. `olx`) | bootstrap superuser — admin only | manual `psql` surgery |
+| `olx_app` | owner of db/schema/objects: CRUD + DDL | scraper (`DATABASE_URL`), remote restores |
+| `olx_reader` | read-only (`pg_read_all_data`) | Grafana datasource, nightly `pg_dump` |
+
+Passwords live in `.env` (`POSTGRES_APP_PASSWORD`, `POSTGRES_READER_PASSWORD`,
+plus optional `POSTGRES_APP_USER` / `POSTGRES_READER_USER` renames).
+
+- **Fresh volumes**: `db/init/zz-database-roles.sh` runs automatically during
+  first init (after the `*.sql` files), transfers object ownership to `olx_app`,
+  and sets default privileges so tables created later stay readable by
+  `olx_reader`.
+- **Existing volumes** (apply once, and again after every password rotation):
+
+  ```bash
+  docker compose exec db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
+  ```
+
+  Then recreate whatever connects, so new credentials are picked up:
+  `docker compose up -d --force-recreate scraper grafana db-backup`
+  (home machine: add `--profile scrape`).
+
+A leak of app or reader credentials can no longer create roles, read arbitrary
+server-side files, or touch anything outside this database — `olx_app` merely
+owns objects; it is not a superuser.
 
 ### Day-to-day
 
@@ -327,5 +372,9 @@ The stack serves Grafana on `:3000`; db (5432) and the scraper health endpoint
 
   (repeat the `UPDATE` once per search with its own key/category)
 - **Grafana datasource fails**: the container needs `POSTGRES_*` env vars to render `grafana/provisioning/datasources/postgres.yml` — they are wired through `docker-compose.yml`.
+- **Grafana fails to start with a TLS/cert error**: `tls/grafana.crt` / `grafana.key` are missing — generate them (`bash scripts/generate-grafana-cert.sh`) and `docker compose up -d --force-recreate grafana`.
+- **Datasource auth failed after enabling roles**: the `olx_app`/`olx_reader` roles do not exist on an older volume yet — run `docker compose exec db bash /docker-entrypoint-initdb.d/zz-database-roles.sh` (see *Database roles* above).
+- **Panels error with permission denied after a restore**: tables were recreated without re-running the roles script, so the reader lost SELECT — run it again.
+- **Deploy job complains about missing env/cert**: the CI guard requires `POSTGRES_APP_PASSWORD`, `POSTGRES_READER_PASSWORD`, `GRAFANA_SECRET_KEY` and `tls/grafana.{crt,key}` on the instance — its error message prints the exact fix.
 
 > Note: scraping olx.ba is for personal analysis only — keep intervals polite.
