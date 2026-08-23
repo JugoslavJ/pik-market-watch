@@ -1,32 +1,35 @@
 # pik-market-watch
 
-A three-container Docker stack that watches **olx.ba** real-estate searches, stores every listing and price change in PostgreSQL, and visualises the market in Grafana dashboards.
+A Docker Compose stack that watches **olx.ba** real-estate searches, stores every listing and price change in PostgreSQL, and visualises the market in Grafana dashboards. The scraper runs at home (residential IP); a small server stack on Oracle Cloud serves the database and dashboards.
 
 It was reworked from the original **"OLX.ba Price per m²" Firefox extension** (v6.3 — preserved in git history, initial commit). The listing-parsing logic was ported verbatim, so results match exactly what the extension's panel showed.
 
 ---
 
-## Server stack architecture
+## Architecture
 
 ```
-┌────────────────────┐      ┌──────────────────────┐      ┌───────────────────┐
-│ scraper            │ SQL  │ db                   │ SQL  │ grafana           │
-│ Node 24 + Playwright│────▶│ PostgreSQL 16        │◀─────│ :3000 dashboards  │
-│ headless Chromium   │     │ volume: pgdata       │      │ volume: grafana   │
-└────────────────────┘      └──────────────────────┘      └───────────────────┘
-        │                         ▲ auto-initialized from db/init/*.sql
-        └─ health/status JSON on :9100
+HOME MACHINE (residential IP)                    OCI INSTANCE (datacenter IP)
+┌────────────────────────────────┐              ┌──────────────────────────────┐
+│ scraper — profile "scrape"     │   pg_dump    │ db   PostgreSQL 16           │
+│ Node 24 + Playwright           │───ssh + ───▶ │      volume: pgdata          │
+│ headless Chromium              │   restore    │ grafana   :3000 dashboards   │
+│ health/status JSON on :9100    │              │ db-backup  nightly dumps     │
+└────────────────────────────────┘              └──────────────────────────────┘
+        ▲ schema auto-initialized from db/init/*.sql (both sides)
 ```
 
-- **scraper** opens each configured olx.ba search in a headless Chromium page, parses listing cards (logic ported 1:1 from the original extension's card parser), then upserts listings and appends price history into Postgres. Runs at startup, then every `SCRAPE_INTERVAL_MINUTES` (default 720 = 12 h).
+- **scraper** opens each configured olx.ba search in a headless Chromium page, parses listing cards (logic ported 1:1 from the original extension's card parser), then upserts listings and appends price history into Postgres. It lives behind the compose profile **`scrape`** and normally runs on the home machine only — Cloudflare hard-blocks datacenter IPs like Oracle's. Its results reach the instance via `scripts/sync-to-instance.ps1`.
 - **db** holds all state; the schema mirrors the extension's IndexedDB stores.
 - **grafana** ships with a provisioned Postgres datasource and two prebuilt dashboards (**Market Overview**, **Exits & Price Endings**).
+- **db-backup** produces nightly dumps into `./backups/`.
 
 ## Quick start
 
 ```bash
 cp .env.example .env                                   # then edit both passwords
 cp config/searches.example.json config/searches.json   # then add your searches
+echo 'COMPOSE_PROFILES=scrape' >> .env                 # run the scraper HERE (home machine)
 docker compose up -d --build
 ```
 
@@ -35,8 +38,8 @@ Then:
 | URL | What |
 |---|---|
 | http://localhost:3000 | Grafana (login = `GRAFANA_ADMIN_*` from `.env`). Dashboards: **OLX → OLX.ba Market Overview** and **OLX → OLX.ba Exits & Price Endings** |
-| http://localhost:9100 | Scraper health/status JSON |
-| `docker compose logs -f scraper` | Live scraping progress |
+| http://localhost:9100 | Scraper health/status JSON *(with the scrape profile)* |
+| `docker compose logs -f scraper` | Live scraping progress *(with the scrape profile)* |
 
 The first scrape starts immediately after the stack comes up.
 
@@ -158,8 +161,8 @@ Everything about ads that disappeared, i.e. the closest thing olx.ba offers to s
 ## Operations
 
 ```bash
-docker compose logs -f scraper                            # follow scraping
-docker compose run --rm scraper node src/index.js --once  # manual one-off scrape
+docker compose logs -f scraper                            # follow scraping (home / scrape profile)
+docker compose --profile scrape run --rm scraper node src/index.js --once  # manual one-off scrape
 docker compose restart scraper                            # pick up searches.json changes
 docker compose down                                       # stop; add -v to ALSO delete pgdata/grafana data
 ```
@@ -207,17 +210,22 @@ run the scraper from a residential machine and sync the result up:
    ```powershell
    pwsh -File scripts\sync-to-instance.ps1
    ```
-3. **Schedule** (Task Scheduler, twice daily; runs whether logged on or not):
+3. **Schedule** (twice daily at 09:00 & 21:00; wakes the PC if it's asleep):
    ```powershell
-   $a = New-ScheduledTaskAction -Execute 'pwsh.exe' -Argument '-NoProfile -ExecutionPolicy Bypass -File "C:\path\to\repo\scripts\sync-to-instance.ps1"'
-   $t = @( (New-ScheduledTaskTrigger -Daily -At 09:00), (New-ScheduledTaskTrigger -Daily -At 21:00) )
-   $s = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew
-   Register-ScheduledTask -TaskName 'OLX home sync' -Action $a -Trigger $t -Settings $s
+   pwsh -File scripts\register-sync-task.ps1      # optional: -At1 08:30 -At2 20:30
    ```
+   Runs whether you are logged on or not (no stored password, S4U logon);
+   overlapping runs are skipped; each run is hard-limited to 2 h. Windows must
+   permit wake timers: *Power Options → advanced settings → Sleep → Allow wake
+   timers → Important Wake Timers Only* (set it for battery too). Unattended
+   progress is appended to `logs/sync.log`.
 
-While home-syncing, the instance's own scraper can be stopped
-(`docker compose stop scraper`) to avoid pointless blocked cycles — the
-restore wrapper only restarts it if it was running.
+The instance runs **no scraper at all**: the service sits behind the compose
+profile `scrape`, which is active only on the home machine (its `.env` sets
+`COMPOSE_PROFILES=scrape`). Deploys therefore skip the ~400 MB Chromium build
+and the idle container's CPU/RAM stays free. If Oracle's IP is ever unblocked
+and you want instance-side scraping back, add that one line to the instance's
+`.env` and redeploy.
 
 ### Detail-page backfill (map pins + floor area)
 

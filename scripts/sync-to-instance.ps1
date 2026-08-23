@@ -14,7 +14,15 @@
 #>
 param()
 $ErrorActionPreference = 'Stop'
-function Log([string]$m) { Write-Output ("[{0}] {1}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $m) }
+$syncLog = Join-Path (Split-Path -Parent $PSScriptRoot) 'logs\sync.log'
+function Log([string]$m) {
+  $line = "[{0}] {1}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $m
+  Write-Output $line
+  try {   # scheduled runs have no console - keep an on-disk trail too
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $syncLog) | Out-Null
+    Add-Content -LiteralPath $syncLog -Value $line -ErrorAction Stop
+  } catch { }
+}
 
 foreach ($e in 'OLX_INSTANCE_HOST', 'OLX_SSH_USER', 'OLX_SYNC_KEY') {
   if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($e))) {
@@ -29,12 +37,30 @@ if (-not (Test-Path -LiteralPath $KeyPath)) { throw "sync key not found: $KeyPat
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
+# A scheduled run wakes the PC straight into this script; Docker Desktop only
+# autostarts with a user session, so bring the engine up ourselves if needed.
+function Test-DockerEngine { docker info --format ok *> $null; return ($LASTEXITCODE -eq 0) }
+if (-not (Test-DockerEngine)) {
+  Log 'docker engine not reachable - starting Docker Desktop...'
+  $dd = @("$env:ProgramFiles\Docker\Docker\Docker Desktop.exe",
+          "$env:LOCALAPPDATA\Programs\DockerDesktop\Docker Desktop.exe") |
+        Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+  if (-not $dd) { throw 'docker engine is down and Docker Desktop.exe was not found - start it manually once' }
+  Start-Process $dd
+  $deadline = (Get-Date).AddMinutes(4)
+  while (-not (Test-DockerEngine)) {
+    if ((Get-Date) -gt $deadline) { throw 'docker engine did not come up within 4 minutes' }
+    Start-Sleep -Seconds 5
+  }
+  Log 'docker engine ready.'
+}
+
 Log 'building scraper image from current source...'
-docker compose build scraper
+docker compose --profile scrape build scraper
 if ($LASTEXITCODE -ne 0) { throw "scraper image build failed (exit $LASTEXITCODE)" }
 
 Log 'scraping (full cycle, all searches)...'
-docker compose run --rm scraper node src/index.js --once
+docker compose --profile scrape run --rm scraper node src/index.js --once
 if ($LASTEXITCODE -ne 0) { throw "scrape failed (exit $LASTEXITCODE) - instance left untouched; retry later" }
 
 Log 'dumping database...'

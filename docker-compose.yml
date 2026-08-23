@@ -1,14 +1,14 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# pik-market-watch — OLX.ba price tracker, 3-container stack
+# pik-market-watch — OLX.ba price tracker
 #   db      : PostgreSQL 16, schema auto-created on first start (db/init/*.sql)
-#   scraper : Node + Playwright headless Chromium; scrapes configured searches
-#             into Postgres on a schedule (default every 12 h)
 #   grafana : dashboards over the database → http://localhost:3000
+#   db-backup : nightly pg_dump + Grafana-state sidecar into ./backups
 #
-# First run:
-#   cp .env.example .env                                   (edit the passwords)
-#   cp config/searches.example.json config/searches.json   (add your searches)
-#   docker compose up -d --build
+#   scraper : Node + Playwright headless Chromium — behind profile "scrape".
+#             Cloudflare blocks datacenter IPs, so it runs on the HOME machine
+#             only (its .env sets COMPOSE_PROFILES=scrape); results reach this
+#             stack via scripts/sync-to-instance.ps1. One-off run:
+#               docker compose --profile scrape run --rm scraper node src/index.js --once
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Cap container logs so months of uptime can't fill the disk.
@@ -45,6 +45,7 @@ services:
   scraper:
     build: ./scraper
     container_name: olx-scraper
+    profiles: ["scrape"]         # opt-in: home machine only — instance never builds/starts it
     restart: unless-stopped
     init: true                   # proper signal handling + reaps chromium zombies
     depends_on:

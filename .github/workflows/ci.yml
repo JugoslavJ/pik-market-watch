@@ -37,7 +37,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
-    timeout-minutes: 45   # first build downloads Chromium (~400 MB) on the instance
+    timeout-minutes: 15   # no Chromium here anymore: instance = db + grafana + backup only
     concurrency:
       group: deploy-production
       cancel-in-progress: false   # queue overlapping pushes; never kill a live deploy
@@ -104,23 +104,27 @@ jobs:
           echo "▶ Restarting grafana to re-read provisioning files…"
           docker compose restart grafana
 
-          echo "▶ Waiting for containers to become healthy (scraper start_period is 120 s)…"
+          echo "▶ Waiting for containers to become healthy…"
           deadline=$((SECONDS + 360))
           while :; do
             db=$(docker inspect -f '{{.State.Health.Status}}' olx-db 2>/dev/null || echo missing)
-            sc=$(docker inspect -f '{{.State.Health.Status}}' olx-scraper 2>/dev/null || echo missing)
             gr=$(docker inspect -f '{{.State.Status}}' olx-grafana 2>/dev/null || echo missing)
-            echo "   db=$db  scraper=$sc  grafana=$gr  (t=${SECONDS}s)"
-            if [ "$db" = healthy ] && [ "$sc" = healthy ] && [ "$gr" = running ]; then
+            echo "   db=$db  grafana=$gr  (t=${SECONDS}s)"
+            if [ "$db" = healthy ] && [ "$gr" = running ]; then
               echo "✓ Stack healthy — deployed ${GIT_SHA:-unknown} to the instance"
               echo "  Grafana: http://${OCI_HOST:-<instance-ip>}:3000"
-              docker image prune -f >/dev/null   # drop the dangling previous scraper image
+              # The scraper moved to the home machine (compose profile "scrape").
+              # --remove-orphans already deleted its container; drop its image too.
+              docker images --format '{{.Repository}}:{{.Tag}}' \
+                | grep -E '(pik-market-watch|olx-price-ext)-scraper' \
+                | xargs -r docker rmi -f || true
+              docker image prune -f >/dev/null
               exit 0
             fi
             if [ "$SECONDS" -ge "$deadline" ]; then
               echo "✗ Health check timed out after 6 min — recent state:"
               docker compose ps -a
-              docker compose logs --tail 80 db scraper grafana
+              docker compose logs --tail 80 db grafana
               exit 1
             fi
             sleep 10
