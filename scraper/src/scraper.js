@@ -86,6 +86,13 @@ async function scrapeSearch(browser, search, cfg, db, log) {
       await sleep(2000);
       cards = await fetchPage(1);
     }
+    if (!cards.length) {
+      // An empty page shell (bot-blocking / rate limiting) must never look
+      // like a successful "0 results" run: it would wipe this search's result
+      // links and let the closing pass freeze every listing. Fail loudly —
+      // failed runs keep their stale links, so nothing gets closed.
+      throw new Error('page 1 returned 0 listing cards after retry — likely throttled or blocked');
+    }
     pagesDone = 1;
     accept(cards);
 
