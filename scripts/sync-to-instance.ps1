@@ -6,7 +6,8 @@
   remote forced-command endpoint verifies and restores (scraper paused during
   restore). The instance is left untouched unless the whole pipeline succeeds.
 
-  Config (user environment variables, set once):
+  Config (user environment variables, set once — start a fresh terminal
+  afterwards so they are visible to new sessions and scheduled tasks):
     OLX_INSTANCE_HOST  e.g. 203.0.113.10
     OLX_SSH_USER       e.g. opc
     OLX_SYNC_KEY       e.g. C:\Users\you\.ssh\olx_sync_key
@@ -15,13 +16,22 @@ param()
 $ErrorActionPreference = 'Stop'
 function Log([string]$m) { Write-Output ("[{0}] {1}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $m) }
 
-foreach ($v in 'InstanceHost', 'SshUser', 'KeyPath') {
-  if (-not (Get-Variable $v -ValueOnly)) { throw "missing config: set the $v environment variable (OLX_$(($v -replace '([A-Z])', '_$1')).ToUpper())" }
+foreach ($e in 'OLX_INSTANCE_HOST', 'OLX_SSH_USER', 'OLX_SYNC_KEY') {
+  if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($e))) {
+    throw "missing config: set the $e user environment variable, e.g. [Environment]::SetEnvironmentVariable('$e', '<value>', 'User')"
+  }
 }
-if (-not (Test-Path $KeyPath)) { throw "sync key not found: $KeyPath" }
+$InstanceHost = $env:OLX_INSTANCE_HOST
+$SshUser      = $env:OLX_SSH_USER
+$KeyPath      = $env:OLX_SYNC_KEY
+if (-not (Test-Path -LiteralPath $KeyPath)) { throw "sync key not found: $KeyPath" }
 
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
+
+Log 'building scraper image from current source...'
+docker compose build scraper
+if ($LASTEXITCODE -ne 0) { throw "scraper image build failed (exit $LASTEXITCODE)" }
 
 Log 'scraping (full cycle, all searches)...'
 docker compose run --rm scraper node src/index.js --once

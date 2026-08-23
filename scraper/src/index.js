@@ -83,11 +83,13 @@ async function runAll(browser, db) {
 }
 
 function startHealthServer() {
-  http.createServer((req, res) => {
+  const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(state, null, 2));
-  }).listen(config.healthPort, () =>
+  });
+  server.listen(config.healthPort, () =>
     log(`health endpoint → http://localhost:${config.healthPort}`));
+  return server;
 }
 
 async function main() {
@@ -128,15 +130,17 @@ async function main() {
 
   // Serve the health endpoint from t=0 so container healthchecks pass while
   // the initial scrape is still running.
-  startHealthServer();
+  const healthServer = startHealthServer();
 
   await runAll(browser, db);
 
   if (config.runOnce) {
     await browser.close();
     await db.close();
+    await new Promise(resolve => healthServer.close(resolve));
+    healthServer.closeAllConnections?.();  // drop keep-alive healthcheck sockets
     log('RUN_ONCE complete');
-    return;
+    return;   // nothing left keeping the event loop alive - process exits 0
   }
 
   timer = setInterval(
