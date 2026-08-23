@@ -183,6 +183,42 @@ docker compose exec db pg_restore -U olx -d olx --clean --if-exists /backups/olx
 
 Manual out-of-band dump: `docker compose exec db pg_dump -U olx -Fc olx > manual.dump`
 
+### Scraping from home (when Cloudflare blocks the instance)
+
+olx.ba sits behind a Cloudflare challenge that hard-blocks datacenter IPs
+(Oracle included) while passing residential connections. When the instance is
+blocked (`scrape_runs.status = 'error'`, *"page 1 returned 0 listing cards"*),
+run the scraper from a residential machine and sync the result up:
+
+1. **One-time setup** — on the home PC:
+   ```powershell
+   ssh-keygen -t ed25519 -f $env:USERPROFILE\.ssh\olx_sync_key -N '""'
+   [Environment]::SetEnvironmentVariable('OLX_INSTANCE_HOST', '<instance-ip>', 'User')
+   [Environment]::SetEnvironmentVariable('OLX_SSH_USER', 'opc', 'User')
+   [Environment]::SetEnvironmentVariable('OLX_SYNC_KEY', "$env:USERPROFILE\.ssh\olx_sync_key", 'User')
+   ```
+   Append the generated public key to the instance's `~/.ssh/authorized_keys`
+   **with a forced command** (the key can only run the restore — never a shell):
+   ```
+   command="$HOME/pik-market-watch/db/remote-restore.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-ed25519 AAAA... olx-sync
+   ```
+2. **Sync** — scrape locally, dump, stream to the instance, verified restore
+   (scraper paused during the swap; rollback snapshots kept in `./backups/`):
+   ```powershell
+   pwsh -File scripts\sync-to-instance.ps1
+   ```
+3. **Schedule** (Task Scheduler, twice daily; runs whether logged on or not):
+   ```powershell
+   $a = New-ScheduledTaskAction -Execute 'pwsh.exe' -Argument '-NoProfile -ExecutionPolicy Bypass -File "C:\path\to\repo\scripts\sync-to-instance.ps1"'
+   $t = @( (New-ScheduledTaskTrigger -Daily -At 09:00), (New-ScheduledTaskTrigger -Daily -At 21:00) )
+   $s = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew
+   Register-ScheduledTask -TaskName 'OLX home sync' -Action $a -Trigger $t -Settings $s
+   ```
+
+While home-syncing, the instance's own scraper can be stopped
+(`docker compose stop scraper`) to avoid pointless blocked cycles — the
+restore wrapper only restarts it if it was running.
+
 ### Detail-page backfill (map pins + floor area)
 
 New listings get their map pin fetched automatically, and ads whose search
