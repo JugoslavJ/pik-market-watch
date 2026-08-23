@@ -52,7 +52,7 @@ openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -sha256 -nodes \
 
 chmod 600 "$KEY"
 chmod 644 "$CRT"
-chown 472:472 "$CRT" "$KEY" 2>/dev/null || true   # grafana image UID (Linux hosts)
+
 
 echo
 echo "wrote $CRT and $KEY (valid $DAYS days)"
