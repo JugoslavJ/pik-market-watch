@@ -28,6 +28,7 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-olx}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-olx}
       # Runtime least-privilege roles (db/init/zz-database-roles.sh):
       #   *APP*    owns schema/objects — scraper + remote restores connect as it
       #   *READER* read-only — Grafana datasource + pg_dump backups
