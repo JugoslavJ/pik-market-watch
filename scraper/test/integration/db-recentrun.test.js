@@ -3,16 +3,11 @@
 // must only consider SUCCESSFUL runs within the lookback window.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const Db = require('../../src/db');
-const { needsDb, ensureSchema, reset } = require('../helpers/db.js');
+const { needsDb, reset, setupDb } = require('../helpers/db.js');
 
 let db;
 
-test.before(async () => {
-  db = new Db(process.env.TEST_DATABASE_URL);
-  await db.waitUntilReady();
-  await ensureSchema(db.pool);
-});
+test.before(async () => { db = await setupDb(); });
 test.after(async () => { if (db) await db.close(); });
 test.beforeEach(() => reset(db.pool));
 

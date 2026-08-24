@@ -4,16 +4,11 @@
 // stamp, pending-detail queries and the analytics views.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const Db = require('../../src/db');
-const { needsDb, ensureSchema, reset } = require('../helpers/db.js');
+const { needsDb, reset, setupDb } = require('../helpers/db.js');
 
 let db;
 
-test.before(async () => {
-  db = new Db(process.env.TEST_DATABASE_URL);
-  await db.waitUntilReady();
-  await ensureSchema(db.pool);
-});
+test.before(async () => { db = await setupDb(); });
 test.after(async () => { if (db) await db.close(); });
 test.beforeEach(() => reset(db.pool));
 
@@ -90,11 +85,31 @@ needsDb('scalars are first-wins; characteristics merge; visit re-stamped', async
   assert.ok(r.details_fetched_at.getTime() >= stampedOnce.getTime());
 });
 
-needsDb('listingsMissingDetails returns only unfetched ids from the given set', async () => {
-  await seed(7003);
-  await seed(7004);
-  await db.enrichListings([{ articleId: 7003, characteristics: {} }]);
-  assert.deepEqual(await db.listingsMissingDetails([7003, 7004]), [7004]);
+needsDb('enrichmentQueue: never-attempted first, then oldest attempt, capped', async () => {
+  await seed(7101);
+  await seed(7102);
+  await seed(7103);   // all three lack pin + m² + a detail visit
+
+  const firstPass = await db.enrichmentQueue([7101, 7102, 7103], 2);
+  assert.deepEqual(firstPass.pending.map(p => p.id), [7101, 7102]);   // NULLS FIRST → id order
+  assert.equal(firstPass.total, 3);            // backlog size reported beyond the cap
+  assert.equal(firstPass.pending[0].unpinned, true);
+  assert.equal(firstPass.pending[0].missingSqm, true);
+  assert.equal(firstPass.pending[0].neverDetailed, true);
+
+  // Attempting 7101 rotates it behind the untouched rows…
+  await db.enrichListings([{ articleId: 7101, characteristics: {} }]);
+  const secondPass = await db.enrichmentQueue([7101, 7102, 7103], 5);
+  assert.deepEqual(secondPass.pending.map(p => p.id), [7102, 7103, 7101]);
+});
+
+needsDb('enrichmentQueue: skips closed rows; empty when nothing is pending', async () => {
+  await seed(7104);
+  await db.enrichListings([{ articleId: 7104, latitude: 44.9, longitude: 17.3,
+                             sqm: 50, characteristics: {} }]);      // fully enriched
+  const q = await db.enrichmentQueue([7104], 25);
+  assert.deepEqual(q.pending, []);
+  assert.equal(q.total, 0);
 });
 
 needsDb('getListingsNeedingDetails includes rows never detail-fetched', async () => {

@@ -41,17 +41,6 @@ class Db {
     }
   }
 
-  /** Active-row ids among `ids` whose listing matches a SQL condition. */
-  async #idsAmong(whereSql, ids) {
-    if (!ids.length) return [];
-    const r = await this.pool.query(
-      `SELECT article_id FROM listings
-        WHERE closed_at IS NULL AND (${whereSql})
-          AND article_id = ANY($1::bigint[])`,
-      [ids]);
-    return r.rows.map(row => Number(row.article_id));
-  }
-
   /**
    * Upsert a batch of parsed cards in ONE transaction.
    * @param {Array<object>} cards — output of parseSearchItem()
@@ -184,41 +173,49 @@ class Db {
   }
 
   /**
-   * Ids among the given set that still lack a map pin.
-   * @param {number[]} ids
-   * @returns {Promise<number[]>}
+   * Fair-share enrichment queue for one search's result set: active rows that
+   * still lack a map pin, m² (on priced sale ads) or a detail visit — ordered
+   * least-recently-attempted first (never-attempted rows lead), capped at
+   * `limit`. Returns the selected rows with their reason flags plus `total`,
+   * the pending count BEFORE the cap, so callers can log the backlog size.
+   * @param {number[]} ids — article ids returned by the current run
+   * @param {number} limit — max rows to hand back (cfg.maxGeoFetches)
+   * @returns {Promise<{pending:Array<{id:number, unpinned:boolean,
+   *   missingSqm:boolean, neverDetailed:boolean}>, total:number}>}
    */
-  unpinnedArticleIds(ids) {
-    return this.#idsAmong('latitude IS NULL', ids);
-  }
-
-  /**
-   * Ids among the given set whose floor area (m²) is unknown although the ad
-   * is a priced sale listing. Search cards carry no m² tag for some
-   * categories (e.g. vikendice), so the area can only come from the ad's
-   * detail page — see enrichListings().
-   * @param {number[]} ids
-   * @returns {Promise<number[]>}
-   */
-  listingsMissingSqm(ids) {
-    return this.#idsAmong('(sqm IS NULL AND price IS NOT NULL AND NOT is_rent)', ids);
-  }
-
-  /**
-   * Ids among the given set whose detail page has never been fetched. The
-   * detail visit yields far more than geo today: characteristics, publish
-   * date, seller type and view/favorite counters (see enrichListings()).
-   * @param {number[]} ids
-   * @returns {Promise<number[]>}
-   */
-  listingsMissingDetails(ids) {
-    return this.#idsAmong('details_fetched_at IS NULL', ids);
+  async enrichmentQueue(ids, limit) {
+    if (!ids.length || !(limit > 0)) return { pending: [], total: 0 };
+    const r = await this.pool.query(
+      `SELECT article_id::bigint AS id,
+              (latitude IS NULL)                                  AS unpinned,
+              (sqm IS NULL AND price IS NOT NULL AND NOT is_rent) AS missing_sqm,
+              (details_fetched_at IS NULL)                        AS never_detailed,
+              COUNT(*) OVER ()                                    AS pool_total
+         FROM listings
+        WHERE closed_at IS NULL
+          AND article_id = ANY($1::bigint[])
+          AND (latitude IS NULL
+               OR details_fetched_at IS NULL
+               OR (sqm IS NULL AND price IS NOT NULL AND NOT is_rent))
+        ORDER BY last_enrichment_attempted_at ASC NULLS FIRST, article_id ASC
+        LIMIT $2`,
+      [ids, limit]);
+    return {
+      pending: r.rows.map(row => ({
+        id: Number(row.id),
+        unpinned: row.unpinned,
+        missingSqm: row.missing_sqm,
+        neverDetailed: row.never_detailed,
+      })),
+      total: r.rows.length ? Number(r.rows[0].pool_total) : 0,
+    };
   }
 
   /**
    * Listings needing a detail-page visit: no map pin, no floor area on a
    * priced sale ad, or never detail-fetched at all (attributes/counters).
-   * Oldest first.
+   * Least-recently-attempted first (never-attempted lead) so a --max cap
+   * rotates fairly instead of stalling on the lowest article ids.
    * @param {boolean} onlyActive — restrict to rows seen in the last 14 days
    */
   async getListingsNeedingDetails(onlyActive = true) {
@@ -228,7 +225,7 @@ class Db {
                         OR details_fetched_at IS NULL)
                    AND closed_at IS NULL
                  ${onlyActive ? "AND last_seen > now() - INTERVAL '14 days'" : ''}
-                 ORDER BY article_id`;
+                 ORDER BY last_enrichment_attempted_at ASC NULLS FIRST, article_id ASC`;
     return (await this.pool.query(sql)).rows;
   }
 
@@ -242,8 +239,10 @@ class Db {
    * Write semantics: scalar columns are FIRST-WINS (COALESCE) — stable facts
    * like the original publish date must never be replaced by a renewal stamp;
    * the `characteristics` JSONB map is MERGED so fresh attr_code pairs refresh
-   * it on every visit. details_fetched_at is stamped unconditionally, marking
-   * the page as visited even when it yielded nothing new.
+   * it on every visit. details_fetched_at and last_enrichment_attempted_at are
+   * stamped unconditionally — the page counts as visited and the row as
+   * enrichment-offered even when nothing new was learned (both feed the
+   * pending-detail / fair-share scheduling queries).
    *
    * @param {Array<{articleId:number, latitude:?number, longitude:?number,
    *   sqm:?number, publishedAt:?Date, sellerType:?string, roomsDetail:?string,
@@ -292,7 +291,10 @@ class Db {
              -- server-side lifecycle state and OLX's own price history.
              api_status         = COALESCE($24::text, api_status),
              api_price_history  = COALESCE($25::jsonb, api_price_history),
-             details_fetched_at = now()
+             -- Scheduling stamps: the detail page counts as visited and the
+             -- row as enrichment-offered, even when nothing new was learned.
+             details_fetched_at           = now(),
+             last_enrichment_attempted_at = now()
            WHERE article_id = $1`,
           [r.articleId, r.latitude ?? null, r.longitude ?? null, r.sqm ?? null,
            r.publishedAt ?? null, r.sellerType ?? null, r.roomsDetail ?? null,

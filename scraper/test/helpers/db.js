@@ -6,6 +6,7 @@
 const path = require('node:path');
 const { test } = require('node:test');
 const applyMigrations = require('../../src/migrate');
+const Db = require('../../src/db');
 
 /** Skip decorator for suites that need a database. */
 const needsDb = process.env.TEST_DATABASE_URL ? test : test.skip;
@@ -28,4 +29,12 @@ async function reset(pool) {
                             search_results, scrape_runs RESTART IDENTITY CASCADE`);
 }
 
-module.exports = { needsDb, ensureSchema, reset };
+/** Fresh Db wired to TEST_DATABASE_URL with the schema ensured (suite bootstrap). */
+async function setupDb() {
+  const db = new Db(process.env.TEST_DATABASE_URL);
+  await db.waitUntilReady();
+  await ensureSchema(db.pool);
+  return db;
+}
+
+module.exports = { needsDb, ensureSchema, reset, setupDb };

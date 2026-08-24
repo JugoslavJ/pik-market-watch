@@ -108,7 +108,7 @@ async function scrapeSearch(db, search, cfg, log) {
       await sleep(cfg.pageDelayMs);
     }
 
-    const { newCount, dropCount, newIds } = await db.saveCards(allCards);
+    const { newCount, dropCount } = await db.saveCards(allCards);
 
     // Row existence + identity were already guaranteed at run start
     // (registerSavedSearch); this upsert refreshes the per-run stats.
@@ -124,29 +124,27 @@ async function scrapeSearch(db, search, cfg, log) {
 
     // ── Enrichment ───────────────────────────────────────────────────────────
     // Search payloads already carry pins, dates, seller type and m² for free;
-    // /api/listings/<id> is consulted only for facts still missing — capped
-    // per run, so every cycle converges older rows until none remain.
+    // /api/listings/<id> is consulted only for facts still missing. The queue
+    // below is capped per run and rotated oldest-attempt-first
+    // (listings.last_enrichment_attempted_at): rows olx.ba can never answer
+    // rotate through instead of squatting on the head and starving the rest.
     let enrichedCount = 0;
     if (cfg.maxGeoFetches > 0 && ids.length) {
-      const [unpinned, missingSqm, missingDetails] = await Promise.all([
-        db.unpinnedArticleIds(ids),
-        db.listingsMissingSqm(ids),
-        db.listingsMissingDetails(ids),
-      ]);
-      const unpinnedSet = new Set(unpinned);
-      const missingSqmSet = new Set(missingSqm);
-      const missingDetailsSet = new Set(missingDetails);
-      const candidateIds = [...new Set(
-        [...newIds, ...unpinned, ...missingSqm, ...missingDetails])];
+      const { pending, total } = await db.enrichmentQueue(ids, cfg.maxGeoFetches);
+      const targets = pending.map(p => p.id);
       const byCard = new Map(allCards.map(c => [c.articleId, c]));
-      const targets = candidateIds.slice(0, cfg.maxGeoFetches);
 
       // Free facts straight off the search results…
       const rows = new Map();
-      for (const id of targets) {
-        const c = byCard.get(id);
-        if (c) rows.set(id, {
-          articleId: id,
+      let unpinnedN = 0, missingSqmN = 0, neverDetailedN = 0;
+      for (const p of pending) {
+        const c = byCard.get(p.id);
+        if (!c) continue;
+        if (p.unpinned) unpinnedN++;
+        if (p.missingSqm) missingSqmN++;
+        if (p.neverDetailed) neverDetailedN++;
+        rows.set(p.id, {
+          articleId: p.id,
           latitude: c.latitude, longitude: c.longitude,
           sqm: c.sqm, publishedAt: c.publishedAt, sellerType: c.sellerType,
           apiStatus: c.apiStatus,
@@ -154,18 +152,18 @@ async function scrapeSearch(db, search, cfg, log) {
       }
 
       // …and detail calls only where search results cannot answer.
-      const needDetail = targets.filter(id => {
-        const r = rows.get(id);
+      const needDetail = pending.filter(p => {
+        const r = rows.get(p.id);
         if (!r) return false;
-        if (missingDetailsSet.has(id)) return true;   // characteristics/views/history
-        if (missingSqmSet.has(id) && r.sqm == null) return true;
-        if (unpinnedSet.has(id) && r.latitude == null) return true;
+        if (p.neverDetailed) return true;              // characteristics/views/history
+        if (p.missingSqm && r.sqm == null) return true;
+        if (p.unpinned && r.latitude == null) return true;
         return false;
-      });
+      }).map(p => p.id);
 
-      log(`⌖ enriching ${targets.length}/${candidateIds.length} listing(s) ` +
-          `(${newIds.length} new, ${unpinned.length} unpinned, ` +
-          `${missingSqm.length} without m², ${missingDetails.length} never detailed)` +
+      log(`⌖ enriching ${pending.length}/${total} pending listing(s) ` +
+          `(${unpinnedN} without pin, ${missingSqmN} without m², ` +
+          `${neverDetailedN} never detailed)` +
           (needDetail.length ? ` · ${needDetail.length} detail call(s)` : ''));
 
       const details = await fetchDetailsInBatches(

@@ -13,39 +13,20 @@
 const fs = require('fs');
 const path = require('path');
 
+// Same HTTP discipline as production: browser-like UA + strict JSON
+// validation with a loud Cloudflare-challenge error.
+const { fetchJson } = require('../src/api');
+
 // Mirrors the first configured search (config/searches.json): Stanovi BL.
 const SEARCH_URL =
   'https://olx.ba/api/search?category_id=23&canton=11&cities=79&per_page=40&page=1';
 const LISTING_ID = 69441462;   // stable older Banja Luka ad with rich attributes
 
-const HEADERS = {
-  Accept: 'application/json, text/plain, */*',
-  // Plain browser-like UA; no cookies/tokens — the API serves anonymous reads.
-  'User-Agent':
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
-    'Chrome/131.0.0.0 Safari/537.36',
-};
-
-async function getJson(url) {
-  const res = await fetch(url, { headers: HEADERS });
-  const text = await res.text();
-  if (!res.ok) throw new Error(`${url} -> HTTP ${res.status}: ${text.slice(0, 160)}`);
-  let body;
-  try {
-    body = JSON.parse(text);
-  } catch (_) {
-    throw new Error(
-      `${url} returned non-JSON (${res.headers.get('content-type')}) — ` +
-      `Cloudflare challenge? Body starts with: ${text.slice(0, 120)}`);
-  }
-  return { body };
-}
-
 (async () => {
   const dir = path.join(__dirname, '..', 'test', 'fixtures');
   fs.mkdirSync(dir, { recursive: true });
 
-  const search = await getJson(SEARCH_URL);
+  const search = await fetchJson(SEARCH_URL, 20000);
   if (!Array.isArray(search.body.data) || !search.body.meta ||
       !Number.isFinite(search.body.meta.total)) {
     throw new Error('search response lacks data[]/meta.total — payload shape changed?');
@@ -55,7 +36,7 @@ async function getJson(url) {
   console.log(`search fixture : ${search.body.data.length} items · ` +
     `total=${search.body.meta.total} · last_page=${search.body.meta.last_page}`);
 
-  const listing = await getJson(`https://olx.ba/api/listings/${LISTING_ID}`);
+  const listing = await fetchJson(`https://olx.ba/api/listings/${LISTING_ID}`, 20000);
   fs.writeFileSync(path.join(dir, 'api-listing-detail.json'),
     JSON.stringify(listing.body, null, 2));
   const attrs = Array.isArray(listing.body.attributes) ? listing.body.attributes : [];

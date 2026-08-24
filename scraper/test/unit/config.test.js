@@ -60,6 +60,18 @@ test('loadSearches: name kept, category trimmed, page stripped from key', () => 
   });
 });
 
+test('loadSearches: duplicate URLs collapse to one search (first wins)', () => {
+  const searches = runWith({}, {
+    searches: [
+      { url: 'https://olx.ba/pretraga?category_id=23', name: 'first' },
+      { url: 'https://olx.ba/pretraga?category_id=23&page=2&olx_scrape=1', name: 'dup' },
+    ],
+  });
+  assert.equal(searches.length, 1);
+  assert.equal(searches[0].name, 'first');
+  assert.equal(searches[0].searchKey, '/pretraga?category_id=23');
+});
+
 test('loadSearches: missing name/category → derived name, null category', () => {
   const [s] = runWith({}, {
     searches: [{ url: 'https://olx.ba/pretraga?kat=16' }],

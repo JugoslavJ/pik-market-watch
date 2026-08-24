@@ -43,6 +43,14 @@ function loadSearches() {
   return [];
 }
 
+// Identical URLs normalize onto one search_key; keep the first occurrence so a
+// copy-pasted duplicate doesn't scrape the same search twice per cycle
+// (double rate-limit spend for zero new data, doubled run stats).
+function dedupeBySearchKey(searches) {
+  const seen = new Set();
+  return searches.filter(({ searchKey }) => !seen.has(searchKey) && seen.add(searchKey));
+}
+
 module.exports = {
   databaseUrl:     process.env.DATABASE_URL || 'postgres://olx:olx@db:5432/olx',
   migrationsDir:   MIGRATIONS_DIR,                            // db/init/*.sql applied on startup
@@ -60,7 +68,7 @@ module.exports = {
   geoDelayMs:      num(process.env.GEO_DELAY_MS, 1200),      // politeness gap between batches
   minRunGapMinutes: num(process.env.SCRAPE_MIN_GAP_MINUTES, 45), // skip boot cycle if a run finished this recently
 
-  searches: loadSearches().map(s => {
+  searches: dedupeBySearchKey(loadSearches().map(s => {
     let name = s.name;
     if (!name) {
       try { name = decodeURIComponent(new URL(s.url).pathname.replace(/\/+$/, '').split('/').pop()); }
@@ -72,5 +80,5 @@ module.exports = {
       category: (s.category || '').trim() || null,   // free-form label used by dashboards
       searchKey: normalizeSearchKey(s.url),
     };
-  }),
+  })),
 };
