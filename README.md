@@ -403,5 +403,8 @@ owns objects; it is not a superuser.
 - **Datasource auth failed after enabling roles**: the `olx_app`/`olx_reader` roles do not exist on an older volume yet — run `docker compose exec db bash /docker-entrypoint-initdb.d/zz-database-roles.sh` (see *Database roles* above).
 - **Panels error with permission denied after a restore**: tables were recreated without re-running the roles script, so the reader lost SELECT — run it again.
 - **Deploy job complains about missing env/cert**: the CI guard requires `POSTGRES_APP_PASSWORD`, `POSTGRES_READER_PASSWORD`, `GRAFANA_SECRET_KEY` and `tls/grafana.{crt,key}` on the instance — its error message prints the exact fix.
+- **`must be owner of …` during scraper startup**: a migration was applied manually as the `olx` superuser, so its objects are superuser-owned while the scraper (as the least-privilege `olx_app` role) re-runs the unrecorded file. One-time fix on the host:
+  `docker exec olx-db psql -U olx -d olx -c "REASSIGN OWNED BY olx TO olx_app"`
+  When applying migrations by hand, prefer doing it as the app role (`docker exec -e PGPASSWORD=… olx-db psql -U olx_app -d olx < db/init/NN-*.sql`) — or better, just restart the scraper and let the startup runner apply and record them.
 
 > Note: scraping olx.ba is for personal analysis only — keep intervals polite.
