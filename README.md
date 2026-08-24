@@ -2,8 +2,6 @@
 
 A Docker Compose stack that watches **olx.ba** real-estate searches, stores every listing and price change in PostgreSQL, and visualises the market in Grafana dashboards. The scraper runs at home (residential IP); a small server stack on Oracle Cloud serves the database and dashboards.
 
-It was reworked from the original **"OLX.ba Price per m²" Firefox extension** (v6.3 — preserved in git history, initial commit); its card parser lived on verbatim through a Playwright era until the 2026 cutover to olx.ba's public JSON API, whose structured fields superseded DOM scraping entirely.
-
 ---
 
 ## Architecture
@@ -20,7 +18,7 @@ HOME MACHINE (residential IP)                    OCI INSTANCE (datacenter IP)
 ```
 
 - **scraper** rewrites each configured olx.ba search URL into the site's JSON search endpoint (`/api/search`; filter params pass through 1:1), pages the results with plain `fetch()`, then upserts listings and appends price history into Postgres. Map pins, publish dates, m²/rooms labels and seller type already ride along with every search result; anything still missing (characteristics, view counters) is filled from `/api/listings/<id>`. No browser, no tokens — anonymous reads only. It lives behind the compose profile **`scrape`** and must run where the API answers: the home machine (OCI's datacenter IP gets 403-challenged — probed). Results reach the instance via `scripts/sync-to-instance.ps1`.
-- **db** holds all state; the schema mirrors the extension's IndexedDB stores.
+- **db** holds all state: listings, append-only price history, saved searches, per-search result sets and scrape runs.
 - **grafana** ships with a provisioned Postgres datasource and two prebuilt dashboards (**Market Overview**, **Exits & Price Endings**). It serves **HTTPS** with a self-signed certificate (scripts/generate-grafana-cert.sh) and queries Postgres through a **read-only role**.
 - **db-backup** produces nightly dumps into `./backups/`.
 
@@ -76,16 +74,16 @@ Scraper-only tuning (set in `docker-compose.yml`'s `environment:` block): `MAX_P
 
 ## Database schema
 
-| Table | Mirrors | Contents |
-|---|---|---|
-| `listings` | `STORE_LISTINGS` | One row per article: title, url, sqm, rooms, price, ppm², is_rent, first/last seen. Ads gone from every search are closed automatically (`closed_at` + frozen `closing_price`/`closing_ppm2`/`closing_category`). Detail data adds `published_at`, `seller_type`, characteristics (rooms/bath/floor/heating/furnished/condition/parking/garage/elevator/year/orientation/plot m²), `views`/`favorites`, raw `characteristics` JSONB, plus raw API extras (`api_status`, `api_price_history`) |
-| `price_history` | `priceHistory[]` | Append-only snapshots; a row is added only when price/ppm² actually changed |
-| `saved_searches` | `STORE_SAVED` | Watched searches + per-run stats (count, median ppm², new/drop counts) + free-form `category` label for the dashboard filter |
-| `search_results` | `STORE_SEARCH` | Which articles each search returned (refreshed every run) |
-| `scrape_runs` | *(new)* | Run observability: status, pages, cards, error |
-| `v_active_listings` | *(new)* | View: anything seen by a scrape within 14 days |
-| `v_listing_lifecycle` | *(new)* | View: one row per listing — opening vs closing price/ppm², change count, days listed, category |
-| `v_market_daily` | *(new)* | View: per-day new/closed counts and estimated live inventory |
+| Table | Contents |
+|---|---|
+| `listings` | One row per article: title, url, sqm, rooms, price, ppm², is_rent, first/last seen. Ads gone from every search are closed automatically (`closed_at` + frozen `closing_price`/`closing_ppm2`/`closing_category`). Detail data adds `published_at`, `seller_type`, characteristics (rooms/bath/floor/heating/furnished/condition/parking/garage/elevator/year/orientation/plot m²), `views`/`favorites`, raw `characteristics` JSONB, plus raw API extras (`api_status`, `api_price_history`) |
+| `price_history` | Append-only snapshots; a row is added only when price/ppm² actually changed |
+| `saved_searches` | Watched searches + per-run stats (count, median ppm², new/drop counts) + free-form `category` label for the dashboard filter |
+| `search_results` | Which articles each search returned (refreshed every run) |
+| `scrape_runs` | Run observability: status, pages, cards, error |
+| `v_active_listings` | View: anything seen by a scrape within 14 days |
+| `v_listing_lifecycle` | View: one row per listing — opening vs closing price/ppm², change count, days listed, category |
+| `v_market_daily` | View: per-day new/closed counts and estimated live inventory |
 
 Schema migrations live in `db/init/*.sql` and are applied in filename order. The Postgres entrypoint runs them on **first** volume start, and the scraper re-checks and applies any *unapplied* ones on every startup — tracked in a `schema_migrations` table. To change the schema later, drop a new **idempotent** migration file into `db/init/` and restart the scraper (`docker compose restart scraper`) — nothing else to do.
 

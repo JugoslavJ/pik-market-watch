@@ -9,8 +9,8 @@ const USER_AGENT =
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// Port of computeMedian() from the original extension (rounded to whole
-// numbers; null for an empty set — callers treat that as "no priced data").
+// Rounded to whole numbers; null for an empty set — callers treat that as
+// "no priced data".
 function computeMedian(values) {
   if (!values.length) return null;
   const s = [...values].sort((a, b) => a - b);

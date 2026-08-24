@@ -1,12 +1,11 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- OLX.ba price tracker — PostgreSQL schema
--- Data model carried over from the original browser extension's IndexedDB
--- stores (preserved in git history, initial commit):
---   STORE_LISTINGS → listings        one row per article (latest known state)
---   priceHistory[] → price_history   append-only price snapshots
---   STORE_SAVED    → saved_searches  watched searches + per-run stats
---   STORE_SEARCH   → search_results  which articles each search returned
---   (new)          → scrape_runs     observability for the scheduled scraper
+--
+--   listings         one row per article (latest known state)
+--   price_history    append-only price snapshots
+--   saved_searches   watched searches + per-run stats
+--   search_results   which articles each search returned
+--   scrape_runs      observability for the scheduled scraper
 -- ─────────────────────────────────────────────────────────────────────────────
 
 CREATE TABLE listings (
@@ -47,7 +46,7 @@ CREATE TABLE price_history (
 CREATE INDEX price_history_article_idx ON price_history (article_id, scraped_at DESC);
 
 CREATE TABLE saved_searches (
-  search_key      TEXT PRIMARY KEY,        -- normalized URL, mirrors buildSearchCacheKey()
+  search_key      TEXT PRIMARY KEY,        -- normalized search URL (page/hash/scrape params stripped)
   name            TEXT NOT NULL,
   url             TEXT NOT NULL,
   category        TEXT,                    -- free-form label: 'apartments', 'houses', 'weekend-homes'…

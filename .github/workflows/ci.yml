@@ -37,7 +37,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
-    timeout-minutes: 15   # no Chromium here anymore: instance = db + grafana + backup only
+    timeout-minutes: 15   # instance stack is just db + grafana + backup
     concurrency:
       group: deploy-production
       cancel-in-progress: false   # queue overlapping pushes; never kill a live deploy

@@ -1,8 +1,6 @@
 'use strict';
 // Per-search harvesting from olx.ba's public JSON API: pagination, dedupe,
-// persistence and API-driven enrichment. Successor of the Playwright page
-// renderer — same run lifecycle, closing-pass safety rules and politeness
-// pacing at a fraction of the cost (no browser; JSON instead of rendered DOM).
+// persistence and API-driven enrichment — plain HTTP, no browser.
 
 const {
   fetchSearchPage, toApiSearchUrl, hasApiFilter, RATE_RESERVE, fetchDetailsInBatches,
@@ -126,9 +124,8 @@ async function scrapeSearch(db, search, cfg, log) {
 
     // ── Enrichment ───────────────────────────────────────────────────────────
     // Search payloads already carry pins, dates, seller type and m² for free;
-    // /api/listings/<id> is consulted only for facts still missing. Same
-    // candidate logic and per-run cap as the detail-page era — every cycle
-    // converges older rows until none remain.
+    // /api/listings/<id> is consulted only for facts still missing — capped
+    // per run, so every cycle converges older rows until none remain.
     let enrichedCount = 0;
     if (cfg.maxGeoFetches > 0 && ids.length) {
       const [unpinned, missingSqm, missingDetails] = await Promise.all([

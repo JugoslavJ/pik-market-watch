@@ -83,7 +83,7 @@ test('search item: listing_type rent wins; rents never get KM/m²', () => {
 });
 
 
-test('search item: cheap "sale" falls back to rent (extension backstop)', () => {
+test('search item: cheap "sale" falls back to rent', () => {
   const card = parseSearchItem({ id: 10, title: 'garsonjera prizemlje',
     price: 250, display_price: '250 KM', listing_type: 'sell',
     special_labels: [] });

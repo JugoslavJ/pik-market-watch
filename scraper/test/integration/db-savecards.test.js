@@ -1,7 +1,7 @@
 'use strict';
-// Integration tests for Db.saveCards — the write semantics ported from the
-// original extension: upsert + last_seen bump, history appended only when
-// ppm² is known AND something changed, drops counted on decreases.
+// Integration tests for Db.saveCards write semantics: upsert + last_seen bump,
+// history appended only when ppm² is known AND something changed, drops
+// counted on decreases.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const Db = require('../../src/db');

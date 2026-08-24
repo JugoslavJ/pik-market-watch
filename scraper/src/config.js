@@ -18,8 +18,7 @@ function num(v, def) {
   return Number.isFinite(n) ? n : def;
 }
 
-// Same normalization as buildSearchCacheKey() in the original extension:
-// same URL minus page/hash/scrape params → stable primary key per search.
+// Same URL minus page/hash/scrape params → stable primary key per search.
 function normalizeSearchKey(href) {
   const u = new URL(href);
   u.searchParams.delete('page');
@@ -50,7 +49,7 @@ module.exports = {
   normalizeSearchKey,                                         // stable per-search primary key
   intervalMinutes: num(process.env.SCRAPE_INTERVAL_MINUTES, 720),
   runOnce:         process.env.RUN_ONCE === '1' || process.argv.includes('--once'),
-  maxPages:        num(process.env.MAX_PAGES, 30),           // cap kept from the extension era (pages of `perPage`)
+  maxPages:        num(process.env.MAX_PAGES, 30),           // pagination cap (pages of `perPage`)
   concurrency:     num(process.env.CONCURRENCY, 3),          // search pages fetched in parallel
   pageDelayMs:     num(process.env.PAGE_DELAY_MS, 1500),     // politeness gap between waves
   perPage:         num(process.env.API_PER_PAGE, 40),        // olx.ba UI default

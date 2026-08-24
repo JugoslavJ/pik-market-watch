@@ -1,8 +1,7 @@
 # syntax=docker/dockerfile:1
 # ─────────────────────────────────────────────────────────────────────────────
-# Plain Node image. Since the API cutover the scraper talks to olx.ba's public
-# JSON endpoints with fetch() — no Chromium, no Playwright, no OS browser deps
-# (that stack was ~1 GB of image and most of the build time).
+# Plain Node image: the scraper talks to olx.ba's public JSON endpoints with
+# fetch() — no browser or OS-level dependencies required.
 # ─────────────────────────────────────────────────────────────────────────────
 FROM node:24-bookworm-slim
 

@@ -156,7 +156,10 @@ function hasApiFilter(apiUrl) {
   return FILTER_PARAMS.some(p => apiUrl.searchParams.has(p));
 }
 
+// Exported surface = what callers actually consume. RATE_RESERVE is read by
+// scrapeSearch()'s throttle; everything else here is called directly.
+// (API_ORIGIN and ApiError stay module-internal — no external consumer.)
 module.exports = {
-  API_ORIGIN, RATE_RESERVE, ApiError, toApiSearchUrl,
+  RATE_RESERVE, toApiSearchUrl,
   fetchSearchPage, fetchListing, fetchDetailsInBatches, hasApiFilter,
 };

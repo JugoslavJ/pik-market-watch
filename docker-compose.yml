@@ -78,7 +78,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s         # DB warm-up + first scrape cycle before counting failures
-    mem_limit: 512m             # plain HTTP client — a fraction of the old Chromium budget
+    mem_limit: 512m             # plain HTTP JSON client
     cpus: 0.50
     logging: *logging
 

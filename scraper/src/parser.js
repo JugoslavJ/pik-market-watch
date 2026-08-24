@@ -9,10 +9,8 @@
 //   location:{lat,lon}, date (unix renewal/bump stamp), user_type, status
 // Listing-detail adds: attributes[] ({attr_code, value, …}), views, favorites,
 //   created_at (true publish time), price_history[], user.type
-//
-// The coercion helpers and the attr_code→column handlers below are carried
-// over verbatim from the HTML-scraping era (git history: parser.js parseDetail)
-// — the API exposes the very same attr_code:value pairs the Nuxt state had.
+// The coercion helpers and the attr_code→column handlers below map those
+// payloads to typed columns.
 
 const BIH_BBOX = { latMin: 42.4, latMax: 46.4, lonMin: 15.5, lonMax: 19.9 };
 
@@ -101,7 +99,7 @@ const CHAR_CODE_HANDLERS = {
   'primarna-orjentacija': (v, o) => { o.orientation = textOrNull(v, 40); },
 };
 
-/** Node-side copy of extractArticleId() — cards still carry URLs. */
+/** Article id from a listing URL (/artikal/<id>…). */
 function extractArticleId(url) {
   const m = String(url || '').match(/\/artikal\/(\d+)/i);
   return m ? m[1] : null;
@@ -138,7 +136,7 @@ function parseSearchItem(item) {
   const id = Number(item.id);
   if (!Number.isFinite(id)) return null;
   const title = typeof item.title === 'string' ? item.title.trim() : '';
-  if (title.length <= 2) return null;                 // same bar as the card parser
+  if (title.length <= 2) return null;                 // too short to be a real listing title
 
   const url = `https://olx.ba/artikal/${id}`;
 
@@ -152,7 +150,7 @@ function parseSearchItem(item) {
   let isRent = /rent|iznajm|najam/i.test(String(item.listing_type || ''));
   const isStudio = /garsonjera/i.test(title);
 
-  // Sanity bounds identical to the HTML-card era.
+  // Sanity bounds for floor area (m²).
   const sqm = numOrNull(specialLabelValue(item, 'Kvadrata'), 5, 500);
 
   let rooms = isStudio ? '0' : null;
@@ -166,7 +164,7 @@ function parseSearchItem(item) {
     }
   }
 
-  // Backstop kept from the extension: implausibly cheap "sales" are rents.
+  // Mislabelled ads: implausibly cheap "sale" prices are really rents.
   if (!isRent && price !== null && price < 3000) isRent = true;
 
   let ppm2 = (!isRent && price !== null && sqm > 0) ? Math.round(price / sqm) : null;
@@ -267,9 +265,12 @@ function parseListingDetail(json, fallbackId) {
   return detail;
 }
 
+// Public surface = what callers consume: db.js (extractArticleId), scraper.js
+// (parseSearchItem), api.js (parseListingDetail), scripts/check-api.js +
+// unit tests (parseSearchPage). inBiH/numOrNull/CHAR_CODE_HANDLERS/BIH_BBOX
+// stay module-internal — no external consumer.
 module.exports = {
   extractArticleId, parseSearchItem, parseSearchPage, parseListingDetail,
-  inBiH, numOrNull, CHAR_CODE_HANDLERS, BIH_BBOX,
 };
 
 

@@ -1,8 +1,7 @@
 'use strict';
 // PostgreSQL access layer (node-postgres).
 //
-// Write semantics mirror the original extension's background script
-// (preserved in git history):
+// Write semantics:
 //   - upsert the listing and bump last_seen on every sighting
 //   - append to price_history only when price/ppm² changed (and ppm² known)
 //   - count new listings and price drops per run
@@ -55,7 +54,7 @@ class Db {
 
   /**
    * Upsert a batch of parsed cards in ONE transaction.
-   * @param {Array<object>} cards — output of collectCards()
+   * @param {Array<object>} cards — output of parseSearchItem()
    * @returns {Promise<{newCount:number, dropCount:number}>}
    */
   async saveCards(cards) {
@@ -76,8 +75,8 @@ class Db {
           const last      = existing.rows[0];
           const lastPrice = last.price === null ? null : Number(last.price); // NUMERIC → string
 
-          // Same rule as background.js: history is appended only when ppm² is
-          // known AND something actually changed vs. the previous snapshot.
+          // History is appended only when ppm² is known AND something actually
+          // changed vs. the previous snapshot.
           const changed = card.ppm2 != null && (last.ppm2 !== card.ppm2 || lastPrice !== price);
           if (changed) {
             if (last.ppm2 != null && card.ppm2 < last.ppm2) dropCount++;
