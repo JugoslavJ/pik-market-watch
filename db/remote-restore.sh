@@ -98,7 +98,13 @@ build_toc() {
   docker compose exec -T db sh -c "
      pg_restore -l '$1' > /tmp/toc.all || exit 1
      grep 'DEFAULT ACL' /tmp/toc.all | grep -Ev \" ${app_user}\\$\" > /tmp/toc.drop || :
-     grep -vxFf /tmp/toc.drop /tmp/toc.all > '$2' || :
+     if [ -s /tmp/toc.drop ]; then
+       grep -vxFf /tmp/toc.drop /tmp/toc.all > '$2' || :
+     else
+       # busybox grep -v -f <empty file> selects NOTHING (GNU selects
+       # everything) - skip the filter when there is nothing to exclude
+       cp /tmp/toc.all '$2'
+     fi
      test -s '$2' && grep -q 'TABLE DATA public listings' '$2'
   "
 }
