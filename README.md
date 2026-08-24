@@ -81,6 +81,7 @@ Scraper-only tuning (set in `docker-compose.yml`'s `environment:` block): `MAX_P
 | `saved_searches` | Watched searches + per-run stats (count, median ppm², new/drop counts) + free-form `category` label for the dashboard filter |
 | `search_results` | Which articles each search returned (refreshed every run) |
 | `scrape_runs` | Run observability: status, pages, cards, error |
+| `neighborhoods` | Banja Luka district polygons (flattened lon/lat rings); `neighborhood_of(lat, lon)` ray-casts a pin to a district name, stored into `listings.location` on enrichment — seeds re-applied on every startup, tweak bounds in `db/init/11-neighborhoods.sql` |
 | `v_active_listings` | View: anything seen by a scrape within 14 days |
 | `v_listing_lifecycle` | View: one row per listing — opening vs closing price/ppm², change count, days listed, category |
 | `v_market_daily` | View: per-day new/closed counts and estimated live inventory |
@@ -102,6 +103,7 @@ Every scraping cycle ends with a closing pass: any listing that none of the conf
 Search results already carry map pins, m²/rooms labels, the renewal timestamp and the seller type; anything beyond that comes from the ad's JSON endpoint (`/api/listings/<id>` — see `05-listing-details.sql` / `07-api-extras.sql` and `parseListingDetail()`):
 
 - **Day created vs day renewed** — the ad endpoint's `created_at` is the true original publish time and lands in `published_at` (first-wins); the renewal bump (`date`, also on every search card) lands in `renewed_at` (10-listing-dates.sql) and is refreshed monotonically on every scrape cycle, no detail call needed. Days-on-market uses creation; staleness views use both. Legacy rows whose `published_at` was seeded from a renewal stamp before the split stay lower-bound estimates.
+- **Neighborhood** — `location` is derived from the ad's map pin via `neighborhood_of()` (`11-neighborhoods.sql`): ray casting over seeded Banja Luka district rectangles (Obilicevo, Starcevica, Laus, Lazarevo, Budzak, Centar, Borik, …). NULL when the pin falls outside every district; first-wins on enrichment, backfilled for existing rows.
 - **Seller type** — `shop` vs `private`, straight from `user.type`.
 - **Characteristics** — rooms, bathrooms, floor / total floors / unit levels, heating, furnished, condition, parking, garage, elevator, year built, plot m², orientation. Every `attr_code:value` pair the payload exposes is also kept raw in the `characteristics` JSONB column, so nothing is lost if OLX renames codes.
 - **Counters & extras** — views, favorites when exposed, plus the ad's server-side price history and lifecycle status stored raw (`api_price_history` / `api_status`) for cross-checking our own observations.
@@ -147,7 +149,7 @@ The daily driver: what is on the market right now.
 3. **Market flow** — new vs closed per day with estimated live inventory (`v_market_daily`, whole database) and the stalest still-active listings (oldest creation day first, with the seller's last renewal day)
 4. **Map** — pinned listings + linked table
 5. **Shopping list** — best-value sales (lowest KM/m²) and recent price drops
-6. **Segments & demand** — actives that cut their price + median biggest cut, median KM/m² by rooms, asking KM/m² by condition, most-viewed active listings (`views` from ad pages)
+6. **Segments & demand** — actives that cut their price + median biggest cut, median KM/m² by rooms, asking KM/m² by condition, neighborhood breakdown from map pins (Obilicevo, Starcevica, Laus, Lazarevo, Budzak, Centar, Borik, …), most-viewed active listings (`views` from ad pages)
 
 ### OLX.ba Exits & Price Endings (`olx-exits`)
 

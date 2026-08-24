@@ -239,6 +239,7 @@ class Db {
    * Attach detail-page data to listings (fetched from their ad pages):
    * map-pin coordinates, floor area (m²) — and since 05-listing-details.sql
    * also publish date, seller type, characteristics and view/favorite
+   * counters, and the neighborhood assigned from the map pin
    * counters. For newly-learned area on a priced sale listing, price-per-m²
    * is derived here (same 1–15000 sanity bound as the card parser).
    *
@@ -267,6 +268,9 @@ class Db {
           `UPDATE listings SET
              latitude  = COALESCE($2::double precision, latitude),
              longitude = COALESCE($3::double precision, longitude),
+             -- Neighborhood from the map pin (11-neighborhoods.sql); first-wins
+             -- like other stable facts; a pin-less pass keeps the stored value.
+             location = COALESCE(location, neighborhood_of($2, $3)),
              sqm  = COALESCE(sqm, $4::numeric),
              ppm2 = CASE
                       WHEN ppm2 IS NULL AND price IS NOT NULL AND NOT is_rent
