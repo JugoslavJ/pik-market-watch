@@ -1,0 +1,1193 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "description": "Operational view of the scraper itself: run outcomes, throughput and per-search freshness. Market filters do not apply here.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [
+    {
+      "title": "Market Overview",
+      "url": "/d/olx-overview",
+      "targetBlank": false
+    },
+    {
+      "title": "Exits & Price Endings",
+      "url": "/d/olx-exits",
+      "targetBlank": false
+    }
+  ],
+  "panels": [
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short",
+          "noValue": "—"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 0,
+        "y": 0
+      },
+      "title": "Searches watched",
+      "type": "stat",
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT count(*) FROM saved_searches",
+          "refId": "A"
+        }
+      ],
+      "id": 1
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 4
+              }
+            ]
+          },
+          "unit": "short",
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 5,
+        "y": 0
+      },
+      "title": "Failed runs · 24 h",
+      "description": "Scrape runs ending in status=error over the last day.",
+      "type": "stat",
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT count(*) FROM scrape_runs\nWHERE status = 'error'\n  AND started_at > now() - INTERVAL '24 hours'",
+          "refId": "A"
+        }
+      ],
+      "id": 2
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 80
+              },
+              {
+                "color": "green",
+                "value": 95
+              }
+            ]
+          },
+          "unit": "percent",
+          "noValue": "—"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 10,
+        "y": 0
+      },
+      "title": "Success rate · 24 h",
+      "type": "stat",
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT COALESCE(round(100.0 * count(*) FILTER (WHERE status = 'ok') / NULLIF(count(*), 0)), 0)\nFROM scrape_runs\nWHERE started_at > now() - INTERVAL '24 hours'\n  AND status IN ('ok', 'error')",
+          "refId": "A"
+        }
+      ],
+      "id": 3
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 7200
+              },
+              {
+                "color": "red",
+                "value": 21600
+              }
+            ]
+          },
+          "unit": "s",
+          "noValue": "—"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 15,
+        "y": 0
+      },
+      "title": "Since last successful scrape",
+      "description": "Age of the newest successful run across all searches.",
+      "type": "stat",
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT COALESCE(EXTRACT(EPOCH FROM (now() - max(finished_at))), 0)::bigint\nFROM scrape_runs\nWHERE status = 'ok'",
+          "refId": "A"
+        }
+      ],
+      "id": 4
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short",
+          "noValue": "—"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 0
+      },
+      "title": "Cards scraped · 24 h",
+      "description": "Sum of listing cards parsed by successful runs over the last day.",
+      "type": "stat",
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT COALESCE(sum(cards), 0) FROM scrape_runs\nWHERE status = 'ok'\n  AND started_at > now() - INTERVAL '24 hours'",
+          "refId": "A"
+        }
+      ],
+      "id": 5
+    },
+    {
+      "type": "row",
+      "title": "Throughput",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      },
+      "panels": [],
+      "id": 6
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 0,
+            "showPoints": "never",
+            "spanNulls": false
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 13,
+        "x": 0,
+        "y": 5
+      },
+      "title": "Runs per hour — ok vs error",
+      "description": "Stacked bars per hour in the selected period; a red segment means failures.",
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "SELECT date_trunc('hour', r.started_at) AS time,\n       count(*) FILTER (WHERE r.status = 'ok')      AS ok,\n       count(*) FILTER (WHERE r.status = 'error')   AS error,\n       count(*) FILTER (WHERE r.status = 'running') AS running\nFROM scrape_runs r\nWHERE $__timeFilter(r.started_at)\nGROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "id": 7
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 11,
+        "x": 13,
+        "y": 5
+      },
+      "title": "Cards & pages per run — hourly averages",
+      "description": "A sudden drop to near zero usually means olx.ba changed markup or pagination, not that the market emptied.",
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "SELECT date_trunc('hour', started_at) AS time,\n       round(avg(cards))::int AS \"avg cards\",\n       round(avg(pages))::int AS \"avg pages\"\nFROM scrape_runs\nWHERE status IN ('ok', 'error')\n  AND $__timeFilter(started_at)\nGROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "id": 8
+    },
+    {
+      "type": "row",
+      "title": "Saved searches",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
+      "panels": [],
+      "id": 9
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "unit": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "url"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "title"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 320
+              },
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "targetBlank": true,
+                    "title": "open on olx.ba",
+                    "url": "${__data.fields.url}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "age_min"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "m"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "age_min"
+            },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 240
+                    },
+                    {
+                      "color": "red",
+                      "value": 1440
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 15
+      },
+      "title": "Saved searches — stalest first",
+      "description": "age_min = minutes since the last completed run. Red means the search has not been scraped for many hours.",
+      "type": "table",
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT ss.name, COALESCE(ss.category, '(none)') AS category,\n       ss.listing_count AS listings,\n       ss.median_ppm2 AS \"median KM/m2\",\n       ss.new_count AS new, ss.drop_count AS drops,\n       round(EXTRACT(EPOCH FROM (now() - ss.last_scraped_at)) / 60)::int AS age_min,\n       ss.url\nFROM saved_searches ss\nWHERE ss.category IS NULL OR ss.category = ANY (ARRAY[${category:sqlstring}])\nORDER BY ss.last_scraped_at ASC NULLS FIRST",
+          "refId": "A"
+        }
+      ],
+      "id": 10
+    },
+    {
+      "type": "row",
+      "title": "Scrape runs",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 25
+      },
+      "panels": [],
+      "id": 11
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "unit": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "status"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "ok": {
+                        "index": 0,
+                        "text": "ok",
+                        "color": "green"
+                      },
+                      "error": {
+                        "index": 1,
+                        "text": "error",
+                        "color": "red"
+                      },
+                      "running": {
+                        "index": 2,
+                        "text": "running",
+                        "color": "yellow"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "error"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 300
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cards"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "pages"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 24,
+        "x": 0,
+        "y": 26
+      },
+      "title": "Recent scrape runs — newest 50",
+      "description": "Full error text is in the last column; click a row and inspect to see it fully.",
+      "type": "table",
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT r.id, COALESCE(ss.category, '(none)') AS category, r.search_key, r.status,\n       r.pages, r.cards, r.started_at AS started, r.finished_at AS finished, r.error\nFROM scrape_runs r\nLEFT JOIN saved_searches ss ON ss.search_key = r.search_key\nORDER BY r.id DESC\nLIMIT 50",
+          "refId": "A"
+        }
+      ],
+      "id": 12
+    },
+    {
+      "type": "row",
+      "title": "Data quality & upstream",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 37
+      },
+      "panels": [],
+      "id": 13
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 50
+              },
+              {
+                "color": "green",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent",
+          "noValue": "—"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 38
+      },
+      "title": "Geo pins · actives",
+      "description": "Share of active listings with map coordinates.",
+      "type": "stat",
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT round(100.0 * count(latitude) / NULLIF(count(*), 0))\nFROM listings\nWHERE closed_at IS NULL\n  AND last_seen > now() - INTERVAL '14 days'",
+          "refId": "A"
+        }
+      ],
+      "id": 14
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 50
+              },
+              {
+                "color": "green",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent",
+          "noValue": "—"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 38
+      },
+      "title": "Details fetched · actives",
+      "description": "Active listings whose ad page was visited at least once (enrichment coverage).",
+      "type": "stat",
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT round(100.0 * count(details_fetched_at) / NULLIF(count(*), 0))\nFROM listings\nWHERE closed_at IS NULL\n  AND last_seen > now() - INTERVAL '14 days'",
+          "refId": "A"
+        }
+      ],
+      "id": 15
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 50
+              },
+              {
+                "color": "green",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent",
+          "noValue": "—"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 38
+      },
+      "title": "KM/m² known · actives",
+      "description": "Actives with a plausible price-per-m² — panels relying on ppm2 see only these.",
+      "type": "stat",
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT round(100.0 * count(*) FILTER (WHERE ppm2 > 0) / NULLIF(count(*), 0))\nFROM listings\nWHERE closed_at IS NULL\n  AND last_seen > now() - INTERVAL '14 days'",
+          "refId": "A"
+        }
+      ],
+      "id": 16
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "yellow",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 50
+              }
+            ]
+          },
+          "unit": "percent",
+          "noValue": "—"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 38
+      },
+      "title": "OLX status known · actives",
+      "description": "API-exposed lifecycle status present (drift telemetry coverage).",
+      "type": "stat",
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT round(100.0 * count(api_status) / NULLIF(count(*), 0))\nFROM listings\nWHERE closed_at IS NULL\n  AND last_seen > now() - INTERVAL '14 days'",
+          "refId": "A"
+        }
+      ],
+      "id": 17
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 42
+      },
+      "title": "OLX server-side status vs our closure state · actives",
+      "description": "Drift detector: rows where olx says active but we marked closed (or vice versa) mean the absence-based closing logic needs attention.",
+      "type": "table",
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT COALESCE(api_status, '(not exposed)') AS olx_says,\n       CASE WHEN closed_at IS NOT NULL THEN 'closed' ELSE 'open' END AS we_say,\n       count(*) AS listings\nFROM listings\nWHERE last_seen > now() - INTERVAL '14 days'\nGROUP BY 1, 2 ORDER BY 3 DESC",
+          "refId": "A"
+        }
+      ],
+      "id": 18
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 42
+      },
+      "title": "Search duration — slowest first",
+      "description": "Runtime per configured search in the selected period. Spikes here usually precede failures when OLX throttles.",
+      "type": "table",
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT ss.name, COALESCE(ss.category, '(none)') AS category,\n       count(r.id) AS runs,\n       round(avg(EXTRACT(EPOCH FROM (r.finished_at - r.started_at))))::int AS avg_s,\n       max(EXTRACT(EPOCH FROM (r.finished_at - r.started_at)))::int AS max_s\nFROM scrape_runs r\nJOIN saved_searches ss ON ss.search_key = r.search_key\nWHERE r.finished_at IS NOT NULL AND $__timeFilter(r.started_at)\nGROUP BY 1, 2 ORDER BY 4 DESC",
+          "refId": "A"
+        }
+      ],
+      "id": 19
+    }
+  ],
+  "refresh": "5m",
+  "schemaVersion": 39,
+  "tags": [
+    "olx",
+    "scraper",
+    "ops"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "postgres",
+          "uid": "olx-postgres"
+        },
+        "definition": "SELECT category AS __value, category AS __text FROM saved_searches WHERE category IS NOT NULL GROUP BY category ORDER BY 1",
+        "includeAll": true,
+        "label": "Category",
+        "multi": false,
+        "name": "category",
+        "options": [],
+        "query": "SELECT category AS __value, category AS __text FROM saved_searches WHERE category IS NOT NULL GROUP BY category ORDER BY 1",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-48h",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": "OLX Scraper Health",
+  "uid": "olx-health",
+  "version": 1,
+  "weekStart": ""
+}

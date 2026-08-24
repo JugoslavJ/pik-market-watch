@@ -2,14 +2,20 @@
   "annotations": {
     "list": []
   },
+  "description": "What is on the market right now: supply, asking prices, fresh listings and price drops — for the current filter selection.",
   "editable": true,
   "fiscalYearStartMonth": 0,
-  "graphTooltip": 0,
+  "graphTooltip": 1,
   "id": null,
   "links": [
     {
       "title": "Exits & Price Endings",
       "url": "/d/olx-exits",
+      "targetBlank": false
+    },
+    {
+      "title": "Scraper Health",
+      "url": "/d/olx-health",
       "targetBlank": false
     }
   ],
@@ -40,11 +46,13 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 8,
+        "w": 5,
         "x": 0,
         "y": 0
       },
-      "id": 1,
+      "title": "Active listings",
+      "description": "Seen by a scrape in the last 14 days and not closed. Respects every filter.",
+      "type": "stat",
       "options": {
         "colorMode": "value",
         "graphMode": "none",
@@ -69,12 +77,11 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT count(*)\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE l.is_rent = FALSE\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])",
+          "rawSql": "SELECT count(*) AS active\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])",
           "refId": "A"
         }
       ],
-      "title": "Active sale listings (seen ≤ 14 d)",
-      "type": "stat"
+      "id": 1
     },
     {
       "datasource": {
@@ -92,29 +99,23 @@
               {
                 "color": "green",
                 "value": null
-              },
-              {
-                "color": "#EAB839",
-                "value": 2000
-              },
-              {
-                "color": "red",
-                "value": 3000
               }
             ]
           },
-          "unit": "none",
+          "unit": "short",
           "noValue": "—"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 4,
-        "w": 8,
-        "x": 8,
+        "w": 5,
+        "x": 5,
         "y": 0
       },
-      "id": 2,
+      "title": "New · 7 d",
+      "description": "Active listings first seen in the last week — fresh supply.",
+      "type": "stat",
       "options": {
         "colorMode": "value",
         "graphMode": "none",
@@ -139,12 +140,11 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE l.ppm2 > 0\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])",
+          "rawSql": "SELECT count(*) AS new7\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\n  AND l.first_seen > now() - INTERVAL '7 days'",
           "refId": "A"
         }
       ],
-      "title": "Median KM/m² — sale listings",
-      "type": "stat"
+      "id": 2
     },
     {
       "datasource": {
@@ -160,7 +160,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "purple",
+                "color": "blue",
                 "value": null
               }
             ]
@@ -172,11 +172,13 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 8,
-        "x": 16,
+        "w": 4,
+        "x": 10,
         "y": 0
       },
-      "id": 3,
+      "title": "Price drops · 7 d",
+      "description": "Distinct active listings whose observed price fell at least once this week.",
+      "type": "stat",
       "options": {
         "colorMode": "value",
         "graphMode": "none",
@@ -201,12 +203,147 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT count(*)\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE l.is_rent = TRUE\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])",
+          "rawSql": "WITH h AS (\n  SELECT ph.article_id, ph.price, ph.scraped_at,\n         lag(ph.price) OVER (PARTITION BY ph.article_id ORDER BY ph.scraped_at, ph.id) AS prev_price\n  FROM price_history ph\n  WHERE ph.price IS NOT NULL\n)\nSELECT count(DISTINCT h.article_id) AS dropped\nFROM h\nJOIN listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}, false) l ON l.article_id = h.article_id\nWHERE h.prev_price IS NOT NULL AND h.price < h.prev_price\n  AND h.scraped_at > now() - INTERVAL '7 days'\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])",
           "refId": "A"
         }
       ],
-      "title": "Rent listings tracked",
-      "type": "stat"
+      "id": 3
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short",
+          "noValue": "—"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 14,
+        "y": 0
+      },
+      "title": "Median KM/m² · sales",
+      "type": "stat",
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE l.ppm2 > 0\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])",
+          "refId": "A"
+        }
+      ],
+      "id": 4
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "suffix:KM",
+          "noValue": "—"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 19,
+        "y": 0
+      },
+      "title": "Median rent · KM/mo",
+      "type": "stat",
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY l.price)\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE l.is_rent AND l.price > 0\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])",
+          "refId": "A"
+        }
+      ],
+      "id": 5
+    },
+    {
+      "type": "row",
+      "title": "Price trend",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      },
+      "panels": [],
+      "id": 6
     },
     {
       "datasource": {
@@ -230,9 +367,11 @@
         "h": 9,
         "w": 16,
         "x": 0,
-        "y": 4
+        "y": 5
       },
-      "id": 4,
+      "title": "Median asking KM/m² — daily snapshots, with p25–p75 band",
+      "description": "All observed price snapshots in the selected period. Use the time picker to zoom.",
+      "type": "timeseries",
       "options": {
         "legend": {
           "displayMode": "list",
@@ -252,7 +391,7 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT date_trunc('day', ph.scraped_at) AS time,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY ph.ppm2) AS \"median KM/m2\"\nFROM price_history ph\nJOIN listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) la ON la.article_id = ph.article_id\nWHERE ph.ppm2 > 0\n  AND ph.scraped_at > now() - INTERVAL '90 days'\n  AND room_bucket(la.rooms) = ANY (ARRAY[${rooms:sqlstring}])\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT date_trunc('day', ph.scraped_at) AS time,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY ph.ppm2) AS \"median KM/m2\"\nFROM price_history ph\nJOIN listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) la ON la.article_id = ph.article_id\nWHERE ph.ppm2 > 0\n  AND $__timeFilter(ph.scraped_at)\n  AND room_bucket(la.rooms) = ANY (ARRAY[${rooms:sqlstring}])\nGROUP BY 1 ORDER BY 1",
           "refId": "A"
         },
         {
@@ -262,7 +401,7 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT date_trunc('day', ph.scraped_at) AS time,\n       percentile_cont(0.25) WITHIN GROUP (ORDER BY ph.ppm2) AS \"p25 KM/m2\"\nFROM price_history ph\nJOIN listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) la ON la.article_id = ph.article_id\nWHERE ph.ppm2 > 0\n  AND ph.scraped_at > now() - INTERVAL '90 days'\n  AND room_bucket(la.rooms) = ANY (ARRAY[${rooms:sqlstring}])\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT date_trunc('day', ph.scraped_at) AS time,\n       percentile_cont(0.25) WITHIN GROUP (ORDER BY ph.ppm2) AS \"p25 KM/m2\"\nFROM price_history ph\nJOIN listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) la ON la.article_id = ph.article_id\nWHERE ph.ppm2 > 0\n  AND $__timeFilter(ph.scraped_at)\n  AND room_bucket(la.rooms) = ANY (ARRAY[${rooms:sqlstring}])\nGROUP BY 1 ORDER BY 1",
           "refId": "B"
         },
         {
@@ -272,12 +411,11 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT date_trunc('day', ph.scraped_at) AS time,\n       percentile_cont(0.75) WITHIN GROUP (ORDER BY ph.ppm2) AS \"p75 KM/m2\"\nFROM price_history ph\nJOIN listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) la ON la.article_id = ph.article_id\nWHERE ph.ppm2 > 0\n  AND ph.scraped_at > now() - INTERVAL '90 days'\n  AND room_bucket(la.rooms) = ANY (ARRAY[${rooms:sqlstring}])\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT date_trunc('day', ph.scraped_at) AS time,\n       percentile_cont(0.75) WITHIN GROUP (ORDER BY ph.ppm2) AS \"p75 KM/m2\"\nFROM price_history ph\nJOIN listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) la ON la.article_id = ph.article_id\nWHERE ph.ppm2 > 0\n  AND $__timeFilter(ph.scraped_at)\n  AND room_bucket(la.rooms) = ANY (ARRAY[${rooms:sqlstring}])\nGROUP BY 1 ORDER BY 1",
           "refId": "C"
         }
       ],
-      "title": "Median KM/m² trend — all price snapshots, 90 d (with p25–p75 band)",
-      "type": "timeseries"
+      "id": 7
     },
     {
       "datasource": {
@@ -293,7 +431,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "blue",
+                "color": "purple",
                 "value": null
               }
             ]
@@ -305,9 +443,11 @@
         "h": 9,
         "w": 8,
         "x": 16,
-        "y": 4
+        "y": 5
       },
-      "id": 5,
+      "title": "Active sale listings by rooms",
+      "description": "Sale side of the current filter selection.",
+      "type": "bargauge",
       "options": {
         "displayMode": "gradient",
         "minVizHeight": 10,
@@ -333,7 +473,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT room_bucket(l.rooms) AS bucket, count(*) AS listings\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE l.is_rent = FALSE\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT room_bucket(l.rooms) AS bucket, count(*) AS listings\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE NOT l.is_rent\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\nGROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -346,8 +486,430 @@
           }
         }
       ],
-      "title": "Listings by room count",
-      "type": "bargauge"
+      "id": 8
+    },
+    {
+      "type": "row",
+      "title": "Market flow",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
+      "panels": [],
+      "id": 9
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 75,
+            "lineWidth": 0,
+            "showPoints": "never",
+            "spanNulls": false
+          },
+          "unit": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "active (est)"
+            },
+            "properties": [
+              {
+                "id": "custom.drawStyle",
+                "value": "line"
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 15
+      },
+      "title": "Inventory flow — new vs closed per day · all categories",
+      "description": "Whole-database view (v_market_daily is not category-filtered). Bars: new/closed per day; line: estimated live inventory.",
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "SELECT day AS time,\n       new_n AS \"new\",\n       closed_n AS \"closed\",\n       active_est AS \"active (est)\"\nFROM v_market_daily\nWHERE $__timeFilter(day)\nORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "id": 10
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "unit": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "url"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "title"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 360
+              },
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "targetBlank": true,
+                    "title": "open on olx.ba",
+                    "url": "${__data.fields.url}"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 15
+      },
+      "title": "Stalest active listings — oldest creation day first",
+      "description": "Age measured from the ad's creation day (olx publish date; falls back to our first sighting). renewed_day is the seller's last bump — NULL until the renewal backfill converges; an old renewed_day means the ad has stopped competing for attention.",
+      "type": "table",
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT l.title, l.url, l.price, l.ppm2,\n       COALESCE(l.published_at, l.first_seen)::date AS created_day,\n       l.renewed_at::date AS renewed_day,\n       round(EXTRACT(EPOCH FROM (now() - COALESCE(l.published_at, l.first_seen))) / 86400.0)::int AS days_online\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nORDER BY COALESCE(l.published_at, l.first_seen) ASC\nLIMIT 15",
+          "refId": "A"
+        }
+      ],
+      "id": 11
+    },
+    {
+      "type": "row",
+      "title": "Map",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
+      "panels": [],
+      "id": 12
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "links": [
+            {
+              "title": "Open ad on olx.ba",
+              "url": "${__data.fields.url}",
+              "targetBlank": true
+            }
+          ]
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "url"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "latitude"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 4
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "longitude"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 4
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 14,
+        "w": 16,
+        "x": 0,
+        "y": 25
+      },
+      "title": "Listing map — click a pin to open the ad",
+      "type": "geomap",
+      "options": {
+        "basemap": {
+          "type": "default",
+          "label": "Road map"
+        },
+        "controls": {
+          "mouseWheelZoom": true,
+          "showLegend": false,
+          "showScale": false,
+          "zoomDelta": 0.5
+        },
+        "layers": [
+          {
+            "config": {
+              "showLegend": false,
+              "style": {
+                "color": {
+                  "fixed": "dark-green"
+                },
+                "opacity": 0.7,
+                "size": {
+                  "fixed": 9
+                }
+              },
+              "links": [
+                {
+                  "title": "Open ad on olx.ba",
+                  "url": "${__data.fields.url}",
+                  "targetBlank": true
+                }
+              ]
+            },
+            "location": {
+              "mode": "auto"
+            },
+            "name": "Listings",
+            "type": "markers"
+          }
+        ],
+        "tooltip": {
+          "mode": "details"
+        },
+        "view": {
+          "id": "coords",
+          "lat": 44.77,
+          "lon": 17.2,
+          "zoom": 9,
+          "allLayers": true,
+          "lastOnly": false
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT l.latitude, l.longitude, l.title, l.url,\n       l.price, l.sqm, l.rooms, l.ppm2,\n       l.location AS location\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])",
+          "refId": "A"
+        }
+      ],
+      "id": 13
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "unit": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "url"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "title"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 300
+              },
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "targetBlank": true,
+                    "title": "open on olx.ba",
+                    "url": "${__data.fields.url}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ppm2"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 14,
+        "w": 8,
+        "x": 16,
+        "y": 25
+      },
+      "title": "Pinned listings on map — click title to open",
+      "type": "table",
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT l.title, l.url, l.price, l.sqm, l.rooms, l.ppm2, l.latitude, l.longitude\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nORDER BY l.last_seen DESC\nLIMIT 100",
+          "refId": "A"
+        }
+      ],
+      "id": 14
+    },
+    {
+      "type": "row",
+      "title": "Shopping list",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 39
+      },
+      "panels": [],
+      "id": 15
     },
     {
       "datasource": {
@@ -418,9 +980,11 @@
         "h": 10,
         "w": 12,
         "x": 0,
-        "y": 13
+        "y": 40
       },
-      "id": 6,
+      "title": "Best value — lowest KM/m² (sales)",
+      "description": "Cheapest per m² among sale listings matching the filters.",
+      "type": "table",
       "options": {
         "cellHeight": "sm",
         "footer": {
@@ -441,12 +1005,11 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT l.title, l.url, l.sqm, l.rooms, l.price, l.ppm2\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE l.is_rent = FALSE AND l.ppm2 > 0\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\nORDER BY l.ppm2 ASC\nLIMIT 50",
+          "rawSql": "SELECT l.title, l.url, l.location, l.rooms, l.sqm, l.price, l.ppm2\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE NOT l.is_rent AND l.ppm2 > 0\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nORDER BY l.ppm2 ASC\nLIMIT 50",
           "refId": "A"
         }
       ],
-      "title": "Best value — lowest KM/m² (click title to open)",
-      "type": "table"
+      "id": 16
     },
     {
       "datasource": {
@@ -461,7 +1024,8 @@
               "type": "auto"
             },
             "inspect": false
-          }
+          },
+          "unit": "none"
         },
         "overrides": [
           {
@@ -484,7 +1048,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 300
+                "value": 340
               },
               {
                 "id": "links",
@@ -505,12 +1069,20 @@
             },
             "properties": [
               {
-                "id": "custom.width",
-                "value": 90
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    }
+                  ]
+                }
               },
               {
-                "id": "custom.filterable",
-                "value": false
+                "id": "unit",
+                "value": "none"
               }
             ]
           }
@@ -520,9 +1092,11 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 13
+        "y": 40
       },
-      "id": 7,
+      "title": "Recent price drops — newest first",
+      "description": "Every observed price decrease in full history window (scans all snapshots).",
+      "type": "table",
       "options": {
         "cellHeight": "sm",
         "footer": {
@@ -543,62 +1117,23 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH h AS (\n  SELECT ph.article_id, ph.price, ph.scraped_at,\n         lag(ph.price) OVER (PARTITION BY ph.article_id ORDER BY ph.scraped_at) AS prev_price\n  FROM price_history ph WHERE ph.price IS NOT NULL\n)\nSELECT l.title, l.url, h.prev_price AS was, h.price AS now,\n       (h.prev_price - h.price) AS drop, h.scraped_at AS seen\nFROM h JOIN listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}, false) l ON l.article_id = h.article_id\nWHERE h.prev_price IS NOT NULL AND h.price < h.prev_price\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nORDER BY h.scraped_at DESC\nLIMIT 50",
+          "rawSql": "WITH h AS (\n  SELECT ph.article_id, ph.price, ph.scraped_at,\n         lag(ph.price) OVER (PARTITION BY ph.article_id ORDER BY ph.scraped_at, ph.id) AS prev_price\n  FROM price_history ph WHERE ph.price IS NOT NULL\n)\nSELECT l.title, l.url, h.prev_price AS was, h.price AS now,\n       (h.prev_price - h.price) AS drop, h.scraped_at AS seen\nFROM h JOIN listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}, false) l ON l.article_id = h.article_id\nWHERE h.prev_price IS NOT NULL AND h.price < h.prev_price\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nORDER BY h.scraped_at DESC\nLIMIT 50",
           "refId": "A"
         }
       ],
-      "title": "Recent price drops (30 d of history)",
-      "type": "table"
+      "id": 17
     },
     {
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "drawStyle": "bars",
-            "fillOpacity": 40,
-            "lineWidth": 1,
-            "spanNulls": true
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
+      "type": "row",
+      "title": "Segments & demand",
       "gridPos": {
-        "h": 8,
-        "w": 12,
+        "h": 1,
+        "w": 24,
         "x": 0,
-        "y": 23
+        "y": 50
       },
-      "id": 8,
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawSql": "SELECT date_trunc('day', l.first_seen) AS time,\n       count(*) AS \"new listings\"\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nGROUP BY 1 ORDER BY 1",
-          "refId": "A"
-        }
-      ],
-      "title": "New listings first seen per day",
-      "type": "timeseries"
+      "panels": [],
+      "id": 18
     },
     {
       "datasource": {
@@ -607,122 +1142,47 @@
       },
       "fieldConfig": {
         "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": false
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 23
-      },
-      "id": 9,
-      "options": {
-        "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": [
-            "sum"
-          ],
-          "show": false
-        },
-        "showHeader": true
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
+          "color": {
+            "mode": "thresholds"
           },
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT name, COALESCE(category, '(none)') AS category, listing_count AS listings,\n       COALESCE(median_ppm2, 0) AS median, new_count AS new, drop_count AS drops,\n       last_scraped_at AS last_scraped\nFROM saved_searches\nWHERE category = ANY (ARRAY[${category:sqlstring}])\nORDER BY name",
-          "refId": "A"
-        }
-      ],
-      "title": "Saved searches",
-      "type": "table"
-    },
-    {
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": false
-          },
-          "mappings": [
-            {
-              "options": {
-                "ok": {
-                  "color": "green",
-                  "index": 0
-                },
-                "error": {
-                  "color": "red",
-                  "index": 1
-                }
-              },
-              "type": "value"
-            }
-          ],
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "text",
+                "color": "blue",
                 "value": null
               }
             ]
-          }
+          },
+          "unit": "none",
+          "noValue": "0"
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "error"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 300
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 24,
+        "h": 9,
+        "w": 5,
         "x": 0,
-        "y": 31
+        "y": 51
       },
-      "id": 10,
+      "title": "Actives that cut their price",
+      "description": "Active listings whose history contains at least one observed decrease — negotiation leverage exists here.",
+      "type": "stat",
       "options": {
-        "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
-          "show": false
+          "values": false
         },
-        "showHeader": true
+        "textMode": "auto",
+        "wideLayout": true
       },
       "targets": [
         {
@@ -732,395 +1192,11 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT r.id, COALESCE(ss.category, '(none)') AS category, r.search_key, r.status,\n       r.pages, r.cards, r.started_at AS started, r.finished_at AS finished, r.error\nFROM scrape_runs r\nLEFT JOIN saved_searches ss ON ss.search_key = r.search_key\nWHERE ss.category IS NULL OR ss.category = ANY (ARRAY[${category:sqlstring}])\nORDER BY r.id DESC\nLIMIT 20",
+          "rawSql": "WITH h AS (\n  SELECT ph.article_id, ph.price,\n         lag(ph.price) OVER (PARTITION BY ph.article_id ORDER BY ph.scraped_at, ph.id) AS prev_price\n  FROM price_history ph WHERE ph.price IS NOT NULL\n),\ncuts AS (\n  SELECT article_id, max(prev_price - price) AS biggest\n  FROM h WHERE prev_price IS NOT NULL AND price < prev_price GROUP BY 1\n)\nSELECT count(DISTINCT c.article_id)::text\nFROM cuts c\nJOIN listings l ON l.article_id = c.article_id\nWHERE l.closed_at IS NULL AND l.last_seen > now() - INTERVAL '14 days'",
           "refId": "A"
         }
       ],
-      "title": "Recent scrape runs",
-      "type": "table"
-    },
-    {
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
-      "gridPos": {
-        "h": 14,
-        "w": 16,
-        "x": 0,
-        "y": 39
-      },
-      "id": 11,
-      "options": {
-        "basemap": {
-          "type": "default",
-          "label": "Road map"
-        },
-        "controls": {
-          "mouseWheelZoom": true,
-          "showLegend": false,
-          "showScale": false,
-          "zoomDelta": 0.5
-        },
-        "layers": [
-          {
-            "config": {
-              "showLegend": false,
-              "style": {
-                "color": {
-                  "fixed": "dark-green"
-                },
-                "opacity": 0.7,
-                "size": {
-                  "fixed": 9
-                }
-              },
-              "links": [
-                {
-                  "title": "Open ad on olx.ba",
-                  "url": "${__data.fields.url}",
-                  "targetBlank": true
-                }
-              ]
-            },
-            "location": {
-              "mode": "auto"
-            },
-            "name": "Listings",
-            "type": "markers"
-          }
-        ],
-        "tooltip": {
-          "mode": "details"
-        },
-        "view": {
-          "id": "coords",
-          "lat": 44.77,
-          "lon": 17.2,
-          "zoom": 9,
-          "allLayers": true,
-          "lastOnly": false
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT l.latitude, l.longitude, l.title, l.url,\n       l.price, l.sqm, l.rooms, l.ppm2,\n       l.location AS location\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])",
-          "refId": "A"
-        }
-      ],
-      "title": "Listing map — pinned locations",
-      "type": "geomap",
-      "fieldConfig": {
-        "defaults": {
-          "links": [
-            {
-              "title": "Open ad on olx.ba",
-              "url": "${__data.fields.url}",
-              "targetBlank": true
-            }
-          ]
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "url"
-            },
-            "properties": [
-              {
-                "id": "custom.hidden",
-                "value": true
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "latitude"
-            },
-            "properties": [
-              {
-                "id": "decimals",
-                "value": 4
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "longitude"
-            },
-            "properties": [
-              {
-                "id": "decimals",
-                "value": 4
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
-      "gridPos": {
-        "h": 14,
-        "w": 8,
-        "x": 16,
-        "y": 39
-      },
-      "id": 12,
-      "options": {
-        "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": [
-            "sum"
-          ],
-          "show": false
-        },
-        "showHeader": true
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT l.title, l.url, l.price, l.sqm, l.rooms, l.ppm2, l.latitude, l.longitude\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nORDER BY l.last_seen DESC\nLIMIT 100",
-          "refId": "A"
-        }
-      ],
-      "title": "Pinned listings on map — click to open",
-      "type": "table",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": false
-          },
-          "links": [
-            {
-              "targetBlank": true,
-              "title": "open on olx.ba",
-              "url": "${__data.fields.url}"
-            }
-          ],
-          "overrides": [
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "url"
-              },
-              "properties": [
-                {
-                  "id": "custom.hidden",
-                  "value": true
-                }
-              ]
-            }
-          ]
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "latitude"
-            },
-            "properties": [
-              {
-                "id": "decimals",
-                "value": 4
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "longitude"
-            },
-            "properties": [
-              {
-                "id": "decimals",
-                "value": 4
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "drawStyle": "bars",
-            "fillOpacity": 40,
-            "lineWidth": 1,
-            "spanNulls": true
-          },
-          "unit": "short",
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "active (est)"
-            },
-            "properties": [
-              {
-                "id": "custom.drawStyle",
-                "value": "line"
-              },
-              {
-                "id": "custom.fillOpacity",
-                "value": 10
-              },
-              {
-                "id": "custom.lineWidth",
-                "value": 2
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 53
-      },
-      "id": 13,
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawSql": "SELECT day AS time,\n       new_n AS \"new\",\n       closed_n AS \"closed\",\n       active_est AS \"active (est)\"\nFROM v_market_daily\nWHERE $__timeFilter(day)\nORDER BY 1",
-          "refId": "A"
-        }
-      ],
-      "title": "Inventory flow — new vs closed per day (live estimate as line)",
-      "description": "From v_market_daily. Closed bars turn positive when ads vanish from every search; the line estimates live inventory (cumulative new − closed).",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": false
-          },
-          "links": [
-            {
-              "targetBlank": true,
-              "title": "open on olx.ba",
-              "url": "${__data.fields.url}"
-            }
-          ],
-          "overrides": []
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "url"
-            },
-            "properties": [
-              {
-                "id": "custom.hidden",
-                "value": true
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "days_online"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "d"
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 53
-      },
-      "id": 14,
-      "options": {
-        "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": [
-            "sum"
-          ],
-          "show": false
-        },
-        "showHeader": true
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT l.title, l.url, l.price, l.ppm2,\n       round(EXTRACT(EPOCH FROM (now() - l.first_seen)) / 86400.0)::int AS days_online,\n       l.first_seen\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nORDER BY l.first_seen ASC\nLIMIT 15",
-          "refId": "A"
-        }
-      ],
-      "title": "Stalest active listings — longest online",
-      "type": "table"
+      "id": 19
     },
     {
       "datasource": {
@@ -1141,33 +1217,35 @@
               }
             ]
           },
-          "overrides": []
+          "unit": "suffix:KM",
+          "noValue": "—"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 61
+        "h": 9,
+        "w": 5,
+        "x": 5,
+        "y": 51
       },
-      "id": 15,
+      "title": "Median biggest cut · KM",
+      "description": "Median of the largest single cut per cutting listing.",
+      "type": "stat",
       "options": {
-        "displayMode": "gradient",
-        "minVizHeight": 10,
-        "minVizWidth": 0,
-        "namePlacement": "auto",
-        "orientation": "horizontal",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
           "fields": "",
-          "values": true
+          "values": false
         },
-        "showUnfilled": true,
-        "sizing": "auto",
-        "valueMode": "color"
+        "textMode": "auto",
+        "wideLayout": true
       },
       "targets": [
         {
@@ -1177,93 +1255,11 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT COALESCE(NULLIF(l.heating, ''), '(unknown)') AS bucket, count(*) AS listings\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE l.is_rent = FALSE AND l.heating IS NOT NULL\nGROUP BY 1 ORDER BY 2 DESC",
+          "rawSql": "WITH h AS (\n  SELECT ph.article_id, ph.price,\n         lag(ph.price) OVER (PARTITION BY ph.article_id ORDER BY ph.scraped_at, ph.id) AS prev_price\n  FROM price_history ph WHERE ph.price IS NOT NULL\n),\ncuts AS (\n  SELECT article_id, max(prev_price - price) AS biggest\n  FROM h WHERE prev_price IS NOT NULL AND price < prev_price GROUP BY 1\n)\nSELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY c.biggest)\nFROM cuts c\nJOIN listings l ON l.article_id = c.article_id\nWHERE l.closed_at IS NULL AND l.last_seen > now() - INTERVAL '14 days'\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])",
           "refId": "A"
         }
       ],
-      "transformations": [
-        {
-          "id": "rowsToFields",
-          "options": {
-            "nameField": "bucket",
-            "valueField": "listings"
-          }
-        }
-      ],
-      "title": "Sale listings by heating (from ad pages)",
-      "description": "Populates as detail-page enrichment converges.",
-      "type": "bargauge"
-    },
-    {
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "orange",
-                "value": null
-              }
-            ]
-          },
-          "overrides": []
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 61
-      },
-      "id": 16,
-      "options": {
-        "displayMode": "gradient",
-        "minVizHeight": 10,
-        "minVizWidth": 0,
-        "namePlacement": "auto",
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": true
-        },
-        "showUnfilled": true,
-        "sizing": "auto",
-        "valueMode": "color"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT COALESCE(NULLIF(l.condition, ''), '(unknown)') AS bucket, count(*) AS listings\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE l.is_rent = FALSE AND l.condition IS NOT NULL\nGROUP BY 1 ORDER BY 2 DESC",
-          "refId": "A"
-        }
-      ],
-      "transformations": [
-        {
-          "id": "rowsToFields",
-          "options": {
-            "nameField": "bucket",
-            "valueField": "listings"
-          }
-        }
-      ],
-      "title": "Sale listings by condition (from ad pages)",
-      "type": "bargauge"
+      "id": 20
     },
     {
       "datasource": {
@@ -1283,18 +1279,19 @@
                 "value": null
               }
             ]
-          },
-          "overrides": []
+          }
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 61
+        "h": 9,
+        "w": 7,
+        "x": 10,
+        "y": 51
       },
-      "id": 17,
+      "title": "Median KM/m² by rooms · sales",
+      "description": "Asking-price segmentation by size — watch the spread between buckets.",
+      "type": "bargauge",
       "options": {
         "displayMode": "gradient",
         "minVizHeight": 10,
@@ -1320,7 +1317,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT COALESCE(l.seller_type, '(unknown)') AS bucket, count(*) AS listings\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE l.is_rent = FALSE AND l.seller_type IS NOT NULL\nGROUP BY 1 ORDER BY 2 DESC",
+          "rawSql": "SELECT room_bucket(l.rooms) AS bucket,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)::int AS median_ppm2\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE NOT l.is_rent AND l.ppm2 > 0 AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\nGROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -1329,12 +1326,164 @@
           "id": "rowsToFields",
           "options": {
             "nameField": "bucket",
-            "valueField": "listings"
+            "valueField": "median_ppm2"
           }
         }
       ],
-      "title": "Sale listings by seller type (shop vs private)",
-      "type": "bargauge"
+      "id": 21
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 7,
+        "x": 17,
+        "y": 51
+      },
+      "title": "Asking KM/m² by condition · sales",
+      "description": "Detail-page condition labels (min. 5 listings). Does Novogradnja actually command a premium?",
+      "type": "table",
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT COALESCE(NULLIF(l.condition, ''), '(unknown)') AS bucket,\n       count(*) AS n,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)::int AS median_ppm2\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE NOT l.is_rent AND l.condition IS NOT NULL AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\nGROUP BY 1 HAVING count(*) >= 5 ORDER BY 3 DESC NULLS LAST",
+          "refId": "A"
+        }
+      ],
+      "id": 22
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "unit": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "url"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "title"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 420
+              },
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "targetBlank": true,
+                    "title": "open on olx.ba",
+                    "url": "${__data.fields.url}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "views"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 60
+      },
+      "title": "Most viewed active listings",
+      "description": "Pregledi counter from ad pages — what everyone else is watching (where exposed).",
+      "type": "table",
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT l.title, l.url, l.views, l.sqm, l.rooms, l.price, l.ppm2\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE l.views IS NOT NULL AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]) AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nORDER BY l.views DESC\nLIMIT 20",
+          "refId": "A"
+        }
+      ],
+      "id": 23
     }
   ],
   "refresh": "5m",
@@ -1390,9 +1539,7 @@
             "value": "rent"
           }
         ],
-        "query": "sell,rent",
         "skipUrlSync": false,
-        "sort": 0,
         "type": "custom"
       },
       {
@@ -1415,13 +1562,14 @@
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
-        "sort": 2,
+        "sort": 1,
         "type": "query"
       },
       {
         "current": {
-          "text": "0",
-          "value": "0"
+          "value": 0,
+          "selected": false,
+          "text": "0"
         },
         "label": "Min m²",
         "name": "min_sqm",
@@ -1430,8 +1578,9 @@
       },
       {
         "current": {
-          "text": "99999",
-          "value": "99999"
+          "value": 99999,
+          "selected": false,
+          "text": "99999"
         },
         "label": "Max m²",
         "name": "max_sqm",
@@ -1440,8 +1589,9 @@
       },
       {
         "current": {
-          "text": "42.4",
-          "value": "42.4"
+          "value": 42.4,
+          "selected": false,
+          "text": "42.4"
         },
         "label": "Min lat",
         "name": "min_lat",
@@ -1450,8 +1600,9 @@
       },
       {
         "current": {
-          "text": "46.4",
-          "value": "46.4"
+          "value": 46.4,
+          "selected": false,
+          "text": "46.4"
         },
         "label": "Max lat",
         "name": "max_lat",
@@ -1460,8 +1611,9 @@
       },
       {
         "current": {
-          "text": "15.5",
-          "value": "15.5"
+          "value": 15.5,
+          "selected": false,
+          "text": "15.5"
         },
         "label": "Min lon",
         "name": "min_lon",
@@ -1470,8 +1622,9 @@
       },
       {
         "current": {
-          "text": "19.6",
-          "value": "19.6"
+          "value": 19.6,
+          "selected": false,
+          "text": "19.6"
         },
         "label": "Max lon",
         "name": "max_lon",
@@ -1487,6 +1640,6 @@
   "timezone": "browser",
   "title": "OLX.ba Market Overview",
   "uid": "olx-overview",
-  "version": 19,
+  "version": 1,
   "weekStart": ""
 }
