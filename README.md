@@ -138,7 +138,7 @@ all three commands on every push and pull request.
 
 ## Dashboards
 
-Three provisioned dashboards live in the **OLX** folder (one JSON file each in `grafana/dashboards/`). The two market dashboards share the same filter bar — Category, Deal, Rooms, m² range, lat/lon bounding box — and **every panel honours both those filters and the dashboard time picker**. All three cross-link via the dashboard links in the top bar.
+Three provisioned dashboards live in the **OLX** folder (one JSON file each in `grafana/dashboards/`). The two market dashboards share the same filter bar — Category, Deal, Rooms, m² range, Neighborhood (multi-select, with `(unmapped)` / `(no pin)` buckets) — and **every panel honours both those filters and the dashboard time picker**. All three cross-link via the dashboard links in the top bar.
 
 ### OLX.ba Market Overview (`olx-overview`)
 

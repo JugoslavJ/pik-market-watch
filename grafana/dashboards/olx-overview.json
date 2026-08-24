@@ -77,7 +77,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT count(*) AS active\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])",
+          "rawSql": "SELECT count(*) AS active\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\nWHERE room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])",
           "refId": "A"
         }
       ],
@@ -140,7 +140,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT count(*) AS new7\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\n  AND l.first_seen > now() - INTERVAL '7 days'",
+          "rawSql": "SELECT count(*) AS new7\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\nWHERE room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\n  AND l.first_seen > now() - INTERVAL '7 days'",
           "refId": "A"
         }
       ],
@@ -203,7 +203,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH h AS (\n  SELECT ph.article_id, ph.price, ph.scraped_at,\n         lag(ph.price) OVER (PARTITION BY ph.article_id ORDER BY ph.scraped_at, ph.id) AS prev_price\n  FROM price_history ph\n  WHERE ph.price IS NOT NULL\n)\nSELECT count(DISTINCT h.article_id) AS dropped\nFROM h\nJOIN listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}, false) l ON l.article_id = h.article_id\nWHERE h.prev_price IS NOT NULL AND h.price < h.prev_price\n  AND h.scraped_at > now() - INTERVAL '7 days'\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])",
+          "rawSql": "WITH h AS (\n  SELECT ph.article_id, ph.price, ph.scraped_at,\n         lag(ph.price) OVER (PARTITION BY ph.article_id ORDER BY ph.scraped_at, ph.id) AS prev_price\n  FROM price_history ph\n  WHERE ph.price IS NOT NULL\n)\nSELECT count(DISTINCT h.article_id) AS dropped\nFROM h\nJOIN listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}], false) l ON l.article_id = h.article_id\nWHERE h.prev_price IS NOT NULL AND h.price < h.prev_price\n  AND h.scraped_at > now() - INTERVAL '7 days'\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])",
           "refId": "A"
         }
       ],
@@ -265,7 +265,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE l.ppm2 > 0\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])",
+          "rawSql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\nWHERE l.ppm2 > 0\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])",
           "refId": "A"
         }
       ],
@@ -327,7 +327,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY l.price)\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE l.is_rent AND l.price > 0\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])",
+          "rawSql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY l.price)\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\nWHERE l.is_rent AND l.price > 0\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])",
           "refId": "A"
         }
       ],
@@ -391,7 +391,7 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT date_trunc('day', ph.scraped_at) AS time,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY ph.ppm2) AS \"median KM/m2\"\nFROM price_history ph\nJOIN listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) la ON la.article_id = ph.article_id\nWHERE ph.ppm2 > 0\n  AND $__timeFilter(ph.scraped_at)\n  AND room_bucket(la.rooms) = ANY (ARRAY[${rooms:sqlstring}])\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT date_trunc('day', ph.scraped_at) AS time,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY ph.ppm2) AS \"median KM/m2\"\nFROM price_history ph\nJOIN listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) la ON la.article_id = ph.article_id\nWHERE ph.ppm2 > 0\n  AND $__timeFilter(ph.scraped_at)\n  AND room_bucket(la.rooms) = ANY (ARRAY[${rooms:sqlstring}])\nGROUP BY 1 ORDER BY 1",
           "refId": "A"
         },
         {
@@ -401,7 +401,7 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT date_trunc('day', ph.scraped_at) AS time,\n       percentile_cont(0.25) WITHIN GROUP (ORDER BY ph.ppm2) AS \"p25 KM/m2\"\nFROM price_history ph\nJOIN listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) la ON la.article_id = ph.article_id\nWHERE ph.ppm2 > 0\n  AND $__timeFilter(ph.scraped_at)\n  AND room_bucket(la.rooms) = ANY (ARRAY[${rooms:sqlstring}])\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT date_trunc('day', ph.scraped_at) AS time,\n       percentile_cont(0.25) WITHIN GROUP (ORDER BY ph.ppm2) AS \"p25 KM/m2\"\nFROM price_history ph\nJOIN listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) la ON la.article_id = ph.article_id\nWHERE ph.ppm2 > 0\n  AND $__timeFilter(ph.scraped_at)\n  AND room_bucket(la.rooms) = ANY (ARRAY[${rooms:sqlstring}])\nGROUP BY 1 ORDER BY 1",
           "refId": "B"
         },
         {
@@ -411,7 +411,7 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT date_trunc('day', ph.scraped_at) AS time,\n       percentile_cont(0.75) WITHIN GROUP (ORDER BY ph.ppm2) AS \"p75 KM/m2\"\nFROM price_history ph\nJOIN listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) la ON la.article_id = ph.article_id\nWHERE ph.ppm2 > 0\n  AND $__timeFilter(ph.scraped_at)\n  AND room_bucket(la.rooms) = ANY (ARRAY[${rooms:sqlstring}])\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT date_trunc('day', ph.scraped_at) AS time,\n       percentile_cont(0.75) WITHIN GROUP (ORDER BY ph.ppm2) AS \"p75 KM/m2\"\nFROM price_history ph\nJOIN listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) la ON la.article_id = ph.article_id\nWHERE ph.ppm2 > 0\n  AND $__timeFilter(ph.scraped_at)\n  AND room_bucket(la.rooms) = ANY (ARRAY[${rooms:sqlstring}])\nGROUP BY 1 ORDER BY 1",
           "refId": "C"
         }
       ],
@@ -473,7 +473,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT room_bucket(l.rooms) AS bucket, count(*) AS listings\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE NOT l.is_rent\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT room_bucket(l.rooms) AS bucket, count(*) AS listings\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\nWHERE NOT l.is_rent\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\nGROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -655,7 +655,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT l.title, l.url, l.price, l.ppm2,\n       COALESCE(l.published_at, l.first_seen)::date AS created_day,\n       l.renewed_at::date AS renewed_day,\n       round(EXTRACT(EPOCH FROM (now() - COALESCE(l.published_at, l.first_seen))) / 86400.0)::int AS days_online\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nORDER BY COALESCE(l.published_at, l.first_seen) ASC\nLIMIT 15",
+          "rawSql": "SELECT l.title, l.url, l.price, l.ppm2,\n       COALESCE(l.published_at, l.first_seen)::date AS created_day,\n       l.renewed_at::date AS renewed_day,\n       round(EXTRACT(EPOCH FROM (now() - COALESCE(l.published_at, l.first_seen))) / 86400.0)::int AS days_online\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\nWHERE room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nORDER BY COALESCE(l.published_at, l.first_seen) ASC\nLIMIT 15",
           "refId": "A"
         }
       ],
@@ -794,7 +794,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT l.latitude, l.longitude, l.title, l.url,\n       l.price, l.sqm, l.rooms, l.ppm2,\n       l.location AS location\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])",
+          "rawSql": "SELECT l.latitude, l.longitude, l.title, l.url,\n       l.price, l.sqm, l.rooms, l.ppm2,\n       l.location AS location\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\nWHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])",
           "refId": "A"
         }
       ],
@@ -893,7 +893,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT l.title, l.url, l.price, l.sqm, l.rooms, l.ppm2, l.latitude, l.longitude\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nORDER BY l.last_seen DESC\nLIMIT 100",
+          "rawSql": "SELECT l.title, l.url, l.price, l.sqm, l.rooms, l.ppm2, l.latitude, l.longitude\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\nWHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nORDER BY l.last_seen DESC\nLIMIT 100",
           "refId": "A"
         }
       ],
@@ -1005,7 +1005,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT l.title, l.url, l.location, l.rooms, l.sqm, l.price, l.ppm2\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE NOT l.is_rent AND l.ppm2 > 0\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nORDER BY l.ppm2 ASC\nLIMIT 50",
+          "rawSql": "SELECT l.title, l.url, l.location, l.rooms, l.sqm, l.price, l.ppm2\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\nWHERE NOT l.is_rent AND l.ppm2 > 0\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nORDER BY l.ppm2 ASC\nLIMIT 50",
           "refId": "A"
         }
       ],
@@ -1117,7 +1117,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH h AS (\n  SELECT ph.article_id, ph.price, ph.scraped_at,\n         lag(ph.price) OVER (PARTITION BY ph.article_id ORDER BY ph.scraped_at, ph.id) AS prev_price\n  FROM price_history ph WHERE ph.price IS NOT NULL\n)\nSELECT l.title, l.url, h.prev_price AS was, h.price AS now,\n       (h.prev_price - h.price) AS drop, h.scraped_at AS seen\nFROM h JOIN listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}, false) l ON l.article_id = h.article_id\nWHERE h.prev_price IS NOT NULL AND h.price < h.prev_price\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nORDER BY h.scraped_at DESC\nLIMIT 50",
+          "rawSql": "WITH h AS (\n  SELECT ph.article_id, ph.price, ph.scraped_at,\n         lag(ph.price) OVER (PARTITION BY ph.article_id ORDER BY ph.scraped_at, ph.id) AS prev_price\n  FROM price_history ph WHERE ph.price IS NOT NULL\n)\nSELECT l.title, l.url, h.prev_price AS was, h.price AS now,\n       (h.prev_price - h.price) AS drop, h.scraped_at AS seen\nFROM h JOIN listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}], false) l ON l.article_id = h.article_id\nWHERE h.prev_price IS NOT NULL AND h.price < h.prev_price\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nORDER BY h.scraped_at DESC\nLIMIT 50",
           "refId": "A"
         }
       ],
@@ -1317,7 +1317,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT room_bucket(l.rooms) AS bucket,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)::int AS median_ppm2\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE NOT l.is_rent AND l.ppm2 > 0 AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT room_bucket(l.rooms) AS bucket,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)::int AS median_ppm2\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\nWHERE NOT l.is_rent AND l.ppm2 > 0 AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\nGROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -1379,7 +1379,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT COALESCE(NULLIF(l.condition, ''), '(unknown)') AS bucket,\n       count(*) AS n,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)::int AS median_ppm2\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE NOT l.is_rent AND l.condition IS NOT NULL AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\nGROUP BY 1 HAVING count(*) >= 5 ORDER BY 3 DESC NULLS LAST",
+          "rawSql": "SELECT COALESCE(NULLIF(l.condition, ''), '(unknown)') AS bucket,\n       count(*) AS n,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)::int AS median_ppm2\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\nWHERE NOT l.is_rent AND l.condition IS NOT NULL AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\nGROUP BY 1 HAVING count(*) >= 5 ORDER BY 3 DESC NULLS LAST",
           "refId": "A"
         }
       ],
@@ -1479,7 +1479,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT l.title, l.url, l.views, l.sqm, l.rooms, l.price, l.ppm2\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE l.views IS NOT NULL AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]) AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nORDER BY l.views DESC\nLIMIT 20",
+          "rawSql": "SELECT l.title, l.url, l.views, l.sqm, l.rooms, l.price, l.ppm2\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\nWHERE l.views IS NOT NULL AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]) AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nORDER BY l.views DESC\nLIMIT 20",
           "refId": "A"
         }
       ],
@@ -1544,7 +1544,7 @@
           "editorMode": "code",
           "format": "table",
           "refId": "A",
-          "rawSql": "SELECT CASE WHEN l.latitude IS NULL THEN '(no pin)'\n            ELSE COALESCE(NULLIF(l.location, ''), '(unmapped)') END AS neighborhood,\n       count(*) AS listings,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)::int AS \"median KM/m2\"\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nGROUP BY 1 ORDER BY 2 DESC"
+          "rawSql": "SELECT CASE WHEN l.latitude IS NULL THEN '(no pin)'\n            ELSE COALESCE(NULLIF(l.location, ''), '(unmapped)') END AS neighborhood,\n       count(*) AS listings,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)::int AS \"median KM/m2\"\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\nWHERE room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nGROUP BY 1 ORDER BY 2 DESC"
         }
       ],
       "title": "Neighborhood breakdown — actives",
@@ -1635,6 +1635,29 @@
       },
       {
         "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "postgres",
+          "uid": "olx-postgres"
+        },
+        "definition": "SELECT d AS __value, d AS __text FROM (\n  SELECT COALESCE(NULLIF(location, ''), '(unmapped)') AS d FROM listings WHERE latitude IS NOT NULL\n  UNION ALL SELECT '(no pin)'\n) s GROUP BY d ORDER BY d",
+        "includeAll": true,
+        "label": "Neighborhood",
+        "multi": true,
+        "name": "neighborhood",
+        "options": [],
+        "query": "SELECT d AS __value, d AS __text FROM (\n  SELECT COALESCE(NULLIF(location, ''), '(unmapped)') AS d FROM listings WHERE latitude IS NOT NULL\n  UNION ALL SELECT '(no pin)'\n) s GROUP BY d ORDER BY d",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
           "value": "0",
           "selected": false,
           "text": "0"
@@ -1652,50 +1675,6 @@
         },
         "label": "Max m²",
         "name": "max_sqm",
-        "skipUrlSync": false,
-        "type": "textbox"
-      },
-      {
-        "current": {
-          "value": "42.4",
-          "selected": false,
-          "text": "42.4"
-        },
-        "label": "Min lat",
-        "name": "min_lat",
-        "skipUrlSync": false,
-        "type": "textbox"
-      },
-      {
-        "current": {
-          "value": "46.4",
-          "selected": false,
-          "text": "46.4"
-        },
-        "label": "Max lat",
-        "name": "max_lat",
-        "skipUrlSync": false,
-        "type": "textbox"
-      },
-      {
-        "current": {
-          "value": "15.5",
-          "selected": false,
-          "text": "15.5"
-        },
-        "label": "Min lon",
-        "name": "min_lon",
-        "skipUrlSync": false,
-        "type": "textbox"
-      },
-      {
-        "current": {
-          "value": "19.6",
-          "selected": false,
-          "text": "19.6"
-        },
-        "label": "Max lon",
-        "name": "max_lon",
         "skipUrlSync": false,
         "type": "textbox"
       }

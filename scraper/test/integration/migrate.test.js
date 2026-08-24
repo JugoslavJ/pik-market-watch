@@ -37,15 +37,15 @@ needsDb('migrations: fresh database applies all files; second pass is a no-op', 
   const pool = new Pool({ connectionString: await recreateDb('mig_fresh') });
   await applyMigrations(pool, FULL_DIR, log);
   assert.equal(await fnCount(pool), 2);
-  assert.equal(await recorded(pool), 11);          // 01…11
+  assert.equal(await recorded(pool), 12);          // 01…12
 
   await applyMigrations(pool, FULL_DIR, log);           // second boot
   assert.equal(await fnCount(pool), 2);
-  assert.equal(await recorded(pool), 11);
+  assert.equal(await recorded(pool), 12);
 
   // Dashboard panel query runs through the freshly created function:
   const r = await pool.query(
-    "SELECT count(*)::int AS n FROM listings_filtered(ARRAY['apartments'], 0, 99999, 42.4, 46.4, 15.5, 19.6)");
+    "SELECT count(*)::int AS n FROM listings_filtered(ARRAY['apartments'], 0, 99999, NULL)");
   assert.equal(typeof r.rows[0].n, 'number');
   await pool.end();
 });
@@ -68,12 +68,12 @@ needsDb('migrations: legacy database (hand-applied 01+02) is upgraded safely', a
   // Upgrade against the full set:
   await applyMigrations(pool, FULL_DIR, log);
   assert.equal(await fnCount(pool), 2);
-  assert.equal(await recorded(pool), 11);
+  assert.equal(await recorded(pool), 12);
 
   // Old data remains queryable through the dashboard's exact filter call,
   // and the upgrade added the closure columns:
   const r = await pool.query(
-    "SELECT count(*)::int AS n FROM listings_filtered(ARRAY['apartments'], 0, 99999, 42.4, 46.4, 15.5, 19.6)");
+    "SELECT count(*)::int AS n FROM listings_filtered(ARRAY['apartments'], 0, 99999, NULL)");
   assert.equal(r.rows[0].n, 1);
   const cols = await pool.query(`SELECT count(*)::int AS n FROM information_schema.columns
     WHERE table_name = 'listings'

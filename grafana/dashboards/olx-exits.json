@@ -85,7 +85,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT count(*)\nFROM listings_closed_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE l.closed_at > now() - INTERVAL '30 days'\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])",
+          "rawSql": "SELECT count(*)\nFROM listings_closed_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\nWHERE l.closed_at > now() - INTERVAL '30 days'\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])",
           "refId": "A"
         }
       ],
@@ -148,7 +148,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY l.closing_ppm2)\nFROM listings_closed_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE l.closed_at > now() - INTERVAL '30 days'\n  AND l.closing_ppm2 > 0\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])",
+          "rawSql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY l.closing_ppm2)\nFROM listings_closed_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\nWHERE l.closed_at > now() - INTERVAL '30 days'\n  AND l.closing_ppm2 > 0\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])",
           "refId": "A"
         }
       ],
@@ -211,7 +211,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH c AS (\n  SELECT count(*)::float AS n FROM listings_closed_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\n  WHERE l.closed_at > now() - INTERVAL '30 days' AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]) AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\n),\na AS (\n  SELECT count(*)::float AS n FROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\n  WHERE room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]) AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\n)\nSELECT COALESCE(round(c.n / NULLIF(c.n + a.n, 0) * 100), 0) FROM c, a",
+          "rawSql": "WITH c AS (\n  SELECT count(*)::float AS n FROM listings_closed_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\n  WHERE l.closed_at > now() - INTERVAL '30 days' AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]) AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\n),\na AS (\n  SELECT count(*)::float AS n FROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\n  WHERE room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]) AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\n)\nSELECT COALESCE(round(c.n / NULLIF(c.n + a.n, 0) * 100), 0) FROM c, a",
           "refId": "A"
         }
       ],
@@ -274,7 +274,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY lc.days_listed)\nFROM listings_closed_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nJOIN v_listing_lifecycle lc ON lc.article_id = l.article_id\nWHERE l.closed_at > now() - INTERVAL '30 days'\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])",
+          "rawSql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY lc.days_listed)\nFROM listings_closed_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\nJOIN v_listing_lifecycle lc ON lc.article_id = l.article_id\nWHERE l.closed_at > now() - INTERVAL '30 days'\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])",
           "refId": "A"
         }
       ],
@@ -338,7 +338,7 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT date_trunc('day', l.closed_at) AS time,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY l.closing_ppm2) AS \"exit KM/m2 (closed ads)\"\nFROM listings_closed_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE l.closing_ppm2 > 0\n  AND $__timeFilter(l.closed_at)\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT date_trunc('day', l.closed_at) AS time,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY l.closing_ppm2) AS \"exit KM/m2 (closed ads)\"\nFROM listings_closed_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\nWHERE l.closing_ppm2 > 0\n  AND $__timeFilter(l.closed_at)\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nGROUP BY 1 ORDER BY 1",
           "refId": "A"
         },
         {
@@ -348,7 +348,7 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT date_trunc('day', ph.scraped_at) AS time,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY ph.ppm2) AS \"asking KM/m2 (snapshots)\"\nFROM price_history ph\nJOIN listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) la ON la.article_id = ph.article_id\nWHERE ph.ppm2 > 0\n  AND $__timeFilter(ph.scraped_at)\n  AND room_bucket(la.rooms) = ANY (ARRAY[${rooms:sqlstring}])\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT date_trunc('day', ph.scraped_at) AS time,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY ph.ppm2) AS \"asking KM/m2 (snapshots)\"\nFROM price_history ph\nJOIN listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) la ON la.article_id = ph.article_id\nWHERE ph.ppm2 > 0\n  AND $__timeFilter(ph.scraped_at)\n  AND room_bucket(la.rooms) = ANY (ARRAY[${rooms:sqlstring}])\nGROUP BY 1 ORDER BY 1",
           "refId": "B"
         }
       ],
@@ -410,7 +410,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT CASE WHEN lc.days_listed <= 7  THEN '0-7 d'\n            WHEN lc.days_listed <= 14 THEN '8-14 d'\n            WHEN lc.days_listed <= 30 THEN '15-30 d'\n            WHEN lc.days_listed <= 60 THEN '31-60 d'\n            ELSE '60+ d' END AS bucket,\n       count(*) AS exits\nFROM listings_closed_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nJOIN v_listing_lifecycle lc ON lc.article_id = l.article_id\nWHERE $__timeFilter(l.closed_at)\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nGROUP BY 1 ORDER BY min(lc.days_listed)",
+          "rawSql": "SELECT CASE WHEN lc.days_listed <= 7  THEN '0-7 d'\n            WHEN lc.days_listed <= 14 THEN '8-14 d'\n            WHEN lc.days_listed <= 30 THEN '15-30 d'\n            WHEN lc.days_listed <= 60 THEN '31-60 d'\n            ELSE '60+ d' END AS bucket,\n       count(*) AS exits\nFROM listings_closed_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\nJOIN v_listing_lifecycle lc ON lc.article_id = l.article_id\nWHERE $__timeFilter(l.closed_at)\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nGROUP BY 1 ORDER BY min(lc.days_listed)",
           "refId": "A"
         }
       ],
@@ -563,7 +563,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT l.title, l.url, l.location, l.sqm, l.rooms,\n       l.closing_price, l.closing_ppm2, lc.opening_price,\n       round(l.closing_price - lc.opening_price) AS price_change,\n       CASE WHEN lc.opening_price > 0\n            THEN round((l.closing_price - lc.opening_price) / lc.opening_price * 100)::int END AS change_pct,\n       lc.days_listed, l.closed_at\nFROM listings_closed_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nJOIN v_listing_lifecycle lc ON lc.article_id = l.article_id\nWHERE $__timeFilter(l.closed_at)\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nORDER BY l.closed_at DESC\nLIMIT 100",
+          "rawSql": "SELECT l.title, l.url, l.location, l.sqm, l.rooms,\n       l.closing_price, l.closing_ppm2, lc.opening_price,\n       round(l.closing_price - lc.opening_price) AS price_change,\n       CASE WHEN lc.opening_price > 0\n            THEN round((l.closing_price - lc.opening_price) / lc.opening_price * 100)::int END AS change_pct,\n       lc.days_listed, l.closed_at\nFROM listings_closed_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\nJOIN v_listing_lifecycle lc ON lc.article_id = l.article_id\nWHERE $__timeFilter(l.closed_at)\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nORDER BY l.closed_at DESC\nLIMIT 100",
           "refId": "A"
         }
       ],
@@ -625,7 +625,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT room_bucket(l.rooms) AS bucket, count(*) AS exits\nFROM listings_closed_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE $__timeFilter(l.closed_at)\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT room_bucket(l.rooms) AS bucket, count(*) AS exits\nFROM listings_closed_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\nWHERE $__timeFilter(l.closed_at)\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nGROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -774,7 +774,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT l.latitude, l.longitude, l.title, l.url,\n       l.closing_price, l.closing_ppm2, l.closed_at,\n       l.location AS location\nFROM listings_closed_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL\n  AND $__timeFilter(l.closed_at)\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])",
+          "rawSql": "SELECT l.latitude, l.longitude, l.title, l.url,\n       l.closing_price, l.closing_ppm2, l.closed_at,\n       l.location AS location\nFROM listings_closed_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\nWHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL\n  AND $__timeFilter(l.closed_at)\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])",
           "refId": "A"
         }
       ],
@@ -861,7 +861,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT l.title, l.url, l.closing_price, l.closing_ppm2, l.closed_at,\n       l.latitude, l.longitude\nFROM listings_closed_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nWHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL\n  AND $__timeFilter(l.closed_at)\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nORDER BY l.closed_at DESC\nLIMIT 100",
+          "rawSql": "SELECT l.title, l.url, l.closing_price, l.closing_ppm2, l.closed_at,\n       l.latitude, l.longitude\nFROM listings_closed_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\nWHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL\n  AND $__timeFilter(l.closed_at)\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nORDER BY l.closed_at DESC\nLIMIT 100",
           "refId": "A"
         }
       ],
@@ -935,7 +935,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT CASE WHEN CASE WHEN lc.opening_price > 0\n            THEN round((l.closing_price - lc.opening_price) / lc.opening_price * 100)::int END IS NULL THEN '(unknown)'\n            WHEN CASE WHEN lc.opening_price > 0\n            THEN round((l.closing_price - lc.opening_price) / lc.opening_price * 100)::int END <= -20 THEN '-20 % or worse'\n            WHEN CASE WHEN lc.opening_price > 0\n            THEN round((l.closing_price - lc.opening_price) / lc.opening_price * 100)::int END <= -10 THEN '-10..-20 %'\n            WHEN CASE WHEN lc.opening_price > 0\n            THEN round((l.closing_price - lc.opening_price) / lc.opening_price * 100)::int END < 0 THEN '0..-10 %'\n            WHEN CASE WHEN lc.opening_price > 0\n            THEN round((l.closing_price - lc.opening_price) / lc.opening_price * 100)::int END = 0 THEN 'flat'\n            ELSE 'raised' END AS bucket,\n       count(*) AS exits\nFROM listings_closed_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ${min_lat:number}, ${max_lat:number}, ${min_lon:number}, ${max_lon:number}) l\nJOIN v_listing_lifecycle lc ON lc.article_id = l.article_id\nWHERE $__timeFilter(l.closed_at)\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nGROUP BY 1 ORDER BY 2 DESC",
+          "rawSql": "SELECT CASE WHEN CASE WHEN lc.opening_price > 0\n            THEN round((l.closing_price - lc.opening_price) / lc.opening_price * 100)::int END IS NULL THEN '(unknown)'\n            WHEN CASE WHEN lc.opening_price > 0\n            THEN round((l.closing_price - lc.opening_price) / lc.opening_price * 100)::int END <= -20 THEN '-20 % or worse'\n            WHEN CASE WHEN lc.opening_price > 0\n            THEN round((l.closing_price - lc.opening_price) / lc.opening_price * 100)::int END <= -10 THEN '-10..-20 %'\n            WHEN CASE WHEN lc.opening_price > 0\n            THEN round((l.closing_price - lc.opening_price) / lc.opening_price * 100)::int END < 0 THEN '0..-10 %'\n            WHEN CASE WHEN lc.opening_price > 0\n            THEN round((l.closing_price - lc.opening_price) / lc.opening_price * 100)::int END = 0 THEN 'flat'\n            ELSE 'raised' END AS bucket,\n       count(*) AS exits\nFROM listings_closed_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\nJOIN v_listing_lifecycle lc ON lc.article_id = l.article_id\nWHERE $__timeFilter(l.closed_at)\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nGROUP BY 1 ORDER BY 2 DESC",
           "refId": "A"
         }
       ],
@@ -1103,6 +1103,29 @@
       },
       {
         "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "postgres",
+          "uid": "olx-postgres"
+        },
+        "definition": "SELECT d AS __value, d AS __text FROM (\n  SELECT COALESCE(NULLIF(location, ''), '(unmapped)') AS d FROM listings WHERE latitude IS NOT NULL\n  UNION ALL SELECT '(no pin)'\n) s GROUP BY d ORDER BY d",
+        "includeAll": true,
+        "label": "Neighborhood",
+        "multi": true,
+        "name": "neighborhood",
+        "options": [],
+        "query": "SELECT d AS __value, d AS __text FROM (\n  SELECT COALESCE(NULLIF(location, ''), '(unmapped)') AS d FROM listings WHERE latitude IS NOT NULL\n  UNION ALL SELECT '(no pin)'\n) s GROUP BY d ORDER BY d",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
           "value": "0",
           "selected": false,
           "text": "0"
@@ -1120,50 +1143,6 @@
         },
         "label": "Max m²",
         "name": "max_sqm",
-        "skipUrlSync": false,
-        "type": "textbox"
-      },
-      {
-        "current": {
-          "value": "42.4",
-          "selected": false,
-          "text": "42.4"
-        },
-        "label": "Min lat",
-        "name": "min_lat",
-        "skipUrlSync": false,
-        "type": "textbox"
-      },
-      {
-        "current": {
-          "value": "46.4",
-          "selected": false,
-          "text": "46.4"
-        },
-        "label": "Max lat",
-        "name": "max_lat",
-        "skipUrlSync": false,
-        "type": "textbox"
-      },
-      {
-        "current": {
-          "value": "15.5",
-          "selected": false,
-          "text": "15.5"
-        },
-        "label": "Min lon",
-        "name": "min_lon",
-        "skipUrlSync": false,
-        "type": "textbox"
-      },
-      {
-        "current": {
-          "value": "19.6",
-          "selected": false,
-          "text": "19.6"
-        },
-        "label": "Max lon",
-        "name": "max_lon",
         "skipUrlSync": false,
         "type": "textbox"
       }
