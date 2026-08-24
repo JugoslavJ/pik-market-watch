@@ -77,7 +77,7 @@ fi
 stamp=$(date +%Y%m%d-%H%M%S)
 cp "$incoming" "$BACKUP_DIR/olx-sync-$stamp.dump"
 ls -1t "$BACKUP_DIR"/olx-sync-*.dump 2>/dev/null | tail -n +4 | xargs -r rm -f
-prev=$(ls -1t "$BACKUP_DIR"/olx-sync-*.dump 2>/dev/null | sed -n 2p || :)
+prev=$(ls -1t "$BACKUP_DIR"/olx-sync-*.dump 2>/dev/null | grep -v 'olx-sync-incoming' | sed -n 2p || :)
 
 if docker compose ps --status running scraper 2>/dev/null | grep -q scraper; then
   was_running=1
@@ -105,6 +105,11 @@ build_toc() {
        # everything) - skip the filter when there is nothing to exclude
        cp /tmp/toc.all '$2'
      fi
+     # schema-level entries carry the source schema's owner (ALTER ... OWNER
+     # TO <bootstrap admin>) and cannot be replayed by $app_user; the reset
+     # block already created the schema with the right owner and grants
+     grep -ve 'SCHEMA - public' -e 'COMMENT - SCHEMA' -e 'ACL - SCHEMA' '$2' > '$2.f' || :
+     mv '$2.f' '$2'
      test -s '$2' && grep -q 'TABLE DATA public listings' '$2'
   "
 }
@@ -114,10 +119,13 @@ if ! build_toc /backups/olx-sync-incoming.dump /tmp/toc.use; then
   exit 1
 fi
 # Replace the whole public schema (see header). Runs as the bootstrap
-# superuser: it owns the schema itself, which $app_user does not.
+# superuser: it owns the schema itself, which $app_user does not. Ownership is
+# transferred to $app_user afterwards - the dump carries schema-level entries
+# (COMMENT ON SCHEMA, schema ACLs) that only the owner may execute.
 if ! docker compose exec -T db psql -U "$boot_user" -d olx -q -c "
        DROP SCHEMA public CASCADE;
        CREATE SCHEMA public;
+       ALTER SCHEMA public OWNER TO \"$app_user\";
        GRANT ALL ON SCHEMA public TO \"$app_user\";
        GRANT USAGE ON SCHEMA public TO \"$reader_user\";"; then
   echo "RESTORE_ERROR: could not reset the public schema - database unchanged" >&2
