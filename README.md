@@ -81,7 +81,7 @@ Scraper-only tuning (set in `docker-compose.yml`'s `environment:` block): `MAX_P
 | `saved_searches` | Watched searches + per-run stats (count, median ppm², new/drop counts) + free-form `category` label for the dashboard filter |
 | `search_results` | Which articles each search returned (refreshed every run) |
 | `scrape_runs` | Run observability: status, pages, cards, error |
-| `neighborhoods` | Banja Luka district polygons (flattened lon/lat rings); `neighborhood_of(lat, lon)` ray-casts a pin to a district name, stored into `listings.location` on enrichment — seeds re-applied on every startup, tweak bounds in `db/init/11-neighborhoods.sql` |
+| `neighborhoods` | 23 Banja Luka districts as polygon rings (flattened lon/lat); `neighborhood_of(lat, lon)` ray-casts a pin to a district name, stored into `listings.location` on enrichment. Outer settlements use real OSM naselje boundaries (partially mapped — rings implicitly closed, so a straight chord spans each unmapped stretch); urban MJ districts (Centar, Obilicevo, Starcevica, …) use hand-tuned rectangles because OSM has no MJ boundaries. Seeds re-applied on every startup — tweak in `db/init/11-neighborhoods.sql`, then re-run its backfill UPDATE unguarded to re-label stored rows |
 | `v_active_listings` | View: anything seen by a scrape within 14 days |
 | `v_listing_lifecycle` | View: one row per listing — opening vs closing price/ppm², change count, days listed, category |
 | `v_market_daily` | View: per-day new/closed counts and estimated live inventory |
