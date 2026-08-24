@@ -7,9 +7,9 @@
 #   db-backup : nightly pg_dump + Grafana-state sidecar into ./backups
 #
 #   scraper : Node, talks to olx.ba's public JSON API (fetch, no browser) —
-#             behind profile "scrape". Runs on the HOME machine by convention;
-#             the API also answered anonymous probes from datacenter IPs, so
-#             relocating it next to the db is safe to try. One-off run:
+#             behind profile "scrape". Runs on the HOME machine: Cloudflare
+#             403-challenges the API from datacenter IPs too (confirmed from
+#             OCI via bare curl). One-off run:
 #               docker compose --profile scrape run --rm scraper node src/index.js --once
 # ─────────────────────────────────────────────────────────────────────────────
 

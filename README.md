@@ -19,7 +19,7 @@ HOME MACHINE (residential IP)                    OCI INSTANCE (datacenter IP)
         ▲ schema auto-initialized from db/init/*.sql (both sides)
 ```
 
-- **scraper** rewrites each configured olx.ba search URL into the site's JSON search endpoint (`/api/search`; filter params pass through 1:1), pages the results with plain `fetch()`, then upserts listings and appends price history into Postgres. Map pins, publish dates, m²/rooms labels and seller type already ride along with every search result; anything still missing (characteristics, view counters) is filled from `/api/listings/<id>`. No browser, no tokens — anonymous reads only. It lives behind the compose profile **`scrape`** and can run anywhere the API answers (home machine by convention; datacenter IPs passed our probes). Results reach the instance via `scripts/sync-to-instance.ps1`.
+- **scraper** rewrites each configured olx.ba search URL into the site's JSON search endpoint (`/api/search`; filter params pass through 1:1), pages the results with plain `fetch()`, then upserts listings and appends price history into Postgres. Map pins, publish dates, m²/rooms labels and seller type already ride along with every search result; anything still missing (characteristics, view counters) is filled from `/api/listings/<id>`. No browser, no tokens — anonymous reads only. It lives behind the compose profile **`scrape`** and must run where the API answers: the home machine (OCI's datacenter IP gets 403-challenged — probed). Results reach the instance via `scripts/sync-to-instance.ps1`.
 - **db** holds all state; the schema mirrors the extension's IndexedDB stores.
 - **grafana** ships with a provisioned Postgres datasource and two prebuilt dashboards (**Market Overview**, **Exits & Price Endings**). It serves **HTTPS** with a self-signed certificate (scripts/generate-grafana-cert.sh) and queries Postgres through a **read-only role**.
 - **db-backup** produces nightly dumps into `./backups/`.
@@ -193,11 +193,12 @@ Manual out-of-band dump: `docker compose exec db pg_dump -U olx -Fc olx > manual
 
 ### Scraping from home (when Cloudflare blocks the instance)
 
-The HTML pages behind Cloudflare used to hard-block datacenter IPs (Oracle
-included); the JSON API has been answering anonymous probes from such IPs
-fine so far — but that can change any day. If instance-side scraping starts
-failing (`scrape_runs.status = 'error'`, *"API page 1 returned 0 listings…"*),
-fall back to running the scraper on a residential machine and syncing up:
+Cloudflare 403-challenges olx.ba from datacenter IPs (Oracle included) —
+verified for the JSON API itself, not just the HTML pages: a bare curl from
+this instance returns the *"Just a moment…"* interstitial. Residential IPs
+pass anonymously, so the scraper belongs HERE (home machine); if it ever
+starts failing at home too (`scrape_runs.status = 'error'`, *"API page 1
+returned 0 listings…"*), re-probe before assuming anything. Sync results up:
 
 1. **One-time setup** — on the home PC:
    ```powershell
@@ -226,10 +227,11 @@ fall back to running the scraper on a residential machine and syncing up:
    timers → Important Wake Timers Only* (set it for battery too). Unattended
    progress is appended to `logs/sync.log`.
 
-The instance runs **no scraper by default**: the service sits behind the compose
-profile `scrape`, active only where `COMPOSE_PROFILES=scrape` is set. The
-browserless API-mode image is small (~200 MB), so enabling it instance-side
-costs almost nothing — flip that one line in the instance's `.env` and redeploy.
+The instance runs **no scraper**: the service sits behind the compose profile
+`scrape`, active only where `COMPOSE_PROFILES=scrape` is set — leave it unset
+here. Want to retry instance-side scraping some day? Re-run the curl probe
+from the instance first and only flip the line if it answers `HTTP 200 …
+application/json` instead of the challenge page.
 
 ### Detail-page backfill (map pins + floor area)
 
