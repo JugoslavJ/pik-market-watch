@@ -1540,7 +1540,9 @@
           }
         ],
         "skipUrlSync": false,
-        "type": "custom"
+        "type": "custom",
+        "query": "sell,rent",
+        "sort": 0
       },
       {
         "current": {
@@ -1562,12 +1564,12 @@
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
-        "sort": 1,
+        "sort": 2,
         "type": "query"
       },
       {
         "current": {
-          "value": 0,
+          "value": "0",
           "selected": false,
           "text": "0"
         },
@@ -1578,7 +1580,7 @@
       },
       {
         "current": {
-          "value": 99999,
+          "value": "99999",
           "selected": false,
           "text": "99999"
         },
@@ -1589,7 +1591,7 @@
       },
       {
         "current": {
-          "value": 42.4,
+          "value": "42.4",
           "selected": false,
           "text": "42.4"
         },
@@ -1600,7 +1602,7 @@
       },
       {
         "current": {
-          "value": 46.4,
+          "value": "46.4",
           "selected": false,
           "text": "46.4"
         },
@@ -1611,7 +1613,7 @@
       },
       {
         "current": {
-          "value": 15.5,
+          "value": "15.5",
           "selected": false,
           "text": "15.5"
         },
@@ -1622,7 +1624,7 @@
       },
       {
         "current": {
-          "value": 19.6,
+          "value": "19.6",
           "selected": false,
           "text": "19.6"
         },
