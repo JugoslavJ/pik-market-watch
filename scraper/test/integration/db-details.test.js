@@ -35,7 +35,8 @@ needsDb('enrichListings persists every detail fact and stamps the visit', async 
   await seed(7001);
   await db.enrichListings([{
     articleId: 7001, latitude: 44.812345, longitude: 17.198765, sqm: 40,
-    publishedAt: new Date('2025-03-01T10:30:00Z'), sellerType: 'shop',
+    publishedAt: new Date('2025-03-01T10:30:00Z'),
+    renewedAt: new Date('2025-06-15T08:00:00Z'), sellerType: 'shop',
     roomsDetail: 'Dvosoban', bathrooms: 2, floorNum: -1, floorsTotal: 6,
     unitLevels: 2, heating: 'Centralno (gradsko)', furnished: true,
     condition: 'Novogradnja', parking: true, garage: false, elevator: true,
@@ -45,6 +46,7 @@ needsDb('enrichListings persists every detail fact and stamps the visit', async 
   const r = await rowOf(7001);
   assert.equal(r.latitude, 44.812345);
   assert.deepEqual(r.published_at, new Date('2025-03-01T10:30:00Z'));
+  assert.deepEqual(r.renewed_at, new Date('2025-06-15T08:00:00Z'));
   assert.equal(r.seller_type, 'shop');
   assert.equal(r.rooms_detail, 'Dvosoban');
   assert.equal(r.bathrooms, 2);
@@ -68,18 +70,21 @@ needsDb('enrichListings persists every detail fact and stamps the visit', async 
   assert.equal(r.ppm2, 2500);
 });
 
-needsDb('scalars are first-wins; characteristics merge; visit re-stamped', async () => {
+needsDb('scalars are first-wins; renewed_at moves forward; characteristics merge', async () => {
   await seed(7002);
   await db.enrichListings([{ articleId: 7002, heating: 'Struja',
                              publishedAt: new Date('2024-01-01T00:00:00Z'),
+                             renewedAt: new Date('2025-01-01T00:00:00Z'),
                              views: 100, characteristics: { kvadrata: 55 } }]);
   const stampedOnce = (await rowOf(7002)).details_fetched_at;
   await db.enrichListings([{ articleId: 7002, heating: 'Plin',
                              publishedAt: new Date('2026-08-21T15:09:00Z'),
+                             renewedAt: new Date('2025-06-01T00:00:00Z'),
                              views: 9999, characteristics: { lift: 'Da' } }]);
   const r = await rowOf(7002);
   assert.equal(r.heating, 'Struja');                       // never overwritten
   assert.deepEqual(r.published_at, new Date('2024-01-01T00:00:00Z'));
+  assert.deepEqual(r.renewed_at, new Date('2025-06-01T00:00:00Z')); // moved FORWARD
   assert.equal(r.views, 100);
   assert.deepEqual(r.characteristics, { kvadrata: 55, lift: 'Da' });   // merged
   assert.ok(r.details_fetched_at.getTime() >= stampedOnce.getTime());

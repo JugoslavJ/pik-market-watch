@@ -146,7 +146,7 @@ async function scrapeSearch(db, search, cfg, log) {
         rows.set(p.id, {
           articleId: p.id,
           latitude: c.latitude, longitude: c.longitude,
-          sqm: c.sqm, publishedAt: c.publishedAt, sellerType: c.sellerType,
+          sqm: c.sqm, renewedAt: c.renewedAt, sellerType: c.sellerType,
           apiStatus: c.apiStatus,
         });
       }

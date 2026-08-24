@@ -77,16 +77,22 @@ class Db {
             `UPDATE listings SET url = $2, title = $3, sqm = $4, rooms = $5,
                     price = $6, price_text = $7, ppm2 = $8, is_rent = $9, last_seen = now(),
                     closed_at = NULL, closing_price = NULL, closing_ppm2 = NULL,
-                    closing_category = NULL
+                    closing_category = NULL,
+                    -- Day renewed moves monotonically forward: GREATEST ignores
+                    -- NULLs on both sides, so a card without a stamp never erases
+                    -- an earlier one and stamps never regress.
+                    renewed_at = GREATEST(renewed_at, $10::timestamptz)
               WHERE article_id = $1`,
-            [id, card.url, card.title, card.sqm, card.rooms, price, card.priceText, ppm2, card.isRent]);
+            [id, card.url, card.title, card.sqm, card.rooms, price, card.priceText, ppm2,
+             card.isRent, card.renewedAt ?? null]);
         } else {
           await client.query(
             `INSERT INTO listings
                (article_id, url, title, sqm, rooms, price, price_text, ppm2, is_rent,
-                first_seen, last_seen)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), now())`,
-            [id, card.url, card.title, card.sqm, card.rooms, price, card.priceText, ppm2, card.isRent]);
+                first_seen, last_seen, renewed_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), now(), $10)`,
+            [id, card.url, card.title, card.sqm, card.rooms, price, card.priceText, ppm2,
+             card.isRent, card.renewedAt ?? null]);
           await client.query(
             'INSERT INTO price_history (article_id, price, ppm2) VALUES ($1, $2, $3)',
             [id, price, ppm2]);
@@ -245,7 +251,8 @@ class Db {
    * pending-detail / fair-share scheduling queries).
    *
    * @param {Array<{articleId:number, latitude:?number, longitude:?number,
-   *   sqm:?number, publishedAt:?Date, sellerType:?string, roomsDetail:?string,
+   *   sqm:?number, publishedAt:?Date, renewedAt:?Date, sellerType:?string,
+   *   roomsDetail:?string,
    *   bathrooms:?number, floorNum:?number, floorsTotal:?number,
    *   unitLevels:?number, heating:?string, furnished:?boolean,
    *   condition:?string, parking:?boolean, garage:?boolean, elevator:?boolean,
@@ -291,6 +298,9 @@ class Db {
              -- server-side lifecycle state and OLX's own price history.
              api_status         = COALESCE($24::text, api_status),
              api_price_history  = COALESCE($25::jsonb, api_price_history),
+             -- Day renewed: monotonic (GREATEST ignores NULLs), so refreshes
+             -- move it forward and stamp-less passes never erase history.
+             renewed_at         = GREATEST(renewed_at, $26::timestamptz),
              -- Scheduling stamps: the detail page counts as visited and the
              -- row as enrichment-offered, even when nothing new was learned.
              details_fetched_at           = now(),
@@ -305,7 +315,8 @@ class Db {
            r.orientation ?? null, r.views ?? null, r.favorites ?? null,
            JSON.stringify(r.characteristics ?? {}),
            r.apiStatus ?? null,
-           r.apiPriceHistory ? JSON.stringify(r.apiPriceHistory) : null]);
+           r.apiPriceHistory ? JSON.stringify(r.apiPriceHistory) : null,
+           r.renewedAt ?? null]);
       }
     });
   }

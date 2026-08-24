@@ -6,9 +6,10 @@
 // Search-item fields consumed (media type olx.v3):
 //   id, title, price, display_price, listing_type ('sell'|'rent', …),
 //   special_labels: [{label:'Kvadrata', value}, {label:'Broj Soba', value}],
-//   location:{lat,lon}, date (unix renewal/bump stamp), user_type, status
+//   location:{lat,lon}, date (unix renewal/bump stamp → renewedAt),
+//   user_type, status
 // Listing-detail adds: attributes[] ({attr_code, value, …}), views, favorites,
-//   created_at (true publish time), price_history[], user.type
+//   created_at (true publish time → publishedAt), price_history[], user.type
 // The coercion helpers and the attr_code→column handlers below map those
 // payloads to typed columns.
 
@@ -173,7 +174,11 @@ function parseSearchItem(item) {
   return {
     articleId: id, title, url, sqm, rooms, price, priceText, ppm2, isRent,
     ...pinOf(item.location),
-    publishedAt: Number.isFinite(Number(item.date))
+    // Search cards only carry the renewal/bump stamp (`date`), never the true
+    // creation time — that lives solely on the ad's own endpoint. Emitted as
+    // renewedAt so saveCards() can refresh it every cycle without ever
+    // polluting published_at (day created).
+    renewedAt: Number.isFinite(Number(item.date))
       ? new Date(Number(item.date) * 1000) : null,
     sellerType: SELLER_TYPES.has(item.user_type) ? item.user_type : null,
     apiStatus: typeof item.status === 'string' ? item.status : null,
@@ -203,8 +208,9 @@ function parseSearchPage(payload) {
 
 /**
  * Full listing payload → one db.enrichListings() row (any field may be null).
- * created_at is the TRUE original publish time (date is the renewal bump);
- * first-wins SQL semantics make passing both safe.
+ * created_at is the TRUE original publish time (day created → publishedAt);
+ * date is the renewal bump (day renewed → renewedAt). First-wins SQL
+ * semantics on published_at make repeated passes safe.
  */
 function parseListingDetail(json, fallbackId) {
   if (!json || typeof json !== 'object') return null;
@@ -217,9 +223,9 @@ function parseListingDetail(json, fallbackId) {
     ...pinOf(json.location),
     sqm: null,
     publishedAt: Number.isFinite(Number(json.created_at))
-      ? new Date(Number(json.created_at) * 1000)
-      : Number.isFinite(Number(json.date))
-        ? new Date(Number(json.date) * 1000) : null,
+      ? new Date(Number(json.created_at) * 1000) : null,
+    renewedAt: Number.isFinite(Number(json.date))
+      ? new Date(Number(json.date) * 1000) : null,
     sellerType: json.user && SELLER_TYPES.has(json.user.type) ? json.user.type : null,
     roomsDetail: null, bathrooms: null, floorNum: null, floorsTotal: null,
     unitLevels: null, heating: null, furnished: null, condition: null,

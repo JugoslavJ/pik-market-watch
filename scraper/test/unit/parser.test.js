@@ -59,6 +59,10 @@ test('search item: priced sale maps price/m²/rooms/ppm²/pin/seller', () => {
   assert.equal(card.apiStatus, 'active');
   assert.equal(card.latitude, 43.8573271);
   assert.equal(card.longitude, 18.4035739);
+  // Search cards carry only the renewal stamp — it must land on renewedAt,
+  // never be passed off as the creation date:
+  assert.deepEqual(card.renewedAt, new Date(1787531183 * 1000));
+  assert.equal(card.publishedAt, undefined);
 });
 
 test('search item: "Na upit" (price 0) stays unpriced, ppm² null, no pin', () => {
@@ -149,6 +153,7 @@ test('detail: attributes[] feed typed columns and characteristics', () => {
   assert.equal(d.sellerType, 'shop');
   assert.equal(d.apiStatus, 'active');
   assert.deepEqual(d.publishedAt, new Date(1752875036 * 1000));  // created_at wins
+  assert.deepEqual(d.renewedAt, new Date(1787527805 * 1000));    // date = renewal bump
   assert.equal(d.characteristics['exotic-unknown-code'], 'kept-raw');
   assert.equal(d.apiPriceHistory.length, 2);
   assert.deepEqual(d.apiPriceHistory[0],
@@ -162,6 +167,8 @@ test('detail: empty/garbage payload tolerated', () => {
   assert.equal(d.sqm, null);
   assert.deepEqual(d.characteristics, {});
   assert.equal(d.apiPriceHistory, null);
+  assert.equal(d.publishedAt, null);
+  assert.equal(d.renewedAt, null);
 });
 
 // ── extractArticleId (unchanged contract) ────────────────────────────────────
