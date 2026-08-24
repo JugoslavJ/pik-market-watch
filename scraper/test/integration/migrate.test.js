@@ -37,11 +37,11 @@ needsDb('migrations: fresh database applies all files; second pass is a no-op', 
   const pool = new Pool({ connectionString: await recreateDb('mig_fresh') });
   await applyMigrations(pool, FULL_DIR, log);
   assert.equal(await fnCount(pool), 2);
-  assert.equal(await recorded(pool), 6);          // 01…06
+  assert.equal(await recorded(pool), 7);          // 01…07
 
   await applyMigrations(pool, FULL_DIR, log);           // second boot
   assert.equal(await fnCount(pool), 2);
-  assert.equal(await recorded(pool), 6);
+  assert.equal(await recorded(pool), 7);
 
   // Dashboard panel query runs through the freshly created function:
   const r = await pool.query(
@@ -68,7 +68,7 @@ needsDb('migrations: legacy database (hand-applied 01+02) is upgraded safely', a
   // Upgrade against the full set:
   await applyMigrations(pool, FULL_DIR, log);
   assert.equal(await fnCount(pool), 2);
-  assert.equal(await recorded(pool), 6);
+  assert.equal(await recorded(pool), 7);
 
   // Old data remains queryable through the dashboard's exact filter call,
   // and the upgrade added the closure columns:

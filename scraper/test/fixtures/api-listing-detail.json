@@ -1,0 +1,328 @@
+{
+  "id": 69441462,
+  "type": "single",
+  "views": 37194,
+  "title": "prodaje se stan namjesten i sa garazom",
+  "slug": "prodaje-se-stan-namjesten-i-sa-garazom",
+  "short_description": null,
+  "additional": {
+    "description": "prodaje se stan namjesten i sa garao<br> porsine 38 m2 .Stan je uknjizen i nalazi se na preljepoj lokaciji",
+    "created_at": 1752875036,
+    "updated_at": 1752875820
+  },
+  "user": {
+    "id": 504835,
+    "type": "shop",
+    "username": "andjelkoprosa",
+    "avatar": "",
+    "medals": [
+      {
+        "type": "years",
+        "text": "Medalja za više od 10 godina na PIK.ba",
+        "value": 13,
+        "url": "https://d4n0y8dshd77z.cloudfront.net/assets/medals/duze_od_10.png"
+      },
+      {
+        "type": "verification",
+        "text": "Korisnik je verifikovao telefon i email",
+        "url": "https://d4n0y8dshd77z.cloudfront.net/assets/medals/verifikovan_broj_ili_email.png"
+      },
+      {
+        "type": "delivery",
+        "text": "Korisnik ima uspjesno realizovanih 15 PIK brzih dostava",
+        "value": 15,
+        "url": "https://d4n0y8dshd77z.cloudfront.net/assets/medals/dostava.png"
+      }
+    ],
+    "delivery_enabled": true,
+    "settings": {
+      "privacy": {
+        "allow_comments": true,
+        "allow_view_phone": true,
+        "allow_private_messages": true
+      }
+    },
+    "avg_response_time": 269,
+    "phone_verified": true,
+    "location": {
+      "id": 79,
+      "name": "Banja Luka",
+      "location": {
+        "lat": "44.76995369956578",
+        "lon": "17.189762566017492"
+      },
+      "canton_id": 11
+    }
+  },
+  "show_price": true,
+  "price": 266000,
+  "display_price": "266.000 KM",
+  "regular_price": null,
+  "has_discount": false,
+  "has_listing_discount": false,
+  "has_ecommerce_discount": false,
+  "price_history": [
+    {
+      "price": 246000,
+      "created_at": 1782389022
+    },
+    {
+      "price": 236000,
+      "created_at": 1767000377
+    },
+    {
+      "price": 230000,
+      "created_at": 1764931837
+    }
+  ],
+  "listing_type": "sell",
+  "price_by_agreement": false,
+  "visible": true,
+  "quantity": 1,
+  "location": {
+    "lat": 44.76995369956578,
+    "lon": 17.189762566017492
+  },
+  "feedbacks": 0,
+  "questions": 0,
+  "status": "active",
+  "available": true,
+  "state": "none",
+  "shipping": "no_shipping",
+  "shipping_available": false,
+  "free_delivery": false,
+  "sponsored": 2,
+  "highlighted": null,
+  "urgent": null,
+  "exchange_for": null,
+  "attributes": [
+    {
+      "id": 7257,
+      "type": "string",
+      "value": "Novogradnja",
+      "attr_code": "stanje",
+      "name": "Stanje",
+      "required": true,
+      "group_name": null,
+      "group_order": null,
+      "order": 0
+    },
+    {
+      "id": 7012,
+      "type": "string",
+      "value": "Prodaja",
+      "attr_code": "vrsta-oglasa",
+      "name": "Vrsta oglasa",
+      "required": true,
+      "group_name": null,
+      "group_order": null,
+      "order": 2
+    },
+    {
+      "id": 7402,
+      "type": "string",
+      "value": "Stan",
+      "attr_code": "vrsta-nekretnine",
+      "name": "Tip nekretnine",
+      "required": false,
+      "group_name": null,
+      "group_order": null,
+      "order": 19
+    },
+    {
+      "id": 107,
+      "type": "string",
+      "value": "Dvosoban (2)",
+      "attr_code": "broj-soba",
+      "name": "Broj soba",
+      "required": true,
+      "group_name": null,
+      "group_order": null,
+      "order": 10
+    },
+    {
+      "id": 102,
+      "type": "number",
+      "value": 4,
+      "attr_code": "kvadrata",
+      "name": "Kvadrata",
+      "required": true,
+      "group_name": null,
+      "group_order": null,
+      "order": 12
+    },
+    {
+      "id": 104,
+      "type": "string",
+      "value": "Namješten",
+      "attr_code": "namjesten",
+      "name": "Opremljenost",
+      "required": true,
+      "group_name": null,
+      "group_order": null,
+      "order": 14
+    },
+    {
+      "id": 500,
+      "type": "string",
+      "value": "1",
+      "attr_code": "sprat",
+      "name": "Sprat",
+      "required": true,
+      "group_name": null,
+      "group_order": null,
+      "order": 16
+    },
+    {
+      "id": 115,
+      "type": "string",
+      "value": "Centralno (gradsko)",
+      "attr_code": "vrsta-grijanja",
+      "name": "Vrsta grijanja",
+      "required": true,
+      "group_name": null,
+      "group_order": null,
+      "order": 18
+    },
+    {
+      "id": 502,
+      "type": "string",
+      "value": "2020+",
+      "attr_code": "godina-izgradnje",
+      "name": "Godina izgradnje",
+      "required": false,
+      "group_name": null,
+      "group_order": null,
+      "order": 20
+    },
+    {
+      "id": 7299,
+      "type": "string",
+      "value": "1",
+      "attr_code": "broj-kupatila",
+      "name": "Broj kupatila",
+      "required": false,
+      "group_name": null,
+      "group_order": null,
+      "order": 21
+    },
+    {
+      "id": 501,
+      "type": "string",
+      "value": "Sjeveroistok",
+      "attr_code": "primarna-orjentacija",
+      "name": "Primarna orjentacija",
+      "required": false,
+      "group_name": null,
+      "group_order": null,
+      "order": 23
+    },
+    {
+      "id": 4698,
+      "type": "string",
+      "value": "Parket",
+      "attr_code": "vrsta-poda",
+      "name": "Vrsta poda",
+      "required": false,
+      "group_name": null,
+      "group_order": null,
+      "order": 24
+    },
+    {
+      "id": 3844,
+      "type": "number",
+      "value": 4,
+      "attr_code": "kvadratura-balkona",
+      "name": "Kvadratura balkona",
+      "required": false,
+      "group_name": null,
+      "group_order": null,
+      "order": 26
+    }
+  ],
+  "model_id": null,
+  "category_id": 23,
+  "categories_all": [
+    {
+      "id": 2,
+      "name": "Nekretnine",
+      "icon_url": "https://d4n0y8dshd77z.cloudfront.net/categories/2/nekretnine-20260709155019-631mDAXkey.webp",
+      "icon_background_color": null
+    },
+    {
+      "id": 23,
+      "name": "Stanovi i apartmani",
+      "icon_url": "https://d4n0y8dshd77z.cloudfront.net/categories/23/stanovi-i-apartmani-20260630133544-g8uLQwbA32.png",
+      "icon_background_color": null
+    }
+  ],
+  "image_masking": false,
+  "image_masking_status": "no",
+  "images_old": [],
+  "images": [
+    "https://d4n0y8dshd77z.cloudfront.net/listings/69441462/lg/img-1752875731-2c784ef62d8f.jpg",
+    "https://d4n0y8dshd77z.cloudfront.net/listings/69441462/lg/img-1752875288-c3c12e937236.jpg",
+    "https://d4n0y8dshd77z.cloudfront.net/listings/69441462/lg/img-1752875719-43659f3dd458.jpg",
+    "https://d4n0y8dshd77z.cloudfront.net/listings/69441462/lg/img-1752875729-c2d3109306f3.jpg",
+    "https://d4n0y8dshd77z.cloudfront.net/listings/69441462/lg/img-1752875723-9faceeeedf63.jpg",
+    "https://d4n0y8dshd77z.cloudfront.net/listings/69441462/lg/img-1752875726-766790c0c23f.jpg",
+    "https://d4n0y8dshd77z.cloudfront.net/listings/69441462/lg/img-1752875724-81fba5a926aa.jpg",
+    "https://d4n0y8dshd77z.cloudfront.net/listings/69441462/lg/img-1752875725-3b0b2f24967d.jpg",
+    "https://d4n0y8dshd77z.cloudfront.net/listings/69441462/lg/img-1752875726-e0b1a30f36dc.jpg",
+    "https://d4n0y8dshd77z.cloudfront.net/listings/69441462/lg/img-1752875729-e873145c54a3.jpg",
+    "https://d4n0y8dshd77z.cloudfront.net/listings/69441462/lg/img-1752875730-c71c8b50bf2b.jpg",
+    "https://d4n0y8dshd77z.cloudfront.net/listings/69441462/lg/img-1752875731-96e97df7e6c6.jpg",
+    "https://d4n0y8dshd77z.cloudfront.net/listings/69441462/lg/img-1752875725-3d2b19a6dd36.jpg",
+    "https://d4n0y8dshd77z.cloudfront.net/listings/69441462/lg/img-1752875728-13d309150fd4.jpg"
+  ],
+  "cities": [
+    {
+      "id": 79,
+      "name": "Banja Luka",
+      "location": {
+        "lat": "44.76995369956578",
+        "lon": "17.189762566017492"
+      },
+      "canton_id": 11
+    }
+  ],
+  "category": {
+    "id": 23,
+    "name": "Stanovi i apartmani",
+    "name_singular": "Stanovi i apartmani",
+    "slug": "stanovi-i-apartmani",
+    "parent_id": 2,
+    "order": 1,
+    "desktop_order": 0,
+    "top_category": false,
+    "highlighted": false,
+    "shipping_available": false,
+    "sensitive_content": false,
+    "post_option": null,
+    "show_price": true,
+    "show_brand": false,
+    "brand_required": false,
+    "model_required": false,
+    "has_models": false,
+    "show_condition": false,
+    "show_map": true,
+    "listing_fee": 190,
+    "booking_enabled": false,
+    "base_listing_price": 18,
+    "disclaimer": null,
+    "icon": "categories/23/stanovi-i-apartmani-20260630133544-g8uLQwbA32.png",
+    "icon_url": "https://d4n0y8dshd77z.cloudfront.net/categories/23/stanovi-i-apartmani-20260630133544-g8uLQwbA32.png",
+    "icon_background_color": null,
+    "show_stories": true
+  },
+  "brand": null,
+  "model": null,
+  "date": 1787527805,
+  "sku_number": null,
+  "created_at": 1752875036,
+  "premium_badges": [],
+  "ecommerce_badges": [],
+  "ecommerce_tags": [],
+  "ecommerce_discounts": [],
+  "ecommerce": false
+}

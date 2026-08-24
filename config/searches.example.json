@@ -3,12 +3,12 @@
     {
       "name": "Stanovi (example)",
       "category": "apartments",
-      "url": "https://www.olx.ba/pretraga?kat=16"
+      "url": "https://www.olx.ba/pretraga?category_id=23"
     },
     {
       "name": "Kuce i vikendice (example)",
       "category": "houses",
-      "url": "https://www.olx.ba/pretraga?kat=17"
+      "url": "https://www.olx.ba/pretraga?category_id=24"
     }
   ]
 }

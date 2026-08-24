@@ -6,10 +6,10 @@
 #             (scripts/generate-grafana-cert.sh)
 #   db-backup : nightly pg_dump + Grafana-state sidecar into ./backups
 #
-#   scraper : Node + Playwright headless Chromium — behind profile "scrape".
-#             Cloudflare blocks datacenter IPs, so it runs on the HOME machine
-#             only (its .env sets COMPOSE_PROFILES=scrape); results reach this
-#             stack via scripts/sync-to-instance.ps1. One-off run:
+#   scraper : Node, talks to olx.ba's public JSON API (fetch, no browser) —
+#             behind profile "scrape". Runs on the HOME machine by convention;
+#             the API also answered anonymous probes from datacenter IPs, so
+#             relocating it next to the db is safe to try. One-off run:
 #               docker compose --profile scrape run --rm scraper node src/index.js --once
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -54,9 +54,9 @@ services:
   scraper:
     build: ./scraper
     container_name: olx-scraper
-    profiles: ["scrape"]         # opt-in: home machine only — instance never builds/starts it
+    profiles: ["scrape"]         # opt-in: runs where you point COMPOSE_PROFILES at it
     restart: unless-stopped
-    init: true                   # proper signal handling + reaps chromium zombies
+    init: true                   # proper signal handling (cheap insurance)
     depends_on:
       db:
         condition: service_healthy
@@ -67,11 +67,9 @@ services:
       # policy, a finished one-shot container would be relaunched forever
       # (= endless scrape loop). For one-off runs use:
       #   docker compose run --rm scraper node src/index.js --once
-      HEADLESS: ${HEADLESS:-1}   # only 1 is supported: image ships headless-shell Chromium
     volumes:
       - ./config:/config:ro      # scraper reads /config/searches.json
       - ./db/init:/db/init:ro    # scraper applies db/init/*.sql on startup
-    shm_size: 512mb              # Chromium crashes with Docker's 64 MB default
     ports:
       - "127.0.0.1:9100:9100"   # health/status JSON endpoint
     healthcheck:
@@ -79,9 +77,9 @@ services:
       interval: 60s
       timeout: 10s
       retries: 3
-      start_period: 120s        # browser + DB warm-up before counting failures
-    mem_limit: 2g               # Chromium is the hungry one; raise if you add many searches
-    cpus: 1.5
+      start_period: 60s         # DB warm-up + first scrape cycle before counting failures
+    mem_limit: 512m             # plain HTTP client — a fraction of the old Chromium budget
+    cpus: 0.50
     logging: *logging
 
   grafana:

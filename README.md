@@ -2,7 +2,7 @@
 
 A Docker Compose stack that watches **olx.ba** real-estate searches, stores every listing and price change in PostgreSQL, and visualises the market in Grafana dashboards. The scraper runs at home (residential IP); a small server stack on Oracle Cloud serves the database and dashboards.
 
-It was reworked from the original **"OLX.ba Price per m²" Firefox extension** (v6.3 — preserved in git history, initial commit). The listing-parsing logic was ported verbatim, so results match exactly what the extension's panel showed.
+It was reworked from the original **"OLX.ba Price per m²" Firefox extension** (v6.3 — preserved in git history, initial commit); its card parser lived on verbatim through a Playwright era until the 2026 cutover to olx.ba's public JSON API, whose structured fields superseded DOM scraping entirely.
 
 ---
 
@@ -12,14 +12,14 @@ It was reworked from the original **"OLX.ba Price per m²" Firefox extension** (
 HOME MACHINE (residential IP)                    OCI INSTANCE (datacenter IP)
 ┌────────────────────────────────┐              ┌──────────────────────────────┐
 │ scraper — profile "scrape"     │   pg_dump    │ db   PostgreSQL 16           │
-│ Node 24 + Playwright           │───ssh + ───▶ │      volume: pgdata          │
-│ headless Chromium              │   restore    │ grafana   :3000 dashboards   │
+│ Node 24 · olx.ba JSON API      │───ssh + ───▶ │      volume: pgdata          │
+│ plain fetch(), no browser      │   restore    │ grafana   :3000 dashboards   │
 │ health/status JSON on :9100    │              │ db-backup  nightly dumps     │
 └────────────────────────────────┘              └──────────────────────────────┘
         ▲ schema auto-initialized from db/init/*.sql (both sides)
 ```
 
-- **scraper** opens each configured olx.ba search in a headless Chromium page, parses listing cards (logic ported 1:1 from the original extension's card parser), then upserts listings and appends price history into Postgres. It lives behind the compose profile **`scrape`** and normally runs on the home machine only — Cloudflare hard-blocks datacenter IPs like Oracle's. Its results reach the instance via `scripts/sync-to-instance.ps1`.
+- **scraper** rewrites each configured olx.ba search URL into the site's JSON search endpoint (`/api/search`; filter params pass through 1:1), pages the results with plain `fetch()`, then upserts listings and appends price history into Postgres. Map pins, publish dates, m²/rooms labels and seller type already ride along with every search result; anything still missing (characteristics, view counters) is filled from `/api/listings/<id>`. No browser, no tokens — anonymous reads only. It lives behind the compose profile **`scrape`** and can run anywhere the API answers (home machine by convention; datacenter IPs passed our probes). Results reach the instance via `scripts/sync-to-instance.ps1`.
 - **db** holds all state; the schema mirrors the extension's IndexedDB stores.
 - **grafana** ships with a provisioned Postgres datasource and two prebuilt dashboards (**Market Overview**, **Exits & Price Endings**). It serves **HTTPS** with a self-signed certificate (scripts/generate-grafana-cert.sh) and queries Postgres through a **read-only role**.
 - **db-backup** produces nightly dumps into `./backups/`.
@@ -60,6 +60,8 @@ Open olx.ba in your browser, filter a search the way you like (e.g. Stanovi → 
 
 Then restart the scraper: `docker compose restart scraper`. `name` and `category` are optional (derived from the URL / left empty if omitted).
 
+> Use current-style URLs (`category_id=23&cities=…`). Legacy `kat=` links are silently ignored by olx.ba's API — they would return the whole site — so the scraper refuses filterless URLs at startup.
+
 Categories are free-form labels for grouping kinds of real estate — apartments, houses, weekend homes, land, whatever you like. The dashboard's **Category** dropdown filters every panel, and a listing that appears in several categories is counted in each of them.
 
 ## Configuration reference (`.env`)
@@ -70,13 +72,13 @@ Categories are free-form labels for grouping kinds of real estate — apartments
 | `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD` | `admin` / required | Grafana login |
 | `SCRAPE_INTERVAL_MINUTES` | `720` | Minutes between scheduled scrapes |
 
-Scraper-only tuning (set in `docker-compose.yml`'s `environment:` block): `MAX_PAGES` (30), `CONCURRENCY` (3 pages in parallel), `PAGE_DELAY_MS` (1500), `NAV_TIMEOUT_MS`, `CARD_TIMEOUT_MS`, `HEADLESS=0` for debugging, `SEARCH_URLS="url1,url2"` instead of the JSON file.
+Scraper-only tuning (set in `docker-compose.yml`'s `environment:` block): `MAX_PAGES` (30 pages × `API_PER_PAGE`), `CONCURRENCY` (3 pages in parallel), `PAGE_DELAY_MS` (1500 ms between waves), `API_PER_PAGE` (40), `API_TIMEOUT_MS` (20000), `MAX_GEO_FETCHES` (25 `/api/listings` calls per run), `SEARCH_URLS="url1,url2"` instead of the JSON file.
 
 ## Database schema
 
 | Table | Mirrors | Contents |
 |---|---|---|
-| `listings` | `STORE_LISTINGS` | One row per article: title, url, sqm, rooms, price, ppm², is_rent, first/last seen. Ads gone from every search are closed automatically (`closed_at` + frozen `closing_price`/`closing_ppm2`/`closing_category`). Detail pages add `published_at`, `seller_type`, characteristics (rooms/bath/floor/heating/furnished/condition/parking/garage/elevator/year/orientation/plot m²), `views`/`favorites`, raw `characteristics` JSONB |
+| `listings` | `STORE_LISTINGS` | One row per article: title, url, sqm, rooms, price, ppm², is_rent, first/last seen. Ads gone from every search are closed automatically (`closed_at` + frozen `closing_price`/`closing_ppm2`/`closing_category`). Detail data adds `published_at`, `seller_type`, characteristics (rooms/bath/floor/heating/furnished/condition/parking/garage/elevator/year/orientation/plot m²), `views`/`favorites`, raw `characteristics` JSONB, plus raw API extras (`api_status`, `api_price_history`) |
 | `price_history` | `priceHistory[]` | Append-only snapshots; a row is added only when price/ppm² actually changed |
 | `saved_searches` | `STORE_SAVED` | Watched searches + per-run stats (count, median ppm², new/drop counts) + free-form `category` label for the dashboard filter |
 | `search_results` | `STORE_SEARCH` | Which articles each search returned (refreshed every run) |
@@ -99,14 +101,14 @@ Every scraping cycle ends with a closing pass: any listing that none of the conf
 
 ### Detail-page data (attributes beyond the search card)
 
-The scraper already visits each ad's detail page for map pins and missing m²; the same fetched HTML now also yields (see `05-listing-details.sql` and `parseDetail()`):
+Search results already carry map pins, m²/rooms labels, the renewal timestamp and the seller type; anything beyond that comes from the ad's JSON endpoint (`/api/listings/<id>` — see `05-listing-details.sql` / `07-api-extras.sql` and `parseListingDetail()`):
 
-- **Publish date** — from *Objavljen:* when shown, else the *Obnovljen:* renewal stamp; days-on-market figures are therefore lower-bound proxies.
-- **Seller type** — `shop` (PIK Shop / PIK Partner badge) vs `private`.
-- **Characteristics** — rooms, bathrooms, floor / total floors / unit levels, heating, furnished, condition, parking, garage, elevator, year built, plot m², orientation. Every `attr_code:value` pair the page exposes is also kept raw in the `characteristics` JSONB column, so nothing is lost if OLX renames codes.
-- **Counters** — views (`Pregledi:`); favorites only when the page exposes them.
+- **Publish date** — `created_at` is the true original publish time (`date` is the renewal bump); days-on-market figures stay lower-bound proxies for ads renewed before we first saw them.
+- **Seller type** — `shop` vs `private`, straight from `user.type`.
+- **Characteristics** — rooms, bathrooms, floor / total floors / unit levels, heating, furnished, condition, parking, garage, elevator, year built, plot m², orientation. Every `attr_code:value` pair the payload exposes is also kept raw in the `characteristics` JSONB column, so nothing is lost if OLX renames codes.
+- **Counters & extras** — views, favorites when exposed, plus the ad's server-side price history and lifecycle status stored raw (`api_price_history` / `api_status`) for cross-checking our own observations.
 
-Scalar columns are **first-wins** (a renewal date can never overwrite an earlier publish date) while the JSONB map merges on every visit. Backfill existing rows anytime with:
+Detail calls are budgeted per run (`MAX_GEO_FETCHES`) and made only for facts still missing, so steady-state cycles need almost none. Scalar columns are **first-wins** (a renewal date can never overwrite an earlier publish date) while the JSONB map merges on every fetch. Backfill existing rows anytime with:
 
 ```bash
 docker compose run --rm scraper node src/backfill-geo.js             # active listings
@@ -118,9 +120,11 @@ docker compose run --rm scraper node src/backfill-geo.js --all       # everythin
 ```bash
 cd scraper
 npm install                # once
-npm test                   # hermetic unit tests (parser, config keys, utils) — no services needed
+npm test                   # hermetic unit tests (payload mappers, config keys, utils) — no services needed
 npm run test:integration   # DB-backed tests; boots a throwaway Postgres container via Docker
 npm run lint:syntax        # node --check over every src file
+npm run fixtures           # refresh recorded live-API fixtures used by the mapper tests
+node scripts/check-api.js  # live no-DB probe of fetch→map path (handy inside Docker on Node-less hosts)
 ```
 
 The integration suite exercises the real SQL against a real database: the write
@@ -189,10 +193,11 @@ Manual out-of-band dump: `docker compose exec db pg_dump -U olx -Fc olx > manual
 
 ### Scraping from home (when Cloudflare blocks the instance)
 
-olx.ba sits behind a Cloudflare challenge that hard-blocks datacenter IPs
-(Oracle included) while passing residential connections. When the instance is
-blocked (`scrape_runs.status = 'error'`, *"page 1 returned 0 listing cards"*),
-run the scraper from a residential machine and sync the result up:
+The HTML pages behind Cloudflare used to hard-block datacenter IPs (Oracle
+included); the JSON API has been answering anonymous probes from such IPs
+fine so far — but that can change any day. If instance-side scraping starts
+failing (`scrape_runs.status = 'error'`, *"API page 1 returned 0 listings…"*),
+fall back to running the scraper on a residential machine and syncing up:
 
 1. **One-time setup** — on the home PC:
    ```powershell
@@ -221,18 +226,17 @@ run the scraper from a residential machine and sync the result up:
    timers → Important Wake Timers Only* (set it for battery too). Unattended
    progress is appended to `logs/sync.log`.
 
-The instance runs **no scraper at all**: the service sits behind the compose
-profile `scrape`, which is active only on the home machine (its `.env` sets
-`COMPOSE_PROFILES=scrape`). Deploys therefore skip the ~400 MB Chromium build
-and the idle container's CPU/RAM stays free. If Oracle's IP is ever unblocked
-and you want instance-side scraping back, add that one line to the instance's
-`.env` and redeploy.
+The instance runs **no scraper by default**: the service sits behind the compose
+profile `scrape`, active only where `COMPOSE_PROFILES=scrape` is set. The
+browserless API-mode image is small (~200 MB), so enabling it instance-side
+costs almost nothing — flip that one line in the instance's `.env` and redeploy.
 
 ### Detail-page backfill (map pins + floor area)
 
-New listings get their map pin fetched automatically, and ads whose search
-card shows no m² (vikendice don't) get their floor area — and with it
-price-per-m² — from the ad's detail page. To fill in the existing stock
+New listings get their pin, dates and seller type straight from the search
+payload; anything still missing (m² for categories that never show it,
+characteristics, counters) comes from the ad's `/api/listings/<id>` endpoint.
+To fill in the existing stock
 (resumable — interrupted runs just start again where they left off):
 
 ```bash
@@ -267,7 +271,7 @@ Every push to `main` runs `.github/workflows/ci.yml` in two stages:
 The image is built **on the instance** — native CPU arch (no amd64/arm64
 mismatch with GitHub's runners), no container registry, no extra PAT secret.
 Thanks to layer caching a code-only change rebuilds in well under a minute;
-touching `package.json` or the Dockerfile re-downloads Chromium once (~400 MB).
+the browserless image rebuilds in seconds even when dependencies change.
 
 ### Required repo settings (Secrets and variables → Actions)
 
@@ -359,10 +363,10 @@ owns objects; it is not a superuser.
 
 ## Troubleshooting
 
-- **Zero cards scraped / 403-style blocks**: olx.ba may be throttling the datacenter-ish fingerprint. Raise `PAGE_DELAY_MS` (e.g. 4000) and lower `CONCURRENCY` to 1. Check http://localhost:9100 and the `scrape_runs` table for errors. (The image ships only Chromium's headless shell, so `HEADLESS=0` is not available in-container.)
+- **Zero listings / blocked requests**: olx.ba may throttle or challenge the client. The scraper paces itself (`PAGE_DELAY_MS`, `CONCURRENCY`, `MAX_GEO_FETCHES`) and backs off when `x-ratelimit-remaining` runs low; if a cycle still fails, check http://localhost:9100 and the `scrape_runs` table, then run `node scripts/check-api.js` inside the image to see exactly what olx.ba returns right now.
   - Two built-in guards protect you here: a boot cycle is **skipped** when another run finished within `SCRAPE_MIN_GAP_MINUTES` (default 45 — rapid redeploys used to fire full scans each time), and a cycle that returns **zero listings everywhere skips its closing pass**, so throttling can never mass-close your catalog with bogus exit prices.
   - Recovery from a throttle is passive: keep intervals polite and wait — blocked IPs are usually unblocked within hours. Listings wrongly closed during such a window reopen automatically on their next sighting.
-- **Selector drift**: if OLX redesigns their markup, update the selectors in `scraper/src/parser.js` — they live in one place now. Detail-page characteristic codes (`attr_code:"…"`) drift the same way; unknown codes are still preserved raw in `listings.characteristics` (JSONB), so historical data survives even when a typed column stops being filled.
+- **Payload drift**: if OLX changes their JSON shape, fix the mappers in `scraper/src/parser.js` — they live in one place, and `npm run fixtures` re-records live payloads to test against. Unknown characteristic codes (`attr_code:"…"` equivalents) are still preserved raw in `listings.characteristics` (JSONB), so historical data survives even when a typed column stops being filled.
 - **“Recent scrape runs” shows category `(none)`**: run rows inherit their category from `saved_searches`, and that row used to be written only when a run *finished* — brand-new searches (and every attempt that failed before the first success) therefore appeared unclassified. The scraper now registers each search's name/category at run start, so this self-heals after `docker compose up -d --build scraper`. To label rows already sitting in the database without rebuilding:
 
   ```bash

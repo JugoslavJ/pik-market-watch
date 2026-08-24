@@ -50,17 +50,15 @@ module.exports = {
   normalizeSearchKey,                                         // stable per-search primary key
   intervalMinutes: num(process.env.SCRAPE_INTERVAL_MINUTES, 720),
   runOnce:         process.env.RUN_ONCE === '1' || process.argv.includes('--once'),
-  maxPages:        num(process.env.MAX_PAGES, 30),           // extension cap was 30
-  concurrency:     num(process.env.CONCURRENCY, 3),          // pages fetched in parallel
+  maxPages:        num(process.env.MAX_PAGES, 30),           // cap kept from the extension era (pages of `perPage`)
+  concurrency:     num(process.env.CONCURRENCY, 3),          // search pages fetched in parallel
   pageDelayMs:     num(process.env.PAGE_DELAY_MS, 1500),     // politeness gap between waves
-  navTimeoutMs:    num(process.env.NAV_TIMEOUT_MS, 45000),
-  cardTimeoutMs:   num(process.env.CARD_TIMEOUT_MS, 25000),  // extension fallback was 25 s
-  headless:        process.env.HEADLESS !== '0',
+  perPage:         num(process.env.API_PER_PAGE, 40),        // olx.ba UI default
+  apiTimeoutMs:    num(process.env.API_TIMEOUT_MS, 20000),   // per-request HTTP timeout
   healthPort:      num(process.env.HEALTH_PORT, 9100),
-  maxGeoFetches:   num(process.env.MAX_GEO_FETCHES, 25),     // ad-detail visits per run (was 50; lower footprint)
-  geoConcurrency:  num(process.env.GEO_CONCURRENCY, 2),      // parallel ad-detail fetches
+  maxGeoFetches:   num(process.env.MAX_GEO_FETCHES, 25),     // /api/listings detail calls per run
+  geoConcurrency:  num(process.env.GEO_CONCURRENCY, 2),      // parallel detail calls
   geoDelayMs:      num(process.env.GEO_DELAY_MS, 1200),      // politeness gap between batches
-  geoSettleMs:     num(process.env.GEO_SETTLE_MS, 2500),     // hydration wait on each ad page
   minRunGapMinutes: num(process.env.SCRAPE_MIN_GAP_MINUTES, 45), // skip boot cycle if a run finished this recently
 
   searches: loadSearches().map(s => {

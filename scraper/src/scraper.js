@@ -1,107 +1,99 @@
 'use strict';
-// Per-search scraping orchestration: pagination, dedupe, persistence.
-// Mirrors the extension's hidden-tab approach (background.js + content.js):
-// one browser page per search page, cards collected, deduped by URL, then
-// written to Postgres in a single transaction.
+// Per-search harvesting from olx.ba's public JSON API: pagination, dedupe,
+// persistence and API-driven enrichment. Successor of the Playwright page
+// renderer — same run lifecycle, closing-pass safety rules and politeness
+// pacing at a fraction of the cost (no browser; JSON instead of rendered DOM).
 
-const { collectCards, extractArticleId, extractGeo } = require('./parser');
-const { USER_AGENT, sleep, computeMedian } = require('./util');
+const {
+  fetchSearchPage, fetchListing, toApiSearchUrl, hasApiFilter, RATE_RESERVE,
+} = require('./api');
+const { parseSearchItem, parseListingDetail } = require('./parser');
+const { sleep, computeMedian } = require('./util');
 
-async function scrapePage(browser, url, cfg) {
-  const context = await browser.newContext({
-    viewport: { width: 1366, height: 900 },
-    userAgent: USER_AGENT,
-  });
-  try {
-    const page = await context.newPage();
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: cfg.navTimeoutMs });
-    try {
-      await page.waitForSelector('.content-wrap', { timeout: cfg.cardTimeoutMs });
-    } catch (_) { /* genuinely empty result page or slow site — collect what is there */ }
-    await page.waitForTimeout(1500);   // settle delay for late client-side rendering
-    return (await collectCards(page)) || [];
-  } finally {
-    await context.close().catch(() => {});
+async function scrapeSearch(db, search, cfg, log) {
+  // Canonical page-1 API URL for this search (pagination stripped, per_page set).
+  const base = toApiSearchUrl(search.url, cfg.perPage);
+  if (!hasApiFilter(base)) {
+    throw new Error(
+      `"${search.name}": URL carries no API-recognized filter (${base.search || '(empty query)'}). ` +
+      `Legacy kat= style params are silently IGNORED by olx.ba's API and would return the whole site. ` +
+      `Re-create the search on olx.ba and copy the new-style category_id/cities URL.`);
   }
-}
-
-// Ad DETAIL page → parseDetail() facts: map pin, floor area, plus publish
-// date, seller type, characteristics and view/favorite counters (search
-// cards carry none of those).
-async function scrapeGeo(browser, url, cfg) {
-  const context = await browser.newContext({
-    viewport: { width: 1366, height: 900 },
-    userAgent: USER_AGENT,
-  });
-  try {
-    const page = await context.newPage();
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: cfg.navTimeoutMs });
-    await page.waitForTimeout(cfg.geoSettleMs);   // let the Nuxt state / map hydrate
-    return (await extractGeo(page)) || { latitude: null, longitude: null };
-  } finally {
-    await context.close().catch(() => {});
-  }
-}
-
-async function scrapeSearch(browser, search, cfg, db, log) {
-  // Canonical page-1 URL for this search (pagination params stripped).
-  const base = new URL(search.url);
-  base.searchParams.delete('page');
-  base.searchParams.delete('olx_scrape');
 
   const runId = await db.startRun(search.searchKey);
   log(`▶ "${search.name}" started (run #${runId})`);
 
-  // Register the search identity (name/url/category) BEFORE scraping so the
-  // dashboard can classify this run while it is still 'running' — and even if
-  // it fails midway. Per-run stats are still only written on successful
-  // completion by upsertSavedSearch() below.
+  // Register the search identity BEFORE scraping so dashboards can classify
+  // this run while it is still 'running' — and even if it fails midway.
   await db.registerSavedSearch({
     searchKey: search.searchKey, name: search.name, url: base.href,
     category: search.category,
   });
 
-  const seen = new Set();
+  const seen = new Set();           // articleIds across pages (sponsored repeats)
   const allCards = [];
   let pagesDone = 0;
+  let lastPage = Infinity;          // refined from meta after page 1
+  let rateWarned = false;
 
   const accept = cards => {
     let fresh = 0;
     for (const c of cards || []) {
-      if (c.url && !seen.has(c.url)) { seen.add(c.url); allCards.push(c); fresh++; }
+      if (!seen.has(c.articleId)) { seen.add(c.articleId); allCards.push(c); fresh++; }
     }
     return fresh;
   };
 
-  try {
-    const fetchPage = async pageNo => {
-      const u = new URL(base.href);
-      if (pageNo > 1) u.searchParams.set('page', String(pageNo));
-      return scrapePage(browser, u.href, cfg);
-    };
+  // Responses advertise x-ratelimit-remaining; if a cycle ever burns down to
+  // the reserve, pause once and let the window recover instead of eating 429s.
+  const trackRate = (remaining, limit) => {
+    if (!rateWarned && Number.isFinite(remaining) && remaining >= 0 &&
+        remaining < RATE_RESERVE) {
+      rateWarned = true;
+      log(`⚠ rate budget low (${remaining}/${limit ?? '?'} left) — throttling this cycle`);
+      return true;
+    }
+    return false;
+  };
 
+  const fetchPage = async pageNo => {
+    const u = new URL(base.href);
+    u.searchParams.set('page', String(pageNo));
+    const r = await fetchSearchPage(u, cfg.apiTimeoutMs);
+    const lp = Number(r.meta.last_page);
+    if (Number.isFinite(lp) && lp > 0) lastPage = Math.min(lastPage, lp);
+    if (trackRate(r.remaining, r.limit)) await sleep(65000);
+    return r.items.map(parseSearchItem).filter(Boolean);
+  };
+
+  try {
     // Page 1 first and alone — fails fast if olx.ba starts blocking us.
     let cards = await fetchPage(1);
-    if (!cards.length) {              // one retry to rule out a transient blank page
+    if (!cards.length) {              // one retry to rule out a transient blank
       await sleep(2000);
       cards = await fetchPage(1);
     }
     if (!cards.length) {
-      // An empty page shell (bot-blocking / rate limiting) must never look
-      // like a successful "0 results" run: it would wipe this search's result
-      // links and let the closing pass freeze every listing. Fail loudly —
-      // failed runs keep their stale links, so nothing gets closed.
-      throw new Error('page 1 returned 0 listing cards after retry — likely throttled or blocked');
+      // An empty result must never look like a successful "0 listings" run:
+      // it would wipe this search's result links and let the closing pass
+      // freeze every listing. Fail loudly — failed runs keep stale links, so
+      // nothing gets closed.
+      throw new Error('API page 1 returned 0 listings after retry — blocked, throttled or payload shape changed?');
     }
     pagesDone = 1;
     accept(cards);
 
-    // Further pages in small concurrent waves (background.js used batches of
-    // 5). Stop when a wave adds nothing new (past the last page OLX repeats
-    // content) or when a page comes back empty.
-    for (let wave = 2; wave <= cfg.maxPages && cards.length > 0; wave += cfg.concurrency) {
+    // Further pages in small concurrent waves. Stop when a wave adds nothing
+    // new (past the end OLX repeats content), a page comes back empty, or the
+    // reported last_page falls behind the wave.
+    for (let wave = 2;
+         wave <= cfg.maxPages && wave <= lastPage && cards.length > 0;
+         wave += cfg.concurrency) {
       const pageNos = [];
-      for (let p = wave; p < wave + cfg.concurrency && p <= cfg.maxPages; p++) pageNos.push(p);
+      for (let p = wave;
+           p < wave + cfg.concurrency && p <= cfg.maxPages && p <= lastPage;
+           p++) pageNos.push(p);
+      if (!pageNos.length) break;
 
       const results = await Promise.all(pageNos.map(n => fetchPage(n).catch(() => [])));
       pagesDone += pageNos.length;
@@ -129,15 +121,14 @@ async function scrapeSearch(browser, search, cfg, db, log) {
       listingCount: allCards.length, median, newCount, dropCount,
     });
 
-    const ids = allCards.map(c => extractArticleId(c.url)).filter(Boolean).map(Number);
+    const ids = allCards.map(c => c.articleId).filter(Boolean);
     await db.refreshSearchResults(search.searchKey, ids);
 
-    // ── Detail-page enrichment ────────────────────────────────────────────────
-    // Search cards carry no coordinates, some categories no m² tag either, and
-    // none of the detail facts (publish date, seller type, characteristics,
-    // view counters); all of that lives on each ad's own page. Visiting only
-    // what's missing keeps runs cheap; every run converges older rows until
-    // none remain.
+    // ── Enrichment ───────────────────────────────────────────────────────────
+    // Search payloads already carry pins, dates, seller type and m² for free;
+    // /api/listings/<id> is consulted only for facts still missing. Same
+    // candidate logic and per-run cap as the detail-page era — every cycle
+    // converges older rows until none remain.
     let enrichedCount = 0;
     if (cfg.maxGeoFetches > 0 && ids.length) {
       const [unpinnedSeen, missingSqmSeen, missingDetailsSeen] = await Promise.all([
@@ -147,29 +138,61 @@ async function scrapeSearch(browser, search, cfg, db, log) {
       ]);
       const candidateIds = [...new Set(
         [...newIds, ...unpinnedSeen, ...missingSqmSeen, ...missingDetailsSeen])];
-      const byId = new Map(allCards.map(c => [Number(extractArticleId(c.url)), c]));
+      const byCard = new Map(allCards.map(c => [c.articleId, c]));
       const targets = candidateIds.slice(0, cfg.maxGeoFetches);
-      log(`⌖ detail-fetching ${targets.length}/${candidateIds.length} ` +
-          `listing(s) (${newIds.length} new, ${unpinnedSeen.length} unpinned, ` +
-          `${missingSqmSeen.length} without m², ${missingDetailsSeen.length} never detailed)`);
-      const detailRows = [];
-      for (let i = 0; i < targets.length; i += cfg.geoConcurrency) {
-        const batch = targets.slice(i, i + cfg.geoConcurrency);
-        const results = await Promise.all(batch.map(async id => {
-          const card = byId.get(id);
-          if (!card) return null;
+
+      // Free facts straight off the search results…
+      const rows = new Map();
+      for (const id of targets) {
+        const c = byCard.get(id);
+        if (c) rows.set(id, {
+          articleId: id,
+          latitude: c.latitude, longitude: c.longitude,
+          sqm: c.sqm, publishedAt: c.publishedAt, sellerType: c.sellerType,
+          apiStatus: c.apiStatus,
+        });
+      }
+
+      // …and detail calls only where search results cannot answer.
+      const needDetail = targets.filter(id => {
+        const r = rows.get(id);
+        if (!r) return false;
+        if (missingDetailsSeen.includes(id)) return true;   // characteristics/views/history
+        if (missingSqmSeen.includes(id) && r.sqm == null) return true;
+        if (unpinnedSeen.includes(id) && r.latitude == null) return true;
+        return false;
+      });
+
+      log(`⌖ enriching ${targets.length}/${candidateIds.length} listing(s) ` +
+          `(${newIds.length} new, ${unpinnedSeen.length} unpinned, ` +
+          `${missingSqmSeen.length} without m², ${missingDetailsSeen.length} never detailed)` +
+          (needDetail.length ? ` · ${needDetail.length} detail call(s)` : ''));
+
+      for (let i = 0; i < needDetail.length; i += cfg.geoConcurrency) {
+        const batch = needDetail.slice(i, i + cfg.geoConcurrency);
+        const details = await Promise.all(batch.map(async id => {
           await sleep(cfg.geoDelayMs);
           try {
-            return { articleId: id, ...(await scrapeGeo(browser, card.url, cfg)) };
-          } catch (_) { return null; }
+            return parseListingDetail(await fetchListing(id, cfg.apiTimeoutMs), id);
+          } catch (err) {
+            log(`⌖ ${id}: detail fetch failed (${String(err.message || err).slice(0, 120)})`);
+            return null;
+          }
         }));
-        // A visited page always counts — even without a pin/m² it may have
-        // yielded publish date, characteristics or counters.
-        for (const r of results) if (r) detailRows.push(r);
+        for (const d of details) {
+          if (!d) continue;   // a failed call leaves search-level facts in place
+          const row = rows.get(d.articleId);
+          for (const [k, v] of Object.entries(d)) {
+            if (k === 'articleId' || v == null) continue;
+            if (k === 'characteristics' && !Object.keys(v).length) continue;
+            row[k] = v;       // non-null detail facts override search-level ones
+          }
+        }
       }
-      if (detailRows.length) await db.enrichListings(detailRows);
-      enrichedCount = detailRows.length;
-      log(`⌖ enriched ${enrichedCount}/${targets.length} listing(s) from their detail pages`);
+
+      if (rows.size) await db.enrichListings([...rows.values()]);
+      enrichedCount = rows.size;
+      log(`⌖ enriched ${enrichedCount}/${targets.length} listing(s)`);
     }
 
     await db.finishRun(runId, { status: 'ok', pages: pagesDone, cards: allCards.length });
@@ -187,4 +210,5 @@ async function scrapeSearch(browser, search, cfg, db, log) {
   }
 }
 
-module.exports = { scrapeSearch, scrapeGeo };
+module.exports = { scrapeSearch };
+

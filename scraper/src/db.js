@@ -252,7 +252,8 @@ class Db {
    *   unitLevels:?number, heating:?string, furnished:?boolean,
    *   condition:?string, parking:?boolean, garage:?boolean, elevator:?boolean,
    *   yearBuilt:?number, plotSqm:?number, orientation:?string, views:?number,
-   *   favorites:?number, characteristics:?object}>} rows
+   *   favorites:?number, characteristics:?object,
+   *   apiStatus:?string, apiPriceHistory:?Array<object>}>} rows
    */
   async enrichListings(rows) {
     const client = await this.pool.connect();
@@ -290,6 +291,10 @@ class Db {
              views              = COALESCE(views, $21::integer),
              favorites          = COALESCE(favorites, $22::integer),
              characteristics    = COALESCE(characteristics, '{}'::jsonb) || $23::jsonb,
+             -- Raw bonus data from olx.ba's JSON API (07-api-extras.sql):
+             -- server-side lifecycle state and OLX's own price history.
+             api_status         = COALESCE($24::text, api_status),
+             api_price_history  = COALESCE($25::jsonb, api_price_history),
              details_fetched_at = now()
            WHERE article_id = $1`,
           [r.articleId, r.latitude ?? null, r.longitude ?? null, r.sqm ?? null,
@@ -299,7 +304,9 @@ class Db {
            r.condition ?? null, r.parking ?? null, r.garage ?? null,
            r.elevator ?? null, r.yearBuilt ?? null, r.plotSqm ?? null,
            r.orientation ?? null, r.views ?? null, r.favorites ?? null,
-           JSON.stringify(r.characteristics ?? {})]);
+           JSON.stringify(r.characteristics ?? {}),
+           r.apiStatus ?? null,
+           r.apiPriceHistory ? JSON.stringify(r.apiPriceHistory) : null]);
       }
       await client.query('COMMIT');
     } catch (err) {

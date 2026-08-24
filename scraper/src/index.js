@@ -4,7 +4,6 @@
 //   otherwise scrape at startup, then every SCRAPE_INTERVAL_MINUTES
 
 const http = require('http');
-const { chromium } = require('playwright');
 const config = require('./config');
 const Db = require('./db');
 const applyMigrations = require('./migrate');
@@ -22,7 +21,7 @@ const state = {
   searches:        config.searches.map(s => ({ name: s.name, url: s.url })),
 };
 
-async function runAll(browser, db) {
+async function runAll(db) {
   if (!config.searches.length) {
     log('No searches configured — mount /config/searches.json ' +
         '(see config/searches.example.json) or set SEARCH_URLS.');
@@ -31,10 +30,10 @@ async function runAll(browser, db) {
   }
 
   // Deploy-restart protection: containers are recreated on every deploy and
-  // each boot fires a full scrape cycle (~40 search pages + up to dozens of
-  // detail visits). Several deploys in one evening are enough to trip olx.ba's
-  // rate limiter, which then serves empty pages. Skip the cycle when another
-  // run finished very recently. (RUN_ONCE is exempt — explicit intent.)
+  // each boot fires a full scrape cycle (~dozens of API pages + detail calls).
+  // Several deploys in one evening are enough to trip olx.ba's rate limiter.
+  // Skip the cycle when another run finished very recently. (RUN_ONCE is
+  // exempt — explicit intent.)
   if (!config.runOnce &&
       await db.hasRecentFinishedRun(config.minRunGapMinutes)) {
     log(`a successful run finished less than ${config.minRunGapMinutes} min ago — skipping this cycle (SCRAPE_MIN_GAP_MINUTES)`);
@@ -46,7 +45,7 @@ async function runAll(browser, db) {
   let totalCards = 0;
   for (const search of config.searches) {
     try {
-      const res = await scrapeSearch(browser, search, config, db, log);
+      const res = await scrapeSearch(db, search, config, log);
       totalCards += res.cards;
       okRuns += 1;
       state.totalRuns += 1;
@@ -59,13 +58,14 @@ async function runAll(browser, db) {
   }
 
   // End of cycle: close listings that no successful search returned anymore,
-  // freezing their last price as the closing price. Failed searches leave
-  // their previous result links in place, so an outage never closes anything.
+  // freezing their last observed price as the closing price. Failed searches
+  // leave their previous result links in place, so an outage never closes
+  // anything.
   //
   // Extra guard: a cycle that returned ZERO listings everywhere is almost
-  // certainly throttling/blocking (empty page shells), not a vanished market.
-  // Closing then would freeze every listing in the database with bogus exit
-  // prices — skip the closing pass instead.
+  // certainly throttling/blocking, not a vanished market. Closing then would
+  // freeze every listing in the database with bogus exit prices — skip the
+  // closing pass instead.
   if (totalCards === 0) {
     log(`⚠ cycle yielded 0 listings across all ${config.searches.length} search(es) — ` +
         `likely throttled or blocked; SKIPPING the closing pass`);
@@ -97,22 +97,7 @@ async function main() {
   await db.waitUntilReady();
   await applyMigrations(db.pool, config.migrationsDir, log);
   log(`database ready · ${config.searches.length} search(es) · ` +
-      `interval ${config.intervalMinutes} min · headless=${config.headless}`);
-
-  let browser;
-  try {
-    browser = await chromium.launch({
-      headless: config.headless,
-      args: ['--disable-dev-shm-usage', '--no-sandbox'],
-    });
-  } catch (err) {
-    if (/executable doesn't exist/i.test(String(err.message))) {
-      console.error(
-        '[scraper] Chromium binary not found. This image ships ONLY the headless\n' +
-        '[scraper] shell (headless:true), so HEADLESS=0 cannot work in-container.');
-    }
-    throw err;
-  }
+      `interval ${config.intervalMinutes} min`);
 
   let timer = null;
   let stopping = false;
@@ -121,7 +106,6 @@ async function main() {
     stopping = true;
     log(`${signal} received — shutting down`);
     if (timer) clearInterval(timer);
-    await browser.close().catch(() => {});
     await db.close().catch(() => {});
     process.exit(0);
   };
@@ -132,10 +116,9 @@ async function main() {
   // the initial scrape is still running.
   const healthServer = startHealthServer();
 
-  await runAll(browser, db);
+  await runAll(db);
 
   if (config.runOnce) {
-    await browser.close();
     await db.close();
     await new Promise(resolve => healthServer.close(resolve));
     healthServer.closeAllConnections?.();  // drop keep-alive healthcheck sockets
@@ -144,7 +127,7 @@ async function main() {
   }
 
   timer = setInterval(
-    () => runAll(browser, db).catch(err => log('scheduled run failed:', err.message || err)),
+    () => runAll(db).catch(err => log('scheduled run failed:', err.message || err)),
     config.intervalMinutes * 60000);
   log('scheduler running — waiting for the next interval');
 }

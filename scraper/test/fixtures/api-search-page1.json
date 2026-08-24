@@ -1,0 +1,2792 @@
+{
+  "data": [
+    {
+      "score": null,
+      "id": 78850511,
+      "type": "single",
+      "title": "Stan Banja Luka - STROGI CENTAR",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 500,
+      "discounted_price": "500 KM",
+      "show_price": true,
+      "price": 500,
+      "display_price": "500 KM",
+      "price_max": 0,
+      "date": 1787533259,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/78850511/sm/img-1786863580-0f8672e1384d.jpeg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78850511/sm/img-1786863580-0f8672e1384d.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78850511/sm/img-1786863582-1c6a3495d9e3.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78850511/sm/img-1786863583-8e7fef562d56.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78850511/sm/img-1786863585-9d69f4229571.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78850511/sm/img-1786863586-03e561a18915.jpeg"
+      ],
+      "sponsored": 2,
+      "available": true,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "shop",
+      "user_id": 2613725,
+      "state": "used",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.773290084369,
+        "lon": 17.1977243945
+      },
+      "labels": [
+        "Garsonjera",
+        28
+      ],
+      "listing_type": "rent",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 28,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "garsonjera",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 76726757,
+      "type": "single",
+      "title": "Lux stan centar Grand Trade 60m2 dostupno 1.9.",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 1100,
+      "discounted_price": "1.100 KM",
+      "show_price": true,
+      "price": 1100,
+      "display_price": "1.100 KM",
+      "price_max": 0,
+      "date": 1787531957,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/76726757/sm/img-1784273653-2bb73e2df819.jpeg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76726757/sm/img-1784273653-2bb73e2df819.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76726757/sm/img-1784273661-a9155d74bf98.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76726757/sm/img-1784273672-b352ea4fc8c7.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76726757/sm/img-1784273668-7241fbd1e081.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76726757/sm/img-1784273680-e0896a69f850.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76726757/sm/img-1784273664-ab4907b913f7.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76726757/sm/img-1784273718-9df05d950a4d.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76726757/sm/img-1784273676-3aca92ab2a1e.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76726757/sm/img-1784273695-c679810462dc.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76726757/sm/img-1784273684-34e5f349d8b8.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76726757/sm/img-1784273657-b717d483d5d6.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76726757/sm/img-1784273690-8350579db1e0.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76726757/sm/img-1784273709-53c86b130b6c.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76726757/sm/img-1784273704-a45627d5cf25.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76726757/sm/img-1784273699-842dda37e719.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76726757/sm/img-1784273714-e9afc2bee005.jpeg"
+      ],
+      "sponsored": 2,
+      "available": true,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "user",
+      "user_id": 117404,
+      "state": "used",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.76995369956578,
+        "lon": 17.189762566017492
+      },
+      "labels": [
+        "Dvosoban (2)",
+        60
+      ],
+      "listing_type": "rent",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 60,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "dvosoban (2)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 78191965,
+      "type": "single",
+      "title": "ODMAH USELJIV  - trosoban stan strogi centar Banja Luka 59m2",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 0,
+      "discounted_price": "Na upit",
+      "show_price": true,
+      "price": 0,
+      "display_price": "Na upit",
+      "price_max": 0,
+      "date": 1787531502,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/78191965/sm/img-1784549595-bb8ca4c0912d.jpg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78191965/sm/img-1784549595-bb8ca4c0912d.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78191965/sm/img-1784549600-9eb749ba45e4.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78191965/sm/img-1784549609-0c06c16dc5be.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78191965/sm/img-1784632708-8c4d72399dd8.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78191965/sm/img-1784549591-fa4211296ba9.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78191965/sm/img-1784622766-76bc10ccd80e.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78191965/sm/img-1784549591-5f9a580db2b8.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78191965/sm/img-1784549594-b3aad22b2bf2.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78191965/sm/img-1784549599-4318fed49eea.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78191965/sm/img-1784549601-43abd9d6157f.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78191965/sm/img-1784549599-7b1b50fbd201.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78191965/sm/img-1784549598-e34388abf500.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78191965/sm/img-1784549596-05fc56680fd3.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78191965/sm/img-1784549592-58ba4f1d50b1.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78191965/sm/img-1784549597-a063f80b98e5.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78191965/sm/img-1784549716-206b23d89338.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78191965/sm/img-1784549602-205a8e79f905.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78191965/sm/img-1784549634-973246059f27.jpg"
+      ],
+      "sponsored": 2,
+      "available": false,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "shop",
+      "user_id": 447366,
+      "state": "used",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.76995369956578,
+        "lon": 17.189762566017492
+      },
+      "labels": [
+        "Trosoban (3)",
+        59
+      ],
+      "listing_type": "sell",
+      "premium_badges": [
+        {
+          "name": "Renovirano",
+          "text_color": "#3c4f18",
+          "background_color": "#e7f2d9",
+          "border_color": "#d1e3be"
+        }
+      ],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 59,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "trosoban (3)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 78980497,
+      "type": "single",
+      "title": "Stan 49.5m2 - 1 sprat - Mladena Stojanovića- Park - Banja Luka",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 214000,
+      "discounted_price": "214.000 KM",
+      "show_price": true,
+      "price": 214000,
+      "display_price": "214.000 KM",
+      "price_max": 0,
+      "date": 1787529404,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/78980497/sm/img-1787312440-6f8d5ea2823e.jpg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78980497/sm/img-1787312440-6f8d5ea2823e.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78980497/sm/img-1787313552-b4d9eb141967.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78980497/sm/img-1787313558-ae38d74a4b9b.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78980497/sm/img-1787313566-e9f6782f7cb4.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78980497/sm/img-1787313574-0466c04f925b.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78980497/sm/img-1787313580-c98395d3facd.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78980497/sm/img-1787313588-3f724f718738.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78980497/sm/img-1787313595-57fa1285d4dd.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78980497/sm/img-1787313605-df97d8ad43fa.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78980497/sm/img-1787313541-c8496637854a.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78980497/sm/img-1787313543-3ec433670aa6.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78980497/sm/img-1787313635-1144f3c20f0e.jpg"
+      ],
+      "sponsored": 2,
+      "available": false,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "user",
+      "user_id": 2154577,
+      "state": "used",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.783593,
+        "lon": 17.2030539
+      },
+      "labels": [
+        "Dvosoban (2)",
+        49.5
+      ],
+      "listing_type": "sell",
+      "premium_badges": [
+        {
+          "name": "Renovirano",
+          "text_color": "#3c4f18",
+          "background_color": "#e7f2d9",
+          "border_color": "#d1e3be"
+        }
+      ],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 49.5,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "dvosoban (2)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 69441462,
+      "type": "single",
+      "title": "prodaje se stan namjesten i sa garazom",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 266000,
+      "discounted_price": "266.000 KM",
+      "show_price": true,
+      "price": 266000,
+      "display_price": "266.000 KM",
+      "price_max": 0,
+      "date": 1787527805,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/69441462/sm/img-1752875731-2c784ef62d8f.jpg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/69441462/sm/img-1752875731-2c784ef62d8f.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/69441462/sm/img-1752875288-c3c12e937236.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/69441462/sm/img-1752875719-43659f3dd458.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/69441462/sm/img-1752875729-c2d3109306f3.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/69441462/sm/img-1752875723-9faceeeedf63.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/69441462/sm/img-1752875726-766790c0c23f.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/69441462/sm/img-1752875724-81fba5a926aa.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/69441462/sm/img-1752875725-3b0b2f24967d.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/69441462/sm/img-1752875726-e0b1a30f36dc.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/69441462/sm/img-1752875729-e873145c54a3.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/69441462/sm/img-1752875730-c71c8b50bf2b.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/69441462/sm/img-1752875731-96e97df7e6c6.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/69441462/sm/img-1752875725-3d2b19a6dd36.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/69441462/sm/img-1752875728-13d309150fd4.jpg"
+      ],
+      "sponsored": 2,
+      "available": true,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "shop",
+      "user_id": 504835,
+      "state": "none",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.76995369956578,
+        "lon": 17.189762566017492
+      },
+      "labels": [
+        "Dvosoban (2)",
+        4
+      ],
+      "listing_type": "sell",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 4,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "dvosoban (2)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 77523227,
+      "type": "single",
+      "title": "Stan Banja Luka izdavanje Nov stan namješten",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 650,
+      "discounted_price": "650 KM",
+      "show_price": true,
+      "price": 650,
+      "display_price": "650 KM",
+      "price_max": 0,
+      "date": 1787525650,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/77523227/sm/img-1782037623-bdf27e189425.jpeg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77523227/sm/img-1782037623-bdf27e189425.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77523227/sm/img-1782037624-b85162e15066.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77523227/sm/img-1782037625-0b319b0991c4.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77523227/sm/img-1782037626-44c82f31ab0b.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77523227/sm/img-1782037627-ea58f28f29b2.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77523227/sm/img-1782037628-f3d908b6f747.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77523227/sm/img-1782037629-8c23198a73a1.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77523227/sm/img-1782037630-096a6ce806be.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77523227/sm/img-1782037632-4442de94b820.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77523227/sm/img-1782037633-88be444a1606.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77523227/sm/img-1782037634-d8225e303e04.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77523227/sm/img-1782037635-9ecfb626e369.jpeg"
+      ],
+      "sponsored": 2,
+      "available": true,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "user",
+      "user_id": 571437,
+      "state": "used",
+      "status": "active",
+      "olx_stories": true,
+      "location": {
+        "lat": 44.75917423411,
+        "lon": 17.18562528491
+      },
+      "labels": [
+        "Jednosoban (1)",
+        37
+      ],
+      "listing_type": "rent",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 37,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "jednosoban (1)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 78798223,
+      "type": "single",
+      "title": "Na prodaju renoviran stan u Banja luci, naselje Borik 066/070-302",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 0,
+      "discounted_price": "Na upit",
+      "show_price": true,
+      "price": 0,
+      "display_price": "Na upit",
+      "price_max": 0,
+      "date": 1787524943,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/78798223/sm/img-1786638712-217009eb95a2.jpg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78798223/sm/img-1786638712-217009eb95a2.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78798223/sm/img-1786638750-ccc7d655fddd.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78798223/sm/img-1786638750-248ecf59ac1a.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78798223/sm/img-1786638750-0537992c9067.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78798223/sm/img-1786638750-84bc7b7302d6.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78798223/sm/img-1786638751-0fbcd28993d9.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78798223/sm/img-1786638751-25ca75170b47.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78798223/sm/img-1786638751-9c0d13dda842.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78798223/sm/img-1786638751-8953705c8005.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78798223/sm/img-1786638751-d241d06b16ed.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78798223/sm/img-1786638752-6bc84c480a3f.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78798223/sm/img-1786638752-0a0e6a34147f.jpg"
+      ],
+      "sponsored": 2,
+      "available": true,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "user",
+      "user_id": 1947141,
+      "state": "none",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.771971957569,
+        "lon": 17.20483392477
+      },
+      "labels": [
+        "Dvosoban (2)",
+        42
+      ],
+      "listing_type": "sell",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 42,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "dvosoban (2)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 61994823,
+      "type": "single",
+      "title": "Stan 35m2 Banja Luka - Obilicevo",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 500,
+      "discounted_price": "500 KM",
+      "show_price": true,
+      "price": 500,
+      "display_price": "500 KM",
+      "price_max": 0,
+      "date": 1787520747,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/61994823/sm/img-1718362784-c833222a57c0.jpg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/61994823/sm/img-1718362784-c833222a57c0.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/61994823/sm/img-1718362724-d995b2a90d15.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/61994823/sm/img-1718362725-2f7332351529.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/61994823/sm/img-1718362725-4e12fc8ffa35.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/61994823/sm/img-1718362883-27a1d15a18ee.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/61994823/sm/img-1718362884-0622e37f9656.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/61994823/sm/img-1718362905-d3fe969bbd5a.jpg"
+      ],
+      "sponsored": 2,
+      "available": true,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "user",
+      "user_id": 2378319,
+      "state": "none",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.76197887347,
+        "lon": 17.189884632826
+      },
+      "labels": [
+        "Jednoiposoban (1.5)",
+        35
+      ],
+      "listing_type": "rent",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 35,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "jednoiposoban (1.5)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 76745668,
+      "type": "single",
+      "title": "Luksuzan stan od 80m2  u centru Banja Luke",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 400000,
+      "discounted_price": "400.000 KM",
+      "show_price": true,
+      "price": 400000,
+      "display_price": "400.000 KM",
+      "price_max": 0,
+      "date": 1787510939,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/76745668/sm/img-1779286084-335821928742.jpg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76745668/sm/img-1779286084-335821928742.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76745668/sm/img-1779286085-5ee462e84de2.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76745668/sm/img-1779286085-c62b34d519d5.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76745668/sm/img-1779286084-d62abc3e8cb5.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76745668/sm/img-1779286084-fe2c64794c7d.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76745668/sm/img-1779286083-fa3a6e480894.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76745668/sm/img-1779286084-4a615b6c22a3.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76745668/sm/img-1779286084-4a099cb6c0c3.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76745668/sm/img-1779286084-bc45f529bbb4.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76745668/sm/img-1779286084-839744432816.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76745668/sm/img-1779286084-fdbda8dfdb61.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76745668/sm/img-1779286084-20a689399353.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76745668/sm/img-1779286083-fa100749e76d.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76745668/sm/img-1779286083-7214c600471a.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76745668/sm/img-1779286083-20f7687439d0.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76745668/sm/img-1779286083-fe0d52526283.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76745668/sm/img-1779286084-d183ff962965.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76745668/sm/img-1779286085-8887e206d5fb.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76745668/sm/img-1779286083-06b0c53f89b6.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76745668/sm/img-1779286083-b057dc605789.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76745668/sm/img-1779286085-46c80e4ab3fb.jpg"
+      ],
+      "sponsored": 2,
+      "available": true,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "shop",
+      "user_id": 2590306,
+      "state": "none",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.773913197039,
+        "lon": 17.190917953849
+      },
+      "labels": [
+        "Trosoban (3)",
+        80
+      ],
+      "listing_type": "sell",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 80,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "trosoban (3)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 66402308,
+      "type": "single",
+      "title": "Vrbas RESIDENCE Banja Luka, stanovi u izgradnji od 46 do 66 m2",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 0,
+      "discounted_price": "Na upit",
+      "show_price": true,
+      "price": 0,
+      "display_price": "Na upit",
+      "price_max": 0,
+      "date": 1787506555,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/66402308/sm/img-1739111604-91d84df55fc4.jpg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/66402308/sm/img-1739111604-91d84df55fc4.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/66402308/sm/img-1739111599-477f55899e94.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/66402308/sm/img-1739111603-c81f67d56a20.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/66402308/sm/img-1739111601-3ef7df35fb9a.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/66402308/sm/img-1739111607-e5975c3e86f3.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/66402308/sm/img-1739111579-d8e1c62b1e80.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/66402308/sm/img-1739111581-ff12340f7c33.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/66402308/sm/img-1739111583-682b6370fdf4.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/66402308/sm/img-1739111585-1817ed2360ce.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/66402308/sm/img-1739111586-3e7b5d998cd6.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/66402308/sm/img-1739111606-18d351b1d9ac.jpg"
+      ],
+      "sponsored": 2,
+      "available": false,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "shop",
+      "user_id": 3333120,
+      "state": "used",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.752878381574,
+        "lon": 17.174495408737
+      },
+      "labels": [
+        "Trosoban (3)",
+        66.46
+      ],
+      "listing_type": "sell",
+      "premium_badges": [
+        {
+          "name": "Novogradnja",
+          "text_color": "#7a2e00",
+          "background_color": "#f8ded2",
+          "border_color": "#f1c8b1"
+        }
+      ],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 66.46,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "trosoban (3)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 70370674,
+      "type": "single",
+      "title": "Stan iza delte trznog centra",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 0,
+      "discounted_price": "Na upit",
+      "show_price": true,
+      "price": 0,
+      "display_price": "Na upit",
+      "price_max": 0,
+      "date": 1787503608,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/70370674/sm/img-1780940304-c8cf3e8db3a1.jpg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/70370674/sm/img-1780940304-c8cf3e8db3a1.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/70370674/sm/img-1779720707-a7d0322270a2.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/70370674/sm/img-1780940314-9a8afec98095.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/70370674/sm/img-1780940331-6881ed883c87.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/70370674/sm/img-1756143483-1d2294053469.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/70370674/sm/img-1757356192-b2c237a91eaa.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/70370674/sm/img-1757356351-f930e60546bc.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/70370674/sm/img-1758186289-cd4bdaf795a4.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/70370674/sm/img-1763632480-96a2de98215f.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/70370674/sm/img-1763632490-a1b8dbff98e4.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/70370674/sm/img-1780940350-8ad312c3450c.jpg"
+      ],
+      "sponsored": 2,
+      "available": true,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "shop",
+      "user_id": 262792,
+      "state": "none",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.780693456369,
+        "lon": 17.2101758793
+      },
+      "labels": [
+        "Trosoban (3)",
+        65
+      ],
+      "listing_type": "sell",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 65,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "trosoban (3)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 78045746,
+      "type": "single",
+      "title": "Jednosoban stan Borik Banja Luka",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 500,
+      "discounted_price": "500 KM",
+      "show_price": true,
+      "price": 500,
+      "display_price": "500 KM",
+      "price_max": 0,
+      "date": 1787502383,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/78045746/sm/img-1784050526-6d539b9541a3.jpg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78045746/sm/img-1784050526-6d539b9541a3.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78045746/sm/img-1784050527-464364d436f3.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78045746/sm/img-1784050527-c0da66d73e49.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78045746/sm/img-1784050527-3ec51b641de6.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78045746/sm/img-1784050527-040ac4cf906f.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78045746/sm/img-1784050527-de550298926e.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78045746/sm/img-1784050527-607efebe8d19.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78045746/sm/img-1784050527-d4eadab7ea79.jpg"
+      ],
+      "sponsored": 2,
+      "available": true,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "user",
+      "user_id": 723748,
+      "state": "none",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.771042967141,
+        "lon": 17.20769315958
+      },
+      "labels": [
+        "Jednosoban (1)",
+        44
+      ],
+      "listing_type": "rent",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 44,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "jednosoban (1)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 76408979,
+      "type": "single",
+      "title": "NOV STAN 80.25 m2, STARČEVICA, Banja Luka",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 280875,
+      "discounted_price": "280.875 KM",
+      "show_price": true,
+      "price": 280875,
+      "display_price": "280.875 KM",
+      "price_max": 0,
+      "date": 1787492554,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/76408979/sm/img-1778222934-f0d294f5c560.jpg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76408979/sm/img-1778222934-f0d294f5c560.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76408979/sm/img-1778222941-874dd55faf38.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76408979/sm/img-1778222947-bb8bfdd5efe2.jpg"
+      ],
+      "sponsored": 2,
+      "available": true,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "user",
+      "user_id": 1741897,
+      "state": "none",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.863560061325,
+        "lon": 17.666647285223
+      },
+      "labels": [
+        "Trosoban (3)",
+        80.25
+      ],
+      "listing_type": "sell",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 80.25,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "trosoban (3)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 78684835,
+      "type": "single",
+      "title": "Najam Dvosoban Stan Banja Luka Borik",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 650,
+      "discounted_price": "650 KM",
+      "show_price": true,
+      "price": 650,
+      "display_price": "650 KM",
+      "price_max": 0,
+      "date": 1787490363,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/78684835/sm/img-1786235112-e864ed062bfd.jpg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78684835/sm/img-1786235112-e864ed062bfd.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78684835/sm/img-1786235109-829703bb51e8.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78684835/sm/img-1786235095-74e4a67b3c66.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78684835/sm/img-1786235092-14f66c96cce6.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78684835/sm/img-1786235111-afbe04aabe77.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78684835/sm/img-1786235097-b1964d236e6e.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78684835/sm/img-1786235106-a0ea3b8652b2.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78684835/sm/img-1786235104-eeb31ad00969.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78684835/sm/img-1786235099-1499845f98ff.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78684835/sm/img-1786235094-6ebe892770af.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78684835/sm/img-1786235107-7f2e38f99201.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78684835/sm/img-1786235116-1d4a15ad6537.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78684835/sm/img-1786235100-63a229a42afb.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78684835/sm/img-1786235103-13a70f7b1233.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78684835/sm/img-1786235114-dd8741316a83.jpg"
+      ],
+      "sponsored": 2,
+      "available": true,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "shop",
+      "user_id": 276961,
+      "state": "used",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.7697755,
+        "lon": 17.2071861
+      },
+      "labels": [
+        "Dvosoban (2)",
+        60
+      ],
+      "listing_type": "rent",
+      "premium_badges": [
+        {
+          "name": "Renovirano",
+          "text_color": "#3c4f18",
+          "background_color": "#e7f2d9",
+          "border_color": "#d1e3be"
+        }
+      ],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 60,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "dvosoban (2)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 75262431,
+      "type": "single",
+      "title": "Dvosoban stan u izgradnji 46,14 m2 Vrbas RESIDENCE Banja Luka",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 0,
+      "discounted_price": "Na upit",
+      "show_price": true,
+      "price": 0,
+      "display_price": "Na upit",
+      "price_max": 0,
+      "date": 1787484824,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/75262431/sm/img-1774271218-4f1ae73d1fe8.jpg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75262431/sm/img-1774271218-4f1ae73d1fe8.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75262431/sm/img-1774271217-b0ab99eba813.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75262431/sm/img-1774271215-2c4d536c8c47.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75262431/sm/img-1774271223-739e664b7342.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75262431/sm/img-1774271226-6c112e1716d1.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75262431/sm/img-1774271230-8aed012e3d82.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75262431/sm/img-1774271232-c8b56553c295.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75262431/sm/img-1774271235-8f0ec00e1e7e.jpg"
+      ],
+      "sponsored": 2,
+      "available": false,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "shop",
+      "user_id": 3333120,
+      "state": "used",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.753325662426,
+        "lon": 17.174253381283
+      },
+      "labels": [
+        "Dvosoban (2)",
+        46.14
+      ],
+      "listing_type": "sell",
+      "premium_badges": [
+        {
+          "name": "Novogradnja",
+          "text_color": "#7a2e00",
+          "background_color": "#f8ded2",
+          "border_color": "#f1c8b1"
+        }
+      ],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 46.14,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "dvosoban (2)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 72097385,
+      "type": "single",
+      "title": "Stanovi Banja Luka od 28m2, 58m2, 63 m2 i 76,75m2",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 129915,
+      "discounted_price": "129.915 KM",
+      "show_price": true,
+      "price": 129915,
+      "display_price": "129.915 KM",
+      "price_max": 0,
+      "date": 1787477814,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/72097385/sm/img-1787476569-87d8b0111c93.jpg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/72097385/sm/img-1787476569-87d8b0111c93.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/72097385/sm/img-1787477791-9da0b2d8120f.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/72097385/sm/img-1787477791-61ffcbdefba6.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/72097385/sm/img-1787477791-a8052e186b31.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/72097385/sm/img-1787477791-4503285d56f5.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/72097385/sm/img-1787477791-5bad69a39d18.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/72097385/sm/img-1787476569-b013890688b9.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/72097385/sm/img-1787476604-679cf023b874.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/72097385/sm/img-1787476627-fea734778c4a.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/72097385/sm/img-1762457177-c07b999b9787.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/72097385/sm/img-1762457177-e1d3179b5dfa.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/72097385/sm/img-1787476642-001b87aea5c5.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/72097385/sm/img-1787476652-1fd667629d82.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/72097385/sm/img-1762457200-4746cbb6c563.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/72097385/sm/img-1762457200-36a7ec0f96f7.jpg"
+      ],
+      "sponsored": 2,
+      "available": true,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "shop",
+      "user_id": 2590306,
+      "state": "none",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.77218117472,
+        "lon": 17.1910000965
+      },
+      "labels": [
+        "Dvosoban (2)",
+        58
+      ],
+      "listing_type": "sell",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 58,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "dvosoban (2)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 77474936,
+      "type": "single",
+      "title": "USELJIV STAN OD 74 M2 U PALATI U CENTRU",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 413142,
+      "discounted_price": "413.142 KM",
+      "show_price": true,
+      "price": 413142,
+      "display_price": "413.142 KM",
+      "price_max": 0,
+      "date": 1787476422,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/77474936/sm/img-1781862802-d2d57ca475b3.jpg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77474936/sm/img-1781862802-d2d57ca475b3.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77474936/sm/img-1781862861-0c4397311240.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77474936/sm/img-1781862862-9bd2f6f9d7af.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77474936/sm/img-1781862862-e10832a4647e.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77474936/sm/img-1781862862-c15a5209c240.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77474936/sm/img-1781862862-8f709ab259dc.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77474936/sm/img-1781862862-fb2c6374a005.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77474936/sm/img-1781862862-62a7fb065f9f.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77474936/sm/img-1781862862-8aac2432b416.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77474936/sm/img-1781862862-a6692c22f5f9.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77474936/sm/img-1781862863-eaee4b1e0d1f.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77474936/sm/img-1781862863-a45caa479d90.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77474936/sm/img-1781862863-e73b703e295c.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77474936/sm/img-1781862863-cbaf759d6797.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77474936/sm/img-1781862863-f86659800640.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77474936/sm/img-1781862863-bf3b2c9732e1.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77474936/sm/img-1781862863-937c11a5f98a.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77474936/sm/img-1781862863-deebb4b843f4.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77474936/sm/img-1781862864-d3a81f5cae0e.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77474936/sm/img-1781862864-383b7ae7d3f5.jpg"
+      ],
+      "sponsored": 2,
+      "available": true,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "shop",
+      "user_id": 2590306,
+      "state": "none",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.771585653603,
+        "lon": 17.194508090615
+      },
+      "labels": [
+        "Trosoban (3)",
+        74
+      ],
+      "listing_type": "sell",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 74,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "trosoban (3)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 78159697,
+      "type": "single",
+      "title": "Stan Ada Banja Luka Apartmani",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 0,
+      "discounted_price": "Na upit",
+      "show_price": true,
+      "price": 0,
+      "display_price": "Na upit",
+      "price_max": 0,
+      "date": 1787475544,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/78159697/sm/img-1784445701-97b1d813b19f.jpg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78159697/sm/img-1784445701-97b1d813b19f.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78159697/sm/img-1784445713-1a276433fa8c.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78159697/sm/img-1784446035-26746807ac15.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78159697/sm/img-1784446043-15b91d5030a7.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78159697/sm/img-1784446049-e6d60d314c4b.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78159697/sm/img-1784446074-9d1df3cc5a65.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78159697/sm/img-1784446111-3bd4ebcd039c.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78159697/sm/img-1784446119-c7627549798c.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78159697/sm/img-1784446127-4e9e85a491f7.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78159697/sm/img-1784446135-b4680a2b1eb0.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78159697/sm/img-1784446156-f1b63b4445ad.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78159697/sm/img-1784446186-35de16772f91.jpg"
+      ],
+      "sponsored": 2,
+      "available": false,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "shop",
+      "user_id": 2473433,
+      "state": "none",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.769963053518,
+        "lon": 17.221092134714
+      },
+      "labels": [
+        "Dvosoban (2)",
+        40
+      ],
+      "listing_type": "sell",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 40,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "dvosoban (2)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 66415172,
+      "type": "single",
+      "title": "Trosoban stan u izgradnji 66,37 m2 Vrbas RESIDENCE Banja Luka",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 0,
+      "discounted_price": "Na upit",
+      "show_price": true,
+      "price": 0,
+      "display_price": "Na upit",
+      "price_max": 0,
+      "date": 1787474901,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/66415172/sm/img-1775308194-6cbaac270266.webp",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/66415172/sm/img-1775308194-6cbaac270266.webp",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/66415172/sm/img-1775308193-dd683f49a167.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/66415172/sm/img-1739176988-ca7ee3f2ae21.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/66415172/sm/img-1739176963-1402c2e25a4e.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/66415172/sm/img-1739176974-15c29622131f.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/66415172/sm/img-1739176982-897eea32e20b.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/66415172/sm/img-1739176993-eefbda89ab2f.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/66415172/sm/img-1739177004-90b565c11754.jpg"
+      ],
+      "sponsored": 2,
+      "available": false,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "shop",
+      "user_id": 3333120,
+      "state": "used",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.752741237917,
+        "lon": 17.174527595245
+      },
+      "labels": [
+        "Trosoban (3)",
+        66.37
+      ],
+      "listing_type": "sell",
+      "premium_badges": [
+        {
+          "name": "Novogradnja",
+          "text_color": "#7a2e00",
+          "background_color": "#f8ded2",
+          "border_color": "#f1c8b1"
+        }
+      ],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 66.37,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "trosoban (3)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 77908051,
+      "type": "single",
+      "title": "Iznajmljivanje stana City Block",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 670,
+      "discounted_price": "670 KM",
+      "show_price": true,
+      "price": 670,
+      "display_price": "670 KM",
+      "price_max": 0,
+      "date": 1787473083,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/77908051/sm/img-1783940405-5b585f95b3f9.jpg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77908051/sm/img-1783940405-5b585f95b3f9.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77908051/sm/img-1783940406-0ccca61c411a.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77908051/sm/img-1783940407-64d2d2fa5e93.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77908051/sm/img-1783940407-bddaafe62dab.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77908051/sm/img-1783940408-db4052105783.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77908051/sm/img-1783940408-31cc91dbdb66.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77908051/sm/img-1783940408-3e25cec6dadd.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77908051/sm/img-1783940408-eadde0c06e71.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77908051/sm/img-1783940408-a9cf2d3d6864.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77908051/sm/img-1783940409-a5431ddfd7db.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77908051/sm/img-1783940409-c7155cc7ea1d.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77908051/sm/img-1783940409-bc484b89472c.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77908051/sm/img-1783940409-92a3b5a97f46.jpg"
+      ],
+      "sponsored": 2,
+      "available": true,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "user",
+      "user_id": 3984965,
+      "state": "none",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.770957041317,
+        "lon": 17.223506122828
+      },
+      "labels": [
+        "Trosoban (3)",
+        57
+      ],
+      "listing_type": "rent",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 57,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "trosoban (3)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 78132526,
+      "type": "single",
+      "title": "Najam dvosoban stan Borik Banja Luka 66 m2",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 700,
+      "discounted_price": "700 KM",
+      "show_price": true,
+      "price": 700,
+      "display_price": "700 KM",
+      "price_max": 0,
+      "date": 1787388292,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/78132526/sm/img-1787388260-d7a0c066c212.jpg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78132526/sm/img-1787388260-d7a0c066c212.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78132526/sm/img-1787387994-181a3fe8147a.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78132526/sm/img-1787388007-48cc13301985.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78132526/sm/img-1787388021-de9c617a375b.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78132526/sm/img-1787388028-bbe065c6ed2e.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78132526/sm/img-1787388081-2dcfcddfd2dc.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78132526/sm/img-1787388082-4ef0997e2d0d.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78132526/sm/img-1787388111-4f76dac66972.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78132526/sm/img-1787388112-69ca2942952e.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78132526/sm/img-1787388169-a0850894758d.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78132526/sm/img-1787388191-4d9a71a5e7f5.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78132526/sm/img-1787388192-bebed7b8d0c8.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78132526/sm/img-1787388197-6bb7f85d5bbd.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78132526/sm/img-1787388197-9c0fae48ec17.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78132526/sm/img-1787388212-ce8a80b14639.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78132526/sm/img-1787388213-dccb3edea041.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78132526/sm/img-1787388213-977e488d56f5.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78132526/sm/img-1787388230-8e0c34480e77.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78132526/sm/img-1787388231-ef965fc8764a.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78132526/sm/img-1787388258-6537a76004d5.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78132526/sm/img-1787388259-919bca55b98d.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78132526/sm/img-1787388261-b39796a44731.jpg"
+      ],
+      "sponsored": 2,
+      "available": false,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "shop",
+      "user_id": 3336239,
+      "state": "used",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.7691669,
+        "lon": 17.1955504
+      },
+      "labels": [
+        "Dvosoban (2)",
+        66
+      ],
+      "listing_type": "rent",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 66,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "dvosoban (2)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 78992431,
+      "type": "single",
+      "title": "NAJAM dvosoban stan sa svim režijama Borik Banja Luka 53m2",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 1000,
+      "discounted_price": "1.000 KM",
+      "show_price": true,
+      "price": 1000,
+      "display_price": "1.000 KM",
+      "price_max": 0,
+      "date": 1787387257,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/78992431/sm/img-1787341326-e503237e8dd1.jpg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78992431/sm/img-1787341326-e503237e8dd1.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78992431/sm/img-1787341106-00a5e3e8e85d.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78992431/sm/img-1787341118-31ea79c46125.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78992431/sm/img-1787341119-dd6b8f441115.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78992431/sm/img-1787341128-879b2ca73569.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78992431/sm/img-1787341160-92fb3c9650a1.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78992431/sm/img-1787341174-67d1706f5dd0.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78992431/sm/img-1787341178-a1a98966437c.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78992431/sm/img-1787341184-066438080cd3.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78992431/sm/img-1787341220-18b982955d65.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78992431/sm/img-1787341224-e3cd3cc75570.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78992431/sm/img-1787341241-2ada5e9726bf.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78992431/sm/img-1787341242-64a16516479e.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78992431/sm/img-1787341253-346ebfc0c679.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78992431/sm/img-1787341254-971a662aaf76.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78992431/sm/img-1787341270-d5faf0e501e5.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78992431/sm/img-1787341287-2af7cba8e22b.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78992431/sm/img-1787341288-b408cd7363ca.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78992431/sm/img-1787341289-93754e396306.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78992431/sm/img-1787341306-3f2487adce9c.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78992431/sm/img-1787341307-0d5952b283ca.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78992431/sm/img-1787341325-18ed85dc86c2.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78992431/sm/img-1787341327-fa0444412a8c.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78992431/sm/img-1787341328-044de6dcbfeb.jpg"
+      ],
+      "sponsored": 2,
+      "available": false,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "shop",
+      "user_id": 3336239,
+      "state": "used",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.777198237394,
+        "lon": 17.203093510787
+      },
+      "labels": [
+        "Dvosoban (2)",
+        53
+      ],
+      "listing_type": "rent",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 53,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "dvosoban (2)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 77170513,
+      "type": "single",
+      "title": "Najam dvosoban stan Banja Luka 32 m2",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 550,
+      "discounted_price": "550 KM",
+      "show_price": true,
+      "price": 550,
+      "display_price": "550 KM",
+      "price_max": 0,
+      "date": 1787385726,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/77170513/sm/img-1783257011-e934404a53dd.jpg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77170513/sm/img-1783257011-e934404a53dd.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77170513/sm/img-1783256617-ab271d93f03f.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77170513/sm/img-1783256627-09e8ea3d63cb.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77170513/sm/img-1783256638-bdb56500457f.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77170513/sm/img-1783256643-ee6c04df622b.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77170513/sm/img-1783256651-81d482a8f09a.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77170513/sm/img-1783256656-47c282ff05dc.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77170513/sm/img-1783256665-324b39742fc0.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77170513/sm/img-1783256667-1a2e0de64fa3.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77170513/sm/img-1783256668-d47a7e89d39e.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77170513/sm/img-1783256687-600bbb5fc6f5.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77170513/sm/img-1783256688-124bc054436a.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77170513/sm/img-1783256705-6ec4b21ef05f.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77170513/sm/img-1783256706-92a45961aad4.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77170513/sm/img-1783256707-3ea68b91f968.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77170513/sm/img-1783256799-c160e384a091.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77170513/sm/img-1783256976-07d416e1e943.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77170513/sm/img-1783256996-2347936951a5.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77170513/sm/img-1783256998-ad3e8b31cf84.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77170513/sm/img-1783256999-bce6ec173fd9.jpg"
+      ],
+      "sponsored": 2,
+      "available": false,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "shop",
+      "user_id": 3336239,
+      "state": "used",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.7617626,
+        "lon": 17.1995778
+      },
+      "labels": [
+        "Dvosoban (2)",
+        32
+      ],
+      "listing_type": "rent",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 32,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "dvosoban (2)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 78536108,
+      "type": "single",
+      "title": "Najam dvosoban stan Nova Varoš Banja Luka 40m2",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 700,
+      "discounted_price": "700 KM",
+      "show_price": true,
+      "price": 700,
+      "display_price": "700 KM",
+      "price_max": 0,
+      "date": 1787384766,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/78536108/sm/img-1785776460-69c4a45ec615.jpg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78536108/sm/img-1785776460-69c4a45ec615.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78536108/sm/img-1785776472-18971e532285.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78536108/sm/img-1785776476-13529a03102a.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78536108/sm/img-1785776486-7c92e4d73591.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78536108/sm/img-1785776497-8de0caa5a290.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78536108/sm/img-1785776506-37eb8147364e.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78536108/sm/img-1785776523-a17b5ec40637.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78536108/sm/img-1785776529-04b040ad5c5f.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78536108/sm/img-1785776549-9a4ce4441f91.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78536108/sm/img-1785776550-d8df6717ab0d.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78536108/sm/img-1785776578-6296dd6b0e42.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78536108/sm/img-1785776579-a3fd85a1a100.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78536108/sm/img-1785776664-c2e58eeecf54.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78536108/sm/img-1785776665-547a1416ffaf.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78536108/sm/img-1785776677-84d096e51dbc.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78536108/sm/img-1785776678-0af3b1079214.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78536108/sm/img-1785776679-a37901e744ea.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78536108/sm/img-1785776699-d57c983e5253.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78536108/sm/img-1785776700-bb123b389a5c.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78536108/sm/img-1785776701-ba9ff7efa715.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78536108/sm/img-1785776703-b104071c3649.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78536108/sm/img-1785776731-ea38facd6ca6.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78536108/sm/img-1785776732-5c441b2166b1.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78536108/sm/img-1785776733-f2c7672f6bff.jpg"
+      ],
+      "sponsored": 2,
+      "available": false,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "shop",
+      "user_id": 3336239,
+      "state": "used",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.778694051697,
+        "lon": 17.196582875894
+      },
+      "labels": [
+        "Dvosoban (2)",
+        40
+      ],
+      "listing_type": "rent",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 40,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "dvosoban (2)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 75578552,
+      "type": "single",
+      "title": "STAN BANJALUKA 42m2 + 15m2 UZ ZOTOVIĆ - TRAPISTI",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 99000,
+      "discounted_price": "99.000 KM",
+      "show_price": true,
+      "price": 99000,
+      "display_price": "99.000 KM",
+      "price_max": 0,
+      "date": 1787145658,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/75578552/sm/img-1786360154-bb8431fc0a20.jpeg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75578552/sm/img-1786360154-bb8431fc0a20.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75578552/sm/img-1777740976-862172a11549.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75578552/sm/img-1777740983-fe9f76a29975.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75578552/sm/img-1777740969-c60ce01c9e5a.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75578552/sm/img-1777740999-bc813266db07.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75578552/sm/img-1777740991-9a6c10b74427.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75578552/sm/img-1777741006-91ee89371f2b.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75578552/sm/img-1779213190-db6221d790d1.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75578552/sm/img-1777741026-43353ec2b9dd.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75578552/sm/img-1778578903-803b82984575.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75578552/sm/img-1778578906-4556f01b59b1.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75578552/sm/img-1777741033-512ec843fd93.jpeg"
+      ],
+      "sponsored": 2,
+      "available": true,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "user",
+      "user_id": 1413273,
+      "state": "used",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.80518110194,
+        "lon": 17.224185727537
+      },
+      "labels": [
+        "Dvosoban (2)",
+        42
+      ],
+      "listing_type": "sell",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 42,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "dvosoban (2)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 78922409,
+      "type": "single",
+      "title": "Stan Banja Luka",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 281000,
+      "discounted_price": "281.000 KM",
+      "show_price": true,
+      "price": 281000,
+      "display_price": "281.000 KM",
+      "price_max": 0,
+      "date": 1787120008,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/78922409/sm/img-1787119981-a730eed6e8d0.jpg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78922409/sm/img-1787119981-a730eed6e8d0.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78922409/sm/img-1787119972-532c451662e2.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78922409/sm/img-1787119842-67711d3785c1.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78922409/sm/img-1787119854-9d7bfbbb36cf.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78922409/sm/img-1787119860-4de2cd0e6af4.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78922409/sm/img-1787119889-5bece34c2680.jpg"
+      ],
+      "sponsored": 2,
+      "available": true,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "shop",
+      "user_id": 262792,
+      "state": "none",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.795144991155,
+        "lon": 17.210975512862
+      },
+      "labels": [
+        "Trosoban (3)",
+        68.54
+      ],
+      "listing_type": "sell",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 68.54,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "trosoban (3)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 78922299,
+      "type": "single",
+      "title": "Stan Banja Luka",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 221195,
+      "discounted_price": "221.195 KM",
+      "show_price": true,
+      "price": 221195,
+      "display_price": "221.195 KM",
+      "price_max": 0,
+      "date": 1787119110,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/78922299/sm/img-1787119045-5b373435528f.jpg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78922299/sm/img-1787119045-5b373435528f.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78922299/sm/img-1787118986-f43fdbd67a3c.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78922299/sm/img-1787118991-13293095d6a8.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78922299/sm/img-1787118995-7a14db3b4d56.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78922299/sm/img-1787119010-ade83d63e769.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78922299/sm/img-1787119059-494649dbfc1f.jpg"
+      ],
+      "sponsored": 2,
+      "available": true,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "shop",
+      "user_id": 262792,
+      "state": "none",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.795134998424,
+        "lon": 17.210977524519
+      },
+      "labels": [
+        "Dvosoban (2)",
+        53.95
+      ],
+      "listing_type": "sell",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 53.95,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "dvosoban (2)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 78922186,
+      "type": "single",
+      "title": "Stan Banja Luka",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 218900,
+      "discounted_price": "218.900 KM",
+      "show_price": true,
+      "price": 218900,
+      "display_price": "218.900 KM",
+      "price_max": 0,
+      "date": 1787118328,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/78922186/sm/img-1787118171-894b577b5bd1.jpg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78922186/sm/img-1787118171-894b577b5bd1.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78922186/sm/img-1787118132-cbe19fc4076b.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78922186/sm/img-1787118139-7390a5ff1562.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78922186/sm/img-1787118145-107ed20953ad.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78922186/sm/img-1787118184-4126bdd47c58.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78922186/sm/img-1787118197-c3840c12a62a.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78922186/sm/img-1787118244-e55bc150b521.jpg"
+      ],
+      "sponsored": 2,
+      "available": false,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "shop",
+      "user_id": 262792,
+      "state": "none",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.792922517594,
+        "lon": 17.210384756327
+      },
+      "labels": [
+        "Dvosoban (2)",
+        53.39
+      ],
+      "listing_type": "sell",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 53.39,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "dvosoban (2)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 77875718,
+      "type": "single",
+      "title": "Izdajem stan apartman garsonjera Banja Luka Starcevica rent",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 550,
+      "discounted_price": "550 KM",
+      "show_price": true,
+      "price": 550,
+      "display_price": "550 KM",
+      "price_max": 0,
+      "date": 1786954714,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/77875718/sm/img-1783461823-d36ba7a9fa86.jpg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77875718/sm/img-1783461823-d36ba7a9fa86.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77875718/sm/img-1783461823-27d1e52ec92f.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77875718/sm/img-1783461824-bd4912a34f19.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77875718/sm/img-1783461824-2acb1dd63720.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77875718/sm/img-1783461824-715c76fa53f0.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77875718/sm/img-1783461824-626ddd875718.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77875718/sm/img-1783461824-0040db1c848a.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77875718/sm/img-1786456623-344b17636761.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77875718/sm/img-1786456623-fc2e8d2834f4.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77875718/sm/img-1786456623-0d3445127037.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77875718/sm/img-1786456623-df34a20d6d62.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77875718/sm/img-1786456623-c7c92d6ec5fa.jpg"
+      ],
+      "sponsored": 2,
+      "available": true,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "user",
+      "user_id": 278800,
+      "state": "none",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.77218117472,
+        "lon": 17.1910000965
+      },
+      "labels": [
+        "Garsonjera",
+        33
+      ],
+      "listing_type": "rent",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 33,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "garsonjera",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 75551614,
+      "type": "single",
+      "title": "Stan visoko prizemlje, Starcevica Banja Luka 87m2, Renoviran",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 261000,
+      "discounted_price": "261.000 KM",
+      "show_price": true,
+      "price": 261000,
+      "display_price": "261.000 KM",
+      "price_max": 0,
+      "date": 1787533025,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/75551614/sm/img-1775237182-1f276e3cf4e7.jpg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75551614/sm/img-1775237182-1f276e3cf4e7.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75551614/sm/img-1775237174-bb96aa3f012c.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75551614/sm/img-1775237174-170ab0f7db87.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75551614/sm/img-1775237175-4be4651e0b80.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75551614/sm/img-1775237175-29f16e3259b3.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75551614/sm/img-1775237176-0a421e1126ea.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75551614/sm/img-1775237177-282ed261e741.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75551614/sm/img-1775237177-26fa6ccb411a.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75551614/sm/img-1775237178-64e5389b2933.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75551614/sm/img-1775237179-ad4c82887e35.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75551614/sm/img-1775237179-e713ad5fac13.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75551614/sm/img-1775237180-90c883034755.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75551614/sm/img-1775237181-6d3d9910b69f.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75551614/sm/img-1775237181-b69b786941de.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75551614/sm/img-1775237184-6c50523ac826.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75551614/sm/img-1775237184-cb630143734c.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75551614/sm/img-1775237185-814bd8ab1843.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/75551614/sm/img-1775237186-9f31004561de.jpg"
+      ],
+      "sponsored": 1,
+      "available": false,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "user",
+      "user_id": 4196051,
+      "state": "used",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.7607126,
+        "lon": 17.2079084
+      },
+      "labels": [
+        "Trosoban (3)",
+        87
+      ],
+      "listing_type": "sell",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 87,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "trosoban (3)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 79023807,
+      "type": "single",
+      "title": "Stan Banja Luka Starcevica rent izdavanje",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 600,
+      "discounted_price": "600 KM",
+      "show_price": true,
+      "price": 600,
+      "display_price": "600 KM",
+      "price_max": 0,
+      "date": 1787531985,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/79023807/sm/img-1787480721-0879357dba93.jpeg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/79023807/sm/img-1787480721-0879357dba93.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/79023807/sm/img-1787479440-f883da62adfd.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/79023807/sm/img-1787479447-29c5c7edff1c.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/79023807/sm/img-1787479451-1e0676a1faa2.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/79023807/sm/img-1787479454-8ee0ed04d4e9.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/79023807/sm/img-1787479458-16c0d60f0fb6.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/79023807/sm/img-1787479461-64984a5feb75.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/79023807/sm/img-1787480842-e1dc0c13e9c4.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/79023807/sm/img-1787480875-dd1fbd01c0df.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/79023807/sm/img-1787480896-0265e05ff26b.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/79023807/sm/img-1787480915-9631a12de610.jpeg"
+      ],
+      "sponsored": 1,
+      "available": true,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "user",
+      "user_id": 43508,
+      "state": "used",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.765731273224,
+        "lon": 17.207288481295
+      },
+      "labels": [
+        "Jednosoban (1)",
+        39
+      ],
+      "listing_type": "rent",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 39,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "jednosoban (1)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 76491646,
+      "type": "single",
+      "title": "Stan Banja Luka 44,36 m2  kod TC Delta useljiv novogradnja",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 0,
+      "discounted_price": "Na upit",
+      "show_price": true,
+      "price": 0,
+      "display_price": "Na upit",
+      "price_max": 0,
+      "date": 1787531692,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/76491646/sm/img-1784198064-d45d231e2f63.jpeg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76491646/sm/img-1784198064-d45d231e2f63.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76491646/sm/img-1785866032-fa9da1d8a77e.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76491646/sm/img-1785866034-eb066a47b7a3.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76491646/sm/img-1787251314-fd0d918f13b8.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76491646/sm/img-1787251318-7738de660b8e.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76491646/sm/img-1787251324-6b20798214ec.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76491646/sm/img-1787251330-400dcd215196.jpeg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/76491646/sm/img-1787307633-4b96f296e794.jpeg"
+      ],
+      "sponsored": 1,
+      "available": true,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "user",
+      "user_id": 3595579,
+      "state": "new",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.781281,
+        "lon": 17.207827
+      },
+      "labels": [
+        "Dvosoban (2)",
+        44
+      ],
+      "listing_type": "sell",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 44,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "dvosoban (2)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 78747527,
+      "type": "single",
+      "title": "Garaza u sklopu zgrade -Petra Preradovica 24",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 150,
+      "discounted_price": "150 KM",
+      "show_price": true,
+      "price": 150,
+      "display_price": "150 KM",
+      "price_max": 0,
+      "date": 1787529714,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/78747527/sm/img-1787385677-b10cae297198.jpeg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/78747527/sm/img-1787385677-b10cae297198.jpeg"
+      ],
+      "sponsored": 1,
+      "available": true,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "user",
+      "user_id": 214093,
+      "state": "used",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.7784652,
+        "lon": 17.1880331
+      },
+      "labels": [
+        "Dvosoban (2)",
+        0
+      ],
+      "listing_type": "rent",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 0,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "dvosoban (2)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 25897265,
+      "type": "single",
+      "title": "Stan Na dan Banja Luka",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 50,
+      "discounted_price": "50 KM",
+      "show_price": true,
+      "price": 50,
+      "display_price": "50 KM",
+      "price_max": 0,
+      "date": 1787528183,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/25897265/sm/63jzuFQ6kPUDhA7e6rra.jpg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/25897265/sm/63jzuFQ6kPUDhA7e6rra.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/25897265/sm/21wbXzckiGqIACOFvRht.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/25897265/sm/RgkwRrop9ytYrOjjvnRk.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/25897265/sm/UpygPYIJAvkWoHaoxXuJ.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/25897265/sm/Bh2vV026MSMmLNYZmxGg.jpg"
+      ],
+      "sponsored": 1,
+      "available": false,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "shop",
+      "user_id": 171152,
+      "state": "new",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.778677716004,
+        "lon": 17.195677869022
+      },
+      "labels": [
+        48,
+        "Jednosoban (1)"
+      ],
+      "listing_type": "rent",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 48,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "jednosoban (1)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 77610061,
+      "type": "single",
+      "title": "Trosoban stan [53.34 m2] Banja Luka",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 0,
+      "discounted_price": "Na upit",
+      "show_price": true,
+      "price": 0,
+      "display_price": "Na upit",
+      "price_max": 0,
+      "date": 1787522400,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/77610061/sm/img-1782371047-2981a88375be.jpg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77610061/sm/img-1782371047-2981a88375be.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77610061/sm/img-1782371048-e3d2632d221e.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77610061/sm/img-1782371058-3b26b8c14a12.gif"
+      ],
+      "sponsored": 1,
+      "available": false,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "shop",
+      "user_id": 2095958,
+      "state": "used",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.758395905764,
+        "lon": 17.205241594242
+      },
+      "labels": [
+        "Trosoban (3)",
+        53.34
+      ],
+      "listing_type": "sell",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 53.34,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "trosoban (3)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 67387358,
+      "type": "single",
+      "title": "Stanovi Banja Luka od 39m2 do 63m2",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 0,
+      "discounted_price": "Na upit",
+      "show_price": true,
+      "price": 0,
+      "display_price": "Na upit",
+      "price_max": 0,
+      "date": 1787521824,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/67387358/sm/img-1743508889-e10d57e70255.jpg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/67387358/sm/img-1743508889-e10d57e70255.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/67387358/sm/img-1743508887-8d6268ae5261.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/67387358/sm/img-1743508894-0e98da111d1c.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/67387358/sm/img-1743508892-a573d2beaf51.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/67387358/sm/img-1743747347-366a7b8e1cdf.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/67387358/sm/img-1743683314-bb89b5fe916f.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/67387358/sm/img-1743683312-5ebb1520b35f.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/67387358/sm/img-1743683317-0d543bd867c9.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/67387358/sm/img-1743747304-1c9b565c4588.jpg"
+      ],
+      "sponsored": 1,
+      "available": false,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "shop",
+      "user_id": 2164024,
+      "state": "used",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.768775020943,
+        "lon": 17.212235694348
+      },
+      "labels": [
+        "Jednosoban (1)",
+        39
+      ],
+      "listing_type": "sell",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 39,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "jednosoban (1)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 77611282,
+      "type": "single",
+      "title": "Trosoban stan [54.96 m2] Banja Luka",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 0,
+      "discounted_price": "Na upit",
+      "show_price": true,
+      "price": 0,
+      "display_price": "Na upit",
+      "price_max": 0,
+      "date": 1787520649,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/77611282/sm/img-1782373047-af5612bc7731.jpg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77611282/sm/img-1782373047-af5612bc7731.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77611282/sm/img-1782373049-6e0c00f85215.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77611282/sm/img-1782373056-a7ab703b63f9.gif"
+      ],
+      "sponsored": 1,
+      "available": false,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "shop",
+      "user_id": 2095958,
+      "state": "used",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.758360908368,
+        "lon": 17.205239500354
+      },
+      "labels": [
+        "Trosoban (3)",
+        54.96
+      ],
+      "listing_type": "sell",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 54.96,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "trosoban (3)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 77769580,
+      "type": "single",
+      "title": "Dvosoban stan Banja Luka (43.68m2)_Hidroenergo",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 0,
+      "discounted_price": "Na upit",
+      "show_price": true,
+      "price": 0,
+      "display_price": "Na upit",
+      "price_max": 0,
+      "date": 1787520625,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/77769580/sm/img-1782991976-5a5b262a2a82.jpg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77769580/sm/img-1782991976-5a5b262a2a82.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77769580/sm/img-1782991974-b134103bd9e7.jpg"
+      ],
+      "sponsored": 1,
+      "available": false,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "shop",
+      "user_id": 2095958,
+      "state": "used",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.77138472093,
+        "lon": 17.218347963569
+      },
+      "labels": [
+        "Dvosoban (2)",
+        43.68
+      ],
+      "listing_type": "sell",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 43.68,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "dvosoban (2)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 61713932,
+      "type": "single",
+      "title": "Namješten stan Banja Luka, novogradnja kod Mercatora",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 750,
+      "discounted_price": "750 KM",
+      "show_price": true,
+      "price": 750,
+      "display_price": "750 KM",
+      "price_max": 0,
+      "date": 1787519735,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/61713932/sm/img-1740516300-1075861f2457.jpg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/61713932/sm/img-1740516300-1075861f2457.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/61713932/sm/img-1740516310-f848ea6e610a.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/61713932/sm/img-1740516563-b5cd0d54388e.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/61713932/sm/img-1740516572-ab1aa63fcd72.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/61713932/sm/img-1740516584-5abea3c24d2c.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/61713932/sm/img-1740516591-5945123578b9.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/61713932/sm/img-1740516597-6a5b781392d2.jpg"
+      ],
+      "sponsored": 1,
+      "available": true,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "user",
+      "user_id": 430149,
+      "state": "used",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.77473384854,
+        "lon": 17.2044037655
+      },
+      "labels": [
+        "Dvosoban (2)",
+        50
+      ],
+      "listing_type": "rent",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 50,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "dvosoban (2)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    },
+    {
+      "score": null,
+      "id": 77614341,
+      "type": "single",
+      "title": "Trosoban stan [54.96 m2] Banja Luka",
+      "category_id": 23,
+      "top_category_id": "2",
+      "brand_id": null,
+      "city_id": 79,
+      "has_discount": false,
+      "original_price": null,
+      "discounted_price_float": 0,
+      "discounted_price": "Na upit",
+      "show_price": true,
+      "price": 0,
+      "display_price": "Na upit",
+      "price_max": 0,
+      "date": 1787518946,
+      "image": "https://d4n0y8dshd77z.cloudfront.net/listings/77614341/sm/img-1782381733-fe27b6dbca44.jpg",
+      "images": [
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77614341/sm/img-1782381733-fe27b6dbca44.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77614341/sm/img-1782381734-2f349c5ac737.jpg",
+        "https://d4n0y8dshd77z.cloudfront.net/listings/77614341/sm/img-1782381744-e752e18c929b.gif"
+      ],
+      "sponsored": 1,
+      "available": false,
+      "visible": true,
+      "shipping": 0,
+      "card_payment": 0,
+      "user_type": "shop",
+      "user_id": 2095958,
+      "state": "used",
+      "status": "active",
+      "olx_stories": false,
+      "location": {
+        "lat": 44.758361623154,
+        "lon": 17.205238912033
+      },
+      "labels": [
+        "Trosoban (3)",
+        54.96
+      ],
+      "listing_type": "sell",
+      "premium_badges": [],
+      "ecommerce_tags": [],
+      "special_labels": [
+        {
+          "value": 54.96,
+          "label": "Kvadrata",
+          "unit": "㎡"
+        },
+        {
+          "value": "trosoban (3)",
+          "label": "Broj Soba",
+          "unit": null
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "total": 989,
+    "last_page": 25,
+    "current_page": 1,
+    "per_page": 40,
+    "selected_category": 23
+  },
+  "filters": [
+    {
+      "key": "category_id",
+      "value": "23"
+    }
+  ],
+  "aggregations": {
+    "categories": [
+      {
+        "id": 2,
+        "name": "Nekretnine",
+        "count": 989,
+        "selected": true,
+        "sub_categories": [
+          {
+            "id": 23,
+            "name": "Stanovi i apartmani",
+            "parent_id": 2,
+            "active_listings": 6582,
+            "selected": true
+          },
+          {
+            "id": 29,
+            "name": "Zemljišta",
+            "parent_id": 2,
+            "active_listings": 3182,
+            "selected": false
+          },
+          {
+            "id": 24,
+            "name": "Kuće",
+            "parent_id": 2,
+            "active_listings": 2711,
+            "selected": false
+          },
+          {
+            "id": 25,
+            "name": "Poslovni prostori",
+            "parent_id": 2,
+            "active_listings": 1896,
+            "selected": false
+          },
+          {
+            "id": 2668,
+            "name": "Stan na dan",
+            "parent_id": 2,
+            "active_listings": 1363,
+            "selected": false
+          },
+          {
+            "id": 26,
+            "name": "Vikendice",
+            "parent_id": 2,
+            "active_listings": 779,
+            "selected": false
+          },
+          {
+            "id": 30,
+            "name": "Garaže",
+            "parent_id": 2,
+            "active_listings": 268,
+            "selected": false
+          },
+          {
+            "id": 2672,
+            "name": "Skladišta i hale",
+            "parent_id": 2,
+            "active_listings": 267,
+            "selected": false
+          },
+          {
+            "id": 1193,
+            "name": "Montažni objekti",
+            "parent_id": 2,
+            "active_listings": 202,
+            "selected": false
+          },
+          {
+            "id": 28,
+            "name": "Sobe",
+            "parent_id": 2,
+            "active_listings": 84,
+            "selected": false
+          },
+          {
+            "id": 270,
+            "name": "Ostale nekretnine",
+            "parent_id": 2,
+            "active_listings": 76,
+            "selected": false
+          }
+        ]
+      }
+    ]
+  }
+}
