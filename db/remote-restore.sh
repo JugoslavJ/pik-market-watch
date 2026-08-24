@@ -8,7 +8,16 @@
 #   Get-Content dump -AsByteStream | ssh -i key <host>   (forced command runs)
 #
 # Pipeline: receive -> size check -> integrity check -> rollback snapshot ->
-# stop scraper (only if running) -> restore -> restart scraper.
+# stop scraper (only if running) -> replace the public schema -> restore
+# (atomic) -> on failure roll back to the previous snapshot -> restart scraper.
+#
+# Why the schema is dropped instead of pg_restore --clean: the instance never
+# runs migrations (no scraper), so home and instance schemas can drift (e.g. a
+# migration renamed a function's signature). Stale instance-side functions
+# that depend on a dumped table make --clean's plain DROP TABLE fail without
+# CASCADE, and the dump cannot drop what it does not contain. Dropping the
+# whole schema removes any drift; the dump recreates everything.
+#
 # No client-controlled input is ever evaluated: the dump path is fixed and
 # the archive must pass pg_restore -l and contain the listings data.
 set -eu
@@ -17,9 +26,15 @@ REPO_DIR="${OLX_REPO_DIR:-$HOME/pik-market-watch}"
 BACKUP_DIR="$REPO_DIR/backups"
 MIN_BYTES=20000
 # Restore as the least-privileged OWNING role (db/init/zz-database-roles.sh):
-# it must own the objects --clean drops/recreates. Name comes from .env.
+# it must own the restored objects. Names come from .env.
 app_user="$(sed -n 's/^POSTGRES_APP_USER=//p' "$REPO_DIR/.env" 2>/dev/null | tr -d '\r')"
 app_user="${app_user:-olx_app}"
+reader_user="$(sed -n 's/^POSTGRES_READER_USER=//p' "$REPO_DIR/.env" 2>/dev/null | tr -d '\r')"
+reader_user="${reader_user:-olx_reader}"
+# Bootstrap superuser (POSTGRES_USER) - owns the public schema itself, which
+# $app_user does not, so the schema reset below runs as this role.
+boot_user="$(sed -n 's/^POSTGRES_USER=//p' "$REPO_DIR/.env" 2>/dev/null | tr -d '\r')"
+boot_user="${boot_user:-olx}"
 
 was_running=0   # EXIT trap restarts the scraper if we stop it and then fail
 restore_ok=0
@@ -39,7 +54,6 @@ on_exit() {
   fi
 }
 trap on_exit EXIT
-
 incoming="$BACKUP_DIR/olx-sync-incoming.dump"
 cat > "$incoming"
 
@@ -58,10 +72,12 @@ if ! docker compose exec -T db sh -c 'pg_restore -l /backups/olx-sync-incoming.d
   exit 1
 fi
 
-# rollback snapshot; keep the 3 newest
+# rollback snapshots; keep the 3 newest. prev = second-newest = the state we
+# roll back to if the restore fails after the schema reset.
 stamp=$(date +%Y%m%d-%H%M%S)
 cp "$incoming" "$BACKUP_DIR/olx-sync-$stamp.dump"
 ls -1t "$BACKUP_DIR"/olx-sync-*.dump 2>/dev/null | tail -n +4 | xargs -r rm -f
+prev=$(ls -1t "$BACKUP_DIR"/olx-sync-*.dump 2>/dev/null | sed -n 2p || :)
 
 if docker compose ps --status running scraper 2>/dev/null | grep -q scraper; then
   was_running=1
@@ -71,32 +87,64 @@ fi
 # pg_restore runs INSIDE the db container: address the archive by its mount
 # point (/backups), never by the host-side path.
 #
-# The source machine's zz-database-roles.sh (pre-2026-08 versions) also set
-# default privileges FOR ROLE <bootstrap admin>. Restoring runs as $app_user,
-# which may not alter ANOTHER role's defaults — those two archive entries
-# would fail, and any pg_restore error aborts the whole sync. Filter the TOC:
-# keep every entry EXCEPT DEFAULT ACL items whose trailing role is not
-# $app_user. The dump's own app-role defaults still restore normally.
-if ! docker compose exec -T db sh -c "
-       pg_restore -l /backups/olx-sync-incoming.dump > /tmp/toc.all || exit 1
-       grep 'DEFAULT ACL' /tmp/toc.all | grep -Ev \" ${app_user}\$\" > /tmp/toc.drop || :;
-       grep -vxFf /tmp/toc.drop /tmp/toc.all > /tmp/toc.use || :;
-       test -s /tmp/toc.use && grep -q 'TABLE DATA public listings' /tmp/toc.use"; then
+# build_toc <container-archive-path> <output-list>: filter the TOC to entries
+# this restore may execute. The source machine's zz-database-roles.sh
+# (pre-2026-08 versions) also set default privileges FOR ROLE <bootstrap
+# admin>. Restoring runs as $app_user, which may not alter ANOTHER role's
+# defaults - those archive entries would fail, and any pg_restore error aborts
+# the whole sync. Keep every entry EXCEPT DEFAULT ACL items whose trailing
+# role is not $app_user; the dump's own app-role defaults restore normally.
+build_toc() {
+  docker compose exec -T db sh -c "
+     pg_restore -l '$1' > /tmp/toc.all || exit 1
+     grep 'DEFAULT ACL' /tmp/toc.all | grep -Ev \" ${app_user}\\$\" > /tmp/toc.drop || :
+     grep -vxFf /tmp/toc.drop /tmp/toc.all > '$2' || :
+     test -s '$2' && grep -q 'TABLE DATA public listings' '$2'
+  "
+}
+
+if ! build_toc /backups/olx-sync-incoming.dump /tmp/toc.use; then
   echo "RESTORE_ERROR: could not build a usable filtered restore list" >&2
   exit 1
 fi
+# Replace the whole public schema (see header). Runs as the bootstrap
+# superuser: it owns the schema itself, which $app_user does not.
+if ! docker compose exec -T db psql -U "$boot_user" -d olx -q -c "
+       DROP SCHEMA public CASCADE;
+       CREATE SCHEMA public;
+       GRANT ALL ON SCHEMA public TO \"$app_user\";
+       GRANT USAGE ON SCHEMA public TO \"$reader_user\";"; then
+  echo "RESTORE_ERROR: could not reset the public schema - database unchanged" >&2
+  exit 1
+fi
 
+# --single-transaction: the restore is all-or-nothing. If it fails after the
+# schema reset, the database is empty and the auto-rollback below replays the
+# previous snapshot.
+restore_failed=0
 if ! docker compose exec -T db pg_restore -U "$app_user" -d olx --clean --if-exists \
-       --use-list=/tmp/toc.use /backups/olx-sync-incoming.dump; then
-  echo "RESTORE_ERROR: pg_restore failed - database unchanged, rollback snapshot kept ($BACKUP_DIR/olx-sync-$stamp.dump)" >&2
+       --single-transaction --use-list=/tmp/toc.use /backups/olx-sync-incoming.dump; then
+  restore_failed=1
+fi
+
+if [ "$restore_failed" = "1" ]; then
+  if [ -n "$prev" ] && build_toc "/backups/$(basename "$prev")" /tmp/toc.prev; then
+    echo "RESTORE_ERROR: pg_restore failed - rolling back to previous snapshot $(basename "$prev")" >&2
+    if docker compose exec -T db pg_restore -U "$app_user" -d olx --clean --if-exists \
+           --single-transaction --use-list=/tmp/toc.prev "/backups/$(basename "$prev")"; then
+      echo "RESTORE_ERROR: rollback finished - instance is serving the previous snapshot" >&2
+    else
+      echo "RESTORE_ERROR: rollback FAILED - database is empty; restore $prev manually (see README)" >&2
+    fi
+  else
+    echo "RESTORE_ERROR: pg_restore failed and no previous snapshot exists - database is empty; restore one from $BACKUP_DIR manually" >&2
+  fi
   exit 1
 fi
 restore_ok=1
 
 # Belt & braces: FUTURE tables created by migrations must stay readable by
 # Grafana even if some future dump ever lacks the app-role defaults.
-reader_user="$(sed -n 's/^POSTGRES_READER_USER=//p' "$REPO_DIR/.env" 2>/dev/null | tr -d '\r')"
-reader_user="${reader_user:-olx_reader}"
 docker compose exec -T db psql -U "$app_user" -d olx -q \
   -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO \"$reader_user\";
       ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON SEQUENCES TO \"$reader_user\";" \
@@ -107,3 +155,4 @@ if [ "$was_running" = "1" ]; then
 fi
 
 echo "RESTORE_OK $stamp ($size bytes)"
+
