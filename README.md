@@ -369,6 +369,12 @@ owns objects; it is not a superuser.
   - Two built-in guards protect you here: a boot cycle is **skipped** when another run finished within `SCRAPE_MIN_GAP_MINUTES` (default 45 — rapid redeploys used to fire full scans each time), and a cycle that returns **zero listings everywhere skips its closing pass**, so throttling can never mass-close your catalog with bogus exit prices.
   - Recovery from a throttle is passive: keep intervals polite and wait — blocked IPs are usually unblocked within hours. Listings wrongly closed during such a window reopen automatically on their next sighting.
 - **Payload drift**: if OLX changes their JSON shape, fix the mappers in `scraper/src/parser.js` — they live in one place, and `npm run fixtures` re-records live payloads to test against. Unknown characteristic codes (`attr_code:"…"` equivalents) are still preserved raw in `listings.characteristics` (JSONB), so historical data survives even when a typed column stops being filled.
+- **Sync failed with *"permission denied to change default privileges"***: fixed in `remote-restore.sh` — archives from a source whose roles were set up before 2026-08 carried default-privilege entries FOR the bootstrap role, which the least-privileged restore role may not replay; those TOC entries are now filtered out. Nothing to do beyond letting CI deploy, then re-running the sync. Optional one-time cleanup on the HOME machine slims future dumps (adjust names if overridden):
+  ```bash
+  docker compose exec db psql -U olx -d olx -c \
+    "ALTER DEFAULT PRIVILEGES FOR ROLE olx IN SCHEMA public REVOKE ALL ON TABLES FROM olx_reader;
+     ALTER DEFAULT PRIVILEGES FOR ROLE olx IN SCHEMA public REVOKE ALL ON SEQUENCES FROM olx_reader;"
+  ```
 - **“Recent scrape runs” shows category `(none)`**: run rows inherit their category from `saved_searches`, and that row used to be written only when a run *finished* — brand-new searches (and every attempt that failed before the first success) therefore appeared unclassified. The scraper now registers each search's name/category at run start, so this self-heals after `docker compose up -d --build scraper`. To label rows already sitting in the database without rebuilding:
 
   ```bash

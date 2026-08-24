@@ -70,11 +70,37 @@ fi
 
 # pg_restore runs INSIDE the db container: address the archive by its mount
 # point (/backups), never by the host-side path.
-if ! docker compose exec -T db pg_restore -U "$app_user" -d olx --clean --if-exists /backups/olx-sync-incoming.dump; then
+#
+# The source machine's zz-database-roles.sh (pre-2026-08 versions) also set
+# default privileges FOR ROLE <bootstrap admin>. Restoring runs as $app_user,
+# which may not alter ANOTHER role's defaults — those two archive entries
+# would fail, and any pg_restore error aborts the whole sync. Filter the TOC:
+# keep every entry EXCEPT DEFAULT ACL items whose trailing role is not
+# $app_user. The dump's own app-role defaults still restore normally.
+if ! docker compose exec -T db sh -c "
+       pg_restore -l /backups/olx-sync-incoming.dump > /tmp/toc.all || exit 1
+       grep 'DEFAULT ACL' /tmp/toc.all | grep -Ev \" ${app_user}\$\" > /tmp/toc.drop || :;
+       grep -vxFf /tmp/toc.drop /tmp/toc.all > /tmp/toc.use || :;
+       test -s /tmp/toc.use && grep -q 'TABLE DATA public listings' /tmp/toc.use"; then
+  echo "RESTORE_ERROR: could not build a usable filtered restore list" >&2
+  exit 1
+fi
+
+if ! docker compose exec -T db pg_restore -U "$app_user" -d olx --clean --if-exists \
+       --use-list=/tmp/toc.use /backups/olx-sync-incoming.dump; then
   echo "RESTORE_ERROR: pg_restore failed - database unchanged, rollback snapshot kept ($BACKUP_DIR/olx-sync-$stamp.dump)" >&2
   exit 1
 fi
 restore_ok=1
+
+# Belt & braces: FUTURE tables created by migrations must stay readable by
+# Grafana even if some future dump ever lacks the app-role defaults.
+reader_user="$(sed -n 's/^POSTGRES_READER_USER=//p' "$REPO_DIR/.env" 2>/dev/null | tr -d '\r')"
+reader_user="${reader_user:-olx_reader}"
+docker compose exec -T db psql -U "$app_user" -d olx -q \
+  -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO \"$reader_user\";
+      ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON SEQUENCES TO \"$reader_user\";" \
+  || echo "RESTORE_WARN: could not re-assert default privileges for the reader (non-fatal)" >&2
 
 if [ "$was_running" = "1" ]; then
   docker compose start scraper

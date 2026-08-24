@@ -69,10 +69,9 @@ SELECT format('GRANT pg_read_all_data TO %I', :'reader_user') \gexec
 SELECT format('GRANT USAGE ON SCHEMA public TO %I', :'reader_user') \gexec
 SELECT format('GRANT SELECT ON ALL TABLES IN SCHEMA public TO %I', :'reader_user') \gexec
 SELECT format('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO %I', :'reader_user') \gexec
-SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT SELECT ON TABLES TO %I',
-              :'admin_user', :'reader_user') \gexec
-SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT SELECT ON SEQUENCES TO %I',
-              :'admin_user', :'reader_user') \gexec
+-- Defaults are attached to the APP role only: remote restores run as it, and
+-- they cannot replay cross-role defaults FOR the bootstrap user (that was the
+-- "permission denied to change default privileges" sync failure of 2026-08).
 SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT SELECT ON TABLES TO %I',
               :'app_user', :'reader_user') \gexec
 SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT SELECT ON SEQUENCES TO %I',
