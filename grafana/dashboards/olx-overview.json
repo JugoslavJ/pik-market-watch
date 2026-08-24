@@ -756,7 +756,7 @@
                 },
                 "opacity": 0.7,
                 "size": {
-                  "fixed": 9
+                  "fixed": 5
                 }
               },
               "links": [
@@ -778,10 +778,10 @@
           "mode": "details"
         },
         "view": {
-          "id": "coords",
+          "id": "fit",
           "lat": 44.77,
           "lon": 17.2,
-          "zoom": 9,
+          "zoom": 14,
           "allLayers": true,
           "lastOnly": false
         }
