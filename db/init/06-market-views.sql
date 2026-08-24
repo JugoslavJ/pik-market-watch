@@ -3,7 +3,7 @@
 -- category/room/bbox filtering stays in the panels via listings_filtered(),
 -- which composes with these views by article_id.
 -- Idempotent; applied automatically by the scraper on startup, or once with:
---   docker exec -i olx-db psql -U olx -d olx < db/init/06-market-views.sql
+--   docker exec -i olx-db psql -U olx_app -d olx < db/init/06-market-views.sql
 
 -- One row per listing: opening vs closing economics, price-change stats and
 -- time on market. Powers the Exits dashboard's discount columns and makes

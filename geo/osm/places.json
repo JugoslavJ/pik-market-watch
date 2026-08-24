@@ -1,0 +1,3789 @@
+{
+  "version": 0.6,
+  "generator": "Overpass API 0.7.62.11 87bfad18",
+  "osm3s": {
+    "timestamp_osm_base": "2026-08-24T19:17:36Z",
+    "timestamp_areas_base": "2026-08-23T12:13:01Z",
+    "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+  },
+  "elements": [
+
+{
+  "type": "node",
+  "id": 251282266,
+  "lat": 44.7064234,
+  "lon": 17.1946975,
+  "tags": {
+    "name": "Jagare",
+    "name:sr": "Јагаре",
+    "name:sr-Latn": "Jagare",
+    "place": "village",
+    "population": "1330",
+    "wikidata": "Q3115941",
+    "wikipedia": "bs:Jagare"
+  }
+},
+{
+  "type": "node",
+  "id": 792847152,
+  "lat": 44.6175370,
+  "lon": 17.1452324,
+  "tags": {
+    "addr:postcode": "78206",
+    "name": "Krupa na Vrbasu",
+    "name:sr": "Крупа на Врбасу",
+    "name:sr-Latn": "Krupa na Vrbasu",
+    "place": "village",
+    "population": "1239"
+  }
+},
+{
+  "type": "node",
+  "id": 792936253,
+  "lat": 44.9027632,
+  "lon": 17.1131295,
+  "tags": {
+    "name": "Mišin Han",
+    "name:sr": "Мишин Хан",
+    "name:sr-Latn": "Mišin Han",
+    "place": "hamlet",
+    "wikidata": "Q12755642",
+    "wikipedia": "sr:Мишин Хан"
+  }
+},
+{
+  "type": "node",
+  "id": 909917295,
+  "lat": 44.9161333,
+  "lon": 17.0684668,
+  "tags": {
+    "name": "Potkozarje",
+    "name:sr": "Поткозарје",
+    "old_name": "Ivanjska",
+    "old_name:sr": "Ивањска",
+    "place": "village",
+    "wikidata": "Q2037964",
+    "wikipedia": "bs:Potkozarje"
+  }
+},
+{
+  "type": "node",
+  "id": 1248802299,
+  "lat": 44.8424243,
+  "lon": 17.2122346,
+  "tags": {
+    "name": "Kuljani",
+    "name:sr": "Куљани",
+    "name:sr-Latn": "Kuljani",
+    "place": "village",
+    "population": "4165"
+  }
+},
+{
+  "type": "node",
+  "id": 1263104902,
+  "lat": 44.7626156,
+  "lon": 17.2508762,
+  "tags": {
+    "name": "Vrbanja",
+    "name:sr": "Врбања",
+    "name:sr-Latn": "Vrbanja",
+    "place": "quarter"
+  }
+},
+{
+  "type": "node",
+  "id": 1270171927,
+  "lat": 44.7831552,
+  "lon": 17.2285212,
+  "tags": {
+    "name": "Česma",
+    "name:sr": "Чесма",
+    "name:sr-Latn": "Česma",
+    "place": "quarter"
+  }
+},
+{
+  "type": "node",
+  "id": 1312707145,
+  "lat": 44.7596993,
+  "lon": 17.2093430,
+  "tags": {
+    "name": "Starčevica",
+    "name:sr": "Старчевица",
+    "name:sr-Latn": "Starčevica",
+    "place": "quarter"
+  }
+},
+{
+  "type": "node",
+  "id": 1312707146,
+  "lat": 44.7592904,
+  "lon": 17.2275850,
+  "tags": {
+    "name": "Rebrovac",
+    "name:sr": "Ребровац",
+    "name:sr-Latn": "Rebrovac",
+    "place": "quarter"
+  }
+},
+{
+  "type": "node",
+  "id": 1312707218,
+  "lat": 44.7706526,
+  "lon": 17.2029778,
+  "tags": {
+    "name": "Borik",
+    "name:sr": "Борик",
+    "name:sr-Latn": "Borik",
+    "place": "quarter"
+  }
+},
+{
+  "type": "node",
+  "id": 1312710912,
+  "lat": 44.7763624,
+  "lon": 17.2028728,
+  "tags": {
+    "name": "Aleja-centar",
+    "name:sr": "Алеја-центар",
+    "name:sr-Latn": "Aleja-centar",
+    "place": "quarter"
+  }
+},
+{
+  "type": "node",
+  "id": 1312710915,
+  "lat": 44.7880321,
+  "lon": 17.1900136,
+  "tags": {
+    "name": "Petrićevac",
+    "name:sr": "Петрићевац",
+    "name:sr-Latn": "Petrićevac",
+    "place": "quarter"
+  }
+},
+{
+  "type": "node",
+  "id": 1312710932,
+  "lat": 44.7791530,
+  "lon": 17.1922426,
+  "tags": {
+    "name": "Nova varoš",
+    "name:sr": "Нова варош",
+    "name:sr-Latn": "Nova varoš",
+    "place": "quarter"
+  }
+},
+{
+  "type": "node",
+  "id": 1431452782,
+  "lat": 44.7940067,
+  "lon": 17.1848141,
+  "tags": {
+    "name": "Rakovačke bare",
+    "name:sr": "Раковачке баре",
+    "name:sr-Latn": "Rakovačke bare",
+    "place": "quarter"
+  }
+},
+{
+  "type": "node",
+  "id": 1431452783,
+  "lat": 44.7784076,
+  "lon": 17.1677294,
+  "tags": {
+    "name": "Lauš",
+    "name:sr": "Лауш",
+    "name:sr-Latn": "Lauš",
+    "place": "quarter"
+  }
+},
+{
+  "type": "node",
+  "id": 1431452784,
+  "lat": 44.8044680,
+  "lon": 17.2081557,
+  "tags": {
+    "name": "Lazarevo",
+    "name:sr": "Лазарево",
+    "name:sr-Latn": "Lazarevo",
+    "place": "quarter"
+  }
+},
+{
+  "type": "node",
+  "id": 1431452787,
+  "lat": 44.7893048,
+  "lon": 17.2316370,
+  "tags": {
+    "name": "Mađir",
+    "name:sr": "Мађир",
+    "name:sr-Latn": "Mađir",
+    "place": "quarter"
+  }
+},
+{
+  "type": "node",
+  "id": 1431452788,
+  "lat": 44.8264930,
+  "lon": 17.1810034,
+  "tags": {
+    "name": "Šargovac",
+    "name:sr": "Шарговац",
+    "name:sr-Latn": "Šargovac",
+    "old_name": "Srpski Milanovac",
+    "old_name:sr": "Српски Милановац",
+    "place": "village",
+    "population": "3079",
+    "wikidata": "Q3115977",
+    "wikimedia_commons": "Category:Šargovac",
+    "wikipedia": "sr:Шарговац"
+  }
+},
+{
+  "type": "node",
+  "id": 1431452789,
+  "lat": 44.8363599,
+  "lon": 17.2314396,
+  "tags": {
+    "name": "Priječani",
+    "name:sr": "Пријечани",
+    "name:sr-Latn": "Priječani",
+    "place": "village",
+    "population": "2034"
+  }
+},
+{
+  "type": "node",
+  "id": 1431452790,
+  "lat": 44.8222171,
+  "lon": 17.2176829,
+  "tags": {
+    "name": "Derviši",
+    "name:sr": "Дервиши",
+    "name:sr-Latn": "Derviši",
+    "place": "quarter"
+  }
+},
+{
+  "type": "node",
+  "id": 1431452791,
+  "lat": 44.8073248,
+  "lon": 17.1759411,
+  "tags": {
+    "name": "Drakulić",
+    "name:sr": "Дракулић",
+    "name:sr-Latn": "Drakulić",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 1435978758,
+  "lat": 44.8702698,
+  "lon": 17.1969775,
+  "tags": {
+    "name": "Barlovci",
+    "name:sr": "Барловци",
+    "name:sr-Latn": "Barlovci",
+    "place": "village",
+    "population": "711"
+  }
+},
+{
+  "type": "node",
+  "id": 1454193077,
+  "lat": 44.6618673,
+  "lon": 17.1102044,
+  "tags": {
+    "name": "Jaćimovići",
+    "name:sr": "Јаћимовићи",
+    "name:sr-Latn": "Jaćimovići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 1454204073,
+  "lat": 44.6552164,
+  "lon": 17.0286866,
+  "tags": {
+    "name": "Dobrnja",
+    "name:sr": "Добрња",
+    "name:sr-Latn": "Dobrnja",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 1640282099,
+  "lat": 44.8295165,
+  "lon": 17.1968791,
+  "tags": {
+    "name": "Tunjice",
+    "name:sr": "Туњице",
+    "name:sr-Latn": "Tunjice",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 1644153654,
+  "lat": 44.7852925,
+  "lon": 17.1996425,
+  "tags": {
+    "name": "Rosulje",
+    "name:sr": "Росуље",
+    "name:sr-Latn": "Rosulje",
+    "place": "quarter"
+  }
+},
+{
+  "type": "node",
+  "id": 1645027036,
+  "lat": 44.7828748,
+  "lon": 17.1838356,
+  "tags": {
+    "name": "Paprikovac",
+    "name:sr": "Паприковац",
+    "name:sr-Latn": "Paprikovac",
+    "place": "quarter"
+  }
+},
+{
+  "type": "node",
+  "id": 1658939856,
+  "lat": 44.7383890,
+  "lon": 17.1559996,
+  "tags": {
+    "name": "Novoselija",
+    "name:sr": "Новоселија",
+    "name:sr-Latn": "Novoselija",
+    "place": "suburb"
+  }
+},
+{
+  "type": "node",
+  "id": 1660646748,
+  "lat": 44.7701327,
+  "lon": 17.1894566,
+  "tags": {
+    "name": "Centar",
+    "name:sr": "Центар",
+    "name:sr-Latn": "Centar",
+    "place": "quarter"
+  }
+},
+{
+  "type": "node",
+  "id": 1661501239,
+  "lat": 44.7991325,
+  "lon": 17.2635188,
+  "tags": {
+    "name": "Krčmarice",
+    "name:sr": "Крчмарице",
+    "name:sr-Latn": "Krčmarice",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 1686148353,
+  "lat": 44.7687282,
+  "lon": 17.1849065,
+  "tags": {
+    "name": "Bulevar",
+    "name:sr": "Булевар",
+    "name:sr-Latn": "Bulevar",
+    "place": "quarter"
+  }
+},
+{
+  "type": "node",
+  "id": 1755076014,
+  "lat": 44.7925435,
+  "lon": 16.7955182,
+  "tags": {
+    "name": "Pranići",
+    "name:sr": "Пранићи",
+    "name:sr-Latn": "Pranići",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 1806552404,
+  "lat": 44.7619549,
+  "lon": 17.1909947,
+  "tags": {
+    "alt_name": "Obilićevo",
+    "int_name": "Mejdan",
+    "name": "Obilićevo",
+    "name:sr": "Обилићево",
+    "name:sr-Latn": "Obilićevo",
+    "old_name": "Mejdan",
+    "place": "quarter"
+  }
+},
+{
+  "type": "node",
+  "id": 2288256735,
+  "lat": 44.7868521,
+  "lon": 16.9321793,
+  "tags": {
+    "name": "Bronzani Majdan",
+    "name:sr": "Бронзани Мајдан",
+    "name:sr-Latn": "Bronzani Majdan",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2288279217,
+  "lat": 44.8144136,
+  "lon": 17.0512176,
+  "tags": {
+    "name": "Bistrica",
+    "name:sr": "Бистрица",
+    "name:sr-Latn": "Bistrica",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2288292904,
+  "lat": 44.8542483,
+  "lon": 17.1592084,
+  "tags": {
+    "name": "Dragočaj",
+    "name:sr": "Драгочај",
+    "name:sr-Latn": "Dragočaj",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2603084341,
+  "lat": 44.8073044,
+  "lon": 16.8633962,
+  "tags": {
+    "name": "Stratinska",
+    "name:sr": "Стратинска",
+    "name:sr-Latn": "Stratinska",
+    "place": "village",
+    "wikidata": "Q3115982",
+    "wikipedia": "bs:Stratinska"
+  }
+},
+{
+  "type": "node",
+  "id": 2626910251,
+  "lat": 44.7615519,
+  "lon": 17.1812491,
+  "tags": {
+    "name": "Kočićev vijenac",
+    "name:sr": "Кочићев вијенац",
+    "name:sr-Latn": "Kočićev vijenac",
+    "place": "quarter"
+  }
+},
+{
+  "type": "node",
+  "id": 2626912374,
+  "lat": 44.7646715,
+  "lon": 17.1726352,
+  "tags": {
+    "name": "Pobrđe",
+    "name:sr": "Побрђе",
+    "name:sr-Latn": "Pobrđe",
+    "place": "quarter"
+  }
+},
+{
+  "type": "node",
+  "id": 2626916241,
+  "lat": 44.5329332,
+  "lon": 17.1585860,
+  "tags": {
+    "name": "Bočac",
+    "name:sr": "Бочац",
+    "name:sr-Latn": "Bočac",
+    "place": "village",
+    "population": "946",
+    "wikidata": "Q2923148",
+    "wikimedia_commons": "Category:Bočac",
+    "wikipedia": "bs:Bočac (Banja Luka)"
+  }
+},
+{
+  "type": "node",
+  "id": 2626916242,
+  "lat": 44.5534349,
+  "lon": 17.1876532,
+  "tags": {
+    "name": "Škrbidol",
+    "name:sr": "Шкрбидол",
+    "name:sr-Latn": "Škrbidol",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 2626916341,
+  "lat": 44.5596106,
+  "lon": 17.2109371,
+  "tags": {
+    "name": "Grlići",
+    "name:sr": "Грлићи",
+    "name:sr-Latn": "Grlići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 2626916495,
+  "lat": 44.5638364,
+  "lon": 17.1760088,
+  "tags": {
+    "name": "Agino Selo",
+    "name:sr": "Агино Село",
+    "name:sr-Latn": "Agino Selo",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2626918243,
+  "lat": 44.6147850,
+  "lon": 17.1540397,
+  "tags": {
+    "name": "Prnjavor",
+    "name:sr": "Прњавор",
+    "name:sr-Latn": "Prnjavor",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 2626919696,
+  "lat": 44.6174508,
+  "lon": 17.1775704,
+  "tags": {
+    "name": "Krmine",
+    "name:sr": "Крмине",
+    "name:sr-Latn": "Krmine",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2626919697,
+  "lat": 44.6157559,
+  "lon": 17.1910153,
+  "tags": {
+    "name": "Dojići",
+    "name:sr": "Дојићи",
+    "name:sr-Latn": "Dojići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 2626920964,
+  "lat": 44.6555438,
+  "lon": 17.1295029,
+  "tags": {
+    "name": "Vukovići",
+    "name:sr": "Вуковићи",
+    "name:sr-Latn": "Vukovići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 2626921827,
+  "lat": 44.7019591,
+  "lon": 17.1399686,
+  "tags": {
+    "name": "Rekavice",
+    "name:sr": "Рекавице",
+    "name:sr-Latn": "Rekavice",
+    "place": "village",
+    "population": "2156",
+    "wikidata": "Q541593",
+    "wikimedia_commons": "Category:Rekavice",
+    "wikipedia": "bs:Rekavice"
+  }
+},
+{
+  "type": "node",
+  "id": 2626923393,
+  "lat": 44.6623843,
+  "lon": 17.2060019,
+  "tags": {
+    "name": "Ljubačevo",
+    "name:sr": "Љубачево",
+    "name:sr-Latn": "Ljubačevo",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2626934063,
+  "lat": 44.6927536,
+  "lon": 17.2328874,
+  "tags": {
+    "name": "Bastasi",
+    "name:sr": "Бастаси",
+    "name:sr-Latn": "Bastasi",
+    "place": "village",
+    "population": "165",
+    "wikidata": "Q2887664",
+    "wikipedia": "bs:Bastasi (Banja Luka)"
+  }
+},
+{
+  "type": "node",
+  "id": 2626943558,
+  "lat": 44.7282914,
+  "lon": 17.2254977,
+  "tags": {
+    "name": "Ponir",
+    "name:sr": "Понир",
+    "name:sr-Latn": "Ponir",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2626945539,
+  "lat": 44.7454391,
+  "lon": 17.2548089,
+  "tags": {
+    "name": "Debeljaci",
+    "name:sr": "Дебељаци",
+    "name:sr-Latn": "Debeljaci",
+    "place": "village",
+    "population": "1219"
+  }
+},
+{
+  "type": "node",
+  "id": 2626970764,
+  "lat": 44.5594077,
+  "lon": 16.9813940,
+  "tags": {
+    "name": "Dujakovci",
+    "name:sr": "Дујаковци",
+    "name:sr-Latn": "Dujakovci",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2626970765,
+  "lat": 44.5581005,
+  "lon": 17.0129582,
+  "tags": {
+    "name": "Lokvari",
+    "name:sr": "Локвари",
+    "name:sr-Latn": "Lokvari",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2626970766,
+  "lat": 44.5631687,
+  "lon": 17.0454666,
+  "tags": {
+    "name": "Marčete",
+    "name:sr": "Марчете",
+    "name:sr-Latn": "Marčete",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 2626970768,
+  "lat": 44.5800749,
+  "lon": 17.0062635,
+  "tags": {
+    "name": "Stričići",
+    "name:sr": "Стричићи",
+    "name:sr-Latn": "Stričići",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2626970771,
+  "lat": 44.6120395,
+  "lon": 17.0017144,
+  "tags": {
+    "name": "Lusići",
+    "name:sr": "Лусићи",
+    "name:sr-Latn": "Lusići",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2626970774,
+  "lat": 44.6150181,
+  "lon": 16.9753430,
+  "tags": {
+    "name": "Kočića Han",
+    "name:sr": "Кочића Хан",
+    "name:sr-Latn": "Kočića Han",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 2626970777,
+  "lat": 44.6381849,
+  "lon": 16.9514177,
+  "tags": {
+    "name": "Pavići",
+    "name:sr": "Павићи",
+    "name:sr-Latn": "Pavići",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2626980953,
+  "lat": 44.6359251,
+  "lon": 16.9980452,
+  "tags": {
+    "name": "Kadina Voda",
+    "name:sr": "Кадина Вода",
+    "name:sr-Latn": "Kadina Voda",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2626983855,
+  "lat": 44.6755651,
+  "lon": 17.0069072,
+  "tags": {
+    "name": "Šljivno",
+    "name:sr": "Шљивно",
+    "name:sr-Latn": "Šljivno",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2626989076,
+  "lat": 44.6129273,
+  "lon": 17.1031676,
+  "tags": {
+    "name": "Racune",
+    "name:sr": "Рацуне",
+    "name:sr-Latn": "Racune",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 2626998619,
+  "lat": 44.6943142,
+  "lon": 17.0853621,
+  "tags": {
+    "name": "Kola",
+    "name:sr": "Кола",
+    "name:sr-Latn": "Kola",
+    "place": "village",
+    "population": "1249",
+    "population:date": "2013",
+    "wikidata": "Q3115093",
+    "wikimedia_commons": "Category:Kola (Banja Luka)",
+    "wikipedia": "bs:Kola (Banja Luka)"
+  }
+},
+{
+  "type": "node",
+  "id": 2626998622,
+  "lat": 44.6812596,
+  "lon": 17.0802974,
+  "tags": {
+    "name": "Gornja Kola",
+    "name:sr": "Горња Кола",
+    "name:sr-Latn": "Gornja Kola",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 2627000079,
+  "lat": 44.7099298,
+  "lon": 17.0399772,
+  "tags": {
+    "name": "Konatari",
+    "name:sr": "Конатари",
+    "name:sr-Latn": "Konatari",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 2627002125,
+  "lat": 44.7111016,
+  "lon": 17.1165758,
+  "tags": {
+    "name": "Dragičevići",
+    "name:sr": "Драгичевићи",
+    "name:sr-Latn": "Dragičevići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 2627005631,
+  "lat": 44.7115511,
+  "lon": 17.1437151,
+  "tags": {
+    "name": "Aćimovići",
+    "name:sr": "Аћимовићи",
+    "name:sr-Latn": "Aćimovići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 2627036004,
+  "lat": 44.6758662,
+  "lon": 16.9166697,
+  "tags": {
+    "name": "Vilusi",
+    "name:sr": "Вилуси",
+    "name:sr-Latn": "Vilusi",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2627036005,
+  "lat": 44.7281944,
+  "lon": 16.9041599,
+  "tags": {
+    "name": "Kmećani",
+    "name:sr": "Кмећани",
+    "name:sr-Latn": "Kmećani",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2627036006,
+  "lat": 44.6803826,
+  "lon": 16.9558300,
+  "tags": {
+    "name": "Radmanići",
+    "name:sr": "Радманићи",
+    "name:sr-Latn": "Radmanići",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2627036007,
+  "lat": 44.7041485,
+  "lon": 17.0014704,
+  "tags": {
+    "name": "Zelenci",
+    "name:sr": "Зеленци",
+    "name:sr-Latn": "Zelenci",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2627036008,
+  "lat": 44.7412892,
+  "lon": 17.0141229,
+  "tags": {
+    "name": "Pervan Gornji",
+    "name:sr": "Перван Горњи",
+    "name:sr-Latn": "Pervan Gornji",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2627036009,
+  "lat": 44.7580053,
+  "lon": 16.9896687,
+  "tags": {
+    "name": "Pervan Donji",
+    "name:sr": "Перван Доњи",
+    "name:sr-Latn": "Pervan Donji",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2627036010,
+  "lat": 44.7402211,
+  "lon": 16.9753564,
+  "tags": {
+    "name": "Subotica",
+    "name:sr": "Суботица",
+    "name:sr-Latn": "Subotica",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2627036011,
+  "lat": 44.7543290,
+  "lon": 16.9589490,
+  "tags": {
+    "name": "Melina",
+    "name:sr": "Мелина",
+    "name:sr-Latn": "Melina",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2627050524,
+  "lat": 44.7739217,
+  "lon": 16.8999543,
+  "tags": {
+    "name": "Obrovac",
+    "name:sr": "Обровац",
+    "name:sr-Latn": "Obrovac",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2627052666,
+  "lat": 44.7524283,
+  "lon": 16.8900729,
+  "tags": {
+    "name": "Kula",
+    "name:sr": "Кула",
+    "name:sr-Latn": "Kula",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2627235975,
+  "lat": 44.8237294,
+  "lon": 16.9838993,
+  "tags": {
+    "name": "Slavićka",
+    "name:sr": "Славићка",
+    "name:sr-Latn": "Slavićka",
+    "place": "village",
+    "wikidata": "Q743519",
+    "wikipedia": "bs:Slavićka"
+  }
+},
+{
+  "type": "node",
+  "id": 2627235979,
+  "lat": 44.8211451,
+  "lon": 16.9992854,
+  "tags": {
+    "name": "Borkovići",
+    "name:sr": "Борковићи",
+    "name:sr-Latn": "Borkovići",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2627235982,
+  "lat": 44.7587600,
+  "lon": 17.0687136,
+  "tags": {
+    "name": "Goleši",
+    "name:sr": "Голеши",
+    "name:sr-Latn": "Goleši",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2627256548,
+  "lat": 44.8496130,
+  "lon": 16.9479301,
+  "tags": {
+    "name": "Radosavska",
+    "name:sr": "Радосавска",
+    "name:sr-Latn": "Radosavska",
+    "place": "village",
+    "wikidata": "Q515169",
+    "wikipedia": "bs:Radosavska"
+  }
+},
+{
+  "type": "node",
+  "id": 2627256551,
+  "lat": 44.8677605,
+  "lon": 16.9757302,
+  "tags": {
+    "name": "Piskavica",
+    "name:sr": "Пискавица",
+    "name:sr-Latn": "Piskavica",
+    "place": "village",
+    "wikidata": "Q3115412",
+    "wikimedia_commons": "Category:Piskavica",
+    "wikipedia": "bs:Piskavica (Banja Luka)"
+  }
+},
+{
+  "type": "node",
+  "id": 2627284198,
+  "lat": 44.7999261,
+  "lon": 17.1169075,
+  "tags": {
+    "name": "Prnjavor Mali",
+    "name:sr": "Прњавор Мали",
+    "name:sr-Latn": "Prnjavor Mali",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2627284199,
+  "lat": 44.7938294,
+  "lon": 17.1429400,
+  "tags": {
+    "name": "Pavlovac",
+    "name:sr": "Павловац",
+    "name:sr-Latn": "Pavlovac",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2627285632,
+  "lat": 44.7863185,
+  "lon": 17.0928488,
+  "tags": {
+    "name": "Čokori",
+    "name:sr": "Чокори",
+    "name:sr-Latn": "Čokori",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2627287491,
+  "lat": 44.7614040,
+  "lon": 17.1195666,
+  "tags": {
+    "name": "Kola Donja",
+    "name:sr": "Кола Доња",
+    "name:sr-Latn": "Kola Donja",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2627290343,
+  "lat": 44.8145872,
+  "lon": 17.1376677,
+  "tags": {
+    "name": "Motike",
+    "name:sr": "Мотике",
+    "name:sr-Latn": "Motike",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2627302632,
+  "lat": 44.8539396,
+  "lon": 17.1743773,
+  "tags": {
+    "name": "Ramići",
+    "name:sr": "Рамићи",
+    "name:sr-Latn": "Ramići",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2627304575,
+  "lat": 44.9274852,
+  "lon": 16.9889132,
+  "tags": {
+    "name": "Verići",
+    "name:sr": "Верићи",
+    "name:sr-Latn": "Verići",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2627306762,
+  "lat": 44.9518127,
+  "lon": 17.1075823,
+  "tags": {
+    "name": "Šimići",
+    "name:sr": "Шимићи",
+    "name:sr-Latn": "Šimići",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2627311304,
+  "lat": 44.9080690,
+  "lon": 17.1196415,
+  "tags": {
+    "name": "Ružići",
+    "name:sr": "Ружићи",
+    "name:sr-Latn": "Ružići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 2627315005,
+  "lat": 44.8733029,
+  "lon": 17.1506621,
+  "tags": {
+    "name": "Prijakovci",
+    "name:sr": "Пријаковци",
+    "name:sr-Latn": "Prijakovci",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2627315006,
+  "lat": 44.8990716,
+  "lon": 17.1690156,
+  "tags": {
+    "name": "Cerici",
+    "name:sr": "Церици",
+    "name:sr-Latn": "Cerici",
+    "place": "village"
+  }
+},
+{
+  "type": "node",
+  "id": 2627321092,
+  "lat": 44.8318546,
+  "lon": 17.2027076,
+  "tags": {
+    "name": "Vujinovići",
+    "name:sr": "Вујиновићи",
+    "name:sr-Latn": "Vujinovići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 2627321096,
+  "lat": 44.8238008,
+  "lon": 17.2024197,
+  "tags": {
+    "name": "Novakovići",
+    "name:sr": "Новаковићи",
+    "name:sr-Latn": "Novakovići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 2627332049,
+  "lat": 44.7863135,
+  "lon": 17.2213408,
+  "tags": {
+    "name": "Kumsale",
+    "name:sr": "Кумсале",
+    "name:sr-Latn": "Kumsale",
+    "place": "quarter"
+  }
+},
+{
+  "type": "node",
+  "id": 2627336575,
+  "lat": 44.8139482,
+  "lon": 17.2372195,
+  "tags": {
+    "name": "Kolonija",
+    "name:sr": "Колонија",
+    "name:sr-Latn": "Kolonija",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 2627342022,
+  "lat": 44.8154552,
+  "lon": 17.2214481,
+  "tags": {
+    "name": "Trapisti",
+    "name:sr": "Траписти",
+    "name:sr-Latn": "Trapisti",
+    "place": "quarter"
+  }
+},
+{
+  "type": "node",
+  "id": 2627345872,
+  "lat": 44.7715112,
+  "lon": 17.2209892,
+  "tags": {
+    "name": "Ada",
+    "name:sr": "Ада",
+    "name:sr-Latn": "Ada",
+    "place": "quarter"
+  }
+},
+{
+  "type": "node",
+  "id": 2627356946,
+  "lat": 44.7411315,
+  "lon": 17.2791329,
+  "tags": {
+    "name": "Zeleni vir",
+    "name:sr": "Зелени вир",
+    "name:sr-Latn": "Zeleni vir",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 2661215521,
+  "lat": 44.9711022,
+  "lon": 17.1418358,
+  "tags": {
+    "name": "Užari",
+    "name:sr": "Ужари",
+    "name:sr-Latn": "Užari",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 2663295308,
+  "lat": 44.9769149,
+  "lon": 17.1343453,
+  "tags": {
+    "name": "Torlak",
+    "name:sr": "Торлак",
+    "name:sr-Latn": "Torlak",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 2946665780,
+  "lat": 44.8056955,
+  "lon": 17.1195145,
+  "tags": {
+    "name": "Saračica",
+    "name:sr": "Сарачица",
+    "name:sr-Latn": "Saračica",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 3509057432,
+  "lat": 44.9162772,
+  "lon": 16.9848435,
+  "tags": {
+    "name": "Đuđići",
+    "name:sr": "Ђуђићи",
+    "name:sr-Latn": "Đuđići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 3621437048,
+  "lat": 44.6972410,
+  "lon": 17.1952877,
+  "tags": {
+    "name": "Karanovac",
+    "name:bs": "Karanovac",
+    "name:de": "Karanovac",
+    "name:en": "Karanovac",
+    "name:hr": "Karanovac",
+    "name:mk": "Карановац",
+    "name:sh": "Karanovac",
+    "name:sr": "Карановац",
+    "name:sr-Latn": "Karanovac",
+    "place": "suburb",
+    "population": "2193",
+    "population:date": "19910101",
+    "source:population": "wikipedia",
+    "wikidata": "Q16086620",
+    "wikipedia": "sr:Карановац (Бања Лука)"
+  }
+},
+{
+  "type": "node",
+  "id": 4791423421,
+  "lat": 44.6142346,
+  "lon": 17.1262634,
+  "tags": {
+    "name": "Tovilovići",
+    "name:sr": "Товиловићи",
+    "name:sr-Latn": "Tovilovići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 4791423422,
+  "lat": 44.6178036,
+  "lon": 17.1273887,
+  "tags": {
+    "name": "Blagojevići",
+    "name:sr": "Благојевићи",
+    "name:sr-Latn": "Blagojevići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 4791423423,
+  "lat": 44.6180837,
+  "lon": 17.1218002,
+  "tags": {
+    "name": "Pejići",
+    "name:sr": "Пејићи",
+    "name:sr-Latn": "Pejići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 4791423424,
+  "lat": 44.6136084,
+  "lon": 17.1379149,
+  "tags": {
+    "name": "Zidine",
+    "name:sr": "Зидине",
+    "name:sr-Latn": "Zidine",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 5053728468,
+  "lat": 44.7515679,
+  "lon": 17.2408801,
+  "tags": {
+    "name": "Presnače",
+    "name:sr": "Пресначе",
+    "name:sr-Latn": "Presnače",
+    "place": "quarter"
+  }
+},
+{
+  "type": "node",
+  "id": 5948130276,
+  "lat": 44.8554797,
+  "lon": 16.9426816,
+  "tags": {
+    "name": "Plavljani",
+    "name:sr": "Плављани",
+    "name:sr-Latn": "Plavljani",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 5948130277,
+  "lat": 44.8416122,
+  "lon": 16.9420728,
+  "tags": {
+    "name": "Jakovljevići",
+    "name:sr": "Јаковљевићи",
+    "name:sr-Latn": "Jakovljevići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 5948130700,
+  "lat": 44.8456322,
+  "lon": 16.9365202,
+  "tags": {
+    "name": "Sandalj",
+    "name:sr": "Сандаљ",
+    "name:sr-Latn": "Sandalj",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 6108372102,
+  "lat": 44.8360663,
+  "lon": 17.1912337,
+  "tags": {
+    "name": "Zalužani",
+    "name:sr": "Залужани",
+    "name:sr-Latn": "Zalužani",
+    "place": "village",
+    "population": "637"
+  }
+},
+{
+  "type": "node",
+  "id": 6681985623,
+  "lat": 44.8591069,
+  "lon": 17.1171276,
+  "tags": {
+    "name": "Gradina",
+    "name:sr": "Градина",
+    "name:sr-Latn": "Gradina",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 6781270860,
+  "lat": 44.7511764,
+  "lon": 17.1595679,
+  "tags": {
+    "name": "Srpske toplice",
+    "name:sr": "Српске топлице",
+    "name:sr-Latn": "Srpske toplice",
+    "old_name": "Gornji Šeher",
+    "place": "quarter",
+    "wikipedia": "sr:Српске топлице"
+  }
+},
+{
+  "type": "node",
+  "id": 7178872070,
+  "lat": 44.8022537,
+  "lon": 17.2306260,
+  "tags": {
+    "name": "Delibašino selo",
+    "name:sr": "Делибашино село",
+    "name:sr-Latn": "Delibašino selo",
+    "place": "quarter"
+  }
+},
+{
+  "type": "node",
+  "id": 8622993929,
+  "lat": 44.5067405,
+  "lon": 17.1815987,
+  "tags": {
+    "name": "Grbavci",
+    "name:hr": "Grbavci",
+    "name:sr": "Грбавци",
+    "name:sr-Latn": "Grbavci",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 8622993930,
+  "lat": 44.4988895,
+  "lon": 17.2075304,
+  "tags": {
+    "name": "Šumljani",
+    "name:hr": "Šumljani",
+    "name:sr": "Шумљани",
+    "name:sr-Latn": "Šumljani",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 8622993931,
+  "lat": 44.4961327,
+  "lon": 17.1984269,
+  "tags": {
+    "name": "Drinići",
+    "name:hr": "Drinići",
+    "name:sr": "Дринићи",
+    "name:sr-Latn": "Drinići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 8622993933,
+  "lat": 44.5060212,
+  "lon": 17.1680267,
+  "tags": {
+    "name": "Vršani",
+    "name:hr": "Vršani",
+    "name:sr": "Вршани",
+    "name:sr-Latn": "Vršani",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 8622993934,
+  "lat": 44.5046440,
+  "lon": 17.2001167,
+  "tags": {
+    "name": "Todići",
+    "name:hr": "Todići",
+    "name:sr": "Тодићи",
+    "name:sr-Latn": "Todići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 8925138310,
+  "lat": 44.9130109,
+  "lon": 17.1701986,
+  "tags": {
+    "name": "Gradina",
+    "name:sr": "Градина",
+    "name:sr-Latn": "Gradina",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 8925138312,
+  "lat": 44.9297619,
+  "lon": 17.1553069,
+  "tags": {
+    "name": "Klasani",
+    "name:sr": "Класани",
+    "name:sr-Latn": "Klasani",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 8925138313,
+  "lat": 44.9287935,
+  "lon": 17.1601295,
+  "tags": {
+    "name": "Dizdari",
+    "name:sr": "Диздари",
+    "name:sr-Latn": "Dizdari",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 8925155830,
+  "lat": 44.9285618,
+  "lon": 17.1784812,
+  "tags": {
+    "name": "Šimići Kozara",
+    "name:sr": "Шимићи Козара",
+    "name:sr-Latn": "Šimići Kozara",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 8925155846,
+  "lat": 44.9375546,
+  "lon": 17.1542126,
+  "tags": {
+    "name": "Jurkići",
+    "name:sr": "Јуркићи",
+    "name:sr-Latn": "Jurkići",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 8925155849,
+  "lat": 44.9387622,
+  "lon": 17.1304858,
+  "tags": {
+    "name": "Oljačić",
+    "name:sr": "Ољачић",
+    "name:sr-Latn": "Oljačić",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 8925155857,
+  "lat": 44.9442414,
+  "lon": 17.1283239,
+  "tags": {
+    "name": "Blaževići",
+    "name:sr": "Блажевићи",
+    "name:sr-Latn": "Blaževići",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 8925155869,
+  "lat": 44.9493176,
+  "lon": 17.0809454,
+  "tags": {
+    "name": "Miškovići",
+    "name:sr": "Мишковићи",
+    "name:sr-Latn": "Miškovići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 9178235465,
+  "lat": 44.8518187,
+  "lon": 17.2134465,
+  "tags": {
+    "name": "Podovi",
+    "name:sr": "Подови",
+    "name:sr-Latn": "Podovi",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 9228646076,
+  "lat": 44.6877030,
+  "lon": 17.0681785,
+  "tags": {
+    "name": "Radulovići",
+    "name:sr": "Радуловићи",
+    "name:sr-Latn": "Radulovići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 9228646077,
+  "lat": 44.7170250,
+  "lon": 17.1045688,
+  "tags": {
+    "name": "Vukliševići",
+    "name:sr": "Вуклишевићи",
+    "name:sr-Latn": "Vukliševići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 9228646078,
+  "lat": 44.7026685,
+  "lon": 17.0988978,
+  "tags": {
+    "name": "Travari",
+    "name:sr": "Травари",
+    "name:sr-Latn": "Travari",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 9228646079,
+  "lat": 44.7044239,
+  "lon": 17.1015605,
+  "tags": {
+    "name": "Marići",
+    "name:sr": "Марићи",
+    "name:sr-Latn": "Marići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 9228646081,
+  "lat": 44.7112859,
+  "lon": 17.0952374,
+  "tags": {
+    "name": "Mandići",
+    "name:sr": "Мандићи",
+    "name:sr-Latn": "Mandići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 9228646084,
+  "lat": 44.7012234,
+  "lon": 17.0945041,
+  "tags": {
+    "name": "Štrkići",
+    "name:sr": "Штркићи",
+    "name:sr-Latn": "Štrkići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 9228664099,
+  "lat": 44.7259308,
+  "lon": 17.1485501,
+  "tags": {
+    "name": "Krčevine",
+    "name:sr": "Крчевине",
+    "name:sr-Latn": "Krčevine",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 10335728496,
+  "lat": 44.7080691,
+  "lon": 17.1980269,
+  "tags": {
+    "name": "Kule",
+    "name:sr": "Куле",
+    "name:sr-Latn": "Kule",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11016985667,
+  "lat": 44.7745658,
+  "lon": 16.8124562,
+  "tags": {
+    "name": "Vukojevići",
+    "name:sr": "Вукојевићи",
+    "name:sr-Latn": "Vukojevići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11016985668,
+  "lat": 44.7703539,
+  "lon": 16.8264306,
+  "tags": {
+    "name": "Kondići",
+    "name:sr": "Кондићи",
+    "name:sr-Latn": "Kondići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043879196,
+  "lat": 44.6889322,
+  "lon": 17.1688605,
+  "tags": {
+    "name": "Prnjavor",
+    "name:sr": "Прњавор",
+    "name:sr-Latn": "Prnjavor",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043911915,
+  "lat": 44.6976976,
+  "lon": 17.1484375,
+  "tags": {
+    "name": "Malčići",
+    "name:sr": "Малчићи",
+    "name:sr-Latn": "Malčići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043912000,
+  "lat": 44.6721221,
+  "lon": 17.1491868,
+  "tags": {
+    "name": "Poljice",
+    "name:sr": "Пољице",
+    "name:sr-Latn": "Poljice",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043912001,
+  "lat": 44.6733469,
+  "lon": 17.1547932,
+  "tags": {
+    "name": "Jagodići",
+    "name:sr": "Јагодићи",
+    "name:sr-Latn": "Jagodići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043912045,
+  "lat": 44.6776758,
+  "lon": 17.1483254,
+  "tags": {
+    "name": "Kasipojevići",
+    "name:sr": "Касипојевићи",
+    "name:sr-Latn": "Kasipojevići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043917664,
+  "lat": 44.6665591,
+  "lon": 17.1444123,
+  "tags": {
+    "name": "Maksimovići",
+    "name:sr": "Максимовићи",
+    "name:sr-Latn": "Maksimovići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043917665,
+  "lat": 44.6689987,
+  "lon": 17.1685933,
+  "tags": {
+    "name": "Obradovići",
+    "name:sr": "Обрадовићи",
+    "name:sr-Latn": "Obradovići",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 11043917666,
+  "lat": 44.6615264,
+  "lon": 17.1458138,
+  "tags": {
+    "name": "Bajići",
+    "name:sr": "Бајићи",
+    "name:sr-Latn": "Bajići",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 11043917667,
+  "lat": 44.7454508,
+  "lon": 17.1467415,
+  "tags": {
+    "name": "Kojin Barjak",
+    "name:sr": "Којин Барјак",
+    "name:sr-Latn": "Kojin Barjak",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043917668,
+  "lat": 44.7386066,
+  "lon": 17.1436882,
+  "tags": {
+    "name": "Račići",
+    "name:sr": "Рачићи",
+    "name:sr-Latn": "Račići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043917669,
+  "lat": 44.7364258,
+  "lon": 17.1201152,
+  "tags": {
+    "name": "Udovčići",
+    "name:sr": "Удовчићи",
+    "name:sr-Latn": "Udovčići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043917670,
+  "lat": 44.7271530,
+  "lon": 17.1626018,
+  "tags": {
+    "name": "Brda",
+    "name:sr": "Брда",
+    "name:sr-Latn": "Brda",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043927362,
+  "lat": 44.5569021,
+  "lon": 17.2343031,
+  "tags": {
+    "name": "Vučići",
+    "name:sr": "Вучићи",
+    "name:sr-Latn": "Vučići",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 11043927363,
+  "lat": 44.5571850,
+  "lon": 17.2243025,
+  "tags": {
+    "name": "Stankovići",
+    "name:sr": "Станковићи",
+    "name:sr-Latn": "Stankovići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043927364,
+  "lat": 44.5631742,
+  "lon": 17.1871976,
+  "tags": {
+    "name": "Rastik",
+    "name:sr": "Растик",
+    "name:sr-Latn": "Rastik",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043927365,
+  "lat": 44.5590830,
+  "lon": 17.1863804,
+  "tags": {
+    "name": "Čivčići",
+    "name:sr": "Чивчићи",
+    "name:sr-Latn": "Čivčići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043927391,
+  "lat": 44.5585227,
+  "lon": 17.1667345,
+  "tags": {
+    "name": "Rogoznik",
+    "name:sr": "Рогозник",
+    "name:sr-Latn": "Rogoznik",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043927392,
+  "lat": 44.5532104,
+  "lon": 17.1721860,
+  "tags": {
+    "name": "Ponijer",
+    "name:sr": "Понијер",
+    "name:sr-Latn": "Ponijer",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043927393,
+  "lat": 44.5675884,
+  "lon": 17.1655653,
+  "tags": {
+    "name": "Bare",
+    "name:sr": "Баре",
+    "name:sr-Latn": "Bare",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043927394,
+  "lat": 44.5711629,
+  "lon": 17.1632905,
+  "tags": {
+    "name": "Kukrik",
+    "name:sr": "Кукрик",
+    "name:sr-Latn": "Kukrik",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043927395,
+  "lat": 44.5671448,
+  "lon": 17.1582166,
+  "tags": {
+    "name": "Dijlkani",
+    "name:sr": "Дијлкани",
+    "name:sr-Latn": "Dijlkani",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043927396,
+  "lat": 44.5678554,
+  "lon": 17.1474650,
+  "tags": {
+    "name": "Agići",
+    "name:sr": "Агићи",
+    "name:sr-Latn": "Agići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043927397,
+  "lat": 44.5475209,
+  "lon": 17.1737504,
+  "tags": {
+    "name": "Novakovići",
+    "name:sr": "Новаковићи",
+    "name:sr-Latn": "Novakovići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043927398,
+  "lat": 44.5368438,
+  "lon": 17.1596007,
+  "tags": {
+    "name": "Gradina",
+    "name:sr": "Градина",
+    "name:sr-Latn": "Gradina",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043927399,
+  "lat": 44.5295809,
+  "lon": 17.1767557,
+  "tags": {
+    "name": "Podplanina",
+    "name:sr": "Подпланина",
+    "name:sr-Latn": "Podplanina",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043927400,
+  "lat": 44.5228061,
+  "lon": 17.1800231,
+  "tags": {
+    "name": "Smiljići (1)",
+    "name:sr": "Смиљићи (1)",
+    "name:sr-Latn": "Smiljići (1)",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043927401,
+  "lat": 44.5271262,
+  "lon": 17.1858547,
+  "tags": {
+    "name": "Popovići",
+    "name:sr": "Поповићи",
+    "name:sr-Latn": "Popovići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043927402,
+  "lat": 44.5196060,
+  "lon": 17.1834366,
+  "tags": {
+    "name": "Džemat",
+    "name:sr": "Џемат",
+    "name:sr-Latn": "Džemat",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043949254,
+  "lat": 44.5155410,
+  "lon": 17.1639692,
+  "tags": {
+    "name": "Dajčići",
+    "name:sr": "Дајчићи",
+    "name:sr-Latn": "Dajčići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043949255,
+  "lat": 44.5746397,
+  "lon": 17.2031166,
+  "tags": {
+    "name": "Radak",
+    "name:sr": "Радак",
+    "name:sr-Latn": "Radak",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043949256,
+  "lat": 44.5806499,
+  "lon": 17.1778711,
+  "tags": {
+    "name": "Doline",
+    "name:sr": "Долине",
+    "name:sr-Latn": "Doline",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043949257,
+  "lat": 44.5912877,
+  "lon": 17.1631869,
+  "tags": {
+    "name": "Sijena",
+    "name:sr": "Сијена",
+    "name:sr-Latn": "Sijena",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 11043953551,
+  "lat": 44.6139251,
+  "lon": 17.2031501,
+  "tags": {
+    "name": "Velimirovići",
+    "name:sr": "Велимировићи",
+    "name:sr-Latn": "Velimirovići",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 11043953552,
+  "lat": 44.6039472,
+  "lon": 17.2136412,
+  "tags": {
+    "name": "Vidovići",
+    "name:sr": "Видовићи",
+    "name:sr-Latn": "Vidovići",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 11043953556,
+  "lat": 44.6211393,
+  "lon": 17.1893665,
+  "tags": {
+    "name": "Nikolići",
+    "name:sr": "Николићи",
+    "name:sr-Latn": "Nikolići",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 11043953557,
+  "lat": 44.6201912,
+  "lon": 17.1936096,
+  "tags": {
+    "name": "Kutići",
+    "name:sr": "Кутићи",
+    "name:sr-Latn": "Kutići",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 11043953558,
+  "lat": 44.6187619,
+  "lon": 17.1959585,
+  "tags": {
+    "name": "Botići",
+    "name:sr": "Ботићи",
+    "name:sr-Latn": "Botići",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 11043953559,
+  "lat": 44.6263867,
+  "lon": 17.1780788,
+  "tags": {
+    "name": "Lazići",
+    "name:sr": "Лазићи",
+    "name:sr-Latn": "Lazići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043953560,
+  "lat": 44.5996111,
+  "lon": 17.1791138,
+  "tags": {
+    "name": "Bosančići",
+    "name:sr": "Босанчићи",
+    "name:sr-Latn": "Bosančići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043953561,
+  "lat": 44.6075116,
+  "lon": 17.1739253,
+  "tags": {
+    "name": "Blagojevići",
+    "name:sr": "Благојевићи",
+    "name:sr-Latn": "Blagojevići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043953562,
+  "lat": 44.6009699,
+  "lon": 17.1670317,
+  "tags": {
+    "name": "Guskići",
+    "name:sr": "Гускићи",
+    "name:sr-Latn": "Guskići",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 11043953563,
+  "lat": 44.6079954,
+  "lon": 17.1612204,
+  "tags": {
+    "name": "Petkovići",
+    "name:sr": "Петковићи",
+    "name:sr-Latn": "Petkovići",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 11043953564,
+  "lat": 44.6043477,
+  "lon": 17.1575310,
+  "tags": {
+    "name": "Tandala",
+    "name:sr": "Тандала",
+    "name:sr-Latn": "Tandala",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 11043953565,
+  "lat": 44.6019906,
+  "lon": 17.1636543,
+  "tags": {
+    "name": "Božići",
+    "name:sr": "Божићи",
+    "name:sr-Latn": "Božići",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 11043953566,
+  "lat": 44.5897304,
+  "lon": 17.1455670,
+  "tags": {
+    "name": "Vujasini",
+    "name:sr": "Вујасини",
+    "name:sr-Latn": "Vujasini",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043972021,
+  "lat": 44.6253991,
+  "lon": 17.1813687,
+  "tags": {
+    "name": "Gašići",
+    "name:sr": "Гашићи",
+    "name:sr-Latn": "Gašići",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 11043972022,
+  "lat": 44.6322507,
+  "lon": 17.1654964,
+  "tags": {
+    "name": "Milovanovići",
+    "name:sr": "Миловановићи",
+    "name:sr-Latn": "Milovanovići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043972023,
+  "lat": 44.6388917,
+  "lon": 17.1605632,
+  "tags": {
+    "name": "Božići",
+    "name:sr": "Божићи",
+    "name:sr-Latn": "Božići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043972024,
+  "lat": 44.6409794,
+  "lon": 17.1543690,
+  "tags": {
+    "name": "Kovačevići",
+    "name:sr": "Ковачевићи",
+    "name:sr-Latn": "Kovačevići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 11043972025,
+  "lat": 44.6376915,
+  "lon": 17.1566511,
+  "tags": {
+    "name": "Brankovići",
+    "name:sr": "Бранковићи",
+    "name:sr-Latn": "Brankovići",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 11043972026,
+  "lat": 44.6380884,
+  "lon": 17.1424973,
+  "tags": {
+    "name": "Mihajlovići",
+    "name:sr": "Михајловићи",
+    "name:sr-Latn": "Mihajlovići",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 11043972027,
+  "lat": 44.6391279,
+  "lon": 17.1383630,
+  "tags": {
+    "name": "Ristići",
+    "name:sr": "Ристићи",
+    "name:sr-Latn": "Ristići",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 11043972028,
+  "lat": 44.6377990,
+  "lon": 17.1275064,
+  "tags": {
+    "name": "Malbašići",
+    "name:sr": "Малбашићи",
+    "name:sr-Latn": "Malbašići",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 11043972029,
+  "lat": 44.6389228,
+  "lon": 17.1246679,
+  "tags": {
+    "name": "Injci",
+    "name:sr": "Ињци",
+    "name:sr-Latn": "Injci",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 11043972030,
+  "lat": 44.6457878,
+  "lon": 17.1362258,
+  "tags": {
+    "name": "Duceni",
+    "name:sr": "Дуцени",
+    "name:sr-Latn": "Duceni",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 11043972031,
+  "lat": 44.6440129,
+  "lon": 17.1332492,
+  "tags": {
+    "name": "Mijići",
+    "name:sr": "Мијићи",
+    "name:sr-Latn": "Mijići",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 11043972032,
+  "lat": 44.6525203,
+  "lon": 17.1323290,
+  "tags": {
+    "name": "Babići",
+    "name:sr": "Бабићи",
+    "name:sr-Latn": "Babići",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 11043972033,
+  "lat": 44.6297549,
+  "lon": 17.1449282,
+  "tags": {
+    "name": "Tešići",
+    "name:sr": "Тешићи",
+    "name:sr-Latn": "Tešići",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 11043972034,
+  "lat": 44.6256137,
+  "lon": 17.1353211,
+  "tags": {
+    "name": "Tovilovići",
+    "name:sr": "Товиловићи",
+    "name:sr-Latn": "Tovilovići",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 11043972035,
+  "lat": 44.6306442,
+  "lon": 17.1346258,
+  "tags": {
+    "name": "Stančevići",
+    "name:sr": "Станчевићи",
+    "name:sr-Latn": "Stančevići",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 11043972036,
+  "lat": 44.6334439,
+  "lon": 17.1302333,
+  "tags": {
+    "name": "Vranješi",
+    "name:sr": "Врањеши",
+    "name:sr-Latn": "Vranješi",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 11043972037,
+  "lat": 44.6461000,
+  "lon": 17.1243026,
+  "tags": {
+    "name": "Vranješevići",
+    "name:sr": "Врањешевићи",
+    "name:sr-Latn": "Vranješevići",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 11043972038,
+  "lat": 44.6556840,
+  "lon": 17.1237225,
+  "tags": {
+    "name": "Vukojevići",
+    "name:sr": "Вукојевићи",
+    "name:sr-Latn": "Vukojevići",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 11043972039,
+  "lat": 44.6600598,
+  "lon": 17.1220357,
+  "tags": {
+    "name": "Lakići",
+    "name:sr": "Лакићи",
+    "name:sr-Latn": "Lakići",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 11043972040,
+  "lat": 44.6670095,
+  "lon": 17.1221301,
+  "tags": {
+    "name": "Blagojevići",
+    "name:sr": "Благојевићи",
+    "name:sr-Latn": "Blagojevići",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 11043981557,
+  "lat": 44.6823977,
+  "lon": 17.1621884,
+  "tags": {
+    "name": "Grbići",
+    "name:sr": "Грбићи",
+    "name:sr-Latn": "Grbići",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 11043981558,
+  "lat": 44.6857979,
+  "lon": 17.1580488,
+  "tags": {
+    "name": "Račići",
+    "name:sr": "Рачићи",
+    "name:sr-Latn": "Račići",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 11335498356,
+  "lat": 44.7032765,
+  "lon": 17.1905822,
+  "tags": {
+    "name": "Kajkuti",
+    "name:sr": "Кајкути",
+    "name:sr-Latn": "Kajkuti",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12216183912,
+  "lat": 44.7511220,
+  "lon": 17.1735738,
+  "tags": {
+    "name": "Sitari",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12412293317,
+  "lat": 44.5605624,
+  "lon": 17.0516932,
+  "tags": {
+    "name": "Lazičići",
+    "name:sr": "Лазичићи",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12412293447,
+  "lat": 44.5540986,
+  "lon": 17.0206010,
+  "tags": {
+    "name": "Lokvari Polje",
+    "name:sr": "Локвари Поље",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12412293450,
+  "lat": 44.5517745,
+  "lon": 17.0452183,
+  "tags": {
+    "name": "Živkovići",
+    "name:sr": "Живковићи",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12412293454,
+  "lat": 44.5606847,
+  "lon": 17.0179778,
+  "tags": {
+    "name": "Brdani",
+    "name:sr": "Брдани",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12412293455,
+  "lat": 44.5591558,
+  "lon": 17.0216310,
+  "tags": {
+    "name": "Sarići",
+    "name:sr": "Сарићи",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12412293519,
+  "lat": 44.5483530,
+  "lon": 17.0359754,
+  "tags": {
+    "name": "Sladojevići",
+    "name:sr": "Сладојевићи",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 12416162430,
+  "lat": 44.5998527,
+  "lon": 16.9856358,
+  "tags": {
+    "name": "Đukići",
+    "name:sr": "Ђукићи",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12416162431,
+  "lat": 44.5982294,
+  "lon": 16.9772136,
+  "tags": {
+    "name": "Kočići",
+    "name:sr": "Кочићи",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12416162432,
+  "lat": 44.5961667,
+  "lon": 16.9822454,
+  "tags": {
+    "name": "Pajići",
+    "name:sr": "Пајићи",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12416162531,
+  "lat": 44.5733882,
+  "lon": 17.0101297,
+  "tags": {
+    "name": "Majkići",
+    "name:sr": "Мајкићи",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12416162532,
+  "lat": 44.5759867,
+  "lon": 16.9996369,
+  "tags": {
+    "name": "Pajići",
+    "name:sr": "Пајићи",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12416162804,
+  "lat": 44.5836744,
+  "lon": 16.9820952,
+  "tags": {
+    "name": "Vulini",
+    "name:sr": "Вулини",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12425106448,
+  "lat": 44.8772510,
+  "lon": 17.1242459,
+  "tags": {
+    "name": "Pavlovača",
+    "name:sr": "Павловача",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12425106449,
+  "lat": 44.8726312,
+  "lon": 17.1198888,
+  "tags": {
+    "name": "Nabrđani",
+    "name:sr": "Набрђани",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12479414513,
+  "lat": 44.7299353,
+  "lon": 17.2645467,
+  "tags": {
+    "name": "Bijeli Potok",
+    "name:sr": "Бијели Поток",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12484691337,
+  "lat": 44.5665438,
+  "lon": 16.9857860,
+  "tags": {
+    "name": "Božići",
+    "name:sr": "Божићи",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12484691414,
+  "lat": 44.5652310,
+  "lon": 17.0061547,
+  "tags": {
+    "name": "Ilići",
+    "name:sr": "Илићи",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12484691545,
+  "lat": 44.5557653,
+  "lon": 16.9908822,
+  "tags": {
+    "name": "Milanovići",
+    "name:sr": "Милановићи",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12485078108,
+  "lat": 44.5531086,
+  "lon": 17.0005703,
+  "tags": {
+    "name": "Savanovići",
+    "name:sr": "Савановићи",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12485078109,
+  "lat": 44.5557844,
+  "lon": 17.0056021,
+  "tags": {
+    "name": "Sladojevići",
+    "name:sr": "Сладојевићи",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12487245125,
+  "lat": 44.7664711,
+  "lon": 17.0915481,
+  "tags": {
+    "name": "Marići",
+    "name:sr": "Марићи",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12487414622,
+  "lat": 44.7719382,
+  "lon": 17.0792019,
+  "tags": {
+    "name": "Moconje",
+    "name:sr": "Моцоње",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12500741617,
+  "lat": 44.7463675,
+  "lon": 17.0140242,
+  "tags": {
+    "name": "Ćopići",
+    "name:sr": "Ћопићи",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12500741618,
+  "lat": 44.7327491,
+  "lon": 17.0538497,
+  "tags": {
+    "name": "Gatarići - 2",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12500741619,
+  "lat": 44.7373559,
+  "lon": 17.0469925,
+  "tags": {
+    "name": "Gatarići",
+    "name:sr": "Гатарићи",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12500741620,
+  "lat": 44.7403284,
+  "lon": 17.0308524,
+  "tags": {
+    "name": "Lojići",
+    "name:sr": "Лојићи",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12500741621,
+  "lat": 44.7376877,
+  "lon": 17.0210302,
+  "tags": {
+    "name": "Milojevići - 2",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12500748703,
+  "lat": 44.7301042,
+  "lon": 16.9988322,
+  "tags": {
+    "name": "Vujinovići",
+    "name:sr": "Вујиновићи",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12500748740,
+  "lat": 44.7278786,
+  "lon": 17.0457065,
+  "tags": {
+    "name": "Šućuri",
+    "name:sr": "Шућури",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12500748741,
+  "lat": 44.7298451,
+  "lon": 17.0360076,
+  "tags": {
+    "name": "Dedići",
+    "name:sr": "Дедићи",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12500778598,
+  "lat": 44.7362931,
+  "lon": 17.0280146,
+  "tags": {
+    "name": "Marčete - 2",
+    "name:sr": "Марчете - 2",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12505530001,
+  "lat": 44.5816150,
+  "lon": 17.1131802,
+  "tags": {
+    "name": "Pavlovići (1)",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12505530002,
+  "lat": 44.5911243,
+  "lon": 17.1177185,
+  "tags": {
+    "name": "Amidžići",
+    "name:sr": "Амиџићи",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12505530003,
+  "lat": 44.5918978,
+  "lon": 17.1114126,
+  "tags": {
+    "name": "Prolići",
+    "name:sr": "Пролићи",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12505530004,
+  "lat": 44.5956243,
+  "lon": 17.1161681,
+  "tags": {
+    "name": "Pavlovići",
+    "name:sr": "Павловићи",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12505530005,
+  "lat": 44.6051121,
+  "lon": 17.1133947,
+  "tags": {
+    "name": "Bojanići",
+    "name:sr": "Бојанићи",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12505530006,
+  "lat": 44.5992760,
+  "lon": 17.1050906,
+  "tags": {
+    "name": "Ljuboje",
+    "name:sr": "Љубоје",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12505530007,
+  "lat": 44.6031833,
+  "lon": 17.1027625,
+  "tags": {
+    "name": "Đurđevići",
+    "name:sr": "Ђурђевићи",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12505530008,
+  "lat": 44.6101992,
+  "lon": 17.0991147,
+  "tags": {
+    "name": "Proseni",
+    "name:sr": "Просени",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12505530458,
+  "lat": 44.6269867,
+  "lon": 17.0963332,
+  "tags": {
+    "name": "Mijići",
+    "name:sr": "Мијићи",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12505530459,
+  "lat": 44.6227468,
+  "lon": 17.1083522,
+  "tags": {
+    "name": "Strike",
+    "name:sr": "Стрике",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12505530460,
+  "lat": 44.6065634,
+  "lon": 17.1006918,
+  "tags": {
+    "name": "Tešanovići",
+    "name:sr": "Тешановићи",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12505530461,
+  "lat": 44.6165358,
+  "lon": 17.1092712,
+  "tags": {
+    "name": "Tešanovići",
+    "name:sr": "Тешановићи",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12518657854,
+  "lat": 44.5009629,
+  "lon": 17.1932977,
+  "tags": {
+    "name": "Smiljići (3)",
+    "name:sr": "Смиљићи (3)",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12518657856,
+  "lat": 44.5032624,
+  "lon": 17.1872091,
+  "tags": {
+    "name": "Polje",
+    "name:sr": "Поље",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12518657857,
+  "lat": 44.4962451,
+  "lon": 17.1872574,
+  "tags": {
+    "name": "Bubotići",
+    "name:sr": "Буботићи",
+    "place": "isolated_dwelling"
+  }
+},
+{
+  "type": "node",
+  "id": 12519162767,
+  "lat": 44.5203007,
+  "lon": 17.1597916,
+  "tags": {
+    "name": "Maljigovo",
+    "name:sr": "Маљигово",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12519162768,
+  "lat": 44.5026502,
+  "lon": 17.1697104,
+  "tags": {
+    "name": "Debeli brijeg",
+    "name:sr": "Дебели бријег",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12519162769,
+  "lat": 44.5410124,
+  "lon": 17.1666473,
+  "tags": {
+    "name": "Drenik",
+    "name:sr": "Дреник",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12552089738,
+  "lat": 44.6935241,
+  "lon": 17.2444685,
+  "tags": {
+    "name": "Ćulumi",
+    "name:sr": "Ћулуми",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12641543519,
+  "lat": 44.6118700,
+  "lon": 17.1371608,
+  "tags": {
+    "name": "Lipik",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 12926550411,
+  "lat": 44.6932081,
+  "lon": 17.2102396,
+  "tags": {
+    "loc_name": "Gornji Karanovac",
+    "name": "Gornji Karanovac - Donji Bastasi",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13138548909,
+  "lat": 44.6198751,
+  "lon": 16.9845417,
+  "tags": {
+    "name": "Krivokuće",
+    "name:sr": "Кривокуће",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13151366257,
+  "lat": 44.6199817,
+  "lon": 16.9984595,
+  "tags": {
+    "name": "Regodići",
+    "name:sr": "Регодићи",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13169317012,
+  "lat": 44.8120110,
+  "lon": 17.1947065,
+  "tags": {
+    "name": "Donji Drakulić",
+    "name:sr": "Доњи Дракулић",
+    "place": "quarter"
+  }
+},
+{
+  "type": "node",
+  "id": 13181235102,
+  "lat": 44.6993477,
+  "lon": 17.1047323,
+  "tags": {
+    "ele": "428",
+    "name": "Sladojevic",
+    "name:sr": "Сладојевић",
+    "name:sr-Latn": "Sladojević",
+    "place": "hamlet",
+    "population": "15"
+  }
+},
+{
+  "type": "node",
+  "id": 13191484477,
+  "lat": 44.6298564,
+  "lon": 17.0164567,
+  "tags": {
+    "name": "Grabovica",
+    "name:sr": "Грабовица",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13227637319,
+  "lat": 44.7074686,
+  "lon": 17.0899681,
+  "tags": {
+    "name": "Gajići",
+    "name:sr": "Гајићи",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13288897221,
+  "lat": 44.8136417,
+  "lon": 17.1170631,
+  "tags": {
+    "name": "Gornje Motike",
+    "name:sr": "Горње Мотике",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13440197651,
+  "lat": 44.8411688,
+  "lon": 17.0492389,
+  "tags": {
+    "name": "Šešići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13440197673,
+  "lat": 44.8446767,
+  "lon": 17.0387363,
+  "tags": {
+    "name": "Kovačevići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13440198050,
+  "lat": 44.8502626,
+  "lon": 17.0283806,
+  "tags": {
+    "name": "Granule",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13440198051,
+  "lat": 44.8492351,
+  "lon": 17.0126680,
+  "tags": {
+    "name": "Kajkute",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13440198056,
+  "lat": 44.8551521,
+  "lon": 17.0230033,
+  "tags": {
+    "name": "Jorgići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13440198057,
+  "lat": 44.8534528,
+  "lon": 17.0060048,
+  "tags": {
+    "name": "Bukše",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13440198113,
+  "lat": 44.8594262,
+  "lon": 17.0042846,
+  "tags": {
+    "name": "Slijepčevići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13440198114,
+  "lat": 44.8614954,
+  "lon": 17.0167032,
+  "tags": {
+    "name": "Brankovići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13440198156,
+  "lat": 44.8604073,
+  "lon": 17.0232214,
+  "tags": {
+    "name": "Ožegovići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13440198157,
+  "lat": 44.8382884,
+  "lon": 17.0180016,
+  "tags": {
+    "name": "Mijatovići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13440198314,
+  "lat": 44.8279990,
+  "lon": 17.0341144,
+  "tags": {
+    "name": "Stjepanovići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13443254037,
+  "lat": 44.8273690,
+  "lon": 16.9995422,
+  "tags": {
+    "name": "Višići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13443254038,
+  "lat": 44.8222854,
+  "lon": 17.0110838,
+  "tags": {
+    "name": "Donji Kremenovići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13443254039,
+  "lat": 44.8210015,
+  "lon": 17.0053082,
+  "tags": {
+    "name": "Ožegovići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13443254040,
+  "lat": 44.8211407,
+  "lon": 17.0278933,
+  "tags": {
+    "name": "Jankovići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13443254041,
+  "lat": 44.8245169,
+  "lon": 17.0412135,
+  "tags": {
+    "name": "Granulići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13443399202,
+  "lat": 44.8426084,
+  "lon": 17.0581487,
+  "tags": {
+    "name": "Ožegovići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13443399203,
+  "lat": 44.8314971,
+  "lon": 17.0558296,
+  "tags": {
+    "name": "Telići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13443399204,
+  "lat": 44.8172414,
+  "lon": 17.0336901,
+  "tags": {
+    "name": "Bojanići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13443399205,
+  "lat": 44.8144303,
+  "lon": 17.0361520,
+  "tags": {
+    "name": "Janjatovići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13443399206,
+  "lat": 44.8137876,
+  "lon": 17.0592265,
+  "tags": {
+    "name": "Lolići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13447028732,
+  "lat": 44.8251888,
+  "lon": 17.0751770,
+  "tags": {
+    "name": "Jankovići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13536990165,
+  "lat": 44.7283913,
+  "lon": 17.0608008,
+  "tags": {
+    "name": "Vukovići",
+    "name:sr": "Вуковићи",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13536990168,
+  "lat": 44.7318364,
+  "lon": 17.0984061,
+  "tags": {
+    "name": "Irići",
+    "name:sr": "Ирићи",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13584693767,
+  "lat": 44.6375960,
+  "lon": 16.9349525,
+  "tags": {
+    "name": "Savanovići",
+    "name:sr": "Савановићи",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13599749115,
+  "lat": 44.7224647,
+  "lon": 17.0090317,
+  "tags": {
+    "name": "Milojevići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13974363723,
+  "lat": 44.7632051,
+  "lon": 17.1277188,
+  "tags": {
+    "name": "Trubajići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13974363741,
+  "lat": 44.7526707,
+  "lon": 17.1356295,
+  "tags": {
+    "name": "Bukvaluk",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13974638581,
+  "lat": 44.7688462,
+  "lon": 17.1213025,
+  "tags": {
+    "name": "Javorci",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13975134754,
+  "lat": 44.7574937,
+  "lon": 17.0829794,
+  "tags": {
+    "name": "Đurđevići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13975134759,
+  "lat": 44.7604235,
+  "lon": 17.0774516,
+  "tags": {
+    "name": "Marići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13975134760,
+  "lat": 44.7738487,
+  "lon": 17.1056531,
+  "tags": {
+    "name": "Gojići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13975134761,
+  "lat": 44.7696489,
+  "lon": 17.1070040,
+  "tags": {
+    "name": "Purići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13975134762,
+  "lat": 44.7652833,
+  "lon": 17.1125629,
+  "tags": {
+    "name": "Krečari",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13975164531,
+  "lat": 44.7409187,
+  "lon": 17.0747571,
+  "tags": {
+    "name": "Čutkovići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13975164532,
+  "lat": 44.7456059,
+  "lon": 17.0922705,
+  "tags": {
+    "name": "Božići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13975164533,
+  "lat": 44.7462933,
+  "lon": 17.1051871,
+  "tags": {
+    "name": "Moconji",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13975164534,
+  "lat": 44.7324179,
+  "lon": 17.0653144,
+  "tags": {
+    "name": "Milankovići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13975164535,
+  "lat": 44.7140920,
+  "lon": 17.0777753,
+  "tags": {
+    "name": "Plavšići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13975164536,
+  "lat": 44.7157880,
+  "lon": 17.0859137,
+  "tags": {
+    "name": "Udovčići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13980073819,
+  "lat": 44.8266360,
+  "lon": 16.9417148,
+  "tags": {
+    "name": "Lipik",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13980073827,
+  "lat": 44.8177908,
+  "lon": 16.9465035,
+  "tags": {
+    "name": "Kneževići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13980073828,
+  "lat": 44.8047293,
+  "lon": 16.9488698,
+  "tags": {
+    "name": "Ritani",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13980073829,
+  "lat": 44.7861051,
+  "lon": 16.9596784,
+  "tags": {
+    "name": "Stari Bronzani Majdan",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13985162214,
+  "lat": 44.8043261,
+  "lon": 17.0428369,
+  "tags": {
+    "name": "Kremenovići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13985162215,
+  "lat": 44.8053991,
+  "lon": 17.0505938,
+  "tags": {
+    "name": "Banjci",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13985162216,
+  "lat": 44.7942540,
+  "lon": 17.0645038,
+  "tags": {
+    "name": "Jovanići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13985162217,
+  "lat": 44.7877979,
+  "lon": 17.0642610,
+  "tags": {
+    "name": "Gligorići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13985162218,
+  "lat": 44.7915234,
+  "lon": 17.0733955,
+  "tags": {
+    "name": "Marjanci",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13985162219,
+  "lat": 44.8038127,
+  "lon": 17.0725313,
+  "tags": {
+    "name": "Janjatovići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13985162220,
+  "lat": 44.8081269,
+  "lon": 17.0708360,
+  "tags": {
+    "name": "Čokići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13985162221,
+  "lat": 44.8048228,
+  "lon": 17.0634889,
+  "tags": {
+    "name": "Lolići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13985162222,
+  "lat": 44.8125734,
+  "lon": 17.0410248,
+  "tags": {
+    "name": "Lovrići",
+    "place": "hamlet"
+  }
+},
+{
+  "type": "node",
+  "id": 13985162223,
+  "lat": 44.8089738,
+  "lon": 17.0319711,
+  "tags": {
+    "name": "Regode",
+    "place": "hamlet"
+  }
+}
+
+  ]
+}

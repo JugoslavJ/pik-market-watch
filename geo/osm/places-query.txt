@@ -1,0 +1,6 @@
+[out:json][timeout:90];
+area(3602528156)->.a;
+(
+  node(area.a)["place"~"^(village|hamlet|quarter|suburb|town|isolated_dwelling)$"];
+);
+out body;

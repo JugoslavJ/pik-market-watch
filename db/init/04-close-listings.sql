@@ -3,7 +3,7 @@
 -- Idempotent; fresh installs get identical columns from 01-schema.sql.
 -- Existing volumes: applied automatically by the scraper on startup, or once
 -- manually with:
---   docker exec -i olx-db psql -U olx -d olx < db/init/04-close-listings.sql
+--   docker exec -i olx-db psql -U olx_app -d olx < db/init/04-close-listings.sql
 
 ALTER TABLE listings ADD COLUMN IF NOT EXISTS closed_at     TIMESTAMPTZ;
 ALTER TABLE listings ADD COLUMN IF NOT EXISTS closing_price NUMERIC(12,2);

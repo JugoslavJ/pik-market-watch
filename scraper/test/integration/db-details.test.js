@@ -92,19 +92,20 @@ needsDb('scalars are first-wins; renewed_at moves forward; characteristics merge
 
 needsDb('enrichListings stamps the neighborhood from map pins; first-wins', async () => {
   await seed(7010);
-  // Trg Krajine area -> inside the Centar rectangle (11-neighborhoods.sql):
+  // Trg Krajine area -> inside the Centar 2 MZ polygon (11-neighborhoods.sql):
   await db.enrichListings([{ articleId: 7010, latitude: 44.7725, longitude: 17.1905,
                              characteristics: {} }]);
-  assert.equal((await rowOf(7010)).location, 'Centar');
+  assert.equal((await rowOf(7010)).location, 'Centar 2');
   // A pin outside every district leaves location empty:
   await seed(7011);
   await db.enrichListings([{ articleId: 7011, latitude: 44.9, longitude: 17.5,
                              characteristics: {} }]);
   assert.equal((await rowOf(7011)).location, null);
-  // First-wins: a later pass with a different pin never re-labels.
+  // First-wins: a later pass with a different pin never re-labels (the second
+  // pin at 44.7940/17.2000 would map to Petricevac, but 7010 keeps its value).
   await db.enrichListings([{ articleId: 7010, latitude: 44.7940, longitude: 17.2000,
                              characteristics: {} }]);
-  assert.equal((await rowOf(7010)).location, 'Centar');
+  assert.equal((await rowOf(7010)).location, 'Centar 2');
 });
 
 needsDb('enrichmentQueue: never-attempted first, then oldest attempt, capped', async () => {

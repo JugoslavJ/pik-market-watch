@@ -1,0 +1,68 @@
+{
+  "version": 0.6,
+  "generator": "Overpass API 0.7.62.11 87bfad18",
+  "osm3s": {
+    "timestamp_osm_base": "2026-08-24T18:06:06Z",
+    "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+  },
+  "elements": [
+
+{
+  "type": "relation",
+  "id": 2528156,
+  "tags": {
+    "admin_level": "6",
+    "alt_name": "Grad Banjaluka",
+    "alt_name:sr": "Град Бања Лука",
+    "alt_name:sr-Latn": "Grad Banja Luka",
+    "boundary": "administrative",
+    "name": "Grad Banja Luka",
+    "name:bs": "Grad Banja Luka",
+    "name:en": "City of Banja Luka",
+    "name:fr": "Ville de Banja Luka",
+    "name:hr": "Grad Banja Luka",
+    "name:ru": "Город Баня-Лука",
+    "name:sr": "Град Бањалука",
+    "name:sr-Latn": "Grad Banjaluka",
+    "name:zh": "巴尼亚卢卡市",
+    "note": "Molimo ne brisati relacije - za uređivanje posjetiti: http://wiki.openstreetmap.org/wiki/WikiProject_Bosnia_and_Herzegovina/Administrativne_granice",
+    "population": "185042",
+    "sorting_name": "Banja Luka",
+    "source": "combination of data from 1991 census & data after the war, for complete image",
+    "type": "boundary",
+    "wikidata": "Q15940918"
+  }
+},
+{
+  "type": "relation",
+  "id": 9063920,
+  "tags": {
+    "admin_level": "9",
+    "alt_name": "Banjaluka",
+    "alt_name:sr": "Бањалука",
+    "alt_name:sr-Latn": "Banjaluka",
+    "boundary": "administrative",
+    "name": "Banja Luka",
+    "name:ar": "بانيا لوكا",
+    "name:bs": "Banja Luka",
+    "name:de": "Banja Luka",
+    "name:en": "Banja Luka",
+    "name:es": "Banja Luka",
+    "name:fr": "Banja Luka",
+    "name:hr": "Banja Luka",
+    "name:ko": "바냐루카",
+    "name:ml": "ബാന്യ ലൂക്ക",
+    "name:ru": "Баня-Лука",
+    "name:sl": "Banja Luka",
+    "name:sr": "Бања Лука",
+    "name:sr-Latn": "Banja Luka",
+    "name:zh": "巴尼亚卢卡",
+    "place": "city",
+    "population": "138963",
+    "population:date": "2013",
+    "type": "boundary"
+  }
+}
+
+  ]
+}

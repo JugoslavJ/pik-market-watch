@@ -81,7 +81,7 @@ Scraper-only tuning (set in `docker-compose.yml`'s `environment:` block): `MAX_P
 | `saved_searches` | Watched searches + per-run stats (count, median ppm², new/drop counts) + free-form `category` label for the dashboard filter |
 | `search_results` | Which articles each search returned (refreshed every run) |
 | `scrape_runs` | Run observability: status, pages, cards, error |
-| `neighborhoods` | 23 Banja Luka districts as polygon rings (flattened lon/lat); `neighborhood_of(lat, lon)` ray-casts a pin to a district name, stored into `listings.location` on enrichment. Outer settlements use real OSM naselje boundaries (partially mapped — rings implicitly closed, so a straight chord spans each unmapped stretch); urban MJ districts (Centar, Obilicevo, Starcevica, …) use hand-tuned rectangles because OSM has no MJ boundaries. Seeds re-applied on every startup — tweak in `db/init/11-neighborhoods.sql`, then re-run its backfill UPDATE unguarded to re-label stored rows |
+| `neighborhoods` | 56 official Banja Luka MZ (mjesna zajednica) polygons as flattened lon/lat rings; `neighborhood_of(lat, lon)` ray-casts a pin to the MZ name (smaller-area-first priority breaks shared-border ties), stored into `listings.location` on enrichment. Polygons come from the city's official MZ map — the Prostorni plan scan, georeferenced and traced; the urban core was digitized by hand (see `geo/PROGRESS.md`). Seeds re-applied on every startup — tweak in `db/init/11-neighborhoods.sql` (or regenerate it from `geo/banja-luka-mz-final.geojson` via `geo/scripts/19-gen-sql.js`), then re-run its backfill UPDATE unguarded to re-label stored rows |
 | `v_active_listings` | View: anything seen by a scrape within 14 days |
 | `v_listing_lifecycle` | View: one row per listing — opening vs closing price/ppm², change count, days listed, category |
 | `v_market_daily` | View: per-day new/closed counts and estimated live inventory |
@@ -103,7 +103,7 @@ Every scraping cycle ends with a closing pass: any listing that none of the conf
 Search results already carry map pins, m²/rooms labels, the renewal timestamp and the seller type; anything beyond that comes from the ad's JSON endpoint (`/api/listings/<id>` — see `05-listing-details.sql` / `07-api-extras.sql` and `parseListingDetail()`):
 
 - **Day created vs day renewed** — the ad endpoint's `created_at` is the true original publish time and lands in `published_at` (first-wins); the renewal bump (`date`, also on every search card) lands in `renewed_at` (10-listing-dates.sql) and is refreshed monotonically on every scrape cycle, no detail call needed. Days-on-market uses creation; staleness views use both. Legacy rows whose `published_at` was seeded from a renewal stamp before the split stay lower-bound estimates.
-- **Neighborhood** — `location` is derived from the ad's map pin via `neighborhood_of()` (`11-neighborhoods.sql`): ray casting over seeded Banja Luka district rectangles (Obilicevo, Starcevica, Laus, Lazarevo, Budzak, Centar, Borik, …). NULL when the pin falls outside every district; first-wins on enrichment, backfilled for existing rows.
+- **Neighborhood** — `location` is derived from the ad's map pin via `neighborhood_of()` (`11-neighborhoods.sql`): ray casting over the 56 official Banja Luka MZ polygons (Centar 1/2, Borik 1/2, Obilicevo, Starcevica, Rosulje, Petricevac, … — traced/digitized from the city's official MZ map, ASCII names). NULL when the pin falls outside every MZ (outlying pins); first-wins on enrichment, backfilled for existing rows.
 - **Seller type** — `shop` vs `private`, straight from `user.type`.
 - **Characteristics** — rooms, bathrooms, floor / total floors / unit levels, heating, furnished, condition, parking, garage, elevator, year built, plot m², orientation. Every `attr_code:value` pair the payload exposes is also kept raw in the `characteristics` JSONB column, so nothing is lost if OLX renames codes.
 - **Counters & extras** — views, favorites when exposed, plus the ad's server-side price history and lifecycle status stored raw (`api_price_history` / `api_status`) for cross-checking our own observations.
@@ -198,13 +198,15 @@ via `BACKUP_RETENTION_DAYS`):
   dashboard edits). Live snapshot; before **major Grafana upgrades** take a
   cold copy instead: `docker compose stop grafana`, tar the volume, start.
 
-Restore into the running database:
+Restore into the running database (as the APP role — restoring as the bootstrap
+superuser would recreate superuser-owned objects and re-trigger the sync
+failure documented under *Troubleshooting*):
 
 ```bash
-docker compose exec db pg_restore -U olx -d olx --clean --if-exists /backups/olx-YYYYMMDD.dump
+docker compose exec db sh -c 'pg_restore -U "$POSTGRES_APP_USER" -d "$POSTGRES_DB" --clean --if-exists /backups/olx-YYYYMMDD.dump'
 ```
 
-Manual out-of-band dump: `docker compose exec db pg_dump -U olx -Fc olx > manual.dump`
+Manual out-of-band dump: `docker compose exec db pg_dump -U olx_reader -Fc olx > manual.dump` (the reader can dump everything via `pg_read_all_data`)
 
 ### Scraping from home (when Cloudflare blocks the instance)
 
@@ -406,5 +408,12 @@ owns objects; it is not a superuser.
 - **`must be owner of …` during scraper startup**: a migration was applied manually as the `olx` superuser, so its objects are superuser-owned while the scraper (as the least-privilege `olx_app` role) re-runs the unrecorded file. One-time fix on the host:
   `docker exec olx-db psql -U olx -d olx -c "REASSIGN OWNED BY olx TO olx_app"`
   When applying migrations by hand, prefer doing it as the app role (`docker exec -e PGPASSWORD=… olx-db psql -U olx_app -d olx < db/init/NN-*.sql`) — or better, just restart the scraper and let the startup runner apply and record them.
+- **Sync failed with *must be able to SET ROLE "olx"*** (and/or the scraper logs *permission denied for table neighborhoods* on every search): some home-database objects are owned by the bootstrap superuser instead of `olx_app`. 2026-08-24 cause: `11-neighborhoods.sql` was re-applied by hand as `-U olx` per an outdated doc comment, leaving `neighborhoods` + `point_in_polygon` superuser-owned — enrichment lost access first, then the dump carried `ALTER … OWNER TO olx`, which the least-privileged restore role cannot replay. Fix the home machine, then re-run the sync:
+
+  ```bash
+  docker compose exec db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
+  ```
+
+  `remote-restore.sh` now audits archive ownership *before* dropping anything, so drifted dumps fail fast with the offending owners printed instead of nuking the schema first.
 
 > Note: scraping olx.ba is for personal analysis only — keep intervals polite.

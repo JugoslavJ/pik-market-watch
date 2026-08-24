@@ -6,7 +6,7 @@
 --
 -- Fresh installs get this automatically (db/init runs on FIRST start only).
 -- Existing volumes: apply once manually —
---   docker exec -i olx-db psql -U olx -d olx < db/init/03-listing-filters.sql
+--   docker exec -i olx-db psql -U olx_app -d olx < db/init/03-listing-filters.sql
 
 -- Room-count bucket used by the Rooms dropdown, the bar gauge and every
 -- filtered panel: ''/NULL → 'unknown', non-numeric → 'other',

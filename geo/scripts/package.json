@@ -1,0 +1,10 @@
+{
+  "name": "geo-scripts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "dependencies": {
+    "jimp": "^0.22.12",
+    "pngjs": "^7.0.0"
+  }
+}

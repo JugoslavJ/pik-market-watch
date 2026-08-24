@@ -2,7 +2,7 @@
 -- HTML pages never exposed. All nullable — presence varies per ad and missing
 -- data must never block an upsert.
 -- Idempotent; applied automatically by the scraper on startup, or once manually:
---   docker exec -i olx-db psql -U olx -d olx < db/init/07-api-extras.sql
+--   docker exec -i olx-db psql -U olx_app -d olx < db/init/07-api-extras.sql
 
 -- The ad's OWN server-side price history (API field price_history[]: past
 -- asking prices with dates). Kept raw for cross-validation against our

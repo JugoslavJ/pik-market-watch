@@ -7,9 +7,10 @@
 # on STDIN:
 #   Get-Content dump -AsByteStream | ssh -i key <host>   (forced command runs)
 #
-# Pipeline: receive -> size check -> integrity check -> rollback snapshot ->
-# stop scraper (only if running) -> replace the public schema -> restore
-# (atomic) -> on failure roll back to the previous snapshot -> restart scraper.
+# Pipeline: receive -> size check -> integrity check -> ownership audit ->
+# rollback snapshot -> stop scraper (only if running) -> replace the public
+# schema -> restore (atomic) -> on failure roll back to the previous snapshot
+# -> restart scraper.
 #
 # Why the schema is dropped instead of pg_restore --clean: the instance never
 # runs migrations (no scraper), so home and instance schemas can drift (e.g. a
@@ -69,6 +70,26 @@ if ! docker compose exec -T db pg_restore -l /backups/olx-sync-incoming.dump >/d
 fi
 if ! docker compose exec -T db sh -c 'pg_restore -l /backups/olx-sync-incoming.dump | grep -q "TABLE DATA public listings"'; then
   echo "RESTORE_ERROR: archive is missing listings data" >&2
+  exit 1
+fi
+
+# ─── Ownership audit (before anything destructive) ───────────────────────────
+# pg_restore replays every entry's ALTER ... OWNER TO <source-owner>, and the
+# least-privileged restore role cannot SET ROLE to any other role — so every
+# archived object must ALREADY be owned by $app_user. Drift happens when the
+# SOURCE machine creates objects as its bootstrap superuser (2026-08-24: a
+# migration re-applied by hand as "-U olx" shipped two superuser-owned objects;
+# the failure only surfaced here, after the schema had already been dropped).
+# DEFAULT ACL entries are excluded: build_toc filters those separately and
+# their trailing token is a grantee, not the owner.
+drifted=$(docker compose exec -T db sh -c "
+    pg_restore -l '$incoming' | grep -v '^;' | grep -v 'DEFAULT ACL' |
+    awk '\$NF != \"$app_user\" {print \$NF}' | sort -u" 2>/dev/null || :)
+if [ -n "$drifted" ]; then
+  echo "RESTORE_ERROR: archive contains objects not owned by $app_user:" >&2
+  printf '%s\n' "$drifted" | sed 's/^/RESTORE_ERROR:   /' >&2
+  echo "RESTORE_ERROR: fix the source machine, then re-run the sync:" >&2
+  echo "RESTORE_ERROR:   docker compose exec db bash /docker-entrypoint-initdb.d/zz-database-roles.sh" >&2
   exit 1
 fi
 
@@ -136,7 +157,10 @@ fi
 # schema reset, the database is empty and the auto-rollback below replays the
 # previous snapshot.
 restore_failed=0
-if ! docker compose exec -T db pg_restore -U "$app_user" -d olx --clean --if-exists \
+# --no-owner: belt-and-braces behind the audit above — a no-op while every
+# entry targets $app_user; if anything ever slips through it degrades to
+# "object owned by the restoring role" instead of failing the whole sync.
+if ! docker compose exec -T db pg_restore -U "$app_user" -d olx --clean --if-exists --no-owner \
        --single-transaction --use-list=/tmp/toc.use /backups/olx-sync-incoming.dump; then
   restore_failed=1
 fi
@@ -144,7 +168,7 @@ fi
 if [ "$restore_failed" = "1" ]; then
   if [ -n "$prev" ] && build_toc "/backups/$(basename "$prev")" /tmp/toc.prev; then
     echo "RESTORE_ERROR: pg_restore failed - rolling back to previous snapshot $(basename "$prev")" >&2
-    if docker compose exec -T db pg_restore -U "$app_user" -d olx --clean --if-exists \
+    if docker compose exec -T db pg_restore -U "$app_user" -d olx --clean --if-exists --no-owner \
            --single-transaction --use-list=/tmp/toc.prev "/backups/$(basename "$prev")"; then
       echo "RESTORE_ERROR: rollback finished - instance is serving the previous snapshot" >&2
     else

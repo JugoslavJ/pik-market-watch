@@ -2,7 +2,7 @@
 -- this feature existed. Fresh installs already get them from 01-schema.sql.
 -- The postgres entrypoint does NOT re-run init scripts on existing volumes,
 -- so apply once manually with:
---   docker exec -i olx-db psql -U olx -d olx < db/init/02-add-geolocation.sql
+--   docker exec -i olx-db psql -U olx_app -d olx < db/init/02-add-geolocation.sql
 
 ALTER TABLE listings ADD COLUMN IF NOT EXISTS location  TEXT;
 ALTER TABLE listings ADD COLUMN IF NOT EXISTS latitude  DOUBLE PRECISION;
