@@ -15,7 +15,8 @@
 //     → full ad incl. attributes[], price_history[], views, location,
 //       created_at/date, user.type, cities[], category
 
-const { USER_AGENT } = require('./util');
+const { USER_AGENT, sleep } = require('./util');
+const { parseListingDetail } = require('./parser');
 
 const API_ORIGIN = 'https://olx.ba';
 
@@ -108,6 +109,43 @@ async function fetchListing(articleId, timeoutMs) {
   return body;
 }
 
+/**
+ * Fetch full listings for the given article ids in small concurrent waves
+ * with a politeness gap between requests (the shared pacing used by both the
+ * per-run enrichment pass and the standalone backfill script).
+ *
+ * Resolves to one entry per id, in input order: the parsed detail object, or
+ * null when that fetch failed (already logged — callers treat null as
+ * "keep whatever search-level facts exist").
+ *
+ * @param {number[]} articleIds
+ * @param {{timeoutMs:number, concurrency?:number, delayMs?:number,
+ *           onBatch?:(results:Array<?object>, done:number, total:number,
+ *                     )=>Promise<void>}} opts
+ * @param {(…args:any[])=>void} [log]
+ */
+async function fetchDetailsInBatches(articleIds, opts, log = () => {}) {
+  const { timeoutMs, concurrency = 2, delayMs = 0, onBatch } = opts;
+  const all = [];
+  let done = 0;
+  for (let i = 0; i < articleIds.length; i += Math.max(1, concurrency)) {
+    const batch = articleIds.slice(i, i + concurrency);
+    const results = await Promise.all(batch.map(async id => {
+      if (delayMs) await sleep(delayMs);
+      try {
+        return parseListingDetail(await fetchListing(id, timeoutMs), id);
+      } catch (err) {
+        log(`⌖ ${id}: detail fetch failed (${String(err.message || err).slice(0, 120)})`);
+        return null;
+      }
+    }));
+    all.push(...results);
+    done += batch.length;
+    if (onBatch) await onBatch(results, done, articleIds.length);
+  }
+  return all;
+}
+
 // Query params olx.ba's API actually honors as filters. A rewritten URL with
 // NONE of these returns the ENTIRE site (6.79 M listings when probed with the
 // legacy kat= param — the API silently ignores unknown params), so
@@ -118,4 +156,7 @@ function hasApiFilter(apiUrl) {
   return FILTER_PARAMS.some(p => apiUrl.searchParams.has(p));
 }
 
-module.exports = { API_ORIGIN, RATE_RESERVE, ApiError, toApiSearchUrl, fetchSearchPage, fetchListing, hasApiFilter };
+module.exports = {
+  API_ORIGIN, RATE_RESERVE, ApiError, toApiSearchUrl,
+  fetchSearchPage, fetchListing, fetchDetailsInBatches, hasApiFilter,
+};

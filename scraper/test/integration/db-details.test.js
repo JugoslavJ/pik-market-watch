@@ -97,13 +97,6 @@ needsDb('listingsMissingDetails returns only unfetched ids from the given set', 
   assert.deepEqual(await db.listingsMissingDetails([7003, 7004]), [7004]);
 });
 
-needsDb('listingsMissingDetails returns only unfetched ids from the given set', async () => {
-  await seed(7003);
-  await seed(7004);
-  await db.enrichListings([{ articleId: 7003, characteristics: {} }]);
-  assert.deepEqual(await db.listingsMissingDetails([7003, 7004]), [7004]);
-});
-
 needsDb('getListingsNeedingDetails includes rows never detail-fetched', async () => {
   await seed(7005, { sqm: 50, price: 100000, priceText: '', ppm2: 2000 });  // sqm complete
   assert.equal((await db.getListingsNeedingDetails(true))

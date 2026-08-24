@@ -26,18 +26,42 @@ class Db {
     }
   }
 
+  /** Run fn(client) inside one BEGIN…COMMIT; ROLLBACK + rethrow on failure. */
+  async #withTransaction(fn) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const out = await fn(client);
+      await client.query('COMMIT');
+      return out;
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  /** Active-row ids among `ids` whose listing matches a SQL condition. */
+  async #idsAmong(whereSql, ids) {
+    if (!ids.length) return [];
+    const r = await this.pool.query(
+      `SELECT article_id FROM listings
+        WHERE closed_at IS NULL AND (${whereSql})
+          AND article_id = ANY($1::bigint[])`,
+      [ids]);
+    return r.rows.map(row => Number(row.article_id));
+  }
+
   /**
    * Upsert a batch of parsed cards in ONE transaction.
    * @param {Array<object>} cards — output of collectCards()
    * @returns {Promise<{newCount:number, dropCount:number}>}
    */
   async saveCards(cards) {
-    const client = await this.pool.connect();
     let newCount = 0, dropCount = 0;
     const newIds = [];
-    try {
-      await client.query('BEGIN');
-
+    return this.#withTransaction(async client => {
       for (const card of cards) {
         const raw = extractArticleId(card.url);
         if (!raw) continue;
@@ -83,14 +107,8 @@ class Db {
         }
       }
 
-      await client.query('COMMIT');
       return { newCount, dropCount, newIds };
-    } catch (err) {
-      await client.query('ROLLBACK').catch(() => {});
-      throw err;
-    } finally {
-      client.release();
-    }
+    });
   }
 
   /**
@@ -171,14 +189,8 @@ class Db {
    * @param {number[]} ids
    * @returns {Promise<number[]>}
    */
-  async unpinnedArticleIds(ids) {
-    if (!ids.length) return [];
-    const r = await this.pool.query(
-      `SELECT article_id FROM listings
-        WHERE latitude IS NULL AND closed_at IS NULL
-          AND article_id = ANY($1::bigint[])`,
-      [ids]);
-    return r.rows.map(row => Number(row.article_id));
+  unpinnedArticleIds(ids) {
+    return this.#idsAmong('latitude IS NULL', ids);
   }
 
   /**
@@ -189,14 +201,8 @@ class Db {
    * @param {number[]} ids
    * @returns {Promise<number[]>}
    */
-  async listingsMissingSqm(ids) {
-    if (!ids.length) return [];
-    const r = await this.pool.query(
-      `SELECT article_id FROM listings
-        WHERE sqm IS NULL AND price IS NOT NULL AND NOT is_rent AND closed_at IS NULL
-          AND article_id = ANY($1::bigint[])`,
-      [ids]);
-    return r.rows.map(row => Number(row.article_id));
+  listingsMissingSqm(ids) {
+    return this.#idsAmong('(sqm IS NULL AND price IS NOT NULL AND NOT is_rent)', ids);
   }
 
   /**
@@ -206,14 +212,8 @@ class Db {
    * @param {number[]} ids
    * @returns {Promise<number[]>}
    */
-  async listingsMissingDetails(ids) {
-    if (!ids.length) return [];
-    const r = await this.pool.query(
-      `SELECT article_id FROM listings
-        WHERE details_fetched_at IS NULL AND closed_at IS NULL
-          AND article_id = ANY($1::bigint[])`,
-      [ids]);
-    return r.rows.map(row => Number(row.article_id));
+  listingsMissingDetails(ids) {
+    return this.#idsAmong('details_fetched_at IS NULL', ids);
   }
 
   /**
@@ -256,9 +256,7 @@ class Db {
    *   apiStatus:?string, apiPriceHistory:?Array<object>}>} rows
    */
   async enrichListings(rows) {
-    const client = await this.pool.connect();
-    try {
-      await client.query('BEGIN');
+    await this.#withTransaction(async client => {
       for (const r of rows) {
         await client.query(
           `UPDATE listings SET
@@ -308,13 +306,7 @@ class Db {
            r.apiStatus ?? null,
            r.apiPriceHistory ? JSON.stringify(r.apiPriceHistory) : null]);
       }
-      await client.query('COMMIT');
-    } catch (err) {
-      await client.query('ROLLBACK').catch(() => {});
-      throw err;
-    } finally {
-      client.release();
-    }
+    });
   }
 
   /**

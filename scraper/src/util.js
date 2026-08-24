@@ -18,4 +18,8 @@ function computeMedian(values) {
   return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2);
 }
 
-module.exports = { USER_AGENT, sleep, computeMedian };
+// Timestamped console logger shared by the entry points: `<iso> [tag] msg…`.
+const makeLogger = tag => (...args) =>
+  console.log(new Date().toISOString(), `[${tag}]`, ...args);
+
+module.exports = { USER_AGENT, sleep, computeMedian, makeLogger };

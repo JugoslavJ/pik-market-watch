@@ -8,8 +8,9 @@ const config = require('./config');
 const Db = require('./db');
 const applyMigrations = require('./migrate');
 const { scrapeSearch } = require('./scraper');
+const { makeLogger } = require('./util');
 
-const log = (...args) => console.log(new Date().toISOString(), '[scraper]', ...args);
+const log = makeLogger('scraper');
 
 const state = {
   startedAt:       new Date().toISOString(),

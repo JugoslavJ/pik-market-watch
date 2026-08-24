@@ -22,8 +22,9 @@ function waitUntilReady() {
   for (let i = 1; i <= 60; i++) {
     const r = docker(['exec', NAME, 'pg_isready', '-U', 'olx', '-d', 'olx']);
     if (r.status === 0) return;
-    require('node:child_process').execSync(
-      process.platform === 'win32' ? 'timeout /t 1 /nobreak >nul' : 'sleep 1');
+    // Synchronous 1 s pause without spawning a process: Windows timeout.exe
+    // refuses to run under execSync ("input redirection not supported").
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
   }
   throw new Error('test postgres did not become ready in time');
 }

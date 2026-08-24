@@ -5,9 +5,9 @@
 // pacing at a fraction of the cost (no browser; JSON instead of rendered DOM).
 
 const {
-  fetchSearchPage, fetchListing, toApiSearchUrl, hasApiFilter, RATE_RESERVE,
+  fetchSearchPage, toApiSearchUrl, hasApiFilter, RATE_RESERVE, fetchDetailsInBatches,
 } = require('./api');
-const { parseSearchItem, parseListingDetail } = require('./parser');
+const { parseSearchItem } = require('./parser');
 const { sleep, computeMedian } = require('./util');
 
 async function scrapeSearch(db, search, cfg, log) {
@@ -131,13 +131,16 @@ async function scrapeSearch(db, search, cfg, log) {
     // converges older rows until none remain.
     let enrichedCount = 0;
     if (cfg.maxGeoFetches > 0 && ids.length) {
-      const [unpinnedSeen, missingSqmSeen, missingDetailsSeen] = await Promise.all([
+      const [unpinned, missingSqm, missingDetails] = await Promise.all([
         db.unpinnedArticleIds(ids),
         db.listingsMissingSqm(ids),
         db.listingsMissingDetails(ids),
       ]);
+      const unpinnedSet = new Set(unpinned);
+      const missingSqmSet = new Set(missingSqm);
+      const missingDetailsSet = new Set(missingDetails);
       const candidateIds = [...new Set(
-        [...newIds, ...unpinnedSeen, ...missingSqmSeen, ...missingDetailsSeen])];
+        [...newIds, ...unpinned, ...missingSqm, ...missingDetails])];
       const byCard = new Map(allCards.map(c => [c.articleId, c]));
       const targets = candidateIds.slice(0, cfg.maxGeoFetches);
 
@@ -157,36 +160,28 @@ async function scrapeSearch(db, search, cfg, log) {
       const needDetail = targets.filter(id => {
         const r = rows.get(id);
         if (!r) return false;
-        if (missingDetailsSeen.includes(id)) return true;   // characteristics/views/history
-        if (missingSqmSeen.includes(id) && r.sqm == null) return true;
-        if (unpinnedSeen.includes(id) && r.latitude == null) return true;
+        if (missingDetailsSet.has(id)) return true;   // characteristics/views/history
+        if (missingSqmSet.has(id) && r.sqm == null) return true;
+        if (unpinnedSet.has(id) && r.latitude == null) return true;
         return false;
       });
 
       log(`⌖ enriching ${targets.length}/${candidateIds.length} listing(s) ` +
-          `(${newIds.length} new, ${unpinnedSeen.length} unpinned, ` +
-          `${missingSqmSeen.length} without m², ${missingDetailsSeen.length} never detailed)` +
+          `(${newIds.length} new, ${unpinned.length} unpinned, ` +
+          `${missingSqm.length} without m², ${missingDetails.length} never detailed)` +
           (needDetail.length ? ` · ${needDetail.length} detail call(s)` : ''));
 
-      for (let i = 0; i < needDetail.length; i += cfg.geoConcurrency) {
-        const batch = needDetail.slice(i, i + cfg.geoConcurrency);
-        const details = await Promise.all(batch.map(async id => {
-          await sleep(cfg.geoDelayMs);
-          try {
-            return parseListingDetail(await fetchListing(id, cfg.apiTimeoutMs), id);
-          } catch (err) {
-            log(`⌖ ${id}: detail fetch failed (${String(err.message || err).slice(0, 120)})`);
-            return null;
-          }
-        }));
-        for (const d of details) {
-          if (!d) continue;   // a failed call leaves search-level facts in place
-          const row = rows.get(d.articleId);
-          for (const [k, v] of Object.entries(d)) {
-            if (k === 'articleId' || v == null) continue;
-            if (k === 'characteristics' && !Object.keys(v).length) continue;
-            row[k] = v;       // non-null detail facts override search-level ones
-          }
+      const details = await fetchDetailsInBatches(
+        needDetail,
+        { timeoutMs: cfg.apiTimeoutMs, concurrency: cfg.geoConcurrency, delayMs: cfg.geoDelayMs },
+        log);
+      for (const d of details) {
+        if (!d) continue;   // a failed call leaves search-level facts in place
+        const row = rows.get(d.articleId);
+        for (const [k, v] of Object.entries(d)) {
+          if (k === 'articleId' || v == null) continue;
+          if (k === 'characteristics' && !Object.keys(v).length) continue;
+          row[k] = v;       // non-null detail facts override search-level ones
         }
       }
 

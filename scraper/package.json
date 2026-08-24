@@ -10,7 +10,7 @@
     "fixtures": "node scripts/update-fixtures.js",
     "test": "node --test \"test/unit/*.test.js\"",
     "test:integration": "node scripts/run-integration-tests.js",
-    "lint:syntax": "node -e \"const fs=require('fs');let bad=0;for(const f of fs.readdirSync('src')){if(!f.endsWith('.js'))continue;try{require('child_process').execSync(process.execPath+' --check src/'+f,{stdio:'pipe'})}catch(e){bad=1;console.error(e.stderr.toString())}};process.exit(bad)\""
+    "lint:syntax": "node -e \"const fs=require('fs'),{execFileSync}=require('child_process');let bad=0;for(const f of fs.readdirSync('src')){if(!f.endsWith('.js'))continue;try{execFileSync(process.execPath,['--check','src/'+f],{stdio:'pipe'})}catch(e){bad=1;console.error((e.stderr&&e.stderr.toString())||e.message)}}process.exit(bad)\""
   },
   "engines": {
     "node": ">=22"
