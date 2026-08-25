@@ -1617,20 +1617,61 @@
         "y": 50
       },
       "title": "Price vs m² — sales",
-      "description": "Every sale listing matching the filters as a point (floor area × asking price). The red dotted line is a least-squares fit computed over the same set — listings clearly below it are the genuine bargains; bottom-left outliers are often studios or data errors.",
-      "type": "scatterplot",
+      "description": "Every sale listing matching the filters as a point (floor area × asking price). The dotted second series traces the least-squares fit computed over the same set — listings clearly below it are the genuine bargains; bottom-left outliers are often studios or data errors.",
+      "type": "xychart",
       "options": {
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": false
+          "showLegend": true
         },
         "tooltip": {
           "mode": "single",
           "sort": "none"
         },
-        "xField": "sqm",
-        "yField": "price_km"
+        "mapping": "manual",
+        "series": [
+          {
+            "frame": {
+              "matcher": {
+                "id": "byIndex",
+                "options": 0
+              }
+            },
+            "x": {
+              "matcher": {
+                "id": "byName",
+                "options": "sqm"
+              }
+            },
+            "y": {
+              "matcher": {
+                "id": "byName",
+                "options": "price_km"
+              }
+            }
+          },
+          {
+            "frame": {
+              "matcher": {
+                "id": "byIndex",
+                "options": 1
+              }
+            },
+            "x": {
+              "matcher": {
+                "id": "byName",
+                "options": "sqm"
+              }
+            },
+            "y": {
+              "matcher": {
+                "id": "byName",
+                "options": "price_km"
+              }
+            }
+          }
+        ]
       },
       "targets": [
         {
@@ -1652,17 +1693,6 @@
           "format": "table",
           "rawSql": "WITH base AS (\n  SELECT l.sqm::float8 AS sqm, l.price::float8 AS price\n  FROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\n  WHERE NOT l.is_rent AND l.price IS NOT NULL AND l.ppm2 > 0 AND l.sqm > 0\n    AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n    AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\n),\nfit AS (\n  SELECT min(sqm) AS x0, max(sqm) AS x1,\n         regr_slope(price, sqm) AS s, regr_intercept(price, sqm) AS b\n  FROM base\n)\nSELECT gs AS sqm, round(b + s * gs)::double precision AS price_km\nFROM fit, generate_series(x0, x1, GREATEST((x1 - x0) / 80.0, 0.001)) gs\nWHERE s IS NOT NULL",
           "refId": "B"
-        }
-      ],
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {},
-            "renameByName": {
-              "price_km": "price KM"
-            }
-          }
         }
       ],
       "id": 26
