@@ -27,113 +27,104 @@ class Db {
     }
   }
 
-  /** Run fn(client) inside one BEGIN…COMMIT; ROLLBACK + rethrow on failure. */
-  async #withTransaction(fn) {
-    const client = await this.pool.connect();
-    try {
-      await client.query("BEGIN");
-      const out = await fn(client);
-      await client.query("COMMIT");
-      return out;
-    } catch (err) {
-      await client.query("ROLLBACK").catch(() => {});
-      throw err;
-    } finally {
-      client.release();
-    }
-  }
-
   /**
-   * Upsert a batch of parsed cards in ONE transaction.
+   * Upsert a batch of parsed cards in ONE set-based statement (single round
+   * trip; per-card semantics preserved exactly):
+   *   - upsert listing, bump last_seen, reopen (closed_* cleared on re-sight)
+   *   - renewed_at moves monotonically forward (GREATEST ignores NULLs)
+   *   - append price_history: unconditionally for brand-new listings, and for
+   *     known ones only when ppm² is known AND price/ppm² actually changed
+   *   - count new listings and price drops; collect new article ids
+   * Caller guarantees unique article ids (scraper dedupes across pages); the
+   * Map below is defensive insurance against future callers forgetting.
    * @param {Array<object>} cards — output of parseSearchItem()
-   * @returns {Promise<{newCount:number, dropCount:number}>}
+   * @returns {Promise<{newCount:number, dropCount:number, newIds:number[]}>}
    */
   async saveCards(cards) {
-    let newCount = 0,
-      dropCount = 0;
-    const newIds = [];
-    return this.#withTransaction(async (client) => {
-      for (const card of cards) {
-        const raw = extractArticleId(card.url);
-        if (!raw) continue;
-        const id = Number(raw);
-        const price = card.price ?? null;
-        const ppm2 = card.ppm2 ?? null;
+    const unique = new Map();
+    for (const card of cards) {
+      const id = Number(extractArticleId(card.url)) || null;
+      if (id !== null && !unique.has(id)) unique.set(id, card);
+    }
+    if (!unique.size) return { newCount: 0, dropCount: 0, newIds: [] };
 
-        const existing = await client.query(
-          "SELECT price, ppm2 FROM listings WHERE article_id = $1 FOR UPDATE",
-          [id],
-        );
-
-        if (existing.rowCount) {
-          const last = existing.rows[0];
-          const lastPrice = last.price === null ? null : Number(last.price); // NUMERIC → string
-
-          // History is appended only when ppm² is known AND something actually
-          // changed vs. the previous snapshot.
-          const changed =
-            card.ppm2 != null &&
-            (last.ppm2 !== card.ppm2 || lastPrice !== price);
-          if (changed) {
-            if (last.ppm2 != null && card.ppm2 < last.ppm2) dropCount++;
-            await client.query(
-              "INSERT INTO price_history (article_id, price, ppm2) VALUES ($1, $2, $3)",
-              [id, price, ppm2],
-            );
-          }
-          await client.query(
-            `UPDATE listings SET url = $2, title = $3, sqm = $4, rooms = $5,
-                    price = $6, price_text = $7, ppm2 = $8, is_rent = $9, last_seen = now(),
-                    closed_at = NULL, closing_price = NULL, closing_ppm2 = NULL,
-                    closing_category = NULL,
-                    -- Day renewed moves monotonically forward: GREATEST ignores
-                    -- NULLs on both sides, so a card without a stamp never erases
-                    -- an earlier one and stamps never regress.
-                    renewed_at = GREATEST(renewed_at, $10::timestamptz)
-              WHERE article_id = $1`,
-            [
-              id,
-              card.url,
-              card.title,
-              card.sqm,
-              card.rooms,
-              price,
-              card.priceText,
-              ppm2,
-              card.isRent,
-              card.renewedAt ?? null,
-            ],
-          );
-        } else {
-          await client.query(
-            `INSERT INTO listings
-               (article_id, url, title, sqm, rooms, price, price_text, ppm2, is_rent,
-                first_seen, last_seen, renewed_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), now(), $10)`,
-            [
-              id,
-              card.url,
-              card.title,
-              card.sqm,
-              card.rooms,
-              price,
-              card.priceText,
-              ppm2,
-              card.isRent,
-              card.renewedAt ?? null,
-            ],
-          );
-          await client.query(
-            "INSERT INTO price_history (article_id, price, ppm2) VALUES ($1, $2, $3)",
-            [id, price, ppm2],
-          );
-          newCount++;
-          newIds.push(id);
-        }
-      }
-
-      return { newCount, dropCount, newIds };
-    });
+    const g = (key, fallback = null) =>
+      [...unique.values()].map((card) => card[key] ?? fallback);
+    const result = await this.pool.query(
+      `WITH input AS (
+         SELECT * FROM unnest(
+             $1::bigint[], $2::text[], $3::text[], $4::numeric[], $5::text[],
+             $6::numeric[], $7::text[], $8::integer[], $9::boolean[], $10::timestamptz[])
+           AS t(article_id, url, title, sqm, rooms, price, price_text, ppm2,
+                is_rent, renewed_at)),
+       prev AS (
+         SELECT l.article_id, l.price AS old_price, l.ppm2 AS old_ppm2
+           FROM listings l JOIN input i USING (article_id)),
+       ins AS (
+         INSERT INTO listings
+           (article_id, url, title, sqm, rooms, price, price_text, ppm2,
+            is_rent, first_seen, last_seen, renewed_at)
+         SELECT i.article_id, i.url, i.title, i.sqm, i.rooms, i.price,
+                i.price_text, i.ppm2, i.is_rent, now(), now(), i.renewed_at
+           FROM input i
+          WHERE NOT EXISTS (SELECT 1 FROM prev p WHERE p.article_id = i.article_id)
+         RETURNING article_id),
+       upd AS (
+         UPDATE listings l SET url = i.url, title = i.title, sqm = i.sqm,
+                 rooms = i.rooms, price = i.price, price_text = i.price_text,
+                 ppm2 = i.ppm2, is_rent = i.is_rent, last_seen = now(),
+                 closed_at = NULL, closing_price = NULL, closing_ppm2 = NULL,
+                 closing_category = NULL,
+                 -- Day renewed moves monotonically forward: GREATEST ignores
+                 -- NULLs on both sides, so a stamp-less card never erases an
+                 -- earlier one and stamps never regress.
+                 renewed_at = GREATEST(l.renewed_at, i.renewed_at)
+           FROM input i WHERE l.article_id = i.article_id),
+       -- History rows: brand-new listings always open their history…
+       hist_new AS (
+         SELECT i.article_id, i.price, i.ppm2
+           FROM input i JOIN ins x USING (article_id)),
+       -- …known ones only when ppm² is known AND something actually changed.
+       hist_changed AS (
+         SELECT i.article_id, i.price, i.ppm2
+           FROM input i JOIN prev p USING (article_id)
+          WHERE i.ppm2 IS NOT NULL
+            AND (p.old_ppm2 IS DISTINCT FROM i.ppm2
+                 OR p.old_price IS DISTINCT FROM i.price)),
+       hist AS (
+         INSERT INTO price_history (article_id, price, ppm2)
+         SELECT article_id, price, ppm2 FROM (
+           SELECT * FROM hist_new UNION ALL SELECT * FROM hist_changed) h),
+       -- A drop = changed, previously had a plausible ppm², and it went down.
+       drops AS (
+         SELECT count(*)::int AS n
+           FROM input i JOIN prev p USING (article_id)
+          WHERE i.ppm2 IS NOT NULL AND p.old_ppm2 IS NOT NULL
+            AND i.ppm2 < p.old_ppm2
+            AND (p.old_ppm2 IS DISTINCT FROM i.ppm2
+                 OR p.old_price IS DISTINCT FROM i.price))
+       SELECT (SELECT count(*)::int FROM ins) AS new_count,
+              (SELECT n FROM drops) AS drop_count,
+              (SELECT array_agg(article_id ORDER BY article_id) FROM ins) AS new_ids`,
+      [
+        [...unique.keys()],
+        g("url"),
+        g("title"),
+        g("sqm"),
+        g("rooms"),
+        g("price"),
+        g("priceText"),
+        g("ppm2"),
+        g("isRent"),
+        g("renewedAt"),
+      ],
+    );
+    const row = result.rows[0];
+    return {
+      newCount: Number(row.new_count),
+      dropCount: Number(row.drop_count),
+      newIds: (row.new_ids ?? []).map(Number),
+    };
   }
 
   /**
@@ -297,86 +288,109 @@ class Db {
    *   favorites:?number, characteristics:?object,
    *   apiStatus:?string, apiPriceHistory:?Array<object>}>} rows
    */
+
   async enrichListings(rows) {
-    await this.#withTransaction(async (client) => {
-      for (const r of rows) {
-        await client.query(
-          `UPDATE listings SET
-             latitude  = COALESCE($2::double precision, latitude),
-             longitude = COALESCE($3::double precision, longitude),
-             -- Neighborhood from the map pin (11-neighborhoods.sql); first-wins
-             -- like other stable facts; a pin-less pass keeps the stored value.
-             location = COALESCE(location, neighborhood_of($2, $3)),
-             sqm  = COALESCE(sqm, $4::numeric),
-             ppm2 = CASE
-                      WHEN ppm2 IS NULL AND price IS NOT NULL AND NOT is_rent
-                           AND COALESCE(sqm, $4::numeric) IS NOT NULL
-                           AND round(price / COALESCE(sqm, $4::numeric)) BETWEEN 1 AND 15000
-                      THEN round(price / COALESCE(sqm, $4::numeric))::int
-                      ELSE ppm2
-                    END,
-             published_at       = COALESCE(published_at, $5::timestamptz),
-             seller_type        = COALESCE(seller_type, $6),
-             rooms_detail       = COALESCE(rooms_detail, $7),
-             bathrooms          = COALESCE(bathrooms, $8::smallint),
-             floor_num          = COALESCE(floor_num, $9::smallint),
-             floors_total       = COALESCE(floors_total, $10::smallint),
-             unit_levels        = COALESCE(unit_levels, $11::smallint),
-             heating            = COALESCE(heating, $12),
-             furnished          = COALESCE(furnished, $13::boolean),
-             condition          = COALESCE(condition, $14),
-             parking            = COALESCE(parking, $15::boolean),
-             garage             = COALESCE(garage, $16::boolean),
-             elevator           = COALESCE(elevator, $17::boolean),
-             year_built         = COALESCE(year_built, $18::smallint),
-             plot_sqm           = COALESCE(plot_sqm, $19::numeric),
-             orientation        = COALESCE(orientation, $20),
-             views              = COALESCE(views, $21::integer),
-             favorites          = COALESCE(favorites, $22::integer),
-             characteristics    = COALESCE(characteristics, '{}'::jsonb) || $23::jsonb,
-             -- Raw bonus data from olx.ba's JSON API (07-api-extras.sql):
-             -- server-side lifecycle state and OLX's own price history.
-             api_status         = COALESCE($24::text, api_status),
-             api_price_history  = COALESCE($25::jsonb, api_price_history),
-             -- Day renewed: monotonic (GREATEST ignores NULLs), so refreshes
-             -- move it forward and stamp-less passes never erase history.
-             renewed_at         = GREATEST(renewed_at, $26::timestamptz),
-             -- Scheduling stamps: the detail page counts as visited and the
-             -- row as enrichment-offered, even when nothing new was learned.
-             details_fetched_at           = now(),
-             last_enrichment_attempted_at = now()
-           WHERE article_id = $1`,
-          [
-            r.articleId,
-            r.latitude ?? null,
-            r.longitude ?? null,
-            r.sqm ?? null,
-            r.publishedAt ?? null,
-            r.sellerType ?? null,
-            r.roomsDetail ?? null,
-            r.bathrooms ?? null,
-            r.floorNum ?? null,
-            r.floorsTotal ?? null,
-            r.unitLevels ?? null,
-            r.heating ?? null,
-            r.furnished ?? null,
-            r.condition ?? null,
-            r.parking ?? null,
-            r.garage ?? null,
-            r.elevator ?? null,
-            r.yearBuilt ?? null,
-            r.plotSqm ?? null,
-            r.orientation ?? null,
-            r.views ?? null,
-            r.favorites ?? null,
-            JSON.stringify(r.characteristics ?? {}),
-            r.apiStatus ?? null,
-            r.apiPriceHistory ? JSON.stringify(r.apiPriceHistory) : null,
-            r.renewedAt ?? null,
-          ],
-        );
-      }
-    });
+    if (!rows.length) return;
+    const g = (key, fallback = null) => rows.map((r) => r[key] ?? fallback);
+    await this.pool.query(
+      `WITH input AS (
+         SELECT article_id, lat, lon, sqm, published_at, seller_type,
+                rooms_detail, bathrooms, floor_num, floors_total, unit_levels,
+                heating, furnished, condition, parking, garage, elevator,
+                year_built, plot_sqm, orientation, views, favorites,
+                chars::jsonb AS characteristics,
+                api_status,
+                api_ph::jsonb AS api_price_history,
+                renewed_at
+           FROM unnest(
+             $1::bigint[], $2::float8[], $3::float8[], $4::numeric[], $5::timestamptz[],
+             $6::text[], $7::text[], $8::smallint[], $9::smallint[], $10::smallint[],
+             $11::smallint[], $12::text[], $13::boolean[], $14::text[], $15::boolean[],
+              $16::boolean[], $17::boolean[], $18::smallint[], $19::numeric[], $20::text[],
+$21::integer[], $22::integer[], $23::text[], $24::text[],
+$25::text[], $26::timestamptz[])
+           AS t(article_id, lat, lon, sqm, published_at, seller_type, rooms_detail,
+                bathrooms, floor_num, floors_total, unit_levels, heating, furnished,
+                condition, parking, garage, elevator, year_built, plot_sqm,
+                orientation, views, favorites, chars, api_status, api_ph, renewed_at))
+       UPDATE listings l SET
+          latitude  = COALESCE(l.latitude, i.lat),
+          longitude = COALESCE(l.longitude, i.lon),
+          -- Neighborhood from the map pin (11-neighborhoods.sql); first-wins
+          -- like other stable facts; a pin-less pass keeps the stored value.
+          location = COALESCE(l.location, neighborhood_of(i.lat, i.lon)),
+          sqm = COALESCE(l.sqm, i.sqm),
+          ppm2 = CASE
+                   WHEN l.ppm2 IS NULL AND l.price IS NOT NULL AND NOT l.is_rent
+                        AND COALESCE(l.sqm, i.sqm) IS NOT NULL
+                        AND round(l.price / COALESCE(l.sqm, i.sqm)) BETWEEN 1 AND 15000
+                   THEN round(l.price / COALESCE(l.sqm, i.sqm))::int
+                   ELSE l.ppm2
+                 END,
+          published_at       = COALESCE(l.published_at, i.published_at),
+          seller_type        = COALESCE(l.seller_type, i.seller_type),
+          rooms_detail       = COALESCE(l.rooms_detail, i.rooms_detail),
+          bathrooms          = COALESCE(l.bathrooms, i.bathrooms),
+          floor_num          = COALESCE(l.floor_num, i.floor_num),
+          floors_total       = COALESCE(l.floors_total, i.floors_total),
+          unit_levels        = COALESCE(l.unit_levels, i.unit_levels),
+          heating            = COALESCE(l.heating, i.heating),
+          furnished          = COALESCE(l.furnished, i.furnished),
+          condition          = COALESCE(l.condition, i.condition),
+          parking            = COALESCE(l.parking, i.parking),
+          garage             = COALESCE(l.garage, i.garage),
+          elevator           = COALESCE(l.elevator, i.elevator),
+          year_built         = COALESCE(l.year_built, i.year_built),
+          plot_sqm           = COALESCE(l.plot_sqm, i.plot_sqm),
+          orientation        = COALESCE(l.orientation, i.orientation),
+          views              = COALESCE(l.views, i.views),
+          favorites          = COALESCE(l.favorites, i.favorites),
+          -- The JSONB map MERGES so fresh attr_code pairs refresh on every visit.
+          characteristics    = COALESCE(l.characteristics, '{}'::jsonb)
+                               || COALESCE(i.characteristics, '{}'::jsonb),
+          -- Raw bonus data from olx.ba's JSON API (07-api-extras.sql).
+          api_status         = COALESCE(l.api_status, i.api_status),
+          api_price_history  = COALESCE(l.api_price_history, i.api_price_history),
+          -- Day renewed: monotonic (GREATEST ignores NULLs), so refreshes move
+          -- it forward and stamp-less passes never erase history.
+          renewed_at         = GREATEST(l.renewed_at, i.renewed_at),
+          -- Scheduling stamps: the detail page counts as visited and the row as
+          -- enrichment-offered even when nothing new was learned.
+          details_fetched_at           = now(),
+          last_enrichment_attempted_at = now()
+       FROM input i
+       WHERE l.article_id = i.article_id`,
+      [
+        g("articleId"),
+        g("latitude"),
+        g("longitude"),
+        g("sqm"),
+        g("publishedAt"),
+        g("sellerType"),
+        g("roomsDetail"),
+        g("bathrooms"),
+        g("floorNum"),
+        g("floorsTotal"),
+        g("unitLevels"),
+        g("heating"),
+        g("furnished"),
+        g("condition"),
+        g("parking"),
+        g("garage"),
+        g("elevator"),
+        g("yearBuilt"),
+        g("plotSqm"),
+        g("orientation"),
+        g("views"),
+        g("favorites"),
+        rows.map((r) => JSON.stringify(r.characteristics ?? {})),
+        g("apiStatus"),
+        rows.map((r) =>
+          r.apiPriceHistory ? JSON.stringify(r.apiPriceHistory) : null,
+        ),
+        g("renewedAt"),
+      ],
+    );
   }
 
   /**
