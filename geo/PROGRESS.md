@@ -53,14 +53,18 @@ and all tests are green.**
   and seams (empty cells whose window touches 2+ MZs — the "(unmapped) at the borders"
   complaint). `21-mz-repair.js` rebuilds the set: overlaps resolved by lowest priority
   (same tie-break as `neighborhood_of`), empty cells within 160 m of covered land claimed
-  by BFS (seams + holes closed, outer boundary dilated ≤ 160 m), then each mask is
-  contoured, Douglas-Peucker-simplified (12 m), forced CCW and written back to
-  `banja-luka-mz-final.geojson` (original recoverable from git history). Before → after:
-  overlaps 319 → 49 cells, seams 8 873 → 480 cells. `neighborhood_of()` additionally gained
-  a nearest-edge fallback (`polygon_distance_m`, ≤ 500 m) so pins in leftover slivers still
-  get a district; pins > 1 km from any MZ (surrounding settlements) stay NULL/unmapped by
-  design. Backfill re-run unguarded: pinned actives unmapped 96 → 53 (all remaining are
-  the far-out ones). Integration suite 39/39 green.
+  by BFS (seams + holes closed, outer boundary dilated ≤ 160 m; fully-enclosed empty
+  components would be claimed outright — none existed, every gap drains to the outside),
+  then each mask is contoured, Douglas-Peucker-simplified (12 m), forced CCW and written
+  back to `banja-luka-mz-final.geojson` (original recoverable from git history). Before →
+  after: overlaps 319 → 49 cells, seams 8 873 → 480 cells. `neighborhood_of()` additionally
+  gained a nearest-edge fallback (`polygon_distance_m`, ≤ 5 km) so pins in border slivers
+  and grad hamlets without their own traced MZ (Trn / Šušnjari / Glamočani → nearest MZ)
+  still get a district. Backfill re-run unguarded: pinned actives unmapped 96 → 28 — and
+  per ad titles those 28 are Laktaši-opština / Čelinac listings (Laktaši, Bakinci,
+  Mahovljani, Jakupovci, Slatina, Čelinac…) returned by the Banja Luka searches, plus a
+  few wrong pins; they are intentionally left unmapped rather than mislabeled with a
+  5–9 km-distant MZ. Integration suite 39/39 green.
 
 ## 1. Goal
 

@@ -77,7 +77,7 @@ END;
 $$;
 
 -- Point-to-ring distance in meters (equirectangular approximation — plenty
--- for a ≤ 500 m fallback decision). Null-safe.
+-- for a ≤ 5 km fallback decision). Null-safe.
 CREATE OR REPLACE FUNCTION polygon_distance_m(p_lat double precision, p_lon double precision,
                                               p_poly double precision[])
 RETURNS double precision LANGUAGE plpgsql IMMUTABLE AS $$
@@ -119,10 +119,10 @@ END;
 $$;
 
 -- Neighborhood of a pin: the containing polygon wins (priority breaks shared-
--- border ties). Hand-traced borders can't be pixel-perfect, so a pin in no
--- polygon falls back to the NEAREST polygon edge within 500 m — a pin a few
--- meters across a seam still gets its district. Beyond the tolerance
--- (surrounding settlements) it stays NULL = '(unmapped)'.
+-- border ties). Hand-traced borders can't be pixel-perfect and the grad is
+-- vast, so a pin in no polygon falls back to the NEAREST polygon edge within
+-- 5 km — a pin across a seam or in a wide untraced pocket still gets its
+-- district. Beyond the tolerance it stays NULL = '(unmapped)'.
 CREATE OR REPLACE FUNCTION neighborhood_of(p_lat double precision, p_lon double precision)
 RETURNS TEXT LANGUAGE plpgsql STABLE AS $$
 DECLARE
@@ -146,7 +146,7 @@ BEGIN
       best_name := n_row.name;
     END IF;
   END LOOP;
-  IF best_dist IS NOT NULL AND best_dist <= 500 THEN
+  IF best_dist IS NOT NULL AND best_dist <= 5000 THEN
     RETURN best_name;
   END IF;
   RETURN NULL;

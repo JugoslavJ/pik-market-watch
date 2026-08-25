@@ -9,7 +9,11 @@
 //      (RFC 7946) and rounded to 6 dp, then written back as the
 //      FeatureCollection (original stays in git history; regenerate the SQL
 //      with 19-gen-sql.js afterwards and re-run the backfill unguarded)
-// Env: RES_M (default 20), GAP_CELLS (default 8 = 160 m), SIMPLIFY_M (default 12)
+// Empty cells connected to the grid border count as outside-the-city and are
+// left alone by the unlimited fill; enclosed holes are claimed fully (nearest
+// MZ wins). Env: RES_M (default 20), GAP_CELLS (default 8 = 160 m),
+// SIMPLIFY_M (default 12)
+// Usage: node 21-mz-repair.js [input.geojson]   (writes back in place)
 const fs = require('fs');
 const path = require('path');
 const GEO = path.join(__dirname, '..');
@@ -17,7 +21,7 @@ const GEO = path.join(__dirname, '..');
 const RES_M = Number(process.env.RES_M || 20);
 const GAP_CELLS = Number(process.env.GAP_CELLS || 8);
 const SIMPLIFY_M = Number(process.env.SIMPLIFY_M || 12);
-const file = path.join(GEO, 'banja-luka-mz-final.geojson');
+const file = process.argv[2] || path.join(GEO, 'banja-luka-mz-final.geojson');
 
 const fc = JSON.parse(fs.readFileSync(file, 'utf8'));
 const feats = fc.features.map(f => ({
@@ -139,6 +143,77 @@ function bfsFill(label, gapCells) {
   }
 }
 
+// ── exterior marking + enclosed hole components ──────────────────────────────
+function markExterior(label) {
+  const ext = new Uint8Array(N);
+  const q = new Int32Array(N);
+  let qh = 0, qt = 0;
+  for (let c = 0; c < cols; c++) {
+    for (const i of [c, (rows - 1) * cols + c]) {
+      if (label[i] === -1 && !ext[i]) { ext[i] = 1; q[qt++] = i; }
+    }
+  }
+  for (let r = 0; r < rows; r++) {
+    for (const i of [r * cols, r * cols + cols - 1]) {
+      if (label[i] === -1 && !ext[i]) { ext[i] = 1; q[qt++] = i; }
+    }
+  }
+  while (qh < qt) {
+    const i = q[qh++];
+    const r = (i / cols) | 0, c = i % cols;
+    for (const j of [r > 0 ? i - cols : -1, r < rows - 1 ? i + cols : -1, c > 0 ? i - 1 : -1, c < cols - 1 ? i + 1 : -1]) {
+      if (j === -1 || ext[j] || label[j] !== -1) continue;
+      ext[j] = 1;
+      q[qt++] = j;
+    }
+  }
+  return ext;
+}
+
+// empty components NOT connected to the outside = genuine holes in the tiling
+function emptyComponents(label, ext) {
+  const seen = new Uint8Array(N);
+  const comps = [];
+  for (let i = 0; i < N; i++) {
+    if (label[i] !== -1 || ext[i] || seen[i]) continue;
+    let size = 0, minR = Infinity, maxR = -1, minC = Infinity, maxC = -1;
+    const stack = [i];
+    seen[i] = 1;
+    while (stack.length) {
+      const j = stack.pop();
+      size++;
+      const r = (j / cols) | 0, c = j % cols;
+      if (r < minR) minR = r;
+      if (r > maxR) maxR = r;
+      if (c < minC) minC = c;
+      if (c > maxC) maxC = c;
+      for (const k of [r > 0 ? j - cols : -1, r < rows - 1 ? j + cols : -1, c > 0 ? j - 1 : -1, c < cols - 1 ? j + 1 : -1]) {
+        if (k === -1 || seen[k] || label[k] !== -1 || ext[k]) continue;
+        seen[k] = 1;
+        stack.push(k);
+      }
+    }
+    comps.push({ size, minR, maxR, minC, maxC });
+  }
+  return comps.sort((a, b) => b.size - a.size);
+}
+
+// unlimited-depth fill of enclosed holes: nearest covered cell wins
+function enclosedFill(label, ext) {
+  const q = new Int32Array(N);
+  let qh = 0, qt = 0;
+  for (let i = 0; i < N; i++) if (label[i] !== -1) q[qt++] = i;
+  while (qh < qt) {
+    const i = q[qh++];
+    const r = (i / cols) | 0, c = i % cols;
+    for (const j of [r > 0 ? i - cols : -1, r < rows - 1 ? i + cols : -1, c > 0 ? i - 1 : -1, c < cols - 1 ? i + 1 : -1]) {
+      if (j === -1 || label[j] !== -1 || ext[j]) continue;
+      label[j] = label[i];
+      q[qt++] = j;
+    }
+  }
+}
+
 // ── contour tracing: longest loop of a label's cell mask ─────────────────────
 const keyR = (k, w) => (k / w) | 0;
 const keyC = (k, w) => k % w;
@@ -250,7 +325,17 @@ const beforeRings = order.map(i => feats[i].ring);
 const g1 = rasterize(beforeRings);
 const before = metrics(g1.cover, g1.label);
 
+const ext = markExterior(g1.label);
+const comps = emptyComponents(g1.label, ext);
+console.log(`enclosed empty components (not reachable from outside): ${comps.length}`);
+for (const cp of comps.slice(0, 12)) {
+  const la = la0 + ((cp.minR + cp.maxR + 1) / 2) * dLat;
+  const lo = lo0 + ((cp.minC + cp.maxC + 1) / 2) * dLon;
+  console.log(`   ${String(cp.size).padStart(7)} cells (${(cp.size * RES_M * RES_M / 10000).toFixed(0)} ha)  near ${lo.toFixed(4)},${la.toFixed(4)}  spread ~${(Math.max(cp.maxR - cp.minR, cp.maxC - cp.minC) * RES_M).toFixed(0)} m`);
+}
+
 bfsFill(g1.label, GAP_CELLS);
+enclosedFill(g1.label, ext);
 
 const newRings = new Array(feats.length);
 let droppedLoops = 0;
