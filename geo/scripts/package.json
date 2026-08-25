@@ -4,7 +4,7 @@
   "private": true,
   "type": "commonjs",
   "dependencies": {
-    "jimp": "^0.22.12",
+    "jimp": "^1.6.1",
     "pngjs": "^7.0.0"
   }
 }
