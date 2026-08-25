@@ -2,16 +2,32 @@
 // Per-search harvesting from olx.ba's public JSON API: pagination, dedupe,
 // persistence and API-driven enrichment — plain HTTP, no browser.
 
-const {
-  fetchSearchPage, toApiSearchUrl, hasApiFilter, RATE_RESERVE, fetchDetailsInBatches,
-} = require('./api');
+const api = require('./api');
 const { parseSearchItem } = require('./parser');
 const { sleep, computeMedian } = require('./util');
 
-async function scrapeSearch(db, search, cfg, log) {
+/**
+ * Harvest one configured search end-to-end.
+ *
+ * The 5th parameter is a test seam: network + pacing dependencies default to
+ * the real implementations and are overridden by unit tests with fakes, so
+ * pagination/enrichment logic runs offline against synthetic payloads.
+ *
+ * @param {Db} db
+ * @param {{name:string,url:string,category:?string,searchKey:string}} search
+ * @param {object} cfg — config.js-shaped knobs
+ * @param {(…args:any[])=>void} log
+ * @param {{fetchSearchPage?:Function, fetchDetailsInBatches?:Function,
+ *          pace?(ms:number):Promise<void>}} [deps]
+ */
+async function scrapeSearch(db, search, cfg, log, {
+  fetchSearchPage = api.fetchSearchPage,
+  fetchDetailsInBatches = api.fetchDetailsInBatches,
+  pace = sleep,
+} = {}) {
   // Canonical page-1 API URL for this search (pagination stripped, per_page set).
-  const base = toApiSearchUrl(search.url, cfg.perPage);
-  if (!hasApiFilter(base)) {
+  const base = api.toApiSearchUrl(search.url, cfg.perPage);
+  if (!api.hasApiFilter(base)) {
     throw new Error(
       `"${search.name}": URL carries no API-recognized filter (${base.search || '(empty query)'}). ` +
       `Legacy kat= style params are silently IGNORED by olx.ba's API and would return the whole site. ` +
@@ -46,7 +62,7 @@ async function scrapeSearch(db, search, cfg, log) {
   // the reserve, pause once and let the window recover instead of eating 429s.
   const trackRate = (remaining, limit) => {
     if (!rateWarned && Number.isFinite(remaining) && remaining >= 0 &&
-        remaining < RATE_RESERVE) {
+        remaining < api.RATE_RESERVE) {
       rateWarned = true;
       log(`⚠ rate budget low (${remaining}/${limit ?? '?'} left) — throttling this cycle`);
       return true;
@@ -60,7 +76,7 @@ async function scrapeSearch(db, search, cfg, log) {
     const r = await fetchSearchPage(u, cfg.apiTimeoutMs);
     const lp = Number(r.meta.last_page);
     if (Number.isFinite(lp) && lp > 0) lastPage = Math.min(lastPage, lp);
-    if (trackRate(r.remaining, r.limit)) await sleep(65000);
+    if (trackRate(r.remaining, r.limit)) await pace(65000);
     return r.items.map(parseSearchItem).filter(Boolean);
   };
 
@@ -68,7 +84,7 @@ async function scrapeSearch(db, search, cfg, log) {
     // Page 1 first and alone — fails fast if olx.ba starts blocking us.
     let cards = await fetchPage(1);
     if (!cards.length) {              // one retry to rule out a transient blank
-      await sleep(2000);
+      await pace(2000);
       cards = await fetchPage(1);
     }
     if (!cards.length) {
@@ -105,7 +121,7 @@ async function scrapeSearch(db, search, cfg, log) {
       if (freshInWave === 0) break;   // all dupes/empty → pagination exhausted
       if (sawEmpty) break;            // hit the last page mid-wave
       cards = results.find(r => r.length) || [];
-      await sleep(cfg.pageDelayMs);
+      await pace(cfg.pageDelayMs);
     }
 
     const { newCount, dropCount } = await db.saveCards(allCards);
