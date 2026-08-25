@@ -9,6 +9,96 @@
 const { Pool } = require("pg");
 const { extractArticleId } = require("./parser");
 
+// ── Bulk-write column plumbing ───────────────────────────────────────────────
+// Both set-based writes feed row data through unnest($n::type[] …) arrays.
+// Each spec below is the SINGLE source of truth for its query's column list:
+//   [unnest alias, Postgres element type, value source]
+// A string source names a JS property read off every row (`r[src] ?? null`,
+// exactly what the former inline g() helper did); a function source receives
+// the whole row array and returns one column array (ids derived from URLs,
+// JSON.stringify derivations). renderUnnest() renders BOTH the placeholder/
+// cast list interpolated into the SQL and the matching params array from one
+// spec — adding or reordering a field becomes a one-line edit here instead
+// of three hand-synced ones across the SQL signature and the params list.
+const SAVE_CARDS_COLS = [
+  // Same derivation as the dedupe keys built in saveCards(), so the rendered
+  // first param is identical to the old explicit [...unique.keys()].
+  [
+    "article_id",
+    "bigint",
+    (cards) => cards.map((c) => Number(extractArticleId(c.url))),
+  ],
+  ["url", "text", "url"],
+  ["title", "text", "title"],
+  ["sqm", "numeric", "sqm"],
+  ["rooms", "text", "rooms"],
+  ["price", "numeric", "price"],
+  ["price_text", "text", "priceText"],
+  ["ppm2", "integer", "ppm2"],
+  ["is_rent", "boolean", "isRent"],
+  ["renewed_at", "timestamptz", "renewedAt"],
+];
+
+// Short unnest aliases (lat/lon/sqm/chars/api_ph) are load-bearing: the
+// UPDATE clause below reads them via `i.<alias>`.
+const ENRICH_COLS = [
+  ["article_id", "bigint", "articleId"],
+  ["lat", "float8", "latitude"],
+  ["lon", "float8", "longitude"],
+  ["sqm", "numeric", "sqm"],
+  ["published_at", "timestamptz", "publishedAt"],
+  ["seller_type", "text", "sellerType"],
+  ["rooms_detail", "text", "roomsDetail"],
+  ["bathrooms", "smallint", "bathrooms"],
+  ["floor_num", "smallint", "floorNum"],
+  ["floors_total", "smallint", "floorsTotal"],
+  ["unit_levels", "smallint", "unitLevels"],
+  ["heating", "text", "heating"],
+  ["furnished", "boolean", "furnished"],
+  ["condition", "text", "condition"],
+  ["parking", "boolean", "parking"],
+  ["garage", "boolean", "garage"],
+  ["elevator", "boolean", "elevator"],
+  ["year_built", "smallint", "yearBuilt"],
+  ["plot_sqm", "numeric", "plotSqm"],
+  ["orientation", "text", "orientation"],
+  ["views", "integer", "views"],
+  ["favorites", "integer", "favorites"],
+  // ::jsonb casts live in the SQL SELECT list (chars/api_ph arrive as text).
+  [
+    "chars",
+    "text",
+    (rows) => rows.map((r) => JSON.stringify(r.characteristics ?? {})),
+  ],
+  ["api_status", "text", "apiStatus"],
+  [
+    "api_ph",
+    "text",
+    (rows) =>
+      rows.map((r) =>
+        r.apiPriceHistory ? JSON.stringify(r.apiPriceHistory) : null,
+      ),
+  ],
+  ["renewed_at", "timestamptz", "renewedAt"],
+];
+
+/** Render one column spec into SQL placeholder/cast list + params array. */
+function renderUnnest(specs, rows) {
+  const casts = [];
+  const params = [];
+  for (const [, type, src] of specs) {
+    casts.push(`$${params.length + 1}::${type}[]`);
+    params.push(
+      typeof src === "function" ? src(rows) : rows.map((r) => r[src] ?? null),
+    );
+  }
+  return {
+    castsSql: casts.join(", "),
+    aliasSql: specs.map(([alias]) => alias).join(", "),
+    params,
+  };
+}
+
 class Db {
   constructor(connectionString) {
     this.pool = new Pool({ connectionString, max: 5 });
@@ -48,15 +138,12 @@ class Db {
     }
     if (!unique.size) return { newCount: 0, dropCount: 0, newIds: [] };
 
-    const g = (key, fallback = null) =>
-      [...unique.values()].map((card) => card[key] ?? fallback);
+    const input = renderUnnest(SAVE_CARDS_COLS, [...unique.values()]);
     const result = await this.pool.query(
       `WITH input AS (
          SELECT * FROM unnest(
-             $1::bigint[], $2::text[], $3::text[], $4::numeric[], $5::text[],
-             $6::numeric[], $7::text[], $8::integer[], $9::boolean[], $10::timestamptz[])
-           AS t(article_id, url, title, sqm, rooms, price, price_text, ppm2,
-                is_rent, renewed_at)),
+             ${input.castsSql})
+           AS t(${input.aliasSql})),
        prev AS (
          SELECT l.article_id, l.price AS old_price, l.ppm2 AS old_ppm2
            FROM listings l JOIN input i USING (article_id)),
@@ -106,18 +193,7 @@ class Db {
        SELECT (SELECT count(*)::int FROM ins) AS new_count,
               (SELECT n FROM drops) AS drop_count,
               (SELECT array_agg(article_id ORDER BY article_id) FROM ins) AS new_ids`,
-      [
-        [...unique.keys()],
-        g("url"),
-        g("title"),
-        g("sqm"),
-        g("rooms"),
-        g("price"),
-        g("priceText"),
-        g("ppm2"),
-        g("isRent"),
-        g("renewedAt"),
-      ],
+      input.params,
     );
     const row = result.rows[0];
     return {
@@ -291,7 +367,9 @@ class Db {
 
   async enrichListings(rows) {
     if (!rows.length) return;
-    const g = (key, fallback = null) => rows.map((r) => r[key] ?? fallback);
+    // Column plumbing comes from ENRICH_COLS above: one spec drives both this
+    // SQL's unnest() signature and the params array (see renderUnnest).
+    const input = renderUnnest(ENRICH_COLS, rows);
     await this.pool.query(
       `WITH input AS (
          SELECT article_id, lat, lon, sqm, published_at, seller_type,
@@ -303,16 +381,8 @@ class Db {
                 api_ph::jsonb AS api_price_history,
                 renewed_at
            FROM unnest(
-             $1::bigint[], $2::float8[], $3::float8[], $4::numeric[], $5::timestamptz[],
-             $6::text[], $7::text[], $8::smallint[], $9::smallint[], $10::smallint[],
-             $11::smallint[], $12::text[], $13::boolean[], $14::text[], $15::boolean[],
-              $16::boolean[], $17::boolean[], $18::smallint[], $19::numeric[], $20::text[],
-$21::integer[], $22::integer[], $23::text[], $24::text[],
-$25::text[], $26::timestamptz[])
-           AS t(article_id, lat, lon, sqm, published_at, seller_type, rooms_detail,
-                bathrooms, floor_num, floors_total, unit_levels, heating, furnished,
-                condition, parking, garage, elevator, year_built, plot_sqm,
-                orientation, views, favorites, chars, api_status, api_ph, renewed_at))
+             ${input.castsSql})
+           AS t(${input.aliasSql}))
        UPDATE listings l SET
           latitude  = COALESCE(l.latitude, i.lat),
           longitude = COALESCE(l.longitude, i.lon),
@@ -360,36 +430,7 @@ $25::text[], $26::timestamptz[])
           last_enrichment_attempted_at = now()
        FROM input i
        WHERE l.article_id = i.article_id`,
-      [
-        g("articleId"),
-        g("latitude"),
-        g("longitude"),
-        g("sqm"),
-        g("publishedAt"),
-        g("sellerType"),
-        g("roomsDetail"),
-        g("bathrooms"),
-        g("floorNum"),
-        g("floorsTotal"),
-        g("unitLevels"),
-        g("heating"),
-        g("furnished"),
-        g("condition"),
-        g("parking"),
-        g("garage"),
-        g("elevator"),
-        g("yearBuilt"),
-        g("plotSqm"),
-        g("orientation"),
-        g("views"),
-        g("favorites"),
-        rows.map((r) => JSON.stringify(r.characteristics ?? {})),
-        g("apiStatus"),
-        rows.map((r) =>
-          r.apiPriceHistory ? JSON.stringify(r.apiPriceHistory) : null,
-        ),
-        g("renewedAt"),
-      ],
+      input.params,
     );
   }
 

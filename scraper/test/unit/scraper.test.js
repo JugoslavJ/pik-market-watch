@@ -6,7 +6,7 @@
 // the real parser and stats math stay in the loop on purpose.
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { scrapeSearch } = require("../../src/scraper");
+const { scrapeSearch, pagesInWave } = require("../../src/scraper");
 const { RATE_RESERVE } = require("../../src/api");
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
@@ -385,4 +385,37 @@ test("MAX_GEO_FETCHES=0 disables the enrichment pass entirely", async () => {
 
   assert.equal(queueCalled, false);
   assert.equal(res.enriched, 0);
+});
+
+// ── pagesInWave: pure pagination boundary rules ──────────────────────────────
+
+test("pagesInWave: full wave strides by concurrency from page 2", () => {
+  assert.deepEqual(
+    pagesInWave(2, Infinity, baseCfg({ concurrency: 3 })),
+    [2, 3, 4],
+  );
+  assert.deepEqual(
+    pagesInWave(5, Infinity, baseCfg({ concurrency: 3 })),
+    [5, 6, 7],
+  );
+});
+
+test("pagesInWave: clamps mid-wave to the API-reported last_page", () => {
+  assert.deepEqual(pagesInWave(2, 3, baseCfg({ concurrency: 3 })), [2, 3]);
+  assert.deepEqual(pagesInWave(4, 4, baseCfg({ concurrency: 2 })), [4]);
+});
+
+test("pagesInWave: empty once the wave starts past last_page", () => {
+  assert.deepEqual(pagesInWave(4, 3, baseCfg({ concurrency: 2 })), []);
+});
+
+test("pagesInWave: clamps to maxPages on both sides", () => {
+  assert.deepEqual(
+    pagesInWave(5, Infinity, baseCfg({ maxPages: 6, concurrency: 3 })),
+    [5, 6],
+  );
+  assert.deepEqual(
+    pagesInWave(7, Infinity, baseCfg({ maxPages: 6, concurrency: 3 })),
+    [],
+  );
 });

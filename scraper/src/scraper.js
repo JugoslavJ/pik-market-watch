@@ -7,6 +7,24 @@ const { parseSearchItem } = require("./parser");
 const { sleep, computeMedian } = require("./util");
 
 /**
+ * Page numbers fetched concurrently by one pagination wave: waves start at
+ * page 2 and stride by cfg.concurrency, never past cfg.maxPages or the
+ * API-reported lastPage. An empty result means pagination is exhausted —
+ * the caller treats [] as its termination signal. Pure function, exported
+ * so the boundary rules get table-driven unit tests offline.
+ */
+function pagesInWave(start, lastPage, cfg) {
+  const pages = [];
+  for (
+    let p = start;
+    p < start + cfg.concurrency && p <= cfg.maxPages && p <= lastPage;
+    p++
+  )
+    pages.push(p);
+  return pages;
+}
+
+/**
  * Harvest one configured search end-to-end.
  *
  * The 5th parameter is a test seam: network + pacing dependencies default to
@@ -123,17 +141,11 @@ async function scrapeSearch(
     // new (past the end OLX repeats content), a page comes back empty, or the
     // reported last_page falls behind the wave.
     for (
-      let wave = 2;
-      wave <= cfg.maxPages && wave <= lastPage && cards.length > 0;
-      wave += cfg.concurrency
+      let waveStart = 2;
+      waveStart <= cfg.maxPages && waveStart <= lastPage && cards.length > 0;
+      waveStart += cfg.concurrency
     ) {
-      const pageNos = [];
-      for (
-        let p = wave;
-        p < wave + cfg.concurrency && p <= cfg.maxPages && p <= lastPage;
-        p++
-      )
-        pageNos.push(p);
+      const pageNos = pagesInWave(waveStart, lastPage, cfg);
       if (!pageNos.length) break;
 
       const results = await Promise.all(
@@ -289,4 +301,4 @@ async function scrapeSearch(
   }
 }
 
-module.exports = { scrapeSearch };
+module.exports = { scrapeSearch, pagesInWave };
