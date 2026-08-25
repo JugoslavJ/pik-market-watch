@@ -1,5 +1,5 @@
-# Dependabot: weekly bump PRs for CI actions, npm deps (both workspaces) and
-# image pins (Dockerfile + docker-compose.yml). Personal-scale cadence.
+# Dependabot: weekly bump PRs for CI actions, npm deps and image pins
+# (Dockerfile + docker-compose.yml). Personal-scale cadence.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -11,11 +11,6 @@ updates:
     directory: /scraper
     schedule:
       interval: weekly
-
-  - package-ecosystem: npm
-    directory: /geo/scripts
-    schedule:
-      interval: monthly   # offline tooling — no rush
 
   - package-ecosystem: docker
     directory: /scraper
