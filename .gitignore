@@ -27,7 +27,7 @@ desktop.ini
 # ── TLS material (self-signed Grafana cert) ──────────────────────────
 /tls/
 
-# ── Geo pipeline intermediates (offline tooling, see geo/PROGRESS.md) ─
+# ── Geo pipeline intermediates (offline tooling, see geo/README.md) ───
 geo/debug/
 geo/pdf-pages/
 geo/scripts/node_modules/

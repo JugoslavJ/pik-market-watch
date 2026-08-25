@@ -1,6 +1,7 @@
 # Architecture & data model
 
 How the tracker stores what it sees, how listings age out, and what the Grafana panels chart.
+
 ## Database schema
 
 | Table | Contents |
@@ -10,7 +11,7 @@ How the tracker stores what it sees, how listings age out, and what the Grafana 
 | `saved_searches` | Watched searches + per-run stats (count, median ppm², new/drop counts) + free-form `category` label for the dashboard filter |
 | `search_results` | Which articles each search returned (refreshed every run) |
 | `scrape_runs` | Run observability: status, pages, cards, error |
-| `neighborhoods` | 56 official Banja Luka MZ (mjesna zajednica) polygons as flattened lon/lat rings; `neighborhood_of(lat, lon)` ray-casts a pin to the MZ name (smaller-area-first priority breaks shared-border ties) and falls back to the nearest MZ within 5 km so pins in digitization seams or grad hamlets without their own traced MZ still get a district; stored into `listings.location` on enrichment. Polygons come from the city's official MZ map — the Prostorni plan scan, georeferenced and traced, then grid-normalized (overlaps removed, seams closed — `geo/scripts/20-mz-sweep.js` / `21-mz-repair.js`); the urban core was digitized by hand (see `geo/PROGRESS.md`). Seeds re-applied on every startup — tweak in `db/init/11-neighborhoods.sql` (or regenerate it from `geo/banja-luka-mz-final.geojson` via `geo/scripts/19-gen-sql.js`), then re-run its backfill UPDATE unguarded to re-label stored rows |
+| `neighborhoods` | 56 official Banja Luka MZ polygons as flattened lon/lat rings. `neighborhood_of(lat, lon)` ray-casts a pin to an MZ name (smaller area wins shared-border ties) and falls back to the nearest MZ within 5 km, so pins in seams or hamlets without their own MZ still get a district; stored into `listings.location` on enrichment. Polygons were traced from the city's official MZ map and grid-normalized (`geo/scripts/20-mz-sweep.js`, `21-mz-repair.js`); the urban core was digitized by hand (`geo/README.md`). Seeds re-apply on every startup: edit `db/init/11-neighborhoods.sql` (or regenerate it from `geo/banja-luka-mz-final.geojson` via `geo/scripts/19-gen-sql.js`), then re-run its backfill UPDATE unguarded to relabel stored rows |
 | `v_active_listings` | View: anything seen by a scrape within 14 days |
 | `v_listing_lifecycle` | View: one row per listing — opening vs closing price/ppm², change count, days listed, category |
 | `v_market_daily` | View: per-day new/closed counts and estimated live inventory |
@@ -29,15 +30,15 @@ Every scraping cycle ends with a closing pass: any listing that none of the conf
 
 ### Detail-page data (attributes beyond the search card)
 
-Search results already carry map pins, m²/rooms labels, the renewal timestamp and the seller type; anything beyond that comes from the ad's JSON endpoint (`/api/listings/<id>` — see `05-listing-details.sql` / `07-api-extras.sql` and `parseListingDetail()`):
+Search results already carry map pins, m²/rooms labels, renewal timestamp and seller type; everything else comes from the ad's JSON endpoint (`/api/listings/<id>`, parsed by `parseListingDetail()` into the `05-listing-details.sql` / `07-api-extras.sql` columns):
 
-- **Day created vs day renewed** — the ad endpoint's `created_at` is the true original publish time and lands in `published_at` (first-wins); the renewal bump (`date`, also on every search card) lands in `renewed_at` (10-listing-dates.sql) and is refreshed monotonically on every scrape cycle, no detail call needed. Days-on-market uses creation; staleness views use both. Legacy rows whose `published_at` was seeded from a renewal stamp before the split stay lower-bound estimates.
-- **Neighborhood** — `location` is derived from the ad's map pin via `neighborhood_of()` (`11-neighborhoods.sql`): ray casting over the 56 official Banja Luka MZ polygons (Centar 1/2, Borik 1/2, Obilicevo, Starcevica, Rosulje, Petricevac, … — traced/digitized from the city's official MZ map, ASCII names). NULL when the pin falls outside every MZ (outlying pins); first-wins on enrichment, backfilled for existing rows.
+- **Dates** — the ad endpoint's `created_at` is the true publish time and lands in `published_at` (first-wins); the renewal bump lands in `renewed_at` (`10-listing-dates.sql`) and only ever moves forward. Days-on-market uses creation. Rows whose publish date predates this split stay lower-bound estimates.
+- **Neighborhood** — `location`, derived from the pin via `neighborhood_of()` over the 56 Banja Luka MZ polygons; NULL outside all of them. First-wins, backfilled for existing rows.
 - **Seller type** — `shop` vs `private`, straight from `user.type`.
-- **Characteristics** — rooms, bathrooms, floor / total floors / unit levels, heating, furnished, condition, parking, garage, elevator, year built, plot m², orientation. Every `attr_code:value` pair the payload exposes is also kept raw in the `characteristics` JSONB column, so nothing is lost if OLX renames codes.
-- **Counters & extras** — views, favorites when exposed, plus the ad's server-side price history and lifecycle status stored raw (`api_price_history` / `api_status`) for cross-checking our own observations.
+- **Characteristics** — rooms, bathrooms, floor, heating, furnished, condition, parking, garage, elevator, year built, plot m², orientation. Every raw `attr_code:value` pair is also kept in the `characteristics` JSONB column, so nothing is lost if OLX renames codes.
+- **Counters & extras** — views, favorites, plus OLX's own price history and status stored raw (`api_price_history` / `api_status`) for cross-checking.
 
-Detail calls are budgeted per run (`MAX_GEO_FETCHES`) and made only for facts still missing, so steady-state cycles need almost none. Scalar columns are **first-wins** (a renewal date can never overwrite an earlier publish date) while the JSONB map merges on every fetch; `renewed_at` is the one exception — it moves forward monotonically (`GREATEST`) because search cards refresh it every cycle. Backfill existing rows anytime with:
+Detail calls are budgeted per run (`MAX_GEO_FETCHES`) and only made for facts still missing, so steady-state cycles need almost none. Scalars are first-wins, the JSONB map merges on every fetch, and `renewed_at` is the exception that moves forward monotonically. Backfill existing rows anytime with:
 
 ```bash
 docker compose run --rm scraper node src/backfill-geo.js             # active listings
@@ -47,11 +48,11 @@ docker compose run --rm scraper node src/backfill-geo.js --all       # everythin
 ---
 ## Dashboards
 
-Four provisioned dashboards live in the **OLX** folder (one JSON file each in `grafana/dashboards/`). The two market dashboards share the same filter bar — Category, Deal, Rooms, m² range, Neighborhood (multi-select, with `(unmapped)` / `(no pin)` buckets) — and **every panel honours both those filters and the dashboard time picker**. All four cross-link via the dashboard links in the top bar, and failed scrape runs are drawn as red region annotations on the market time series so scraper downtime explains any dip or gap.
+Four provisioned dashboards live in the **OLX** folder (one JSON each in `grafana/dashboards/`). The two market dashboards share one filter bar — Category, Deal, Rooms, m² range, Neighborhood (multi-select, with `(unmapped)` / `(no pin)` buckets) — and every panel honours those filters plus the time picker. All four cross-link from the top bar, and failed scrape runs appear as red annotations on the market time series.
 
 ### OLX.ba Home (`olx-home`)
 
-The landing page — no filter bar, whole database only: six market KPIs (active listings, median sale KM/m², median rent, gross yield, sell-through 30 d, weekly Δ% of the median), three pipeline KPIs (age of the last successful scrape, failed runs 24 h, cards scraped 24 h) and two trend charts (inventory flow, weekly sell-through). Everything links onward to the detail dashboards.
+Landing page, no filter bar, whole database: six market KPIs (active listings, median sale KM/m², median rent, gross yield, sell-through 30 d, weekly Δ%), three pipeline KPIs (last successful scrape age, failed runs 24 h, cards 24 h) and two trend charts (inventory flow, weekly sell-through).
 
 ### OLX.ba Market Overview (`olx-overview`)
 

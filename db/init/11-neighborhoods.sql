@@ -10,11 +10,11 @@
 --   polygon_distance_m(lat, lon, poly)   — point-to-ring distance in meters
 --   neighborhood_of(lat, lon)            — containing polygon by priority; pins
 --                                          in no polygon fall back to the
---                                          nearest polygon edge within 500 m;
+--                                          nearest polygon edge within 5 km;
 --                                          NULL only beyond that
 --
 -- Polygons come from the official "Prostorni plan grada Banja Luka" MZ map
--- (scanned, georeferenced and traced — see geo/PROGRESS.md): 19 urban-core MZs
+-- (scanned, georeferenced and traced — see geo/README.md): 19 urban-core MZs
 -- digitized by hand over the georeferenced scan, 37 rural MZs auto-traced from
 -- the map's MZ layer. Names are ASCII (no diacritics). priority ranks by area
 -- (smaller/urban first) so shared-border ties resolve deterministically.
@@ -23,8 +23,8 @@
 --   docker exec -i olx-db psql -U olx_app -d olx < db/init/11-neighborhoods.sql
 --   ^ the APP role — never hand-apply as the bootstrap superuser (-U olx):
 --     superuser-owned objects broke enrichment ("permission denied for table
---     neighborhoods") and then the instance sync (2026-08-24; see README ·
---     Troubleshooting).
+--     neighborhoods") and then the instance sync (2026-08-24; see
+--     docs/OPERATIONS.md · Troubleshooting).
 -- To re-label already-stored rows after a tweak, re-run the backfill UPDATE at
 -- the bottom WITHOUT the "location IS NULL" guard.
 -- ─────────────────────────────────────────────────────────────────────────────
