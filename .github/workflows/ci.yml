@@ -17,7 +17,7 @@ jobs:
       run:
         working-directory: scraper
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v5
         with:
           node-version: 24
@@ -55,7 +55,7 @@ jobs:
       # Variables). Must be tilde- or absolute-path style, no spaces.
       DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '~/pik-market-watch' }}
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Write deploy key
         env:
