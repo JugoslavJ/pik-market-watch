@@ -11,6 +11,8 @@
     "test": "node --test \"test/unit/*.test.js\"",
     "test:integration": "node scripts/run-integration-tests.js",
     "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "lint:syntax": "node -e \"const fs=require('fs'),{execFileSync}=require('child_process');let bad=0;for(const f of fs.readdirSync('src')){if(!f.endsWith('.js'))continue;try{execFileSync(process.execPath,['--check','src/'+f],{stdio:'pipe'})}catch(e){bad=1;console.error((e.stderr&&e.stderr.toString())||e.message)}}process.exit(bad)\""
   },
   "engines": {
@@ -22,6 +24,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "eslint": "^10.9.1",
-    "globals": "^17.11.0"
+    "globals": "^17.11.0",
+    "prettier": "^3.9.6"
   }
 }

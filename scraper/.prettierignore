@@ -1,0 +1,6 @@
+package-lock.json
+coverage/
+node_modules/
+# Recorded live-API payloads are canonical captures — formatting them would
+# churn diffs against future real responses for zero value.
+test/fixtures/

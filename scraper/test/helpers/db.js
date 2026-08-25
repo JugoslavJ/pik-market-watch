@@ -1,19 +1,19 @@
-'use strict';
+"use strict";
 // Shared helpers for the DB-backed integration tests.
 // These run against a throwaway PostgreSQL provisioned by
 // scripts/run-integration-tests.js (TEST_DATABASE_URL must be set).
 
-const path = require('node:path');
-const { test } = require('node:test');
-const applyMigrations = require('../../src/migrate');
-const Db = require('../../src/db');
+const path = require("node:path");
+const { test } = require("node:test");
+const applyMigrations = require("../../src/migrate");
+const Db = require("../../src/db");
 
 /** Skip decorator for suites that need a database. */
 const needsDb = process.env.TEST_DATABASE_URL ? test : test.skip;
 
 // Repo checkout location of db/init — mounted at /db/init inside containers,
 // but tests may also run from a plain `npm install`ed working copy.
-const MIGRATIONS_DIR = path.resolve(__dirname, '..', '..', '..', 'db', 'init');
+const MIGRATIONS_DIR = path.resolve(__dirname, "..", "..", "..", "db", "init");
 
 /**
  * Ensure the schema exists (and is current) by running the project's own

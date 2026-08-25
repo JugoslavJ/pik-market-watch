@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 // HTTP layer for olx.ba's public JSON API (media type olx.v3).
 //
 // Both endpoints serve anonymous reads — no cookies, no Bearer token, no
@@ -15,10 +15,10 @@
 //     → full ad incl. attributes[], price_history[], views, location,
 //       created_at/date, user.type, cities[], category
 
-const { USER_AGENT, sleep } = require('./util');
-const { parseListingDetail } = require('./parser');
+const { USER_AGENT, sleep } = require("./util");
+const { parseListingDetail } = require("./parser");
 
-const API_ORIGIN = 'https://olx.ba';
+const API_ORIGIN = "https://olx.ba";
 
 // olx.ba advertises x-ratelimit-limit: 60 per window across these endpoints.
 // A full cycle stays far below that (a few dozen search pages + capped detail
@@ -29,7 +29,7 @@ const RATE_RESERVE = 10;
 class ApiError extends Error {
   constructor(message, status = null) {
     super(message);
-    this.name = 'ApiError';
+    this.name = "ApiError";
     this.status = status;
   }
 }
@@ -44,13 +44,13 @@ class ApiError extends Error {
  */
 function toApiSearchUrl(searchUrl, perPage) {
   const u = new URL(searchUrl);
-  u.protocol = 'https:';
-  u.host = 'olx.ba';
-  u.hash = '';
-  u.pathname = '/api/search';
-  u.searchParams.delete('page');
-  u.searchParams.delete('olx_scrape');
-  if (perPage != null) u.searchParams.set('per_page', String(perPage));
+  u.protocol = "https:";
+  u.host = "olx.ba";
+  u.hash = "";
+  u.pathname = "/api/search";
+  u.searchParams.delete("page");
+  u.searchParams.delete("olx_scrape");
+  if (perPage != null) u.searchParams.set("per_page", String(perPage));
   return u;
 }
 
@@ -60,16 +60,22 @@ async function fetchJson(url, timeoutMs) {
   try {
     res = await fetch(url, {
       headers: {
-        Accept: 'application/json, text/plain, */*',
-        'User-Agent': USER_AGENT,
+        Accept: "application/json, text/plain, */*",
+        "User-Agent": USER_AGENT,
       },
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (err) {
-    throw new ApiError(`network error fetching ${url}: ${err.cause?.code || err.message}`);
+    throw new ApiError(
+      `network error fetching ${url}: ${err.cause?.code || err.message}`,
+    );
   }
   const text = await res.text();
-  if (!res.ok) throw new ApiError(`HTTP ${res.status} for ${url.pathname}${url.search}`, res.status);
+  if (!res.ok)
+    throw new ApiError(
+      `HTTP ${res.status} for ${url.pathname}${url.search}`,
+      res.status,
+    );
   let body;
   try {
     body = JSON.parse(text);
@@ -77,13 +83,14 @@ async function fetchJson(url, timeoutMs) {
     // Cloudflare challenge / HTML interstitial / truncated gzip — anything
     // non-JSON is unusable regardless of the 200.
     throw new ApiError(
-      `non-JSON response for ${url.pathname} (${res.headers.get('content-type')}) — blocked or challenged?`,
-      res.status);
+      `non-JSON response for ${url.pathname} (${res.headers.get("content-type")}) — blocked or challenged?`,
+      res.status,
+    );
   }
   return {
     body,
-    remaining: Number(res.headers.get('x-ratelimit-remaining')),
-    limit: Number(res.headers.get('x-ratelimit-limit')),
+    remaining: Number(res.headers.get("x-ratelimit-remaining")),
+    limit: Number(res.headers.get("x-ratelimit-limit")),
   };
 }
 
@@ -94,16 +101,25 @@ async function fetchJson(url, timeoutMs) {
  */
 async function fetchSearchPage(apiUrl, timeoutMs) {
   const { body, remaining, limit } = await fetchJson(apiUrl, timeoutMs);
-  if (!Array.isArray(body.data) || !body.meta || !Number.isFinite(body.meta.total)) {
-    throw new ApiError('search response lacks data[]/meta.total — payload shape changed?');
+  if (
+    !Array.isArray(body.data) ||
+    !body.meta ||
+    !Number.isFinite(body.meta.total)
+  ) {
+    throw new ApiError(
+      "search response lacks data[]/meta.total — payload shape changed?",
+    );
   }
   return { items: body.data, meta: body.meta, remaining, limit };
 }
 
 /** Fetch one ad's full detail object by article id. */
 async function fetchListing(articleId, timeoutMs) {
-  const { body } = await fetchJson(`${API_ORIGIN}/api/listings/${articleId}`, timeoutMs);
-  if (!body || typeof body !== 'object' || body.id !== Number(articleId)) {
+  const { body } = await fetchJson(
+    `${API_ORIGIN}/api/listings/${articleId}`,
+    timeoutMs,
+  );
+  if (!body || typeof body !== "object" || body.id !== Number(articleId)) {
     throw new ApiError(`listing ${articleId}: unexpected payload shape`);
   }
   return body;
@@ -130,15 +146,19 @@ async function fetchDetailsInBatches(articleIds, opts, log = () => {}) {
   let done = 0;
   for (let i = 0; i < articleIds.length; i += Math.max(1, concurrency)) {
     const batch = articleIds.slice(i, i + concurrency);
-    const results = await Promise.all(batch.map(async id => {
-      if (delayMs) await sleep(delayMs);
-      try {
-        return parseListingDetail(await fetchListing(id, timeoutMs), id);
-      } catch (err) {
-        log(`⌖ ${id}: detail fetch failed (${String(err.message || err).slice(0, 120)})`);
-        return null;
-      }
-    }));
+    const results = await Promise.all(
+      batch.map(async (id) => {
+        if (delayMs) await sleep(delayMs);
+        try {
+          return parseListingDetail(await fetchListing(id, timeoutMs), id);
+        } catch (err) {
+          log(
+            `⌖ ${id}: detail fetch failed (${String(err.message || err).slice(0, 120)})`,
+          );
+          return null;
+        }
+      }),
+    );
     all.push(...results);
     done += batch.length;
     if (onBatch) await onBatch(results, done, articleIds.length);
@@ -150,16 +170,27 @@ async function fetchDetailsInBatches(articleIds, opts, log = () => {}) {
 // NONE of these returns the ENTIRE site (6.79 M listings when probed with the
 // legacy kat= param — the API silently ignores unknown params), so
 // scrapeSearch() refuses filterless configs loudly instead.
-const FILTER_PARAMS = ['category_id', 'cities', 'canton', 'attr', 'query', 'keyword'];
+const FILTER_PARAMS = [
+  "category_id",
+  "cities",
+  "canton",
+  "attr",
+  "query",
+  "keyword",
+];
 
 function hasApiFilter(apiUrl) {
-  return FILTER_PARAMS.some(p => apiUrl.searchParams.has(p));
+  return FILTER_PARAMS.some((p) => apiUrl.searchParams.has(p));
 }
 
 // Exported surface = what callers actually consume. RATE_RESERVE is read by
 // scrapeSearch()'s throttle; everything else here is called directly.
 // (API_ORIGIN and ApiError stay module-internal — no external consumer.)
 module.exports = {
-  RATE_RESERVE, toApiSearchUrl,
-  fetchSearchPage, fetchListing, fetchDetailsInBatches, hasApiFilter,
+  RATE_RESERVE,
+  toApiSearchUrl,
+  fetchSearchPage,
+  fetchListing,
+  fetchDetailsInBatches,
+  hasApiFilter,
 };

@@ -1,14 +1,15 @@
-'use strict';
+"use strict";
 // Small helpers shared by the scraping entry points.
 
 // Browser-like UA: Cloudflare scores bare runtime UAs ("node") harshly. The
 // default mimics a real Chrome session; override via SCRAPE_USER_AGENT once it
 // ages into an obviously stale fingerprint.
-const USER_AGENT = process.env.SCRAPE_USER_AGENT ||
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
-  'Chrome/131.0.0.0 Safari/537.36';
+const USER_AGENT =
+  process.env.SCRAPE_USER_AGENT ||
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) " +
+    "Chrome/131.0.0.0 Safari/537.36";
 
-const sleep = ms => new Promise(r => setTimeout(r, ms));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Rounded to whole numbers; null for an empty set — callers treat that as
 // "no priced data".
@@ -20,8 +21,10 @@ function computeMedian(values) {
 }
 
 // Timestamped console logger shared by the entry points: `<iso> [tag] msg…`.
-const makeLogger = tag => (...args) =>
-  console.log(new Date().toISOString(), `[${tag}]`, ...args);
+const makeLogger =
+  (tag) =>
+  (...args) =>
+    console.log(new Date().toISOString(), `[${tag}]`, ...args);
 
 // HTTP status for the /health endpoint: 503 only once WHOLE scrape cycles keep
 // failing end-to-end (consecutiveFailures >= threshold). Transient single-cycle

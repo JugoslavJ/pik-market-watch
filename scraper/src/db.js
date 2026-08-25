@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 // PostgreSQL access layer (node-postgres).
 //
 // Write semantics:
@@ -6,8 +6,8 @@
 //   - append to price_history only when price/ppm² changed (and ppm² known)
 //   - count new listings and price drops per run
 
-const { Pool } = require('pg');
-const { extractArticleId } = require('./parser');
+const { Pool } = require("pg");
+const { extractArticleId } = require("./parser");
 
 class Db {
   constructor(connectionString) {
@@ -17,10 +17,12 @@ class Db {
   /** Retry SELECT 1 until Postgres accepts connections (compose healthcheck covers this too). */
   async waitUntilReady({ retries = 30, delayMs = 2000 } = {}) {
     for (let i = 1; i <= retries; i++) {
-      try { await this.pool.query('SELECT 1'); return; }
-      catch (err) {
+      try {
+        await this.pool.query("SELECT 1");
+        return;
+      } catch (err) {
         if (i === retries) throw err;
-        await new Promise(r => setTimeout(r, delayMs));
+        await new Promise((r) => setTimeout(r, delayMs));
       }
     }
   }
@@ -29,12 +31,12 @@ class Db {
   async #withTransaction(fn) {
     const client = await this.pool.connect();
     try {
-      await client.query('BEGIN');
+      await client.query("BEGIN");
       const out = await fn(client);
-      await client.query('COMMIT');
+      await client.query("COMMIT");
       return out;
     } catch (err) {
-      await client.query('ROLLBACK').catch(() => {});
+      await client.query("ROLLBACK").catch(() => {});
       throw err;
     } finally {
       client.release();
@@ -47,31 +49,37 @@ class Db {
    * @returns {Promise<{newCount:number, dropCount:number}>}
    */
   async saveCards(cards) {
-    let newCount = 0, dropCount = 0;
+    let newCount = 0,
+      dropCount = 0;
     const newIds = [];
-    return this.#withTransaction(async client => {
+    return this.#withTransaction(async (client) => {
       for (const card of cards) {
         const raw = extractArticleId(card.url);
         if (!raw) continue;
-        const id    = Number(raw);
+        const id = Number(raw);
         const price = card.price ?? null;
-        const ppm2  = card.ppm2 ?? null;
+        const ppm2 = card.ppm2 ?? null;
 
         const existing = await client.query(
-          'SELECT price, ppm2 FROM listings WHERE article_id = $1 FOR UPDATE', [id]);
+          "SELECT price, ppm2 FROM listings WHERE article_id = $1 FOR UPDATE",
+          [id],
+        );
 
         if (existing.rowCount) {
-          const last      = existing.rows[0];
+          const last = existing.rows[0];
           const lastPrice = last.price === null ? null : Number(last.price); // NUMERIC → string
 
           // History is appended only when ppm² is known AND something actually
           // changed vs. the previous snapshot.
-          const changed = card.ppm2 != null && (last.ppm2 !== card.ppm2 || lastPrice !== price);
+          const changed =
+            card.ppm2 != null &&
+            (last.ppm2 !== card.ppm2 || lastPrice !== price);
           if (changed) {
             if (last.ppm2 != null && card.ppm2 < last.ppm2) dropCount++;
             await client.query(
-              'INSERT INTO price_history (article_id, price, ppm2) VALUES ($1, $2, $3)',
-              [id, price, ppm2]);
+              "INSERT INTO price_history (article_id, price, ppm2) VALUES ($1, $2, $3)",
+              [id, price, ppm2],
+            );
           }
           await client.query(
             `UPDATE listings SET url = $2, title = $3, sqm = $4, rooms = $5,
@@ -83,19 +91,42 @@ class Db {
                     -- an earlier one and stamps never regress.
                     renewed_at = GREATEST(renewed_at, $10::timestamptz)
               WHERE article_id = $1`,
-            [id, card.url, card.title, card.sqm, card.rooms, price, card.priceText, ppm2,
-             card.isRent, card.renewedAt ?? null]);
+            [
+              id,
+              card.url,
+              card.title,
+              card.sqm,
+              card.rooms,
+              price,
+              card.priceText,
+              ppm2,
+              card.isRent,
+              card.renewedAt ?? null,
+            ],
+          );
         } else {
           await client.query(
             `INSERT INTO listings
                (article_id, url, title, sqm, rooms, price, price_text, ppm2, is_rent,
                 first_seen, last_seen, renewed_at)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), now(), $10)`,
-            [id, card.url, card.title, card.sqm, card.rooms, price, card.priceText, ppm2,
-             card.isRent, card.renewedAt ?? null]);
+            [
+              id,
+              card.url,
+              card.title,
+              card.sqm,
+              card.rooms,
+              price,
+              card.priceText,
+              ppm2,
+              card.isRent,
+              card.renewedAt ?? null,
+            ],
+          );
           await client.query(
-            'INSERT INTO price_history (article_id, price, ppm2) VALUES ($1, $2, $3)',
-            [id, price, ppm2]);
+            "INSERT INTO price_history (article_id, price, ppm2) VALUES ($1, $2, $3)",
+            [id, price, ppm2],
+          );
           newCount++;
           newIds.push(id);
         }
@@ -132,23 +163,25 @@ class Db {
          FROM doomed
         WHERE l.article_id = doomed.article_id
           AND l.closing_category IS NULL`,
-      [activeKeys]);
+      [activeKeys],
+    );
     const r = await this.pool.query(
       `UPDATE listings l
           SET closed_at = now(), closing_price = price, closing_ppm2 = ppm2
         WHERE closed_at IS NULL
           AND NOT EXISTS (SELECT 1 FROM search_results sr
-                           WHERE sr.article_id = l.article_id)`);
+                           WHERE sr.article_id = l.article_id)`,
+    );
     return r.rowCount;
   }
 
   /** Replace a search's result set with the freshly scraped article ids.
-    *
-    * When this DELETE removes an ad's LAST result link (it vanished from this
-    * search and no other search still holds it), its category is frozen into
-    * closing_category — closure deletes links, and dashboards filter closed
-    * ads by that frozen value afterwards (see listings_closed_filtered()).
-    */
+   *
+   * When this DELETE removes an ad's LAST result link (it vanished from this
+   * search and no other search still holds it), its category is frozen into
+   * closing_category — closure deletes links, and dashboards filter closed
+   * ads by that frozen value afterwards (see listings_closed_filtered()).
+   */
   async refreshSearchResults(searchKey, articleIds) {
     const ids = [...new Set(articleIds)];
     await this.pool.query(
@@ -168,13 +201,15 @@ class Db {
           AND NOT EXISTS (SELECT 1 FROM search_results sr
                            WHERE sr.article_id = l.article_id
                              AND sr.search_key <> $1)`,
-      [searchKey, ids]);
+      [searchKey, ids],
+    );
     if (ids.length) {
       await this.pool.query(
         `INSERT INTO search_results (search_key, article_id)
          SELECT $1, x FROM unnest($2::bigint[]) AS x
          ON CONFLICT (search_key, article_id) DO NOTHING`,
-        [searchKey, ids]);
+        [searchKey, ids],
+      );
     }
   }
 
@@ -205,9 +240,10 @@ class Db {
                OR (sqm IS NULL AND price IS NOT NULL AND NOT is_rent))
         ORDER BY last_enrichment_attempted_at ASC NULLS FIRST, article_id ASC
         LIMIT $2`,
-      [ids, limit]);
+      [ids, limit],
+    );
     return {
-      pending: r.rows.map(row => ({
+      pending: r.rows.map((row) => ({
         id: Number(row.id),
         unpinned: row.unpinned,
         missingSqm: row.missing_sqm,
@@ -230,7 +266,7 @@ class Db {
                         OR (sqm IS NULL AND price IS NOT NULL AND NOT is_rent)
                         OR details_fetched_at IS NULL)
                    AND closed_at IS NULL
-                 ${onlyActive ? "AND last_seen > now() - INTERVAL '14 days'" : ''}
+                 ${onlyActive ? "AND last_seen > now() - INTERVAL '14 days'" : ""}
                  ORDER BY last_enrichment_attempted_at ASC NULLS FIRST, article_id ASC`;
     return (await this.pool.query(sql)).rows;
   }
@@ -262,7 +298,7 @@ class Db {
    *   apiStatus:?string, apiPriceHistory:?Array<object>}>} rows
    */
   async enrichListings(rows) {
-    await this.#withTransaction(async client => {
+    await this.#withTransaction(async (client) => {
       for (const r of rows) {
         await client.query(
           `UPDATE listings SET
@@ -310,17 +346,35 @@ class Db {
              details_fetched_at           = now(),
              last_enrichment_attempted_at = now()
            WHERE article_id = $1`,
-          [r.articleId, r.latitude ?? null, r.longitude ?? null, r.sqm ?? null,
-           r.publishedAt ?? null, r.sellerType ?? null, r.roomsDetail ?? null,
-           r.bathrooms ?? null, r.floorNum ?? null, r.floorsTotal ?? null,
-           r.unitLevels ?? null, r.heating ?? null, r.furnished ?? null,
-           r.condition ?? null, r.parking ?? null, r.garage ?? null,
-           r.elevator ?? null, r.yearBuilt ?? null, r.plotSqm ?? null,
-           r.orientation ?? null, r.views ?? null, r.favorites ?? null,
-           JSON.stringify(r.characteristics ?? {}),
-           r.apiStatus ?? null,
-           r.apiPriceHistory ? JSON.stringify(r.apiPriceHistory) : null,
-           r.renewedAt ?? null]);
+          [
+            r.articleId,
+            r.latitude ?? null,
+            r.longitude ?? null,
+            r.sqm ?? null,
+            r.publishedAt ?? null,
+            r.sellerType ?? null,
+            r.roomsDetail ?? null,
+            r.bathrooms ?? null,
+            r.floorNum ?? null,
+            r.floorsTotal ?? null,
+            r.unitLevels ?? null,
+            r.heating ?? null,
+            r.furnished ?? null,
+            r.condition ?? null,
+            r.parking ?? null,
+            r.garage ?? null,
+            r.elevator ?? null,
+            r.yearBuilt ?? null,
+            r.plotSqm ?? null,
+            r.orientation ?? null,
+            r.views ?? null,
+            r.favorites ?? null,
+            JSON.stringify(r.characteristics ?? {}),
+            r.apiStatus ?? null,
+            r.apiPriceHistory ? JSON.stringify(r.apiPriceHistory) : null,
+            r.renewedAt ?? null,
+          ],
+        );
       }
     });
   }
@@ -339,10 +393,20 @@ class Db {
        VALUES ($1, $2, $3, $4)
        ON CONFLICT (search_key) DO UPDATE SET
          name = EXCLUDED.name, url = EXCLUDED.url, category = EXCLUDED.category`,
-      [searchKey, name, url, category ?? null]);
+      [searchKey, name, url, category ?? null],
+    );
   }
 
-  async upsertSavedSearch({ searchKey, name, url, category, listingCount, median, newCount, dropCount }) {
+  async upsertSavedSearch({
+    searchKey,
+    name,
+    url,
+    category,
+    listingCount,
+    median,
+    newCount,
+    dropCount,
+  }) {
     await this.pool.query(
       `INSERT INTO saved_searches
          (search_key, name, url, category, last_scraped_at, listing_count, median_ppm2,
@@ -353,12 +417,24 @@ class Db {
          last_scraped_at = now(),
          listing_count = EXCLUDED.listing_count, median_ppm2 = EXCLUDED.median_ppm2,
          new_count = EXCLUDED.new_count, drop_count = EXCLUDED.drop_count`,
-      [searchKey, name, url, category ?? null, listingCount, median, newCount, dropCount]);
+      [
+        searchKey,
+        name,
+        url,
+        category ?? null,
+        listingCount,
+        median,
+        newCount,
+        dropCount,
+      ],
+    );
   }
 
   async startRun(searchKey) {
     const r = await this.pool.query(
-      "INSERT INTO scrape_runs (search_key) VALUES ($1) RETURNING id", [searchKey]);
+      "INSERT INTO scrape_runs (search_key) VALUES ($1) RETURNING id",
+      [searchKey],
+    );
     return r.rows[0].id;
   }
 
@@ -366,7 +442,8 @@ class Db {
     await this.pool.query(
       `UPDATE scrape_runs SET finished_at = now(), status = $2, pages = $3, cards = $4, error = $5
         WHERE id = $1`,
-      [runId, status, pages, cards, error]);
+      [runId, status, pages, cards, error],
+    );
   }
 
   /**
@@ -385,11 +462,14 @@ class Db {
           AND started_at > now() - make_interval(mins => $1::int)
           AND ($2::text IS NULL OR search_key = $2)
         LIMIT 1`,
-      [Math.max(0, Math.round(minutes || 0)), searchKey]);
+      [Math.max(0, Math.round(minutes || 0)), searchKey],
+    );
     return r.rowCount > 0;
   }
 
-  close() { return this.pool.end(); }
+  close() {
+    return this.pool.end();
+  }
 }
 
 module.exports = Db;

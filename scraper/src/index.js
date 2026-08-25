@@ -1,33 +1,35 @@
-'use strict';
+"use strict";
 // Entry point: scheduler + health endpoint.
 //   RUN_ONCE=1 or `node src/index.js --once`  → scrape once and exit
 //   otherwise scrape at startup, then every SCRAPE_INTERVAL_MINUTES
 
-const http = require('http');
-const config = require('./config');
-const Db = require('./db');
-const applyMigrations = require('./migrate');
-const { scrapeSearch } = require('./scraper');
-const { makeLogger, healthStatus } = require('./util');
+const http = require("http");
+const config = require("./config");
+const Db = require("./db");
+const applyMigrations = require("./migrate");
+const { scrapeSearch } = require("./scraper");
+const { makeLogger, healthStatus } = require("./util");
 
-const log = makeLogger('scraper');
+const log = makeLogger("scraper");
 
 const state = {
-  startedAt:       new Date().toISOString(),
-  lastRunAt:       null,
-  lastStatus:      'starting',
-  totalRuns:       0,
-  failedRuns:      0,
-  consecutiveFailures: 0,   // fully-failed cycles in a row → drives /health 503
+  startedAt: new Date().toISOString(),
+  lastRunAt: null,
+  lastStatus: "starting",
+  totalRuns: 0,
+  failedRuns: 0,
+  consecutiveFailures: 0, // fully-failed cycles in a row → drives /health 503
   intervalMinutes: config.intervalMinutes,
-  searches:        config.searches.map(s => ({ name: s.name, url: s.url })),
+  searches: config.searches.map((s) => ({ name: s.name, url: s.url })),
 };
 
 async function runAll(db) {
   if (!config.searches.length) {
-    log('No searches configured — mount /config/searches.json ' +
-        '(see config/searches.example.json) or set SEARCH_URLS.');
-    state.lastStatus = 'idle: no searches configured';
+    log(
+      "No searches configured — mount /config/searches.json " +
+        "(see config/searches.example.json) or set SEARCH_URLS.",
+    );
+    state.lastStatus = "idle: no searches configured";
     return;
   }
 
@@ -40,9 +42,13 @@ async function runAll(db) {
     // deploys in one evening are enough to trip olx.ba's rate limiter. Keyed
     // on search_key so a newly added search still scrapes immediately instead
     // of waiting out the gap. (RUN_ONCE is exempt — explicit intent.)
-    if (!config.runOnce &&
-        await db.hasRecentFinishedRun(config.minRunGapMinutes, search.searchKey)) {
-      log(`↷ "${search.name}" had an ok run < ${config.minRunGapMinutes} min ago — skipping`);
+    if (
+      !config.runOnce &&
+      (await db.hasRecentFinishedRun(config.minRunGapMinutes, search.searchKey))
+    ) {
+      log(
+        `↷ "${search.name}" had an ok run < ${config.minRunGapMinutes} min ago — skipping`,
+      );
       skipped += 1;
       continue;
     }
@@ -51,10 +57,10 @@ async function runAll(db) {
       totalCards += res.cards;
       okRuns += 1;
       state.totalRuns += 1;
-      state.lastStatus = 'ok';
+      state.lastStatus = "ok";
     } catch (err) {
       state.failedRuns += 1;
-      state.lastStatus = 'error';
+      state.lastStatus = "error";
       log(`✖ "${search.name}" failed: ${err.message || err}`);
     }
   }
@@ -65,7 +71,7 @@ async function runAll(db) {
   // ran recently) is neutral in both directions.
   const allSkipped = skipped > 0 && skipped === config.searches.length;
   if (allSkipped) {
-    state.lastStatus = 'skipped: recent run';
+    state.lastStatus = "skipped: recent run";
   } else if (okRuns === 0) {
     state.consecutiveFailures += 1;
   } else {
@@ -82,13 +88,23 @@ async function runAll(db) {
   // freeze every listing in the database with bogus exit prices — skip the
   // closing pass instead.
   if (totalCards === 0) {
-    log(`⚠ cycle yielded 0 listings across all ${config.searches.length} search(es) — ` +
-        `likely throttled or blocked; SKIPPING the closing pass`);
+    log(
+      `⚠ cycle yielded 0 listings across all ${config.searches.length} search(es) — ` +
+        `likely throttled or blocked; SKIPPING the closing pass`,
+    );
   } else {
     try {
-      const closed = await db.closeUnseenListings(config.searches.map(s => s.searchKey));
-      if (closed > 0) log(`✕ closed ${closed} listing(s) no longer seen on olx.ba (last price recorded)`);
-      else log(`no listings to close this cycle (${okRuns}/${config.searches.length} search(es) ok)`);
+      const closed = await db.closeUnseenListings(
+        config.searches.map((s) => s.searchKey),
+      );
+      if (closed > 0)
+        log(
+          `✕ closed ${closed} listing(s) no longer seen on olx.ba (last price recorded)`,
+        );
+      else
+        log(
+          `no listings to close this cycle (${okRuns}/${config.searches.length} search(es) ok)`,
+        );
     } catch (err) {
       log(`✖ closing pass failed: ${err.message || err}`);
     }
@@ -102,12 +118,14 @@ function startHealthServer() {
     // 200 normally; 503 once HEALTH_FAILURE_THRESHOLD consecutive cycles have
     // failed end-to-end — so `docker compose ps` shows unhealthy and uptime
     // probes can page. The JSON body is identical either way.
-    res.writeHead(healthStatus(state, config.healthFailureThreshold),
-                  { 'Content-Type': 'application/json' });
+    res.writeHead(healthStatus(state, config.healthFailureThreshold), {
+      "Content-Type": "application/json",
+    });
     res.end(JSON.stringify(state, null, 2));
   });
   server.listen(config.healthPort, () =>
-    log(`health endpoint → http://localhost:${config.healthPort}`));
+    log(`health endpoint → http://localhost:${config.healthPort}`),
+  );
   return server;
 }
 
@@ -115,12 +133,14 @@ async function main() {
   const db = new Db(config.databaseUrl);
   await db.waitUntilReady();
   await applyMigrations(db.pool, config.migrationsDir, log);
-  log(`database ready · ${config.searches.length} search(es) · ` +
-      `interval ${config.intervalMinutes} min`);
+  log(
+    `database ready · ${config.searches.length} search(es) · ` +
+      `interval ${config.intervalMinutes} min`,
+  );
 
   let timer = null;
   let stopping = false;
-  const shutdown = async signal => {
+  const shutdown = async (signal) => {
     if (stopping) return;
     stopping = true;
     log(`${signal} received — shutting down`);
@@ -128,8 +148,8 @@ async function main() {
     await db.close().catch(() => {});
     process.exit(0);
   };
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-  process.on('SIGINT',  () => shutdown('SIGINT'));
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 
   // Serve the health endpoint from t=0 so container healthchecks pass while
   // the initial scrape is still running.
@@ -139,10 +159,10 @@ async function main() {
 
   if (config.runOnce) {
     await db.close();
-    await new Promise(resolve => healthServer.close(resolve));
-    healthServer.closeAllConnections?.();  // drop keep-alive healthcheck sockets
-    log('RUN_ONCE complete');
-    return;   // nothing left keeping the event loop alive - process exits 0
+    await new Promise((resolve) => healthServer.close(resolve));
+    healthServer.closeAllConnections?.(); // drop keep-alive healthcheck sockets
+    log("RUN_ONCE complete");
+    return; // nothing left keeping the event loop alive - process exits 0
   }
 
   // Reentrancy guard: a slow cycle (many pages × waves + 65 s rate-limit
@@ -150,18 +170,20 @@ async function main() {
   let running = false;
   timer = setInterval(() => {
     if (running) {
-      log('previous cycle still running — skipping this tick');
+      log("previous cycle still running — skipping this tick");
       return;
     }
     running = true;
     runAll(db)
-      .catch(err => log('scheduled run failed:', err.message || err))
-      .finally(() => { running = false; });
+      .catch((err) => log("scheduled run failed:", err.message || err))
+      .finally(() => {
+        running = false;
+      });
   }, config.intervalMinutes * 60000);
-  log('scheduler running — waiting for the next interval');
+  log("scheduler running — waiting for the next interval");
 }
 
-main().catch(err => {
-  console.error('[scraper] fatal:', err);
+main().catch((err) => {
+  console.error("[scraper] fatal:", err);
   process.exit(1);
 });
