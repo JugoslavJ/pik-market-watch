@@ -1,9 +1,11 @@
 # syntax=docker/dockerfile:1
 # ─────────────────────────────────────────────────────────────────────────────
-# Plain Node image: the scraper talks to olx.ba's public JSON endpoints with
-# fetch() — no browser or OS-level dependencies required.
+# Alpine Node image: the scraper talks to olx.ba's public JSON endpoints with
+# fetch() — pure JS (pg ships no native addons), so musl costs nothing and
+# trims ~100 MB vs bookworm-slim while sharing base layers with the
+# postgres:16-alpine images the stack already pulls.
 # ─────────────────────────────────────────────────────────────────────────────
-FROM node:26-bookworm-slim
+FROM node:26-alpine
 
 ENV NODE_ENV=production
 
@@ -14,8 +16,9 @@ COPY package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --omit=dev && npm cache clean --force
 
-# Non-root runtime user.
-RUN useradd --create-home --uid 10001 scraper && chown -R scraper:scraper /app
+# Non-root runtime user (busybox adduser — Alpine has no useradd).
+RUN addgroup -S -g 10001 scraper && adduser -S -u 10001 -G scraper scraper \
+ && chown -R scraper:scraper /app
 USER scraper
 
 # App source LAST so dependency layers stay cached across code edits.

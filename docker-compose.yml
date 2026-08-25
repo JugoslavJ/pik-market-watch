@@ -25,6 +25,31 @@ services:
     image: postgres:16-alpine
     container_name: olx-db
     restart: unless-stopped
+    # Right-size for the 768m cap (stock defaults assume a dedicated server):
+    #   shared_buffers/effective_cache_size fit inside the limit; 40 conns cover
+    #   the real client budget (scraper pool max 5 + Grafana maxOpenConns 20 +
+    #   backup psql sessions); random_page_cost/io_concurrency assume SSD;
+    #   wal_compression suits this tiny write volume.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=192MB
+      - -c
+      - effective_cache_size=512MB
+      - -c
+      - max_connections=40
+      - -c
+      - work_mem=8MB
+      - -c
+      - maintenance_work_mem=64MB
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - effective_io_concurrency=200
+      - -c
+      - checkpoint_completion_target=0.9
+      - -c
+      - wal_compression=on
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-olx}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
@@ -46,6 +71,7 @@ services:
       timeout: 3s
       retries: 12
     mem_limit: 768m     # plenty for a personal-scale tracker; raise if needed
+    memswap_limit: 768m # hit OOM decisively instead of swapping into latency spikes
     cpus: 0.50
     logging: *logging
     ports:
@@ -79,6 +105,7 @@ services:
       retries: 3
       start_period: 60s         # DB warm-up + first scrape cycle before counting failures
     mem_limit: 512m             # plain HTTP JSON client
+    memswap_limit: 512m         # hit OOM decisively instead of swapping into latency spikes
     cpus: 0.50
     logging: *logging
 
@@ -93,6 +120,9 @@ services:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
       GF_ANALYTICS_REPORTUSAGE_ENABLED: "false"   # no usage telemetry
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"     # no outbound version-check pings either
+      GF_SERVER_ENABLE_GZIP: "true"               # compress dashboard JSON over WAN links
+      GF_LOG_LEVEL: "warn"                        # trim log IO; flip back to info when debugging
       # Native HTTPS termination — self-signed cert mounted read-only from ./tls
       GF_SERVER_PROTOCOL: https
       GF_SERVER_CERT_FILE: /certs/grafana.crt
@@ -131,6 +161,7 @@ services:
         protocol: tcp
         mode: host
     mem_limit: 768m
+    memswap_limit: 768m         # hit OOM decisively instead of swapping into latency spikes
     cpus: 1.0
     logging: *logging
     healthcheck:
@@ -161,6 +192,7 @@ services:
       - grafana:/grafana-data:ro          # nightly tar of Grafana state (users/prefs/UI edits)
     entrypoint: ["sh", "/usr/local/bin/backup.sh"]
     mem_limit: 256m
+    memswap_limit: 256m         # hit OOM decisively instead of swapping into latency spikes
     logging: *logging
     healthcheck:
       # Semantic check: healthy ⇔ a pg_dump archive exists and is fresh (< 26 h).
