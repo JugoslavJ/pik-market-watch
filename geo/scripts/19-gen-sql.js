@@ -33,8 +33,11 @@ const sql = `-- ─────────────────────�
 --
 --   neighborhoods(name, priority, poly)  — flattened polygon rings (lon,lat pairs)
 --   point_in_polygon(lat, lon, poly)     — ray casting, plain plpgsql (no PostGIS)
---   neighborhood_of(lat, lon)            — first matching polygon by priority,
---                                          NULL when no district matches
+--   polygon_distance_m(lat, lon, poly)   — point-to-ring distance in meters
+--   neighborhood_of(lat, lon)            — containing polygon by priority; pins
+--                                          in no polygon fall back to the
+--                                          nearest polygon edge within 500 m;
+--                                          NULL only beyond that
 --
 -- Polygons come from the official "Prostorni plan grada Banja Luka" MZ map
 -- (scanned, georeferenced and traced — see geo/PROGRESS.md): 19 urban-core MZs
@@ -99,13 +102,81 @@ BEGIN
 END;
 $$;
 
+-- Point-to-ring distance in meters (equirectangular approximation — plenty
+-- for a ≤ 500 m fallback decision). Null-safe.
+CREATE OR REPLACE FUNCTION polygon_distance_m(p_lat double precision, p_lon double precision,
+                                              p_poly double precision[])
+RETURNS double precision LANGUAGE plpgsql IMMUTABLE AS $$
+DECLARE
+  verts integer := COALESCE(array_length(p_poly, 1), 0) / 2;
+  kx    double precision := 111320.0 * cos(radians(p_lat));
+  px    double precision := p_lon * kx;
+  py    double precision := p_lat * 111320.0;
+  best  double precision;
+  d     double precision;
+  x1    double precision; y1 double precision;
+  x2    double precision; y2 double precision;
+  dx    double precision; dy double precision;
+  t     double precision;
+  ex    double precision; ey double precision;
+  i     integer;
+BEGIN
+  IF verts < 3 OR p_lat IS NULL OR p_lon IS NULL THEN
+    RETURN NULL;
+  END IF;
+  FOR i IN 1..verts LOOP
+    x1 := p_poly[(i - 1) * 2 + 1] * kx;  y1 := p_poly[(i - 1) * 2 + 2] * 111320.0;
+    x2 := p_poly[i * 2 + 1] * kx;        y2 := p_poly[i * 2 + 2] * 111320.0;
+    dx := x2 - x1;  dy := y2 - y1;
+    IF dx = 0 AND dy = 0 THEN
+      t := 0;
+    ELSE
+      t := ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy);
+      t := GREATEST(0, LEAST(1, t));
+    END IF;
+    ex := x1 + t * dx - px;  ey := y1 + t * dy - py;
+    d := ex * ex + ey * ey;
+    IF best IS NULL OR d < best THEN
+      best := d;
+    END IF;
+  END LOOP;
+  RETURN CASE WHEN best IS NULL THEN NULL ELSE sqrt(best) END;
+END;
+$$;
+
+-- Neighborhood of a pin: the containing polygon wins (priority breaks shared-
+-- border ties). Hand-traced borders can't be pixel-perfect, so a pin in no
+-- polygon falls back to the NEAREST polygon edge within 500 m — a pin a few
+-- meters across a seam still gets its district. Beyond the tolerance
+-- (surrounding settlements) it stays NULL = '(unmapped)'.
 CREATE OR REPLACE FUNCTION neighborhood_of(p_lat double precision, p_lon double precision)
-RETURNS TEXT LANGUAGE sql STABLE AS $$
-  SELECT n.name
-  FROM neighborhoods n
-  WHERE point_in_polygon(p_lat, p_lon, n.poly)
-  ORDER BY n.priority, n.name
-  LIMIT 1
+RETURNS TEXT LANGUAGE plpgsql STABLE AS $$
+DECLARE
+  n_row     RECORD;
+  d         double precision;
+  best_name TEXT;
+  best_dist double precision;
+BEGIN
+  IF p_lat IS NULL OR p_lon IS NULL THEN
+    RETURN NULL;
+  END IF;
+  FOR n_row IN SELECT name, poly FROM neighborhoods ORDER BY priority, name LOOP
+    IF point_in_polygon(p_lat, p_lon, n_row.poly) THEN
+      RETURN n_row.name;
+    END IF;
+  END LOOP;
+  FOR n_row IN SELECT name, poly FROM neighborhoods ORDER BY priority, name LOOP
+    d := polygon_distance_m(p_lat, p_lon, n_row.poly);
+    IF d IS NOT NULL AND (best_dist IS NULL OR d < best_dist) THEN
+      best_dist := d;
+      best_name := n_row.name;
+    END IF;
+  END LOOP;
+  IF best_dist IS NOT NULL AND best_dist <= 500 THEN
+    RETURN best_name;
+  END IF;
+  RETURN NULL;
+END;
 $$;
 
 -- Official Banja Luka MZ polygons (geo/banja-luka-mz-final.geojson).

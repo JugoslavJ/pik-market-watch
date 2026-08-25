@@ -48,6 +48,19 @@ and all tests are green.**
   Novoselija, Vujanovica potok, Debeljaca, Borik, Lazarevo…) no longer occur in
   `listings.location` — Grafana variables/panels that hardcode district lists must
   switch to the 56 MZ names (see `SELECT name FROM neighborhoods ORDER BY priority`).
+- **Follow-up 2026-08-25 — coverage sweep + topology repair:** `geo/scripts/20-mz-sweep.js`
+  rasterizes the polygon set on a 20 m grid and reports overlaps (cells claimed by 2+ MZs)
+  and seams (empty cells whose window touches 2+ MZs — the "(unmapped) at the borders"
+  complaint). `21-mz-repair.js` rebuilds the set: overlaps resolved by lowest priority
+  (same tie-break as `neighborhood_of`), empty cells within 160 m of covered land claimed
+  by BFS (seams + holes closed, outer boundary dilated ≤ 160 m), then each mask is
+  contoured, Douglas-Peucker-simplified (12 m), forced CCW and written back to
+  `banja-luka-mz-final.geojson` (original recoverable from git history). Before → after:
+  overlaps 319 → 49 cells, seams 8 873 → 480 cells. `neighborhood_of()` additionally gained
+  a nearest-edge fallback (`polygon_distance_m`, ≤ 500 m) so pins in leftover slivers still
+  get a district; pins > 1 km from any MZ (surrounding settlements) stay NULL/unmapped by
+  design. Backfill re-run unguarded: pinned actives unmapped 96 → 53 (all remaining are
+  the far-out ones). Integration suite 39/39 green.
 
 ## 1. Goal
 
