@@ -105,7 +105,11 @@ services:
       POSTGRES_READER_PASSWORD: ${POSTGRES_READER_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-olx}
       # Consumed by provisioning/alerting/olx-alerts.yml (alert mail recipient).
-      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-}
+      # Grafana 13 fatal-VALIDATES email receivers during provisioning: an empty
+      # address makes the container exit (deploys stuck unhealthy). The
+      # placeholder keeps boot safe; set a real ALERT_EMAIL_TO in .env to arm
+      # delivery (plus GF_SMTP_* below).
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-alert-not-configured@localhost}
       # Alert MAIL delivery is optional — without SMTP the rules still evaluate
       # and show firing/resolving history in the UI. Uncomment + set .env:
       # GF_SMTP_ENABLED: "true"

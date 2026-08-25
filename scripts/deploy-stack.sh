@@ -31,6 +31,10 @@ for v in POSTGRES_APP_PASSWORD POSTGRES_READER_PASSWORD GRAFANA_SECRET_KEY; do
     exit 1
   }
 done
+# Non-fatal: without it the alert rule still evaluates & shows UI state, but
+# mail delivery stays inert on the placeholder recipient.
+grep -q '^ALERT_EMAIL_TO=.' .env || \
+  echo "⚠ ALERT_EMAIL_TO not set in .env — scrape-silence alert mail is INERT (placeholder recipient)."
 if [ ! -f tls/grafana.crt ] || [ ! -f tls/grafana.key ]; then
   echo "✗ Missing tls/grafana.crt|key on the instance (Grafana native TLS)."
   echo "  Fix once over SSH, then re-run this job:"
