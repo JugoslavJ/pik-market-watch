@@ -99,7 +99,7 @@ Operational view of the scraper itself — market filters don't apply here.
 
 ## Metrics not charted (yet)
 
-- **Dead columns** (never populated by the scraper): `heating`, `furnished`, `favorites` — don't build panels on these. (`location` used to be dead but is now filled for Banja Luka pins by the neighborhoods backfill.)
+- **Sparse columns, chart with care**: `heating`, `furnished`, `favorites` ARE populated by detail enrichment whenever OLX exposes them (`parser.js`), but exposure is inconsistent across ads — treat them like the other sparse attributes below and check coverage before building panels. (`location` used to be entirely dead but is now filled for Banja Luka pins by the neighborhoods backfill.)
 - **Sparse but charted with caveats**: `floor_num` (~12 % of actives) powers the floor-position gauge, with explicit `n=` counts per bucket so sparsity stays visible. Still too sparse to chart: `parking` (6 %), `elevator` (4 %), `bathrooms` (11 %), `year_built` (20 %). Revisit as detail enrichment converges.
 - **Needs scraper/schema work**: `views` and `favorites` are overwrite-in-place counters, so no history/trend is possible without snapshotting them (e.g. a `listing_stats_history` table). `api_price_history` (OLX's own server-side price log, ~7 % coverage) could power hidden-drop detection we can't see between cycles.
 

@@ -10,7 +10,7 @@ Docker Compose stack that watches olx.ba real-estate searches, stores every list
 HOME MACHINE (residential IP)                    OCI INSTANCE (datacenter IP)
 ┌────────────────────────────────┐              ┌──────────────────────────────┐
 │ scraper — profile "scrape"     │   pg_dump    │ db   PostgreSQL 16           │
-│ Node 24 · olx.ba JSON API      │───ssh + ───▶ │      volume: pgdata          │
+│ Node 26 · olx.ba JSON API      │───ssh + ───▶ │      volume: pgdata          │
 │ plain fetch(), no browser      │   restore    │ grafana   :3000 dashboards   │
 │ health/status JSON on :9100    │              │ db-backup  nightly dumps     │
 └────────────────────────────────┘              └──────────────────────────────┘
