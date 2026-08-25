@@ -172,7 +172,7 @@ if [ "$restore_failed" = "1" ]; then
            --single-transaction --use-list=/tmp/toc.prev "/backups/$(basename "$prev")"; then
       echo "RESTORE_ERROR: rollback finished - instance is serving the previous snapshot" >&2
     else
-      echo "RESTORE_ERROR: rollback FAILED - database is empty; restore $prev manually (see README)" >&2
+      echo "RESTORE_ERROR: rollback FAILED - database is empty; restore $prev manually (see docs/OPERATIONS.md)" >&2
     fi
   else
     echo "RESTORE_ERROR: pg_restore failed and no previous snapshot exists - database is empty; restore one from $BACKUP_DIR manually" >&2

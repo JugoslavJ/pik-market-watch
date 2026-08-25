@@ -27,7 +27,7 @@ done
 # machines (git-ignored): fail fast with fix instructions.
 for v in POSTGRES_APP_PASSWORD POSTGRES_READER_PASSWORD GRAFANA_SECRET_KEY; do
   grep -q "^$v=." .env || {
-    echo "✗ Missing $v in $DEPLOY_DIR/.env (see README §Database roles / §Exposing Grafana)."
+    echo "✗ Missing $v in $DEPLOY_DIR/.env (see docs/OPERATIONS.md §Database roles / §Exposing Grafana)."
     exit 1
   }
 done
