@@ -1084,6 +1084,7 @@
       "title": "Days on market vs exit discount · sales",
       "description": "Each closed sale ad as a point: how long it sat (x) vs how its final asking price compared to the first one we saw (y). Points drifting downward to the right = stale ads exiting at bigger discounts. Days-on-market is a lower bound until published_at converges; exit prices are askings, not transactions.",
       "type": "xychart",
+      "pluginVersion": "13.0.2",
       "options": {
         "legend": {
           "displayMode": "list",

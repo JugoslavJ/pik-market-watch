@@ -1619,6 +1619,7 @@
       "title": "Price vs m² — sales",
       "description": "Every sale listing matching the filters as a point (floor area × asking price). The dotted second series traces the least-squares fit computed over the same set — listings clearly below it are the genuine bargains; bottom-left outliers are often studios or data errors.",
       "type": "xychart",
+      "pluginVersion": "13.0.2",
       "options": {
         "legend": {
           "displayMode": "list",
