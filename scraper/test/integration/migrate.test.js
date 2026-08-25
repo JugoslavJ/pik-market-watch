@@ -1,10 +1,10 @@
 "use strict";
 // Integration tests for the startup migration runner:
 //   A. fresh database — applies everything, second pass is a clean no-op
-//   B. legacy database — hand-migrated through 02 only, tracker unaware:
-//      01 tolerated as duplicate, 02 re-applied cleanly, 03 created
-const fs = require("node:fs");
-const os = require("node:os");
+//   B. pre-squash volume — schema_migrations records the retired 01…12
+//      filenames; the consolidated 01 + generated 11 are a clean no-op
+//   C. tracker-unaware volume — hand-created early tables are upgraded in
+//      place by the self-heal block in 01-schema.sql
 const path = require("node:path");
 const assert = require("node:assert/strict");
 const { Pool } = require("pg");
@@ -45,11 +45,11 @@ needsDb(
     const pool = new Pool({ connectionString: await recreateDb("mig_fresh") });
     await applyMigrations(pool, FULL_DIR, log);
     assert.equal(await fnCount(pool), 2);
-    assert.equal(await recorded(pool), 12); // 01…12
+    assert.equal(await recorded(pool), 2); // 01-schema + 11-neighborhoods
 
     await applyMigrations(pool, FULL_DIR, log); // second boot
     assert.equal(await fnCount(pool), 2);
-    assert.equal(await recorded(pool), 12);
+    assert.equal(await recorded(pool), 2);
 
     // Dashboard panel query runs through the freshly created function:
     const r = await pool.query(
@@ -61,44 +61,104 @@ needsDb(
 );
 
 needsDb(
-  "migrations: legacy database (hand-applied 01+02) is upgraded safely",
+  "migrations: pre-squash volume (retired filenames recorded) sees a no-op",
   async () => {
-    const pool = new Pool({ connectionString: await recreateDb("mig_legacy") });
+    const pool = new Pool({
+      connectionString: await recreateDb("mig_presquash"),
+    });
+    await applyMigrations(pool, FULL_DIR, log);
 
-    // Build the "old world": tracker unaware, only 01+02 ever applied.
-    const partial = fs.mkdtempSync(path.join(os.tmpdir(), "olx-mig-"));
-    fs.copyFileSync(
-      path.join(FULL_DIR, "01-schema.sql"),
-      path.join(partial, "01-schema.sql"),
-    );
-    fs.copyFileSync(
-      path.join(FULL_DIR, "02-add-geolocation.sql"),
-      path.join(partial, "02-add-geolocation.sql"),
-    );
-    await applyMigrations(pool, partial, log);
-    assert.equal(await fnCount(pool), 0);
-    await pool.query(`INSERT INTO listings (article_id, url, title, sqm, price)
-                    VALUES (1, 'https://olx.ba/artikal/1', 'legacy row', 80, 100000)`);
-    await pool.query(`INSERT INTO saved_searches (search_key, name, url, category)
-                    VALUES ('/k', 'legacy', 'https://olx.ba/k', 'apartments')`);
-    await pool.query("INSERT INTO search_results VALUES ('/k', 1)");
+    // Mimic a volume migrated by the retired 01…12 chain: same live schema,
+    // but schema_migrations records the old filenames alongside the two that
+    // still exist on disk.
+    const retiredNames = [
+      "02-add-geolocation.sql",
+      "03-listing-filters.sql",
+      "04-close-listings.sql",
+      "05-listing-details.sql",
+      "06-market-views.sql",
+      "07-api-extras.sql",
+      "08-enrichment-fairness.sql",
+      "09-search-results-article-idx.sql",
+      "10-listing-dates.sql",
+      "12-neighborhood-filter.sql",
+    ];
+    for (const name of retiredNames) {
+      await pool.query("INSERT INTO schema_migrations (filename) VALUES ($1)", [
+        name,
+      ]);
+    }
 
-    // Upgrade against the full set:
+    // Boot against the squashed directory: nothing to apply, nothing breaks.
     await applyMigrations(pool, FULL_DIR, log);
     assert.equal(await fnCount(pool), 2);
-    assert.equal(await recorded(pool), 12);
+    assert.equal(await recorded(pool), 12); // 2 on-disk files + 10 historical rows
 
-    // Old data remains queryable through the dashboard's exact filter call,
-    // and the upgrade added the closure columns:
     const r = await pool.query(
       "SELECT count(*)::int AS n FROM listings_filtered(ARRAY['apartments'], 0, 99999, NULL)",
     );
-    assert.equal(r.rows[0].n, 1);
+    assert.equal(typeof r.rows[0].n, "number");
+    await pool.end();
+  },
+);
+
+needsDb(
+  "migrations: tracker-unaware volume is upgraded in place (self-heal)",
+  async () => {
+    const pool = new Pool({
+      connectionString: await recreateDb("mig_ancient"),
+    });
+
+    // Old world: tables shaped exactly like the ORIGINAL 01-schema.sql (all
+    // sibling tables complete from day one; only listings grew since), no
+    // tracker, none of the later columns or helper objects.
+    await pool.query(`CREATE TABLE listings (
+      article_id BIGINT PRIMARY KEY, url TEXT NOT NULL, title TEXT NOT NULL,
+      sqm NUMERIC(8,2), rooms TEXT, price NUMERIC(12,2), price_text TEXT,
+      ppm2 INTEGER, is_rent BOOLEAN NOT NULL DEFAULT FALSE,
+      first_seen TIMESTAMPTZ NOT NULL DEFAULT now(),
+      last_seen  TIMESTAMPTZ NOT NULL DEFAULT now())`);
+    await pool.query(`CREATE TABLE price_history (
+      id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      article_id BIGINT NOT NULL REFERENCES listings (article_id) ON DELETE CASCADE,
+      scraped_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      price NUMERIC(12,2), ppm2 INTEGER)`);
+    await pool.query(`CREATE TABLE saved_searches (
+      search_key TEXT PRIMARY KEY, name TEXT NOT NULL, url TEXT NOT NULL,
+      category TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      last_scraped_at TIMESTAMPTZ, listing_count INTEGER, median_ppm2 INTEGER,
+      new_count INTEGER, drop_count INTEGER)`);
+    await pool.query(`CREATE TABLE search_results (
+      search_key TEXT NOT NULL REFERENCES saved_searches (search_key) ON DELETE CASCADE,
+      article_id BIGINT NOT NULL REFERENCES listings (article_id) ON DELETE CASCADE,
+      PRIMARY KEY (search_key, article_id))`);
+    await pool.query(`CREATE TABLE scrape_runs (
+      id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, search_key TEXT,
+      started_at TIMESTAMPTZ NOT NULL DEFAULT now(), finished_at TIMESTAMPTZ,
+      pages INTEGER, cards INTEGER, status TEXT NOT NULL DEFAULT 'running',
+      error TEXT)`);
+    await pool.query(`INSERT INTO listings (article_id, url, title, sqm, price)
+                    VALUES (1, 'https://olx.ba/artikal/1', 'legacy row', 80, 100000)`);
+    await pool.query(
+      `INSERT INTO saved_searches VALUES ('/k', 'legacy', 'https://olx.ba/k', 'apartments')`,
+    );
+    await pool.query("INSERT INTO search_results VALUES ('/k', 1)");
+
+    await applyMigrations(pool, FULL_DIR, log);
+    assert.equal(await fnCount(pool), 2);
+    assert.equal(await recorded(pool), 2);
+
+    // Self-heal added the closure columns, and the legacy row remains
+    // queryable through the dashboard's exact filter call:
     const cols =
       await pool.query(`SELECT count(*)::int AS n FROM information_schema.columns
     WHERE table_name = 'listings'
       AND column_name IN ('closed_at','closing_price','closing_ppm2')`);
     assert.equal(cols.rows[0].n, 3);
+    const r = await pool.query(
+      "SELECT count(*)::int AS n FROM listings_filtered(ARRAY['apartments'], 0, 99999, NULL)",
+    );
+    assert.equal(r.rows[0].n, 1);
     await pool.end();
   },
 );

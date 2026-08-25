@@ -16,12 +16,20 @@ How the tracker stores what it sees, how listings age out, and what the Grafana 
 | `v_listing_lifecycle` | View: one row per listing — opening vs closing price/ppm², change count, days listed, category |
 | `v_market_daily` | View: per-day new/closed counts and estimated live inventory |
 
-Schema migrations live in `db/init/*.sql` and are applied in filename order. The Postgres entrypoint runs them on **first** volume start, and the scraper re-checks and applies any *unapplied* ones on every startup — tracked in a `schema_migrations` table. To change the schema later, drop a new **idempotent** migration file into `db/init/` and restart the scraper (`docker compose restart scraper`) — nothing else to do.
+Schema migrations live in `db/init/*.sql`. `01-schema.sql` is the consolidated
+base schema (it absorbed the former incremental migrations — history in git),
+`11-neighborhoods.sql` is **generated** by `geo/scripts/gen-sql.js` (edit the
+GeoJSON source, never the file), and `zz-database-roles.sh` bootstraps runtime
+roles. The Postgres entrypoint runs them on **first** volume start, and the
+scraper re-checks and applies any *unapplied* ones on every startup — tracked
+in a `schema_migrations` table by filename. To change the schema later, drop a
+new **idempotent** migration file into `db/init/` and restart the scraper
+(`docker compose restart scraper`) — nothing else to do.
 
 Manual application still works if you ever need it:
 
 ```bash
-docker exec -i olx-db psql -U olx -d olx < db/init/03-listing-filters.sql   # dashboard filter functions
+docker exec -i olx-db psql -U olx_app -d olx < db/init/01-schema.sql   # full schema, idempotent
 ```
 
 ### Listing lifecycle
