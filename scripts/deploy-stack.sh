@@ -57,9 +57,10 @@ echo "▶ Waiting for containers to become healthy…"
 deadline=$((SECONDS + 360))
 while :; do
   db=$(docker inspect -f '{{.State.Health.Status}}' olx-db 2>/dev/null || echo missing)
-  gr=$(docker inspect -f '{{.State.Status}}' olx-grafana 2>/dev/null || echo missing)
-  echo "   db=$db  grafana=$gr  (t=${SECONDS}s)"
-  if [ "$db" = healthy ] && [ "$gr" = running ]; then
+  gr=$(docker inspect -f '{{.State.Health.Status}}' olx-grafana 2>/dev/null || echo missing)
+  bk=$(docker inspect -f '{{.State.Health.Status}}' olx-db-backup 2>/dev/null || echo missing)
+  echo "   db=$db  grafana=$gr  db-backup=$bk  (t=${SECONDS}s)"
+  if [ "$db" = healthy ] && [ "$gr" = healthy ]; then
     echo "✓ Stack healthy — deployed ${GIT_SHA:-unknown} to the instance"
     echo "  Grafana: https://${OCI_HOST:-<instance-ip>}:3000 (self-signed cert — expect a browser warning)"
     # The scraper moved to the home machine (compose profile "scrape").
