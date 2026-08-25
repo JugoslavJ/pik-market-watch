@@ -370,18 +370,22 @@ class Db {
   }
 
   /**
-   * True when some scrape run started successfully within the given number of
-   * minutes. Used to skip redundant full cycles after rapid container
-   * restarts (every deploy fires one at boot).
+   * True when a successful run started within the given number of minutes —
+   * optionally restricted to one search_key. Used to skip redundant boot-time
+   * cycles after deploys (per search, so a NEWLY added search still scrapes
+   * immediately instead of waiting out the gap).
    * @param {number} minutes
+   * @param {?string} [searchKey] — omit/null for "any search"
    * @returns {Promise<boolean>}
    */
-  async hasRecentFinishedRun(minutes) {
+  async hasRecentFinishedRun(minutes, searchKey = null) {
     const r = await this.pool.query(
       `SELECT 1 FROM scrape_runs
-        WHERE status = 'ok' AND started_at > now() - make_interval(mins => $1::int)
+        WHERE status = 'ok'
+          AND started_at > now() - make_interval(mins => $1::int)
+          AND ($2::text IS NULL OR search_key = $2)
         LIMIT 1`,
-      [Math.max(0, Math.round(minutes || 0))]);
+      [Math.max(0, Math.round(minutes || 0)), searchKey]);
     return r.rowCount > 0;
   }
 

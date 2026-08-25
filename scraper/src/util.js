@@ -1,9 +1,10 @@
 'use strict';
 // Small helpers shared by the scraping entry points.
 
-// Browser-like UA: Cloudflare scores bare runtime UAs ("node") harshly, and
-// this exact string is what millions of real Chrome sessions send.
-const USER_AGENT =
+// Browser-like UA: Cloudflare scores bare runtime UAs ("node") harshly. The
+// default mimics a real Chrome session; override via SCRAPE_USER_AGENT once it
+// ages into an obviously stale fingerprint.
+const USER_AGENT = process.env.SCRAPE_USER_AGENT ||
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
   'Chrome/131.0.0.0 Safari/537.36';
 

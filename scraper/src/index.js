@@ -31,21 +31,21 @@ async function runAll(db) {
     return;
   }
 
-  // Deploy-restart protection: containers are recreated on every deploy and
-  // each boot fires a full scrape cycle (~dozens of API pages + detail calls).
-  // Several deploys in one evening are enough to trip olx.ba's rate limiter.
-  // Skip the cycle when another run finished very recently. (RUN_ONCE is
-  // exempt — explicit intent.)
-  if (!config.runOnce &&
-      await db.hasRecentFinishedRun(config.minRunGapMinutes)) {
-    log(`a successful run finished less than ${config.minRunGapMinutes} min ago — skipping this cycle (SCRAPE_MIN_GAP_MINUTES)`);
-    state.lastStatus = 'skipped: recent run';
-    return;
-  }
-
   let okRuns = 0;
   let totalCards = 0;
+  let skipped = 0;
   for (const search of config.searches) {
+    // Deploy-restart protection, PER SEARCH: every container recreation boots
+    // a full scrape cycle (~dozens of API pages + detail calls), and several
+    // deploys in one evening are enough to trip olx.ba's rate limiter. Keyed
+    // on search_key so a newly added search still scrapes immediately instead
+    // of waiting out the gap. (RUN_ONCE is exempt — explicit intent.)
+    if (!config.runOnce &&
+        await db.hasRecentFinishedRun(config.minRunGapMinutes, search.searchKey)) {
+      log(`↷ "${search.name}" had an ok run < ${config.minRunGapMinutes} min ago — skipping`);
+      skipped += 1;
+      continue;
+    }
     try {
       const res = await scrapeSearch(db, search, config, log);
       totalCards += res.cards;
@@ -59,11 +59,18 @@ async function runAll(db) {
     }
   }
 
-  // /health semantics: only a cycle where EVERY search failed (or that threw)
-  // counts as a consecutive failure — partial success still serves fresh data,
-  // and any successful search resets the streak.
-  if (okRuns === 0) state.consecutiveFailures += 1;
-  else state.consecutiveFailures = 0;
+  // /health semantics: only a cycle where EVERY non-skipped search failed (or
+  // that threw) counts as a consecutive failure — partial success still serves
+  // fresh data, any success resets the streak, and a pure skip tick (everything
+  // ran recently) is neutral in both directions.
+  const allSkipped = skipped > 0 && skipped === config.searches.length;
+  if (allSkipped) {
+    state.lastStatus = 'skipped: recent run';
+  } else if (okRuns === 0) {
+    state.consecutiveFailures += 1;
+  } else {
+    state.consecutiveFailures = 0;
+  }
 
   // End of cycle: close listings that no successful search returned anymore,
   // freezing their last observed price as the closing price. Failed searches

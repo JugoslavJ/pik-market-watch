@@ -26,3 +26,17 @@ needsDb('hasRecentFinishedRun: failed runs do not count', async () => {
   await db.finishRun(runId, { status: 'error', error: 'boom' });
   assert.equal(await db.hasRecentFinishedRun(45), false);
 });
+
+needsDb('hasRecentFinishedRun(key): matches only that search_key', async () => {
+  const a = await db.startRun('/alpha');
+  await db.finishRun(a, { status: 'ok' });
+  assert.equal(await db.hasRecentFinishedRun(45, '/alpha'), true);
+  assert.equal(await db.hasRecentFinishedRun(45, '/beta'), false);   // keyed miss…
+  assert.equal(await db.hasRecentFinishedRun(45), true);             // …unkeyed = any
+});
+
+needsDb('hasRecentFinishedRun(key): other keys failing does not leak in', async () => {
+  const b = await db.startRun('/beta');
+  await db.finishRun(b, { status: 'error', error: 'boom' });
+  assert.equal(await db.hasRecentFinishedRun(45, '/beta'), false);
+});

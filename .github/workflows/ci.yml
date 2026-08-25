@@ -3,6 +3,10 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:          # doc-only pushes don't need tests or a redeploy
+      - '**.md'
+      - 'docs/**'
+      - 'geo/**'
   pull_request:
   workflow_dispatch:   # manual run → full test suite + redeploy of main
 
@@ -51,7 +55,7 @@ jobs:
       # Variables). Must be tilde- or absolute-path style, no spaces.
       DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '~/pik-market-watch' }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Write deploy key
         env:
