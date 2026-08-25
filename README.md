@@ -19,7 +19,7 @@ HOME MACHINE (residential IP)                    OCI INSTANCE (datacenter IP)
 
 - **scraper** rewrites each configured olx.ba search URL into the site's JSON search endpoint (`/api/search`; filter params pass through 1:1), pages the results with plain `fetch()`, then upserts listings and appends price history into Postgres. Map pins, publish dates, m²/rooms labels and seller type already ride along with every search result; anything still missing (characteristics, view counters) is filled from `/api/listings/<id>`. No browser, no tokens — anonymous reads only. It lives behind the compose profile **`scrape`** and must run where the API answers: the home machine (OCI's datacenter IP gets 403-challenged — probed). Results reach the instance via `scripts/sync-to-instance.ps1`.
 - **db** holds all state: listings, append-only price history, saved searches, per-search result sets and scrape runs.
-- **grafana** ships with a provisioned Postgres datasource and two prebuilt dashboards (**Market Overview**, **Exits & Price Endings**). It serves **HTTPS** with a self-signed certificate (scripts/generate-grafana-cert.sh) and queries Postgres through a **read-only role**.
+- **grafana** ships with a provisioned Postgres datasource and four prebuilt dashboards (**Home**, **Market Overview**, **Exits & Price Endings**, **Scraper Health**). It serves **HTTPS** with a self-signed certificate (scripts/generate-grafana-cert.sh) and queries Postgres through a **read-only role**.
 - **db-backup** produces nightly dumps into `./backups/`.
 
 ## Quick start
@@ -36,7 +36,7 @@ Then:
 
 | URL | What |
 |---|---|
-| https://localhost:3000 | Grafana over HTTPS — self-signed cert, expect a one-time browser warning (login = `GRAFANA_ADMIN_*` from `.env`). Dashboards: **OLX → OLX.ba Market Overview** and **OLX → OLX.ba Exits & Price Endings** |
+| https://localhost:3000 | Grafana over HTTPS — self-signed cert, expect a one-time browser warning (login = `GRAFANA_ADMIN_*` from `.env`). Dashboards: **OLX → OLX.ba Home**, plus **Market Overview**, **Exits & Price Endings** and **Scraper Health** |
 | http://localhost:9100 | Scraper health/status JSON *(with the scrape profile)* — returns **503** after `HEALTH_FAILURE_THRESHOLD` consecutive fully-failed cycles, so `docker compose ps` shows `unhealthy` |
 | `docker compose logs -f scraper` | Live scraping progress *(with the scrape profile)* |
 

@@ -1,6 +1,19 @@
 {
   "annotations": {
-    "list": []
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "red",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
   },
   "description": "Operational view of the scraper itself: run outcomes, throughput and per-search freshness. Market filters do not apply here.",
   "editable": true,
@@ -8,6 +21,11 @@
   "graphTooltip": 0,
   "id": null,
   "links": [
+    {
+      "title": "Home",
+      "url": "/d/olx-home",
+      "targetBlank": false
+    },
     {
       "title": "Market Overview",
       "url": "/d/olx-overview",
@@ -51,6 +69,7 @@
         "y": 0
       },
       "title": "Searches watched",
+      "description": "Configured searches (saved_searches rows) the scraper cycles through.",
       "type": "stat",
       "options": {
         "colorMode": "value",
@@ -192,6 +211,7 @@
         "y": 0
       },
       "title": "Success rate · 24 h",
+      "description": "ok runs ÷ (ok + error) runs started in the last day; runs still marked running are excluded.",
       "type": "stat",
       "options": {
         "colorMode": "value",
@@ -1145,6 +1165,152 @@
         }
       ],
       "id": 19
+    },
+    {
+      "type": "row",
+      "title": "Errors & latency",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 50
+      },
+      "panels": [],
+      "id": 20
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "unit": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "failure_pattern"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 900
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 51
+      },
+      "title": "Errors grouped — last 7 d",
+      "description": "scrape_runs error messages with digits masked to '#', so one recurring bug (markup change, timeout on one search) separates from many transient ones.",
+      "type": "table",
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT count(*)::int AS runs,\n       left(regexp_replace(regexp_replace(COALESCE(error, '(no message)'), '[0-9]+', '#', 'g'), '\\s+', ' ', 'g'), 120) AS failure_pattern,\n       to_char(max(started_at), 'MM-DD HH24:MI') AS last_seen\nFROM scrape_runs\nWHERE status = 'error'\n  AND started_at > now() - INTERVAL '7 days'\nGROUP BY 2\nORDER BY 1 DESC",
+          "refId": "A"
+        }
+      ],
+      "id": 21
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "unit": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "max min"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 61
+      },
+      "title": "Run duration over time",
+      "description": "Average (blue) and worst-case (orange) runtime per hour across all searches. A gradual creep is the leading indicator of OLX throttling before runs start failing.",
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "SELECT date_trunc('hour', r.started_at) AS time,\n       round(avg(EXTRACT(EPOCH FROM (r.finished_at - r.started_at))) / 60.0, 1) AS \"avg min\",\n       round(max(EXTRACT(EPOCH FROM (r.finished_at - r.started_at))) / 60.0, 1) AS \"max min\"\nFROM scrape_runs r\nWHERE r.finished_at IS NOT NULL\n  AND $__timeFilter(r.started_at)\nGROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "id": 22
     }
   ],
   "refresh": "5m",

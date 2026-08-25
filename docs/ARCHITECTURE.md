@@ -47,7 +47,11 @@ docker compose run --rm scraper node src/backfill-geo.js --all       # everythin
 ---
 ## Dashboards
 
-Three provisioned dashboards live in the **OLX** folder (one JSON file each in `grafana/dashboards/`). The two market dashboards share the same filter bar — Category, Deal, Rooms, m² range, Neighborhood (multi-select, with `(unmapped)` / `(no pin)` buckets) — and **every panel honours both those filters and the dashboard time picker**. All three cross-link via the dashboard links in the top bar.
+Four provisioned dashboards live in the **OLX** folder (one JSON file each in `grafana/dashboards/`). The two market dashboards share the same filter bar — Category, Deal, Rooms, m² range, Neighborhood (multi-select, with `(unmapped)` / `(no pin)` buckets) — and **every panel honours both those filters and the dashboard time picker**. All four cross-link via the dashboard links in the top bar, and failed scrape runs are drawn as red region annotations on the market time series so scraper downtime explains any dip or gap.
+
+### OLX.ba Home (`olx-home`)
+
+The landing page — no filter bar, whole database only: six market KPIs (active listings, median sale KM/m², median rent, gross yield, sell-through 30 d, weekly Δ% of the median), three pipeline KPIs (age of the last successful scrape, failed runs 24 h, cards scraped 24 h) and two trend charts (inventory flow, weekly sell-through). Everything links onward to the detail dashboards.
 
 ### OLX.ba Market Overview (`olx-overview`)
 
@@ -59,6 +63,8 @@ The daily driver: what is on the market right now.
 4. **Map** — pinned listings + linked table
 5. **Shopping list** — best-value sales (lowest KM/m²) and recent price drops
 6. **Segments & demand** — actives that cut their price + median biggest cut, median KM/m² by rooms, asking KM/m² by condition, neighborhood breakdown from map pins (Obilicevo, Starcevica, Laus, Lazarevo, Budzak, Centar, Borik, …), most-viewed active listings (`views` from ad pages)
+7. **Investment view** — gross rental yield (median rent × 12 ÷ median sale price), this-week-vs-last median KM/m² stat, price-vs-m² scatter with a least-squares fit line (genuine bargains sit below it), median KM/m² by floor position (labels carry `n=`; coverage still partial), asking KM/m² by seller type (private vs agency)
+8. **Neighborhood economics** — districts ranked by median asking KM/m² with p25–p75 spread (≥ 8 listings each; ignores the Neighborhood filter on purpose so districts stay comparable)
 
 ### OLX.ba Exits & Price Endings (`olx-exits`)
 
@@ -69,6 +75,7 @@ Everything about ads that disappeared, i.e. the closest thing olx.ba offers to s
 3. **Recently closed table** — exit price vs original ask, change % (colour-coded), days listed
 4. **Exits by room count**, **exit map** + linked table
 5. **Exit dynamics** — exit-discount buckets (final ask vs original ask) and a weekly sell-through-rate trend (`v_market_daily`, whole database)
+6. **Liquidity deep dive** — days-on-market vs exit-discount scatter (do stale ads exit cheaper?), exit rate by KM/m² quartile, and exit rate by neighborhood over 30 d (which districts actually move)
 
 ### OLX Scraper Health (`olx-health`)
 
@@ -79,11 +86,12 @@ Operational view of the scraper itself — market filters don't apply here.
 3. **Saved searches** — per-search freshness (`age_min`, colour-coded), listing counts, new/drop counters
 4. **Recent scrape runs** — newest 50 with status colouring and full error text
 5. **Data quality & upstream** — coverage of geo pins / detail fetches / KM-m² / OLX status among actives (how much data the market panels can actually rely on), an OLX-status-vs-our-closure drift table (`api_status` telemetry), and per-search run durations
+6. **Errors & latency** — error messages grouped with digits masked to `#` (tells one recurring bug from many transient failures) and a run-duration trend (avg/max per hour); duration creep is the leading indicator of OLX throttling
 
 ## Metrics not charted (yet)
 
-- **Dead columns** (never populated by the scraper): `location`, `heating`, `furnished`, `favorites` — don't build panels on these.
-- **Too sparse to chart** today: `parking` (6 %), `elevator` (4 %), `bathrooms` (11 %), `floor_num` (12 %), `year_built` (20 %) of actives. Revisit as detail enrichment converges.
+- **Dead columns** (never populated by the scraper): `heating`, `furnished`, `favorites` — don't build panels on these. (`location` used to be dead but is now filled for Banja Luka pins by the neighborhoods backfill.)
+- **Sparse but charted with caveats**: `floor_num` (~12 % of actives) powers the floor-position gauge, with explicit `n=` counts per bucket so sparsity stays visible. Still too sparse to chart: `parking` (6 %), `elevator` (4 %), `bathrooms` (11 %), `year_built` (20 %). Revisit as detail enrichment converges.
 - **Needs scraper/schema work**: `views` and `favorites` are overwrite-in-place counters, so no history/trend is possible without snapshotting them (e.g. a `listing_stats_history` table). `api_price_history` (OLX's own server-side price log, ~7 % coverage) could power hidden-drop detection we can't see between cycles.
 
 
