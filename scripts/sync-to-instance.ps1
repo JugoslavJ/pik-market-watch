@@ -79,6 +79,15 @@ $out | ForEach-Object { Log "remote: $_" }
 
 if (($out -join "`n") -match 'RESTORE_OK') {
   Log 'sync complete - instance database updated.'
+  # Prune local dumps now that the instance confirmed the restore — every
+  # scheduled run otherwise drops another olx-sync-*.dump into ./backups
+  # forever. Keep the newest few (timestamped names sort chronologically).
+  # Dumps from FAILED runs never reach this branch, so they stay for forensics.
+  Get-ChildItem (Join-Path $root 'backups') -Filter 'olx-sync-*.dump' |
+    Sort-Object Name -Descending | Select-Object -Skip 3 | ForEach-Object {
+      Log "pruning superseded local dump: $($_.Name)"
+      Remove-Item -LiteralPath $_.FullName -Force
+    }
 } else {
   throw 'remote restore did not report RESTORE_OK - check the instance'
 }
