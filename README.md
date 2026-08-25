@@ -417,3 +417,9 @@ owns objects; it is not a superuser.
   `remote-restore.sh` now audits archive ownership *before* dropping anything, so drifted dumps fail fast with the offending owners printed instead of nuking the schema first.
 
 > Note: scraping olx.ba is for personal analysis only — keep intervals polite.
+
+## License
+
+All **code** in this repository (scraper, schema, scripts, provisioning) is licensed under the **GNU Affero General Public License v3.0** — see [LICENSE](LICENSE). Self-host, study and modify freely; if you redistribute the stack or offer a modified version as a network service, you must make your version's source available under the same terms.
+
+Committed geographic **data** has separate provenance and caveats — read [DATA.md](DATA.md) before redistributing it.
