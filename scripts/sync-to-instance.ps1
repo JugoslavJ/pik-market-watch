@@ -64,9 +64,11 @@ docker compose --profile scrape run --rm scraper node src/index.js --once
 if ($LASTEXITCODE -ne 0) { throw "scrape failed (exit $LASTEXITCODE) - instance left untouched; retry later" }
 
 Log 'dumping database...'
-docker compose exec -T db pg_dump -U olx -Fc -f /backups/olx-sync.dump olx
+$stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+$dumpName = "olx-sync-$stamp.dump"
+docker compose exec -T db pg_dump -U olx -Fc -f "/backups/$dumpName" olx
 if ($LASTEXITCODE -ne 0) { throw "pg_dump failed (exit $LASTEXITCODE)" }
-$dump = Join-Path $root 'backups/olx-sync.dump'
+$dump = Join-Path $root "backups/$dumpName"
 if ((Get-Item $dump).Length -lt 20000) { throw "dump suspiciously small - aborting" }
 
 Log ('streaming {0:N0} bytes to {1}@{2} and restoring...' -f (Get-Item $dump).Length, $SshUser, $InstanceHost)
