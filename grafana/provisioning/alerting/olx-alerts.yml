@@ -1,0 +1,76 @@
+apiVersion: 1
+
+# ── Provisioned alerting ──────────────────────────────────────────────────────
+# One high-signal rule: the instance DB going silent covers EVERY break in the
+# chain (home scraper dead / olx.ba blocking / sync pipeline broken) — they all
+# end with no fresh status='ok' scrape_runs row.
+#
+# Delivery needs SMTP (uncomment GF_SMTP_* in docker-compose.yml + set
+# ALERT_EMAIL_* in .env). Without SMTP the rules still evaluate and show their
+# firing/resolving history under Alerting → Alert rules in the UI.
+
+policies:
+  - receiver: admin-email
+    group_by: [grafana_folder]
+
+contactPoints:
+  - orgId: 1
+    name: admin-email
+    receivers:
+      - type: email
+        uid: admin-email
+        settings:
+          addresses: ${ALERT_EMAIL_TO}
+        disableResolveMessage: false
+
+groups:
+  - orgId: 1
+    name: olx-pipeline-health
+    folder: OLX
+    interval: 15m
+    rules:
+      - uid: olx-no-ok-run-26h
+        title: No successful scrape in 26 h
+        condition: C
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: >-
+            scrape_runs has no status='ok' row younger than 26 h — the home
+            scraper is down/blocked, or the sync to this instance is broken.
+          runbook_url: https://github.com/JugoslavJ/pik-market-watch/blob/main/docs/OPERATIONS.md
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: olx-postgres
+            model:
+              rawSql: |
+                SELECT count(*)::int AS ok_runs
+                  FROM scrape_runs
+                 WHERE status = 'ok'
+                   AND started_at > now() - interval '26 hours';
+              format: table
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions: []
+              expression: A
+              reducer: last
+              type: reduce
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params: [C]
+                  type: threshold
+              expression: B
+              type: threshold

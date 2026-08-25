@@ -104,13 +104,28 @@ services:
       POSTGRES_READER_USER: ${POSTGRES_READER_USER:-olx_reader}
       POSTGRES_READER_PASSWORD: ${POSTGRES_READER_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-olx}
+      # Consumed by provisioning/alerting/olx-alerts.yml (alert mail recipient).
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-}
+      # Alert MAIL delivery is optional — without SMTP the rules still evaluate
+      # and show firing/resolving history in the UI. Uncomment + set .env:
+      # GF_SMTP_ENABLED: "true"
+      # GF_SMTP_HOST: ${GRAFANA_SMTP_HOST}          # host:port, e.g. smtp.gmail.com:587
+      # GF_SMTP_USER: ${GRAFANA_SMTP_USER}
+      # GF_SMTP_PASSWORD: ${GRAFANA_SMTP_PASSWORD}
+      # GF_SMTP_FROM_ADDRESS: ${GRAFANA_SMTP_FROM}
     volumes:
       - grafana:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
       - ./tls:/certs:ro                        # self-signed HTTPS cert (scripts/generate-grafana-cert.sh)
     ports:
-      - "3000:3000"
+      # host_ip empty ⇒ all interfaces (historic default); set GRAFANA_BIND in
+      # .env to a LAN/WireGuard IP to keep dashboards off the public internet.
+      - target: 3000
+        published: "3000"
+        host_ip: ${GRAFANA_BIND:-0.0.0.0}
+        protocol: tcp
+        mode: host
     mem_limit: 768m
     cpus: 1.0
     logging: *logging
