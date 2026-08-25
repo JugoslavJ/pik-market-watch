@@ -58,8 +58,6 @@ Open olx.ba in your browser, filter a search the way you like (e.g. Stanovi → 
 
 Restart the scraper afterwards: `docker compose restart scraper`. `name` and `category` are optional.
 
-Use current-style URLs (`category_id=23&cities=…`). Legacy `kat=` links make the API return the whole site, so the scraper refuses filterless URLs at startup.
-
 `category` is a free-form label for the dashboard's Category dropdown (apartments, houses, land, …). A listing in several categories counts in each.
 
 ---
