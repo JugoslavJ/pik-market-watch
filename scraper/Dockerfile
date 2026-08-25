@@ -3,7 +3,7 @@
 # Plain Node image: the scraper talks to olx.ba's public JSON endpoints with
 # fetch() — no browser or OS-level dependencies required.
 # ─────────────────────────────────────────────────────────────────────────────
-FROM node:24-bookworm-slim
+FROM node:26-bookworm-slim
 
 ENV NODE_ENV=production
 
