@@ -29,7 +29,7 @@ function waitUntilReady() {
   throw new Error('test postgres did not become ready in time');
 }
 
-let exit = 1;
+let exit;
 docker(['rm', '-f', NAME]);                              // stale container from a crashed run
 const up = docker(['run', '-d', '--name', NAME,
   '-e', 'POSTGRES_USER=olx', '-e', 'POSTGRES_PASSWORD=olx', '-e', 'POSTGRES_DB=olx',

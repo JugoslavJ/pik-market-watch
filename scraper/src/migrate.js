@@ -48,7 +48,7 @@ async function applyMigrations(pool, dir, log = () => {}) {
       if (DUPLICATE_CODES.has(err.code)) {
         log(`skipped ${file} — objects already exist (${err.code})`);
       } else {
-        throw new Error(`migration ${file} failed: ${err.message}`);
+        throw new Error(`migration ${file} failed: ${err.message}`, { cause: err });
       }
     }
   }

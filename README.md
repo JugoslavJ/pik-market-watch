@@ -122,6 +122,7 @@ cd scraper
 npm install                # once
 npm test                   # hermetic unit tests (payload mappers, config keys, utils) — no services needed
 npm run test:integration   # DB-backed tests; boots a throwaway Postgres container via Docker
+npm run lint               # ESLint (flat config) — correctness rules tuned to this codebase, not formatting
 npm run lint:syntax        # node --check over every src file
 npm run fixtures           # refresh recorded live-API fixtures used by the mapper tests
 node scripts/check-api.js  # live no-DB probe of fetch→map path (handy inside Docker on Node-less hosts)
@@ -134,7 +135,7 @@ freezing (`closing_category`) and reopening, the analytics views, saved-search
 identity vs stats separation, the run lifecycle, and the startup migration
 runner on fresh *and* legacy-shaped databases. It is skipped gracefully when no
 database is configured, so plain `npm test` works anywhere. GitHub Actions runs
-all three commands on every push and pull request.
+lint plus all test suites on every push and pull request.
 
 ## Dashboards
 
