@@ -1691,7 +1691,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH base AS (\n  SELECT l.sqm::float8 AS sqm, l.price::float8 AS price\n  FROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\n  WHERE NOT l.is_rent AND l.price IS NOT NULL AND l.ppm2 > 0 AND l.sqm > 0\n    AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n    AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\n),\nfit AS (\n  SELECT min(sqm) AS x0, max(sqm) AS x1,\n         regr_slope(price, sqm) AS s, regr_intercept(price, sqm) AS b\n  FROM base\n)\nSELECT gs AS sqm, round(b + s * gs)::double precision AS price_km\nFROM fit, generate_series(x0, x1, GREATEST((x1 - x0) / 80.0, 0.001)) gs\nWHERE s IS NOT NULL",
+          "rawSql": "WITH base AS (\n  SELECT l.sqm::float8 AS sqm, l.price::float8 AS price\n  FROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\n  WHERE NOT l.is_rent AND l.price IS NOT NULL AND l.ppm2 > 0 AND l.sqm > 0\n    AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n    AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\n),\nfit AS (\n  SELECT min(sqm) AS x0, max(sqm) AS x1,\n         regr_slope(price, sqm) AS s, regr_intercept(price, sqm) AS b\n  FROM base\n)\nSELECT (x0 + (x1 - x0) * gs / 80.0)::float8 AS sqm,\n       round(b + s * (x0 + (x1 - x0) * gs / 80.0))::double precision AS price_km\nFROM fit, generate_series(0, 80) gs\nWHERE s IS NOT NULL",
           "refId": "B"
         }
       ],
@@ -1755,7 +1755,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH s AS (\n  SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY l.price) AS p\n  FROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\n  WHERE NOT l.is_rent AND l.price > 0\n    AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n),\nr AS (\n  SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY l.price) AS p\n  FROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\n  WHERE l.is_rent AND l.price > 0\n    AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n)\nSELECT round(r.p * 12 / s.p * 100, 1)::double precision AS gross_yield_pct\nFROM s, r",
+          "rawSql": "WITH s AS (\n  SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY l.price) AS p\n  FROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\n  WHERE NOT l.is_rent AND l.price > 0\n    AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n),\nr AS (\n  SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY l.price) AS p\n  FROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\n  WHERE l.is_rent AND l.price > 0\n    AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n)\nSELECT round((r.p * 12 / s.p * 100)::numeric, 1)::double precision AS gross_yield_pct\nFROM s, r",
           "refId": "A"
         }
       ],
@@ -1847,7 +1847,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH pts AS (\n  SELECT ph.scraped_at, ph.ppm2\n  FROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\n  JOIN price_history ph ON ph.article_id = l.article_id\n  WHERE NOT l.is_rent AND ph.ppm2 > 0\n    AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n),\nw AS (\n  SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE scraped_at >= date_trunc('week', now())) AS \"this wk\",\n         percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE scraped_at >= date_trunc('week', now()) - INTERVAL '7 days'\n                                              AND scraped_at < date_trunc('week', now())) AS \"last wk\"\n  FROM pts\n)\nSELECT \"this wk\"::int AS \"this wk\",\n       \"last wk\"::int AS \"last wk\",\n       round(100.0 * (\"this wk\" - \"last wk\") / NULLIF(\"last wk\", 0), 1)::double precision AS \"Δ %\"\nFROM w",
+          "rawSql": "WITH pts AS (\n  SELECT ph.scraped_at, ph.ppm2\n  FROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\n  JOIN price_history ph ON ph.article_id = l.article_id\n  WHERE NOT l.is_rent AND ph.ppm2 > 0\n    AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n),\nw AS (\n  SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE scraped_at >= date_trunc('week', now())) AS \"this wk\",\n         percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE scraped_at >= date_trunc('week', now()) - INTERVAL '7 days'\n                                              AND scraped_at < date_trunc('week', now())) AS \"last wk\"\n  FROM pts\n)\nSELECT \"this wk\"::int AS \"this wk\",\n       \"last wk\"::int AS \"last wk\",\n       round((100.0 * (\"this wk\" - \"last wk\") / NULLIF(\"last wk\", 0))::numeric, 1)::double precision AS \"Δ %\"\nFROM w",
           "refId": "A"
         }
       ],
@@ -1920,7 +1920,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT CASE WHEN l.floor_num < 0 THEN 'basement'\n            WHEN l.floor_num = 0 THEN 'ground'\n            WHEN l.floors_total IS NOT NULL AND l.floor_num = l.floors_total THEN 'top'\n            ELSE 'mid' END || ' · n=' || count(*)::int AS bucket,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)::int AS median_ppm2\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\nWHERE NOT l.is_rent AND l.ppm2 > 0 AND l.floor_num IS NOT NULL\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT CASE WHEN l.floor_num < 0 THEN 'basement'\n            WHEN l.floor_num = 0 THEN 'ground'\n            WHEN l.floors_total IS NOT NULL AND l.floor_num = l.floors_total THEN 'top'\n            ELSE 'mid' END || ' · n=' || count(*)::int AS bucket,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)::int AS median_ppm2\nFROM listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) l\nWHERE NOT l.is_rent AND l.ppm2 > 0 AND l.floor_num IS NOT NULL\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\nGROUP BY CASE WHEN l.floor_num < 0 THEN 'basement'\n            WHEN l.floor_num = 0 THEN 'ground'\n            WHEN l.floors_total IS NOT NULL AND l.floor_num = l.floors_total THEN 'top'\n            ELSE 'mid' END\nORDER BY 1",
           "refId": "A"
         }
       ],

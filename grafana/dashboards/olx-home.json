@@ -297,7 +297,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH s AS (\n  SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY price) AS p\n  FROM v_active_listings WHERE NOT is_rent AND price > 0\n),\nr AS (\n  SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY price) AS p\n  FROM v_active_listings WHERE is_rent AND price > 0\n)\nSELECT round(r.p * 12 / s.p * 100, 1)::double precision AS gross_yield_pct\nFROM s, r",
+          "rawSql": "WITH s AS (\n  SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY price) AS p\n  FROM v_active_listings WHERE NOT is_rent AND price > 0\n),\nr AS (\n  SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY price) AS p\n  FROM v_active_listings WHERE is_rent AND price > 0\n)\nSELECT round((r.p * 12 / s.p * 100)::numeric, 1)::double precision AS gross_yield_pct\nFROM s, r",
           "refId": "A"
         }
       ],
@@ -429,7 +429,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH pts AS (\n  SELECT ph.scraped_at, ph.ppm2\n  FROM listings l\n  JOIN price_history ph ON ph.article_id = l.article_id\n  WHERE NOT l.is_rent AND ph.ppm2 > 0\n),\nw AS (\n  SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE scraped_at >= date_trunc('week', now())) AS this_week,\n         percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE scraped_at >= date_trunc('week', now()) - INTERVAL '7 days'\n                                              AND scraped_at < date_trunc('week', now())) AS last_week\n  FROM pts\n)\nSELECT round(100.0 * (this_week - last_week) / NULLIF(last_week, 0), 1)::double precision AS \"Δ %\"\nFROM w",
+          "rawSql": "WITH pts AS (\n  SELECT ph.scraped_at, ph.ppm2\n  FROM listings l\n  JOIN price_history ph ON ph.article_id = l.article_id\n  WHERE NOT l.is_rent AND ph.ppm2 > 0\n),\nw AS (\n  SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE scraped_at >= date_trunc('week', now())) AS this_week,\n         percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE scraped_at >= date_trunc('week', now()) - INTERVAL '7 days'\n                                              AND scraped_at < date_trunc('week', now())) AS last_week\n  FROM pts\n)\nSELECT round((100.0 * (this_week - last_week) / NULLIF(last_week, 0))::numeric, 1)::double precision AS \"Δ %\"\nFROM w",
           "refId": "A"
         }
       ],
