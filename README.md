@@ -37,7 +37,7 @@ Then:
 | URL | What |
 |---|---|
 | https://localhost:3000 | Grafana over HTTPS — self-signed cert, expect a one-time browser warning (login = `GRAFANA_ADMIN_*` from `.env`). Dashboards: **OLX → OLX.ba Market Overview** and **OLX → OLX.ba Exits & Price Endings** |
-| http://localhost:9100 | Scraper health/status JSON *(with the scrape profile)* |
+| http://localhost:9100 | Scraper health/status JSON *(with the scrape profile)* — returns **503** after `HEALTH_FAILURE_THRESHOLD` consecutive fully-failed cycles, so `docker compose ps` shows `unhealthy` |
 | `docker compose logs -f scraper` | Live scraping progress *(with the scrape profile)* |
 
 The first scrape starts immediately after the stack comes up.

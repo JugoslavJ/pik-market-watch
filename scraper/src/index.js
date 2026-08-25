@@ -8,7 +8,7 @@ const config = require('./config');
 const Db = require('./db');
 const applyMigrations = require('./migrate');
 const { scrapeSearch } = require('./scraper');
-const { makeLogger } = require('./util');
+const { makeLogger, healthStatus } = require('./util');
 
 const log = makeLogger('scraper');
 
@@ -18,6 +18,7 @@ const state = {
   lastStatus:      'starting',
   totalRuns:       0,
   failedRuns:      0,
+  consecutiveFailures: 0,   // fully-failed cycles in a row → drives /health 503
   intervalMinutes: config.intervalMinutes,
   searches:        config.searches.map(s => ({ name: s.name, url: s.url })),
 };
@@ -58,6 +59,12 @@ async function runAll(db) {
     }
   }
 
+  // /health semantics: only a cycle where EVERY search failed (or that threw)
+  // counts as a consecutive failure — partial success still serves fresh data,
+  // and any successful search resets the streak.
+  if (okRuns === 0) state.consecutiveFailures += 1;
+  else state.consecutiveFailures = 0;
+
   // End of cycle: close listings that no successful search returned anymore,
   // freezing their last observed price as the closing price. Failed searches
   // leave their previous result links in place, so an outage never closes
@@ -85,7 +92,11 @@ async function runAll(db) {
 
 function startHealthServer() {
   const server = http.createServer((req, res) => {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
+    // 200 normally; 503 once HEALTH_FAILURE_THRESHOLD consecutive cycles have
+    // failed end-to-end — so `docker compose ps` shows unhealthy and uptime
+    // probes can page. The JSON body is identical either way.
+    res.writeHead(healthStatus(state, config.healthFailureThreshold),
+                  { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(state, null, 2));
   });
   server.listen(config.healthPort, () =>
@@ -127,9 +138,19 @@ async function main() {
     return;   // nothing left keeping the event loop alive - process exits 0
   }
 
-  timer = setInterval(
-    () => runAll(db).catch(err => log('scheduled run failed:', err.message || err)),
-    config.intervalMinutes * 60000);
+  // Reentrancy guard: a slow cycle (many pages × waves + 65 s rate-limit
+  // sleeps) must never overlap the next tick's cycle against the same tables.
+  let running = false;
+  timer = setInterval(() => {
+    if (running) {
+      log('previous cycle still running — skipping this tick');
+      return;
+    }
+    running = true;
+    runAll(db)
+      .catch(err => log('scheduled run failed:', err.message || err))
+      .finally(() => { running = false; });
+  }, config.intervalMinutes * 60000);
   log('scheduler running — waiting for the next interval');
 }
 

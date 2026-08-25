@@ -1,12 +1,13 @@
 'use strict';
 // Configuration: environment variables + the searches list.
-// Precedence for searches: SEARCH_URLS env → /config/searches.json → bundled example.
+// Precedence for searches: SEARCH_URLS env → /config/searches.json.
+// (No in-image fallback on purpose: with neither source present the scraper
+// idles loudly instead of silently scraping whatever the example file holds.)
 
 const fs = require('fs');
 const path = require('path');
 
 const SEARCHES_FILE = process.env.SEARCHES_FILE || '/config/searches.json';
-const FALLBACK_FILE = path.join(__dirname, '..', 'searches.example.json');
 
 // Where db/init migrations live: container mount first, repo checkout second.
 const MIGRATIONS_DIR =
@@ -32,14 +33,12 @@ function loadSearches() {
   const envUrls = (process.env.SEARCH_URLS || '').split(',').map(s => s.trim()).filter(Boolean);
   if (envUrls.length) return envUrls.map(url => ({ url }));
 
-  // 2) mounted JSON file, 3) bundled example as a last resort
-  for (const file of [SEARCHES_FILE, FALLBACK_FILE]) {
-    try {
-      const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
-      const arr = Array.isArray(parsed) ? parsed : parsed.searches;
-      if (Array.isArray(arr) && arr.length) return arr;
-    } catch (_) { /* missing or invalid — try the next source */ }
-  }
+  // 2) mounted JSON file
+  try {
+    const parsed = JSON.parse(fs.readFileSync(SEARCHES_FILE, 'utf8'));
+    const arr = Array.isArray(parsed) ? parsed : parsed.searches;
+    if (Array.isArray(arr) && arr.length) return arr;
+  } catch (_) { /* missing or invalid */ }
   return [];
 }
 
@@ -67,6 +66,7 @@ module.exports = {
   geoConcurrency:  num(process.env.GEO_CONCURRENCY, 2),      // parallel detail calls
   geoDelayMs:      num(process.env.GEO_DELAY_MS, 1200),      // politeness gap between batches
   minRunGapMinutes: num(process.env.SCRAPE_MIN_GAP_MINUTES, 45), // skip boot cycle if a run finished this recently
+  healthFailureThreshold: num(process.env.HEALTH_FAILURE_THRESHOLD, 3), // fully-failed cycles in a row before /health answers 503
 
   searches: dedupeBySearchKey(loadSearches().map(s => {
     let name = s.name;

@@ -22,4 +22,13 @@ function computeMedian(values) {
 const makeLogger = tag => (...args) =>
   console.log(new Date().toISOString(), `[${tag}]`, ...args);
 
-module.exports = { USER_AGENT, sleep, computeMedian, makeLogger };
+// HTTP status for the /health endpoint: 503 only once WHOLE scrape cycles keep
+// failing end-to-end (consecutiveFailures >= threshold). Transient single-cycle
+// outages, partial successes and 'skipped' boot ticks never flip the container
+// unhealthy — an always-green endpoint hides a dead scraper from Docker and
+// any uptime probe.
+function healthStatus(state, threshold) {
+  return state.consecutiveFailures >= threshold ? 503 : 200;
+}
+
+module.exports = { USER_AGENT, sleep, computeMedian, makeLogger, healthStatus };
