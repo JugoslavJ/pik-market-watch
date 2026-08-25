@@ -1,6 +1,6 @@
 'use strict';
-// 21-mz-repair.js — rebuild the MZ set from a gap-filled, overlap-free
-// rasterization of itself (companion to 20-mz-sweep.js):
+// repair.js — rebuild the MZ set from a gap-filled, overlap-free
+// rasterization of itself (companion to sweep.js):
 //   1. scanline-rasterize all polygons on a RES_M grid; on overlaps the lowest
 //      priority wins (same tie-break as neighborhood_of) -> overlaps gone
 //   2. multi-source BFS claims empty cells within GAP_CELLS of covered land
@@ -8,12 +8,12 @@
 //   3. each MZ mask is contoured, Douglas-Peucker simplified, forced CCW
 //      (RFC 7946) and rounded to 6 dp, then written back as the
 //      FeatureCollection (original stays in git history; regenerate the SQL
-//      with 19-gen-sql.js afterwards and re-run the backfill unguarded)
+//      with gen-sql.js afterwards and re-run the backfill unguarded)
 // Empty cells connected to the grid border count as outside-the-city and are
 // left alone by the unlimited fill; enclosed holes are claimed fully (nearest
 // MZ wins). Env: RES_M (default 20), GAP_CELLS (default 8 = 160 m),
 // SIMPLIFY_M (default 12)
-// Usage: node 21-mz-repair.js [input.geojson]   (writes back in place)
+// Usage: node repair.js [input.geojson]   (writes back in place)
 const fs = require('fs');
 const path = require('path');
 const GEO = path.join(__dirname, '..');
@@ -87,7 +87,7 @@ function rasterize(ringsSorted) {
   return { cover, label };
 }
 
-// ── metrics (same definitions as 20-mz-sweep.js) ─────────────────────────────
+// ── metrics (same definitions as sweep.js) ──────────────────────────────────
 function metrics(cover, label) {
   let covered = 0, overlap = 0, seam = 0, hole = 0;
   const INF = 255;

@@ -1,5 +1,5 @@
 'use strict';
-// 20-mz-sweep.js — rasterize the MZ polygons on a fine grid and report how
+// sweep.js — rasterize the MZ polygons on a fine grid and report how
 // well the set tiles the city:
 //   overlaps — cells claimed by 2+ polygons (area + worst pairs)
 //   seams    — empty cells whose window touches 2+ different MZs (border gaps)
@@ -7,7 +7,7 @@
 // Optionally classifies pins (lines of "lat lon") by distance to the nearest
 // polygon edge — separates fixable border stragglers from far-out rural pins.
 //
-// Usage: node 20-mz-sweep.js [geojson] [pins.txt]
+// Usage: node sweep.js [geojson] [pins.txt]
 // Env:   RES_M (cell size m, default 20), SEAM_CELLS (default 3)
 const fs = require('fs');
 const path = require('path');

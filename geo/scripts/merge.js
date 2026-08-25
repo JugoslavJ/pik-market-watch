@@ -1,5 +1,5 @@
 'use strict';
-// 13-merge.js — combine the hand-drawn city core (city-core.geojson, 19 polygons)
+// merge.js — combine the hand-drawn city core (city-core.geojson, 19 polygons)
 // with the auto-traced rural MZs (banja-luka-mz.geojson, 51 regions) into the
 // final MZ set: geo/banja-luka-mz-final.geojson.
 // Traced regions mostly inside a hand-drawn polygon are absorbed (reported).

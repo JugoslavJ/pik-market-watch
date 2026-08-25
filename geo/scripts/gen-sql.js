@@ -1,5 +1,5 @@
 'use strict';
-// 19-gen-sql.js — regenerate db/init/11-neighborhoods.sql from
+// gen-sql.js — regenerate db/init/11-neighborhoods.sql from
 // geo/banja-luka-mz-final.geojson (56 official MZ polygons: 19 hand-drawn core
 // + 37 traced rural). DB names are ASCII (existing seed convention); display
 // names keep diacritics in the GeoJSON.
