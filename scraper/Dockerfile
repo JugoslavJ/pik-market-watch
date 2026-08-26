@@ -7,7 +7,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Digest pin: reproducible builds regardless of registry tag drift (Dependabot
 # bumps tag + digest together).
-FROM node:26-alpine@sha256:2e0f4a1c8f6b3d9a7c5e1b8f4a2d6c9e7b3a5f8d1c4e7a0b9d2c5f8e1a4d7b0c
+FROM node:26-alpine@sha256:aadf416b2cdce311a8811ba3f0608a61b77dbf997500e2eafe781b51f6a0b019
 
 ENV NODE_ENV=production
 
