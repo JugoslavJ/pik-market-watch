@@ -26,6 +26,11 @@ const API_ORIGIN = "https://olx.ba";
 // instead of burning requests into a 429.
 const RATE_RESERVE = 10;
 
+// Hard ceiling on upstream response bodies: a broken or hostile endpoint (or
+// an oversized Cloudflare interstitial) can never balloon memory past this —
+// the fetch fails cleanly instead of OOM-killing the container.
+const MAX_BODY_BYTES = 5 * 1024 * 1024;
+
 class ApiError extends Error {
   constructor(message, status = null) {
     super(message);
@@ -54,6 +59,29 @@ function toApiSearchUrl(searchUrl, perPage) {
   return u;
 }
 
+/**
+ * Drain a fetch body as text while enforcing a byte ceiling. `res.text()`
+ * would happily buffer any size; this cancels the stream once the cap is
+ * crossed, so hostile/broken upstreams fail fast instead of eating RAM.
+ */
+async function readBodyCapped(res, maxBytes) {
+  if (!res.body) return res.text(); // no stream (mocks/tests) — uncapped fallback
+  const reader = res.body.getReader();
+  const chunks = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel();
+      throw new ApiError(`response body exceeds ${maxBytes} bytes`);
+    }
+    chunks.push(Buffer.from(value));
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
 /** One authenticated-free GET expecting a JSON body. */
 async function fetchJson(url, timeoutMs) {
   let res;
@@ -70,7 +98,13 @@ async function fetchJson(url, timeoutMs) {
       `network error fetching ${url}: ${err.cause?.code || err.message}`,
     );
   }
-  const text = await res.text();
+  // Cheap pre-flight: honor a declared Content-Length before reading at all.
+  const declared = Number(res.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES)
+    throw new ApiError(
+      `response too large (${declared} > ${MAX_BODY_BYTES} bytes) for ${url.pathname}`,
+    );
+  const text = await readBodyCapped(res, MAX_BODY_BYTES);
   if (!res.ok)
     throw new ApiError(
       `HTTP ${res.status} for ${url.pathname}${url.search}`,
@@ -185,9 +219,12 @@ function hasApiFilter(apiUrl) {
 
 // Exported surface = what callers actually consume. RATE_RESERVE is read by
 // scrapeSearch()'s throttle; everything else here is called directly.
-// (API_ORIGIN and ApiError stay module-internal — no external consumer.)
+// (API_ORIGIN and ApiError stay module-internal — no external consumer;
+// readBodyCapped / MAX_BODY_BYTES are exported for their unit tests.)
 module.exports = {
   RATE_RESERVE,
+  MAX_BODY_BYTES,
+  readBodyCapped,
   toApiSearchUrl,
   fetchSearchPage,
   fetchListing,

@@ -5,7 +5,9 @@
 # trims ~100 MB vs bookworm-slim while sharing base layers with the
 # postgres:16-alpine images the stack already pulls.
 # ─────────────────────────────────────────────────────────────────────────────
-FROM node:26-alpine
+# Digest pin: reproducible builds regardless of registry tag drift (Dependabot
+# bumps tag + digest together).
+FROM node:26-alpine@sha256:2e0f4a1c8f6b3d9a7c5e1b8f4a2d6c9e7b3a5f8d1c4e7a0b9d2c5f8e1a4d7b0c
 
 ENV NODE_ENV=production
 

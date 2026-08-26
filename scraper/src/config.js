@@ -61,7 +61,19 @@ function dedupeBySearchKey(searches) {
 }
 
 module.exports = {
-  databaseUrl: process.env.DATABASE_URL || "postgres://olx:olx@db:5432/olx",
+  // Lazy on purpose: requiring this module must NEVER throw (the unit tests
+  // load it without env), but running without DATABASE_URL must fail fast
+  // with a clear message instead of silently trying the old weak olx:olx
+  // fallback credentials.
+  get databaseUrl() {
+    const url = process.env.DATABASE_URL;
+    if (!url)
+      throw new Error(
+        "DATABASE_URL is not set — compose injects it from .env " +
+          "(POSTGRES_APP_USER/PASSWORD); export it for bare-metal runs.",
+      );
+    return url;
+  },
   migrationsDir: MIGRATIONS_DIR, // db/init/*.sql applied on startup
   normalizeSearchKey, // stable per-search primary key
   intervalMinutes: num(process.env.SCRAPE_INTERVAL_MINUTES, 720),

@@ -10,14 +10,20 @@ on:
   pull_request:
   workflow_dispatch:   # manual run → full test suite + redeploy of main
 
+permissions:
+  contents: read       # workflow-wide least privilege; jobs inherit unless overridden
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20   # a hung throwaway-Postgres boot must not burn the 6 h default
     defaults:
       run:
         working-directory: scraper
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false   # nothing here pushes; drop the token
       # checkout MUST precede setup-node: the npm cache keys off
       # scraper/package-lock.json, which only exists after checkout.
       # Actions pinned by commit SHA like the deploy job below (Dependabot
@@ -61,6 +67,22 @@ jobs:
       DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '~/pik-market-watch' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false   # archive + ssh only; drop the token
+
+      - name: Pin host key when OCI_KNOWN_HOSTS is set, else accept-new (TOFU)
+        env:
+          OCI_KNOWN_HOSTS: ${{ secrets.OCI_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          if [ -n "$OCI_KNOWN_HOSTS" ]; then
+            printf '%s\n' "$OCI_KNOWN_HOSTS" > ~/.ssh/known_hosts
+            echo "SSH_STRICT=-o StrictHostKeyChecking=yes" >> "$GITHUB_ENV"
+            echo "host key pinned from OCI_KNOWN_HOSTS — strict checking armed"
+          else
+            echo "SSH_STRICT=-o StrictHostKeyChecking=accept-new" >> "$GITHUB_ENV"
+            echo "⚠ OCI_KNOWN_HOSTS unset — trust-on-first-use fallback (set the secret to pin the host key)"
+          fi
 
       - name: Write deploy key
         env:
@@ -72,14 +94,14 @@ jobs:
 
       - name: Sync tracked files to the instance
         run: |
-          SSH="ssh -i ~/.ssh/oci_deploy_key -o StrictHostKeyChecking=accept-new -o BatchMode=yes -o ServerAliveInterval=30"
+          SSH="ssh -i ~/.ssh/oci_deploy_key ${SSH_STRICT:--o StrictHostKeyChecking=accept-new} -o BatchMode=yes -o ServerAliveInterval=30"
           $SSH "$OCI_USER@$OCI_HOST" "mkdir -p $DEPLOY_DIR"
           git archive --format=tar.gz HEAD | $SSH "$OCI_USER@$OCI_HOST" "tar -xzf - -C $DEPLOY_DIR"
           echo "Shipped $(git archive --format=tar HEAD | tar -tf - | wc -l) files to $OCI_USER@$OCI_HOST:$DEPLOY_DIR"
 
       - name: Rebuild stack and wait for health
         run: |
-          ssh -i ~/.ssh/oci_deploy_key \
-              -o StrictHostKeyChecking=accept-new -o BatchMode=yes -o ServerAliveInterval=30 \
+          ssh -i ~/.ssh/oci_deploy_key ${SSH_STRICT:--o StrictHostKeyChecking=accept-new} \
+              -o BatchMode=yes -o ServerAliveInterval=30 \
               "$OCI_USER@$OCI_HOST" "DEPLOY_DIR=$DEPLOY_DIR GIT_SHA=${{ github.sha }} bash -s" \
             < scripts/deploy-stack.sh

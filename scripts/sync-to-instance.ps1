@@ -34,6 +34,21 @@ $SshUser      = $env:OLX_SSH_USER
 $KeyPath      = $env:OLX_SYNC_KEY
 if (-not (Test-Path -LiteralPath $KeyPath)) { throw "sync key not found: $KeyPath" }
 
+# Host-key pinning: set OLX_KNOWN_HOSTS_FILE (user env, see OPERATIONS.md) to a
+# file produced with `ssh-keyscan -H <instance-ip>` to upgrade from
+# trust-on-first-use to strict checking — a hijacked DNS/route then fails the
+# sync loudly instead of streaming the dump to an impostor host.
+$knownHostArgs = @('-o', 'StrictHostKeyChecking=accept-new')
+if ($env:OLX_KNOWN_HOSTS_FILE) {
+  if (-not (Test-Path -LiteralPath $env:OLX_KNOWN_HOSTS_FILE)) {
+    throw "OLX_KNOWN_HOSTS_FILE points to a missing file: $($env:OLX_KNOWN_HOSTS_FILE)"
+  }
+  $knownHostArgs = @('-o', "UserKnownHostsFile=$($env:OLX_KNOWN_HOSTS_FILE)",
+                     '-o', 'StrictHostKeyChecking=yes')
+}
+$sshArgs = @('-i', $KeyPath, '-o', 'BatchMode=yes') + $knownHostArgs +
+           @('-o', 'ServerAliveInterval=30')
+
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
@@ -73,8 +88,7 @@ if ((Get-Item $dump).Length -lt 20000) { throw "dump suspiciously small - aborti
 
 Log ('streaming {0:N0} bytes to {1}@{2} and restoring...' -f (Get-Item $dump).Length, $SshUser, $InstanceHost)
 $out = Get-Content $dump -AsByteStream |
-  ssh -i $KeyPath -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 `
-    "$SshUser@$InstanceHost" ./db/remote-restore.sh
+  ssh @sshArgs "$SshUser@$InstanceHost" ./db/remote-restore.sh
 $out | ForEach-Object { Log "remote: $_" }
 
 if (($out -join "`n") -match 'RESTORE_OK') {

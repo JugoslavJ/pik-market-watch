@@ -22,9 +22,13 @@ x-logging: &logging
 
 services:
   db:
-    image: postgres:16-alpine
+    # Digest pin = exactly this build everywhere (Dependabot updates tag+digest).
+    image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
     container_name: olx-db
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true   # nothing here may gain privileges
+    pids_limit: 100              # max_connections forks (40) + background workers
     # Right-size for the 768m cap (stock defaults assume a dedicated server):
     #   shared_buffers/effective_cache_size fit inside the limit; 40 conns cover
     #   the real client budget (scraper pool max 5 + Grafana maxOpenConns 20 +
@@ -74,6 +78,10 @@ services:
     memswap_limit: 768m # hit OOM decisively instead of swapping into latency spikes
     cpus: 0.50
     logging: *logging
+    # Deliberately NO cap_drop/read_only here: the first-boot entrypoint chowns
+    # PGDATA. Isolation comes from attaching db to the backend network ONLY.
+    networks:
+      - backend
     ports:
       - "127.0.0.1:5432:5432"   # host access for psql/GUIs; delete line to keep internal
 
@@ -83,6 +91,13 @@ services:
     profiles: ["scrape"]         # opt-in: runs where you point COMPOSE_PROFILES at it
     restart: unless-stopped
     init: true                   # proper signal handling (cheap insurance)
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]              # pure JSON client — needs no kernel capabilities
+    read_only: true              # writes live in Postgres; rootfs stays immutable
+    tmpfs:
+      - /tmp
+    pids_limit: 64               # one node process + libuv threadpool
     depends_on:
       db:
         condition: service_healthy
@@ -108,11 +123,19 @@ services:
     memswap_limit: 512m         # hit OOM decisively instead of swapping into latency spikes
     cpus: 0.50
     logging: *logging
+    networks:
+      - default                 # egress to olx.ba
+      - backend                 # reach db
 
   grafana:
-    image: grafana/grafana-oss:13.0.2
+    # Digest pin alongside the version tag (Dependabot keeps both current).
+    image: grafana/grafana-oss:13.0.2@sha256:5dad0df181cb644a14e13617b913b261a54f7d4fd4510721dba420929f35bea2
     container_name: olx-grafana
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]              # uid 472 on an unprivileged port needs none
+    pids_limit: 128              # server + plugins (goroutines aren't PIDs)
     depends_on:
       db:
         condition: service_healthy
@@ -123,6 +146,8 @@ services:
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"     # no outbound version-check pings either
       GF_SERVER_ENABLE_GZIP: "true"               # compress dashboard JSON over WAN links
       GF_LOG_LEVEL: "warn"                        # trim log IO; flip back to info when debugging
+      # Listener is https-only (below) → never send auth cookies over http://
+      GF_COOKIE_SECURE: "true"
       # Native HTTPS termination — self-signed cert mounted read-only from ./tls
       GF_SERVER_PROTOCOL: https
       GF_SERVER_CERT_FILE: /certs/grafana.crt
@@ -164,6 +189,9 @@ services:
     memswap_limit: 768m         # hit OOM decisively instead of swapping into latency spikes
     cpus: 1.0
     logging: *logging
+    networks:
+      - default                 # SMTP egress (optional alert mail delivery)
+      - backend                 # reach db
     healthcheck:
       # Native TLS → probe must speak https; self-signed cert ⇒ -k.
       # (curl ships in the image; validated against grafana-oss:13.0.2.)
@@ -174,9 +202,17 @@ services:
       start_period: 30s
 
   db-backup:
-    image: postgres:16-alpine        # same image as db → pg_dump always version-matched
+    image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+                                         # same image as db → pg_dump always version-matched
     container_name: olx-db-backup
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]              # sh / pg_dump / tar need no capabilities
+    read_only: true              # dumps land on the /backups mount only
+    tmpfs:
+      - /tmp
+    pids_limit: 50
     depends_on:
       db:
         condition: service_healthy
@@ -194,6 +230,8 @@ services:
     mem_limit: 256m
     memswap_limit: 256m         # hit OOM decisively instead of swapping into latency spikes
     logging: *logging
+    networks:
+      - backend
     healthcheck:
       # Semantic check: healthy ⇔ a pg_dump archive exists and is fresh (< 26 h).
       # The loop dumps right after start, so this settles within minutes; a hung
@@ -213,3 +251,10 @@ volumes:
     name: olx-price-ext_pgdata
   grafana:
     name: olx-price-ext_grafana
+
+networks:
+  # Segmentation: db joins ONLY `backend`, so anything on the default network
+  # (today's and future containers alike) cannot resolve or reach Postgres.
+  # Not marked `internal:` on purpose — clients need ordinary egress
+  # (olx.ba from the scraper, SMTP from Grafana's optional alerts).
+  backend:

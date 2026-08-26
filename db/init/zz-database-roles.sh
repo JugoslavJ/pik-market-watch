@@ -76,6 +76,20 @@ SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT SELEC
               :'app_user', :'reader_user') \gexec
 SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT SELECT ON SEQUENCES TO %I',
               :'app_user', :'reader_user') \gexec
+
+-- Connect must be granted explicitly: any role created LATER starts closed ---
+-- (defense in depth — today's roles are granted above, tomorrow's won't be).
+SELECT format('REVOKE CONNECT ON DATABASE %I FROM PUBLIC', :'db_name') \gexec
+SELECT format('GRANT CONNECT ON DATABASE %I TO %I', :'db_name', :'app_user') \gexec
+SELECT format('GRANT CONNECT ON DATABASE %I TO %I', :'db_name', :'reader_user') \gexec
+
+-- Reader guard-rails: dashboards/alerts/pg_dump run as this role, so a -------
+-- runaway query or wedged session must not eat the shared work_mem /
+-- connection budget. LIMIT 30 sits under max_connections=40 (app pool max 5
+-- + admin headroom); 60 s comfortably covers the heaviest analytics views.
+SELECT format('ALTER ROLE %I SET statement_timeout = %L', :'reader_user', '60s') \gexec
+SELECT format('ALTER ROLE %I SET idle_in_transaction_session_timeout = %L', :'reader_user', '30s') \gexec
+SELECT format('ALTER ROLE %I WITH CONNECTION LIMIT %s', :'reader_user', 30) \gexec
 SQL
 
   echo "zz-database-roles: ensured '${POSTGRES_APP_USER:-olx_app}' (owner/rw) and '${POSTGRES_READER_USER:-olx_reader}' (read-only)."

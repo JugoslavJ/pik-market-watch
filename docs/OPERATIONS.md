@@ -44,6 +44,34 @@ docker compose exec db sh -c 'pg_restore -U "$POSTGRES_APP_USER" -d "$POSTGRES_D
 
 Manual dump: `docker compose exec db pg_dump -U olx_reader -Fc olx > manual.dump` (reader has `pg_read_all_data`)
 
+Keep at least one copy off the instance disk — `pgdata` and `./backups` share
+one machine today. Pull nightly from anywhere you trust:
+
+```bash
+# from your home PC (scheduled task / cron):
+rsync -az --delete opc@<instance-ip>:pik-market-watch/backups/ /mnt/archive/olx/
+# or push from the instance to any S3-compatible target:
+rclone sync ~/pik-market-watch/backups remote:olx-backups
+```
+
+A backup you have never restored is just hope — drill the restore quarterly
+(destroys nothing; the scratch `drill` database is dropped at the end):
+
+```bash
+docker compose exec db sh -c '
+  dropdb --if-exists -U "$POSTGRES_USER" drill &&
+  createdb -U "$POSTGRES_USER" drill &&
+  pg_restore -U "$POSTGRES_APP_USER" -d drill /backups/<newest-dump>.dump &&
+  psql -U "$POSTGRES_READER_USER" -d drill -tAc "SELECT count(*) FROM listings" &&
+  dropdb -U "$POSTGRES_USER" drill'
+```
+
+Known gap: nothing *pages* when the backup goes stale — the sidecar flips its
+own container unhealthy, but the provisioned alert rule only watches
+`scrape_runs`. Closing this needs a heartbeat table written by the sidecar
+(it currently connects read-only by design) plus a second alert rule; tracked
+as a deliberate follow-up.
+
 ### Scraping from home (when Cloudflare blocks the instance)
 
 Cloudflare 403-challenges datacenter IPs (Oracle included); residential IPs
@@ -57,6 +85,9 @@ re-probe before assuming anything. Sync results up:
    [Environment]::SetEnvironmentVariable('OLX_INSTANCE_HOST', '<instance-ip>', 'User')
    [Environment]::SetEnvironmentVariable('OLX_SSH_USER', 'opc', 'User')
    [Environment]::SetEnvironmentVariable('OLX_SYNC_KEY', "$env:USERPROFILE\.ssh\olx_sync_key", 'User')
+   # Optional — strict host-key checking instead of trust-on-first-use:
+   #   ssh-keyscan -H <instance-ip> | Out-File $env:USERPROFILE\.ssh\olx_known_hosts
+   #   [Environment]::SetEnvironmentVariable('OLX_KNOWN_HOSTS_FILE', "$env:USERPROFILE\.ssh\olx_known_hosts", 'User')
    ```
    Append the generated public key to the instance's `~/.ssh/authorized_keys`
    **with a forced command** (the key can only run the restore — never a shell):
@@ -127,6 +158,7 @@ Layer caching keeps code-only rebuilds well under a minute.
 | `OCI_SSH_PRIVATE_KEY` | secret | full contents of the deploy key's **private** key file |
 | `OCI_HOST` | secret | instance's public IP |
 | `OCI_USER` | secret | SSH user — `ubuntu` on Ubuntu images, `opc` on Oracle Linux |
+| `OCI_KNOWN_HOSTS` | secret (optional) | output of `ssh-keyscan -H <instance-ip>` — pins the host key so deploys use strict checking; unset = accept-new (trust-on-first-use) |
 | `DEPLOY_DIR` | variable (optional) | app dir on the instance, default `~/pik-market-watch` |
 
 ### One-time instance setup
@@ -170,6 +202,30 @@ Two firewalls sit in front of port 3000 — restrict both to your IP:
 Regenerate the certificate any time (new key, extra SANs, nearing expiry), then
 recreate the container: `docker compose up -d --force-recreate grafana`.
 
+### Container & host hardening
+
+The compose file ships defense-in-depth by default: every service runs with
+`no-new-privileges` and a PID cap alongside its memory/swap/CPU ceilings;
+scraper and db-backup additionally drop ALL Linux capabilities and mount their
+root filesystems `read_only` (all writes go to volumes/bind mounts); db is
+attached exclusively to a dedicated `backend` network, so no other container
+can resolve or reach Postgres. All images are digest-pinned (`postgres`,
+`grafana`, the node base image) so pulls are reproducible; Dependabot keeps
+tags and digests current.
+
+Two optional instance-side steps worth doing once:
+
+```bash
+# 1) auto-apply OS security patches:
+sudo apt-get install -y unattended-upgrades && sudo dpkg-reconfigure -plow unattended-upgrades
+```
+
+2) **Restrict the CI deploy key** (optional): unlike the sync key, it currently
+   allows an interactive shell on the instance. Lock it down with its own
+   forced-command wrapper (same pattern as the sync key's `command=` entry in
+   `authorized_keys`) that only extracts the shipped archive and runs
+   `scripts/deploy-stack.sh`.
+
 ### Database roles (least privilege)
 
 Everything no longer talks to Postgres as the bootstrap superuser:
@@ -196,6 +252,10 @@ plus optional `POSTGRES_APP_USER` / `POSTGRES_READER_USER` renames).
   Then recreate whatever connects, so new credentials are picked up:
   `docker compose up -d --force-recreate scraper grafana db-backup`
   (home machine: add `--profile scrape`).
+
+  After pulling a change to this script — e.g. 2026-08 added the
+  connect-from-PUBLIC lockdown and reader guard-rails (statement_timeout,
+  idle-in-txn timeout, CONNECTION LIMIT) — re-run it once per machine.
 
 With this in place, leaked app/reader credentials can't create roles, read
 server-side files, or touch anything outside this database.
