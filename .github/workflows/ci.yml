@@ -76,7 +76,10 @@ jobs:
         run: |
           mkdir -p ~/.ssh
           if [ -n "$OCI_KNOWN_HOSTS" ]; then
-            printf '%s\n' "$OCI_KNOWN_HOSTS" > ~/.ssh/known_hosts
+            # tr -d '\r': secrets copied from Windows files carry CRLF; a
+            # trailing \r corrupts every entry and strict checking would
+            # fail with "Host key verification failed".
+            printf '%s\n' "$OCI_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
             echo "SSH_STRICT=-o StrictHostKeyChecking=yes" >> "$GITHUB_ENV"
             echo "host key pinned from OCI_KNOWN_HOSTS — strict checking armed"
           else
