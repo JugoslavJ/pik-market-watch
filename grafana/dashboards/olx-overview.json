@@ -567,6 +567,14 @@
               {
                 "id": "custom.lineWidth",
                 "value": 2
+              },
+              {
+                "id" :"custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "Active (est)"
               }
             ]
           }
