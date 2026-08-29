@@ -569,7 +569,7 @@
                 "value": 2
               },
               {
-                "id" :"custom.axisPlacement",
+                "id": "custom.axisPlacement",
                 "value": "right"
               },
               {
@@ -579,6 +579,30 @@
               {
                 "id": "custom.spanNulls",
                 "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "closed"
+            },
+            "properties": [
+              {
+                "id": "custom.axisLabel",
+                "value": "New / Closed"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "new"
+            },
+            "properties": [
+              {
+                "id": "custom.axisLabel",
+                "value": "New / Closed"
               }
             ]
           }
@@ -591,7 +615,7 @@
         "y": 15
       },
       "title": "Inventory flow — new vs closed per day · all categories",
-      "description": "Whole-database view (v_market_daily is not category-filtered). Bars: new/closed per day; line: estimated live inventory.",
+      "description": "Whole-database view (v_market_daily is not category-filtered). Bars: new (up) / closed (down, mirrored as negative) per day; line: estimated live inventory on the right axis.",
       "type": "timeseries",
       "options": {
         "legend": {
@@ -612,7 +636,7 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT LEAST(day + interval '1 hour', now()) AS time, new_n AS \"new\", NULL::numeric AS \"closed\", NULL::numeric AS \"active (est)\"\nFROM v_market_daily\nWHERE $__timeFilter(day)\nUNION ALL\nSELECT LEAST(day + interval '2 hours', now()) AS time, NULL::numeric AS \"new\", closed_n AS \"closed\", NULL::numeric AS \"active (est)\"\nFROM v_market_daily\nWHERE $__timeFilter(day)\nUNION ALL\nSELECT day AS time, NULL::numeric AS \"new\", NULL::numeric AS \"closed\", active_est AS \"active (est)\"\nFROM v_market_daily\nWHERE $__timeFilter(day)\nORDER BY 1",
+          "rawSql": "SELECT day AS time,\n       new_n AS \"new\",\n       -closed_n AS \"closed\",\n       active_est AS \"active (est)\"\nFROM v_market_daily\nWHERE $__timeFilter(day)\nORDER BY 1",
           "refId": "A"
         }
       ],
