@@ -575,6 +575,10 @@
               {
                 "id": "custom.axisLabel",
                 "value": "Active (est)"
+              },
+              {
+                "id": "custom.spanNulls",
+                "value": true
               }
             ]
           }
