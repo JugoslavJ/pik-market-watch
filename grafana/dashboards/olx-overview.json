@@ -591,6 +591,10 @@
               {
                 "id": "custom.axisLabel",
                 "value": "New / Closed"
+              },
+              {
+                "id": "custom.transform",
+                "value": "negative-Y"
               }
             ]
           },
@@ -624,7 +628,7 @@
           "showLegend": true
         },
         "tooltip": {
-          "mode": "single",
+          "mode": "multi",
           "sort": "none"
         }
       },
@@ -636,7 +640,7 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT day AS time,\n       new_n AS \"new\",\n       -closed_n AS \"closed\",\n       active_est AS \"active (est)\"\nFROM v_market_daily\nWHERE $__timeFilter(day)\nORDER BY 1",
+          "rawSql": "SELECT day AS time,\n       new_n AS \"new\",\n       closed_n AS \"closed\",\n       active_est AS \"active (est)\"\nFROM v_market_daily\nWHERE $__timeFilter(day)\nORDER BY 1",
           "refId": "A"
         }
       ],
