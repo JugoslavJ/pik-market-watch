@@ -456,7 +456,7 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT date_trunc('day', ph.scraped_at AT TIME ZONE 'Europe/Sarajevo') AS time,\n       percentile_cont(0.25) WITHIN GROUP (ORDER BY ph.ppm2) AS \"p25 KM/m2\",\n       percentile_cont(0.5)  WITHIN GROUP (ORDER BY ph.ppm2) AS \"median KM/m2\",\n       percentile_cont(0.75) WITHIN GROUP (ORDER BY ph.ppm2) AS \"p75 KM/m2\"\nFROM price_history ph\nJOIN listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) la\n  ON la.article_id = ph.article_id\nWHERE ph.ppm2 > 0\n  AND $__timeFilter(ph.scraped_at)\n  AND room_bucket(la.rooms) = ANY (ARRAY[${rooms:sqlstring}])\nGROUP BY 1\nORDER BY 1",
+          "rawSql": "SELECT date_trunc('day', ph.scraped_at AT TIME ZONE 'Europe/Sarajevo') AT TIME ZONE 'Europe/Sarajevo' AS time,\n       percentile_cont(0.25) WITHIN GROUP (ORDER BY ph.ppm2) AS \"p25 KM/m2\",\n       percentile_cont(0.5)  WITHIN GROUP (ORDER BY ph.ppm2) AS \"median KM/m2\",\n       percentile_cont(0.75) WITHIN GROUP (ORDER BY ph.ppm2) AS \"p75 KM/m2\"\nFROM price_history ph\nJOIN listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) la\n  ON la.article_id = ph.article_id\nWHERE ph.ppm2 > 0\n  AND $__timeFilter(ph.scraped_at)\n  AND room_bucket(la.rooms) = ANY (ARRAY[${rooms:sqlstring}])\nGROUP BY 1\nORDER BY 1",
           "refId": "A"
         }
       ],
