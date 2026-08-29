@@ -608,7 +608,7 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT day AS time,\n       new_n AS \"new\",\n       closed_n AS \"closed\",\n       active_est AS \"active (est)\"\nFROM v_market_daily\nWHERE $__timeFilter(day)\nORDER BY 1",
+          "rawSql": "SELECT day + interval '9 hours' AS time,\n       new_n AS \"new\",\n       NULL::numeric AS \"closed\",\n       NULL::numeric AS \"active (est)\"\nFROM v_market_daily\nWHERE $__timeFilter(day)\nUNION ALL\nSELECT day + interval '15 hours' AS time,\n       NULL::numeric AS \"new\",\n       closed_n AS \"closed\",\n       NULL::numeric AS \"active (est)\"\nFROM v_market_daily\nWHERE $__timeFilter(day)\nUNION ALL\nSELECT day AS time,\n       NULL::numeric AS \"new\",\n       NULL::numeric AS \"closed\",\n       active_est AS \"active (est)\"\nFROM v_market_daily\nWHERE $__timeFilter(day)\nORDER BY 1",
           "refId": "A"
         }
       ],
