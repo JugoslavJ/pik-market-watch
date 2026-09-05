@@ -403,7 +403,7 @@
         "y": 1
       },
       "title": "Median KM/m² · Δ this wk",
-      "description": "Weekly move in the median asking KM/m² (sales, snapshot history, whole database). Green when prices drifted down.",
+      "description": "All categories and all deals: pooled reconstructed listing-day asking prices, comparing this week with last week. No dashboard filter variables are exposed on Home; NULL means no eligible priced population.",
       "type": "stat",
       "options": {
         "colorMode": "value",
@@ -429,7 +429,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH pts AS (\n  SELECT ph.scraped_at, ph.ppm2\n  FROM listings l\n  JOIN price_history ph ON ph.article_id = l.article_id\n  WHERE NOT l.is_rent AND ph.ppm2 > 0\n),\nw AS (\n  SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE scraped_at >= date_trunc('week', now())) AS this_week,\n         percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE scraped_at >= date_trunc('week', now()) - INTERVAL '7 days'\n                                              AND scraped_at < date_trunc('week', now())) AS last_week\n  FROM pts\n)\nSELECT round((100.0 * (this_week - last_week) / NULLIF(last_week, 0))::numeric, 1)::double precision AS \"Δ %\"\nFROM w",
+          "rawSql": "WITH pooled AS (\n  SELECT d.day, d.ppm2\n  FROM v_listing_daily d\n  WHERE d.price_state = 'valid' AND d.ppm2 IS NOT NULL AND NOT d.is_rent\n    AND d.day >= date_trunc('week', now() AT TIME ZONE 'Europe/Sarajevo')::date - 7\n    AND d.day < date_trunc('week', now() AT TIME ZONE 'Europe/Sarajevo')::date + 7\n), weeks AS (\n  SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)\n           FILTER (WHERE day >= date_trunc('week', now() AT TIME ZONE 'Europe/Sarajevo')::date) AS \"this wk\",\n         percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)\n           FILTER (WHERE day >= date_trunc('week', now() AT TIME ZONE 'Europe/Sarajevo')::date - 7\n                   AND day < date_trunc('week', now() AT TIME ZONE 'Europe/Sarajevo')::date) AS \"last wk\"\n  FROM pooled\n)\nSELECT \"this wk\"::int AS \"this wk\",\n       \"last wk\"::int AS \"last wk\",\n       round((100.0 * (\"this wk\" - \"last wk\") / NULLIF(\"last wk\", 0))::numeric, 1)::double precision AS \"Δ %\"\nFROM weeks",
           "refId": "A"
         }
       ],
@@ -753,7 +753,7 @@
         "y": 13
       },
       "title": "Inventory flow — new vs closed per day · all categories",
-      "description": "Whole-database view (v_market_daily). Bars: new/closed ads per day; line: estimated live inventory.",
+      "description": "All categories and all deals. Historical state flow includes new, closed and reopened observations; active inventory is estimated from reconstructed daily rows and may include stale carry-forward rows.",
       "type": "timeseries",
       "options": {
         "legend": {
@@ -774,7 +774,7 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT day AS time, new_n, closed_n, active_est\nFROM v_market_daily\nWHERE $__timeFilter(day)\nORDER BY 1",
+          "rawSql": "SELECT day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time, new_n, closed_n, reopened_n, active_est, stale_n, provisional_day\nFROM v_market_daily\nWHERE day BETWEEN date($__timeFrom() AT TIME ZONE 'Europe/Sarajevo')\n              AND date($__timeTo() AT TIME ZONE 'Europe/Sarajevo')\nORDER BY day",
           "refId": "A"
         }
       ],
@@ -805,7 +805,7 @@
         "y": 13
       },
       "title": "Sell-through rate — weekly · all categories",
-      "description": "Closures that week ÷ estimated live stock (v_market_daily). Rising = faster market; whole database.",
+      "description": "All categories and all deals. This is the same inventory-flow definition shown on Home, expressed as closed observations divided by estimated active inventory; it is not a transaction measure.",
       "type": "timeseries",
       "options": {
         "legend": {
@@ -826,7 +826,7 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT day AS time,\n       round(100.0 * closed_n / NULLIF(active_est, 0), 2) AS \"sell-through %\" \nFROM v_market_daily\nWHERE $__timeFilter(day)\nORDER BY 1",
+          "rawSql": "SELECT day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time,\n       round(100.0 * closed_n / NULLIF(active_est, 0), 2) AS \"sell-through %\"\nFROM v_market_daily\nWHERE day BETWEEN date($__timeFrom() AT TIME ZONE 'Europe/Sarajevo')\n              AND date($__timeTo() AT TIME ZONE 'Europe/Sarajevo')\nORDER BY day",
           "refId": "A"
         }
       ],
@@ -846,7 +846,7 @@
     "from": "now-90d",
     "to": "now"
   },
-  "timezone": "browser",
+  "timezone": "Europe/Sarajevo",
   "title": "OLX.ba Home",
   "uid": "olx-home",
   "version": 1,

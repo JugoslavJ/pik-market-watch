@@ -8,6 +8,8 @@
 
 const { Pool } = require("pg");
 const { extractArticleId } = require("./parser");
+const { recordPriceEvents } = require("./price-history");
+const { normalizeEvent } = require("./price-history");
 
 // ── Bulk-write column plumbing ───────────────────────────────────────────────
 // Both set-based writes feed row data through unnest($n::type[] …) arrays.
@@ -43,6 +45,11 @@ const SAVE_CARDS_COLS = [
 // UPDATE clause below reads them via `i.<alias>`.
 const ENRICH_COLS = [
   ["article_id", "bigint", "articleId"],
+  ["price", "numeric", "price"],
+  ["price_text", "text", "priceText"],
+  ["ppm2_current", "integer", "ppm2"],
+  ["is_rent_current", "boolean", "isRent"],
+  ["price_present", "boolean", "pricePresent"],
   ["lat", "float8", "latitude"],
   ["lon", "float8", "longitude"],
   ["sqm", "numeric", "sqm"],
@@ -196,11 +203,326 @@ class Db {
       input.params,
     );
     const row = result.rows[0];
-    return {
+    const saved = {
       newCount: Number(row.new_count),
       dropCount: Number(row.drop_count),
       newIds: (row.new_ids ?? []).map(Number),
     };
+    await this.recordPriceEvents(
+      [...unique.values()].map((card) => ({
+        articleId: card.articleId ?? extractArticleId(card.url),
+        effectiveAt: new Date(),
+        price: card.price,
+        priceState: card.priceState,
+        dealType: card.dealType,
+        source: "search",
+        isCurrent: true,
+        provenance: { observation: "search_card" },
+      })),
+    );
+    return saved;
+  }
+
+  /** Store a source response without coupling retention to scraper logic. */
+  async archiveSearchResponse({
+    runId,
+    articleId = null,
+    requestKind = "search",
+    requestUrl,
+    fetchedAt = new Date(),
+    parserVersion = "search-v1",
+    payload,
+  }) {
+    const retentionDays = Math.max(
+      1,
+      Number(process.env.RAW_RESPONSE_RETENTION_DAYS) || 30,
+    );
+    await this.pool.query(
+      `INSERT INTO raw_api_responses
+         (run_id, article_id, request_kind, request_url, fetched_at, expires_at, parser_version, payload)
+       VALUES ($1, $2, $3, $4, $5, $5 + make_interval(days => $6::int), $7, $8::jsonb)`,
+      [
+        runId ?? null,
+        articleId ?? null,
+        requestKind,
+        requestUrl,
+        fetchedAt,
+        retentionDays,
+        parserVersion,
+        JSON.stringify(payload),
+      ],
+    );
+  }
+
+  async archiveDetailResponse({ articleId, payload, fetchedAt = new Date() }) {
+    return this.archiveSearchResponse({
+      articleId,
+      requestKind: "detail",
+      requestUrl: `https://olx.ba/api/listings/${articleId}`,
+      fetchedAt,
+      parserVersion: "detail-v1",
+      payload,
+    });
+  }
+
+  /**
+   * Atomic search write boundary used by search-lifecycle.js.  The legacy
+   * saveCards/refreshSearchResults methods remain available for compatibility,
+   * while new cycles commit identity, state, price evidence, membership,
+   * lifecycle and run statistics together.
+   */
+  async commitSearchIngestion(payload) {
+    const client = await this.pool.connect();
+    const cards = payload.cards || [];
+    const articleIds = cards.map((card) => Number(card.articleId));
+    const now = new Date();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+        ["pik-market-watch search ingestion"],
+      );
+
+      const previous = await client.query(
+        "SELECT article_id FROM search_results WHERE search_key = $1",
+        [payload.membership.searchKey],
+      );
+      const previousIds = previous.rows.map((row) => Number(row.article_id));
+      const previouslyClosed = await client.query(
+        "SELECT article_id FROM listings WHERE article_id = ANY($1::bigint[]) AND closed_at IS NOT NULL",
+        [articleIds],
+      );
+
+      for (const card of cards) {
+        const id = Number(card.articleId);
+        await client.query(
+          `INSERT INTO listings
+             (article_id, url, title, sqm, rooms, price, price_text, ppm2,
+              is_rent, first_seen, last_seen, renewed_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), now(), $10)
+           ON CONFLICT (article_id) DO UPDATE SET
+             url = EXCLUDED.url,
+             title = EXCLUDED.title,
+             sqm = COALESCE(EXCLUDED.sqm, listings.sqm),
+             rooms = COALESCE(EXCLUDED.rooms, listings.rooms),
+             price = CASE WHEN $11 THEN EXCLUDED.price ELSE listings.price END,
+             price_text = CASE WHEN $11 THEN EXCLUDED.price_text ELSE listings.price_text END,
+             ppm2 = CASE WHEN $11 THEN EXCLUDED.ppm2 ELSE listings.ppm2 END,
+             is_rent = EXCLUDED.is_rent,
+             last_seen = now(),
+             renewed_at = GREATEST(listings.renewed_at, EXCLUDED.renewed_at),
+             closed_at = NULL`,
+          [
+            id,
+            card.url,
+            card.title,
+            card.sqm ?? null,
+            card.rooms ?? null,
+            card.price ?? null,
+            card.priceText ?? null,
+            card.ppm2 ?? null,
+            Boolean(card.isRent),
+            card.renewedAt ?? null,
+            card.pricePresent !== false,
+          ],
+        );
+      }
+
+      for (const observation of payload.stateObservations || []) {
+        await client.query(
+          `INSERT INTO listing_state_history
+             (article_id, effective_at, ingested_at, source, event_type, run_id,
+              search_key, category, category_membership, is_rent, sqm, rooms,
+              price, ppm2, filter_attributes, last_seen_at, is_closed,
+              membership_inferred, attributes_inferred)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16,$17,$18,$19)`,
+          [
+            observation.articleId,
+            observation.effectiveAt,
+            observation.ingestedAt ?? now,
+            observation.source,
+            observation.eventType,
+            observation.runId ?? payload.runId,
+            observation.searchKey ?? payload.search.searchKey,
+            observation.category,
+            observation.categoryMembership || [],
+            observation.isRent ?? null,
+            observation.sqm ?? null,
+            observation.rooms ?? null,
+            observation.price ?? null,
+            observation.ppm2 ?? null,
+            JSON.stringify(observation.filterAttributes || {}),
+            observation.lastSeenAt ?? observation.effectiveAt,
+            Boolean(observation.isClosed),
+            Boolean(observation.membershipInferred),
+            Boolean(observation.attributesInferred),
+          ],
+        );
+      }
+
+      for (const event of payload.priceEvents || []) {
+        const normalized = normalizeEvent(event, { now });
+        if (!normalized.ok) continue;
+        const value = normalized.event;
+        await client.query(
+          `INSERT INTO listing_price_events
+             (article_id, effective_at, ingested_at, price, price_state, source, provenance)
+           VALUES ($1,$2,COALESCE($3,now()),$4,$5,$6,$7::jsonb)
+           ON CONFLICT (article_id, effective_at, price, price_state) DO NOTHING`,
+          [
+            value.articleId,
+            value.effectiveAt,
+            value.ingestedAt,
+            value.price,
+            value.priceState,
+            value.source,
+            JSON.stringify(value.provenance),
+          ],
+        );
+      }
+
+      const ids = [...new Set(articleIds)];
+      await client.query(
+        `DELETE FROM search_results
+          WHERE search_key = $1 AND NOT (article_id = ANY($2::bigint[]))`,
+        [payload.membership.searchKey, ids],
+      );
+      if (ids.length) {
+        await client.query(
+          `INSERT INTO search_results (search_key, article_id)
+           SELECT $1, value FROM unnest($2::bigint[]) AS value
+           ON CONFLICT DO NOTHING`,
+          [payload.membership.searchKey, ids],
+        );
+      }
+
+      for (const row of previouslyClosed.rows.filter((entry) =>
+        ids.includes(Number(entry.article_id)),
+      )) {
+        await client.query(
+          `INSERT INTO listing_state_history
+             (article_id, effective_at, ingested_at, source, event_type,
+              run_id, search_key, is_closed, closed_at)
+           VALUES ($1, now(), now(), 'search', 'reopened', $2, $3, false, NULL)`,
+          [Number(row.article_id), payload.runId, payload.membership.searchKey],
+        );
+      }
+
+      for (const oldId of previousIds.filter((id) => !ids.includes(id))) {
+        const retained = await client.query(
+          "SELECT 1 FROM search_results WHERE article_id = $1 LIMIT 1",
+          [oldId],
+        );
+        if (!retained.rowCount) {
+          await client.query(
+            `UPDATE listings SET closed_at = COALESCE(closed_at, now()),
+                    closing_price = COALESCE(closing_price, price),
+                    closing_ppm2 = COALESCE(closing_ppm2, ppm2)
+              WHERE article_id = $1`,
+            [oldId],
+          );
+          await client.query(
+            `INSERT INTO listing_state_history
+               (article_id, effective_at, ingested_at, source, event_type,
+                run_id, search_key, is_closed, closed_at)
+             VALUES ($1, now(), now(), 'search', 'closed', $2, $3, true, now())`,
+            [oldId, payload.runId, payload.membership.searchKey],
+          );
+        }
+      }
+
+      const refreshDays = payload.analytics?.invalidateFrom || now;
+      await client.query(
+        `INSERT INTO analytics_refresh_state
+           (scope, pending_from_day, pending_through_day, updated_at)
+         VALUES ('listing_daily', ($1::timestamptz AT TIME ZONE 'Europe/Sarajevo')::date,
+                 ($1::timestamptz AT TIME ZONE 'Europe/Sarajevo')::date, now())
+         ON CONFLICT (scope) DO UPDATE SET
+           pending_from_day = LEAST(analytics_refresh_state.pending_from_day, EXCLUDED.pending_from_day),
+           pending_through_day = GREATEST(analytics_refresh_state.pending_through_day, EXCLUDED.pending_through_day),
+           updated_at = now()`,
+        [refreshDays],
+      );
+
+      const run = payload.run || {};
+      await client.query(
+        `INSERT INTO saved_searches
+           (search_key, name, url, category, last_scraped_at, listing_count,
+            median_ppm2, new_count, drop_count)
+         VALUES ($1,$2,$3,$4,now(),$5,$6,$7,$8)
+         ON CONFLICT (search_key) DO UPDATE SET
+           name = EXCLUDED.name, url = EXCLUDED.url, category = EXCLUDED.category,
+           last_scraped_at = EXCLUDED.last_scraped_at,
+           listing_count = EXCLUDED.listing_count, median_ppm2 = EXCLUDED.median_ppm2,
+           new_count = EXCLUDED.new_count, drop_count = EXCLUDED.drop_count`,
+        [
+          payload.search.searchKey,
+          payload.search.name,
+          payload.search.url,
+          payload.search.category,
+          run.listingCount ?? cards.length,
+          run.median ?? null,
+          run.newCount ?? 0,
+          run.dropCount ?? 0,
+        ],
+      );
+      await client.query(
+        `UPDATE scrape_runs SET finished_at = now(), status = $2, pages = $3,
+                cards = $4, error = NULL, is_complete = $5,
+                failure_reason = NULL, truncation_reason = NULL
+          WHERE id = $1`,
+        [
+          payload.runId,
+          run.status || "ok",
+          run.pages ?? null,
+          run.cards ?? cards.length,
+          run.isComplete !== false,
+        ],
+      );
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /** Delete expired raw payloads in bounded batches after a successful cycle. */
+  async purgeRawResponses(limit = 1000) {
+    let deleted = 0;
+    for (;;) {
+      const result = await this.pool.query(
+        `WITH doomed AS (
+           SELECT id FROM raw_api_responses
+            WHERE expires_at <= now()
+            ORDER BY expires_at, id
+            LIMIT $1
+         )
+         DELETE FROM raw_api_responses r USING doomed
+          WHERE r.id = doomed.id`,
+        [Math.max(1, Math.floor(limit))],
+      );
+      deleted += result.rowCount;
+      if (result.rowCount < limit) return deleted;
+    }
+  }
+
+  /** Rebuild pending historical inventory through the current Sarajevo day. */
+  async rebuildDailyInventory() {
+    const r = await this.pool.query(
+      `SELECT pending_from_day, pending_through_day
+         FROM analytics_refresh_state WHERE scope = 'listing_daily'`,
+    );
+    const today = new Date().toLocaleDateString("en-CA", {
+      timeZone: "Europe/Sarajevo",
+    });
+    const from = r.rows[0]?.pending_from_day || today;
+    const through = r.rows[0]?.pending_through_day || today;
+    return this.pool.query(
+      "SELECT * FROM rebuild_listing_daily($1::date, $2::date)",
+      [from, through],
+    );
   }
 
   /**
@@ -291,7 +613,17 @@ class Db {
    * @returns {Promise<{pending:Array<{id:number, unpinned:boolean,
    *   missingSqm:boolean, neverDetailed:boolean}>, total:number}>}
    */
-  async enrichmentQueue(ids, limit) {
+  async enrichmentQueue(
+    ids,
+    limit,
+    {
+      refreshDays = Number(process.env.DETAIL_REFRESH_DAYS) || 7,
+      retryAfterMinutes = Math.max(
+        1,
+        Number(process.env.SCRAPE_INTERVAL_MINUTES) || 720,
+      ),
+    } = {},
+  ) {
     if (!ids.length || !(limit > 0)) return { pending: [], total: 0 };
     const r = await this.pool.query(
       `SELECT article_id::bigint AS id,
@@ -302,12 +634,24 @@ class Db {
          FROM listings
         WHERE closed_at IS NULL
           AND article_id = ANY($1::bigint[])
-          AND (latitude IS NULL
+          AND (details_fetched_at IS NOT NULL
+               OR last_enrichment_attempted_at IS NULL
+               OR last_enrichment_attempted_at <= now() - make_interval(mins => $3::int))
+          AND (latitude IS NULL OR longitude IS NULL
                OR details_fetched_at IS NULL
-               OR (sqm IS NULL AND price IS NOT NULL AND NOT is_rent))
-        ORDER BY last_enrichment_attempted_at ASC NULLS FIRST, article_id ASC
+               OR details_fetched_at <= now() - make_interval(days => $4::int)
+               OR (sqm IS NULL AND price IS NOT NULL AND NOT is_rent)
+               OR EXISTS (SELECT 1 FROM listing_price_events pe
+                            WHERE pe.article_id = listings.article_id
+                              AND pe.source <> 'detail'
+                              AND pe.ingested_at > COALESCE(listings.details_fetched_at, '-infinity'::timestamptz)))
+        ORDER BY (details_fetched_at IS NULL) DESC,
+                 (EXISTS (SELECT 1 FROM listing_price_events pe
+                            WHERE pe.article_id = listings.article_id
+                              AND pe.ingested_at > COALESCE(listings.details_fetched_at, '-infinity'::timestamptz))) DESC,
+                 last_enrichment_attempted_at ASC NULLS FIRST, article_id ASC
         LIMIT $2`,
-      [ids, limit],
+      [ids, limit, retryAfterMinutes, refreshDays],
     );
     return {
       pending: r.rows.map((row) => ({
@@ -327,15 +671,33 @@ class Db {
    * rotates fairly instead of stalling on the lowest article ids.
    * @param {boolean} onlyActive — restrict to rows seen in the last 14 days
    */
-  async getListingsNeedingDetails(onlyActive = true) {
+  async getListingsNeedingDetails(
+    onlyActive = true,
+    {
+      refreshDays = Number(process.env.DETAIL_REFRESH_DAYS) || 7,
+      retryAfterMinutes = Math.max(
+        1,
+        Number(process.env.SCRAPE_INTERVAL_MINUTES) || 720,
+      ),
+    } = {},
+  ) {
     const sql = `SELECT article_id AS "articleId", url FROM listings
                  WHERE (latitude IS NULL
+                        OR longitude IS NULL
                         OR (sqm IS NULL AND price IS NOT NULL AND NOT is_rent)
-                        OR details_fetched_at IS NULL)
-                   AND closed_at IS NULL
-                 ${onlyActive ? "AND last_seen > now() - INTERVAL '14 days'" : ""}
-                 ORDER BY last_enrichment_attempted_at ASC NULLS FIRST, article_id ASC`;
-    return (await this.pool.query(sql)).rows;
+                        OR details_fetched_at IS NULL
+                        OR details_fetched_at <= now() - make_interval(days => $1::int)
+                        OR EXISTS (SELECT 1 FROM listing_price_events pe
+                                     WHERE pe.article_id = listings.article_id
+                                       AND pe.source <> 'detail'
+                                       AND pe.ingested_at > COALESCE(listings.details_fetched_at, '-infinity'::timestamptz)))
+                   AND (details_fetched_at IS NOT NULL
+                        OR last_enrichment_attempted_at IS NULL
+                        OR last_enrichment_attempted_at <= now() - make_interval(mins => $2::int))
+                   ${onlyActive ? "AND last_seen > now() - INTERVAL '14 days'" : ""}
+                 ORDER BY (details_fetched_at IS NULL) DESC,
+                          last_enrichment_attempted_at ASC NULLS FIRST, article_id ASC`;
+    return (await this.pool.query(sql, [refreshDays, retryAfterMinutes])).rows;
   }
 
   /**
@@ -367,12 +729,24 @@ class Db {
 
   async enrichListings(rows) {
     if (!rows.length) return;
+    for (const row of rows) {
+      if (
+        row.sourcePayload &&
+        typeof this.archiveDetailResponse === "function"
+      ) {
+        await this.archiveDetailResponse({
+          articleId: row.articleId,
+          payload: row.sourcePayload,
+        });
+      }
+    }
     // Column plumbing comes from ENRICH_COLS above: one spec drives both this
     // SQL's unnest() signature and the params array (see renderUnnest).
     const input = renderUnnest(ENRICH_COLS, rows);
     await this.pool.query(
       `WITH input AS (
-         SELECT article_id, lat, lon, sqm, published_at, seller_type,
+         SELECT article_id, price, price_text, ppm2_current, is_rent_current,
+                price_present, lat, lon, sqm, published_at, seller_type,
                 rooms_detail, bathrooms, floor_num, floors_total, unit_levels,
                 heating, furnished, condition, parking, garage, elevator,
                 year_built, plot_sqm, orientation, views, favorites,
@@ -384,6 +758,9 @@ class Db {
              ${input.castsSql})
            AS t(${input.aliasSql}))
        UPDATE listings l SET
+          price = CASE WHEN i.price_present THEN i.price ELSE l.price END,
+          price_text = CASE WHEN i.price_present THEN i.price_text ELSE l.price_text END,
+          is_rent = COALESCE(i.is_rent_current, l.is_rent),
           latitude  = COALESCE(l.latitude, i.lat),
           longitude = COALESCE(l.longitude, i.lon),
           -- Neighborhood from the map pin (11-neighborhoods.sql); first-wins
@@ -391,6 +768,7 @@ class Db {
           location = COALESCE(l.location, neighborhood_of(i.lat, i.lon)),
           sqm = COALESCE(l.sqm, i.sqm),
           ppm2 = CASE
+                   WHEN i.price_present THEN i.ppm2_current
                    WHEN l.ppm2 IS NULL AND l.price IS NOT NULL AND NOT l.is_rent
                         AND COALESCE(l.sqm, i.sqm) IS NOT NULL
                         AND round(l.price / COALESCE(l.sqm, i.sqm)) BETWEEN 1 AND 15000
@@ -431,6 +809,51 @@ class Db {
        FROM input i
        WHERE l.article_id = i.article_id`,
       input.params,
+    );
+
+    const events = [];
+    for (const row of rows) {
+      const currentState =
+        row.priceState ?? (row.price == null ? "unpriced" : "valid");
+      events.push({
+        articleId: row.articleId,
+        effectiveAt: new Date(),
+        price: row.price,
+        priceState: currentState,
+        dealType: row.dealType ?? (row.isRent ? "rent" : "sale"),
+        source: "detail",
+        isCurrent: true,
+        provenance: { observation: "detail_current" },
+      });
+      for (const history of row.apiPriceHistory || []) {
+        events.push({
+          articleId: row.articleId,
+          effectiveAt:
+            history.effectiveAt ?? history.date ?? history.created_at,
+          price: history.price,
+          dealType: row.dealType ?? (row.isRent ? "rent" : "sale"),
+          source: "api_price_history",
+          historical: true,
+          provenance: { observation: "listing_api_price_history" },
+        });
+      }
+    }
+    await this.recordPriceEvents(events);
+  }
+
+  /** Shared canonical price-event facade used by ingestion and backfills. */
+  recordPriceEvents(events, options) {
+    return recordPriceEvents(this.pool, events, options);
+  }
+
+  async markDetailAttempts(articleIds) {
+    const ids = [
+      ...new Set((articleIds || []).map(Number).filter(Number.isSafeInteger)),
+    ];
+    if (!ids.length) return;
+    await this.pool.query(
+      "UPDATE listings SET last_enrichment_attempted_at = now() WHERE article_id = ANY($1::bigint[])",
+      [ids],
     );
   }
 
@@ -493,11 +916,33 @@ class Db {
     return r.rows[0].id;
   }
 
-  async finishRun(runId, { status, pages = null, cards = null, error = null }) {
+  async finishRun(
+    runId,
+    {
+      status,
+      pages = null,
+      cards = null,
+      error = null,
+      isComplete = status === "ok",
+      failureReason = null,
+      truncationReason = null,
+    },
+  ) {
     await this.pool.query(
-      `UPDATE scrape_runs SET finished_at = now(), status = $2, pages = $3, cards = $4, error = $5
+      `UPDATE scrape_runs SET finished_at = now(), status = $2, pages = $3,
+              cards = $4, error = $5, is_complete = $6,
+              failure_reason = $7, truncation_reason = $8
         WHERE id = $1`,
-      [runId, status, pages, cards, error],
+      [
+        runId,
+        status,
+        pages,
+        cards,
+        error,
+        isComplete,
+        failureReason,
+        truncationReason,
+      ],
     );
   }
 

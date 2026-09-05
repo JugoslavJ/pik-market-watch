@@ -124,7 +124,7 @@ test("search item: listing_type rent wins; rents never get KM/m²", () => {
   assert.equal(card.ppm2, null);
 });
 
-test('search item: cheap "sale" falls back to rent', () => {
+test("search item: cheap declared sale stays sale but is invalid", () => {
   const card = parseSearchItem({
     id: 10,
     title: "garsonjera prizemlje",
@@ -133,7 +133,11 @@ test('search item: cheap "sale" falls back to rent', () => {
     listing_type: "sell",
     special_labels: [],
   });
-  assert.equal(card.isRent, true);
+  assert.equal(card.isRent, false);
+  assert.equal(card.dealType, "sale");
+  assert.equal(card.price, null);
+  assert.equal(card.priceState, "invalid");
+  assert.equal(card.priceReason, "below_sale_minimum");
   assert.equal(card.rooms, "0"); // garsonjera counts as studio
 });
 
@@ -208,7 +212,7 @@ test("detail: attributes[] feed typed columns and characteristics", () => {
   assert.deepEqual(d.renewedAt, new Date(1787527805 * 1000)); // date = renewal bump
   assert.equal(d.characteristics["exotic-unknown-code"], "kept-raw");
   assert.equal(d.apiPriceHistory.length, 2);
-  assert.deepEqual(d.apiPriceHistory[0], { price: 246000, date: 1782389022 });
+  assert.deepEqual(d.apiPriceHistory[0], { price: 236000, date: 1767000377 });
 });
 
 test("detail: empty/garbage payload tolerated", () => {

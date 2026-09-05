@@ -164,33 +164,38 @@ test("multi-page search: waves cover pages 2..last_page", async () => {
   assert.equal(res.cards, 6);
 });
 
-test("wave of pure duplicates stops pagination (OLX repeats past the end)", async () => {
+test("wave of pure duplicates marks pagination incomplete (OLX repeats past the end)", async () => {
   const dupes = [rawCard(1), rawCard(2)];
   const db = fakeDb();
   const fetchPage = pageFetcher({
     1: { items: dupes, meta: meta(4, 2, 1) },
     2: { items: dupes, meta: meta(4, 2, 2) }, // same ids → freshInWave 0
   });
-  const res = await run(db, {}, { fetchSearchPage: fetchPage });
+  await assert.rejects(
+    run(db, {}, { fetchSearchPage: fetchPage }),
+    /pagination ended/,
+  );
 
   assert.deepEqual(fetchPage.fetched, [1, 2]); // stopped right there
-  assert.equal(res.cards, 2); // uniques only
-  assert.deepEqual(db.rec.refreshed, [[1, 2]]); // dupes collapsed
+  assert.equal(db.rec.finishedRuns[0].isComplete, false);
+  assert.deepEqual(db.rec.refreshed, []); // incomplete runs preserve prior membership
 });
 
-test("empty page mid-wave: fresh sibling page still accepted, then stops", async () => {
+test("empty page mid-wave marks pagination incomplete", async () => {
   const db = fakeDb();
   const fetchPage = pageFetcher({
     1: { items: [rawCard(1)], meta: meta(3, 3, 1) },
     2: { items: [], meta: meta(3, 3, 2) }, // empty → sawEmpty
     3: { items: [rawCard(9)], meta: meta(3, 3, 3) },
   });
-  const res = await run(db, {}, { fetchSearchPage: fetchPage });
+  await assert.rejects(
+    run(db, {}, { fetchSearchPage: fetchPage }),
+    /pagination ended/,
+  );
 
   assert.deepEqual(fetchPage.fetched, [1, 2, 3]);
-  assert.equal(res.cards, 2); // page 3's fresh item kept…
-  assert.deepEqual(db.rec.finishedRuns, [{ status: "ok", pages: 3, cards: 2 }]);
-  // …and pagination did NOT continue past the wave containing the empty page.
+  assert.equal(db.rec.finishedRuns[0].status, "error");
+  assert.equal(db.rec.finishedRuns[0].isComplete, false);
 });
 
 test("MAX_PAGES caps pagination even when last_page is huge", async () => {
@@ -199,26 +204,32 @@ test("MAX_PAGES caps pagination even when last_page is huge", async () => {
     1: { items: [rawCard(1)], meta: meta(9999, 99, 1) },
     2: { items: [rawCard(2)], meta: meta(9999, 99, 2) },
   });
-  const res = await run(db, { maxPages: 2 }, { fetchSearchPage: fetchPage });
+  await assert.rejects(
+    run(db, { maxPages: 2 }, { fetchSearchPage: fetchPage }),
+    /capped below reported end/,
+  );
 
   assert.deepEqual(
     [...fetchPage.fetched].sort((a, b) => a - b),
     [1, 2],
   );
-  assert.equal(res.pages, 2);
+  assert.equal(db.rec.finishedRuns[0].truncationReason !== null, true);
 });
 
-test("a failing page inside a wave is tolerated as empty (run stays ok)", async () => {
+test("a failing page inside a wave marks the run incomplete", async () => {
   const db = fakeDb();
   const fetchPage = pageFetcher({
     __failOn: [2],
     1: { items: [rawCard(1)], meta: meta(3, 3, 1) },
     3: { items: [rawCard(3)], meta: meta(3, 3, 3) },
   });
-  const res = await run(db, {}, { fetchSearchPage: fetchPage });
+  await assert.rejects(
+    run(db, {}, { fetchSearchPage: fetchPage }),
+    /failed pagination/,
+  );
 
-  assert.deepEqual(db.rec.finishedRuns, [{ status: "ok", pages: 3, cards: 2 }]);
-  assert.equal(res.newCount, 2);
+  assert.equal(db.rec.finishedRuns[0].status, "error");
+  assert.equal(db.rec.finishedRuns[0].isComplete, false);
 });
 
 // ── rate budget ──────────────────────────────────────────────────────────────

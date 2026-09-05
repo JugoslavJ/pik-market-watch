@@ -5,6 +5,10 @@
 const api = require("./api");
 const { parseSearchItem } = require("./parser");
 const { sleep, computeMedian } = require("./util");
+const {
+  buildSearchObservations,
+  buildSearchPriceEvents,
+} = require("./search-lifecycle");
 
 /**
  * Page numbers fetched concurrently by one pagination wave: waves start at
@@ -76,6 +80,8 @@ async function scrapeSearch(
   let pagesDone = 0;
   let lastPage = Infinity; // refined from meta after page 1
   let rateWarned = false;
+  const failedPages = new Set();
+  let truncatedPagination = false;
 
   const accept = (cards) => {
     let fresh = 0;
@@ -149,7 +155,13 @@ async function scrapeSearch(
       if (!pageNos.length) break;
 
       const results = await Promise.all(
-        pageNos.map((n) => fetchPage(n).catch(() => [])),
+        pageNos.map((n) =>
+          fetchPage(n).catch((error) => {
+            failedPages.add(n);
+            log(`⚠ search page ${n} failed: ${error.message || error}`);
+            return [];
+          }),
+        ),
       );
       pagesDone += pageNos.length;
 
@@ -163,32 +175,98 @@ async function scrapeSearch(
         freshInWave += accept(cs);
       }
 
-      if (freshInWave === 0) break; // all dupes/empty → pagination exhausted
-      if (sawEmpty) break; // hit the last page mid-wave
+      if (freshInWave === 0) {
+        truncatedPagination = true;
+        break; // all dupes/empty → pagination exhausted
+      }
+      if (sawEmpty) {
+        truncatedPagination = true;
+        break; // hit the last page mid-wave
+      }
       cards = results.find((r) => r.length) || [];
       await pace(cfg.pageDelayMs);
     }
 
-    const { newCount, dropCount } = await db.saveCards(allCards);
+    const incompleteReason = failedPages.size
+      ? `failed pagination page(s): ${[...failedPages].join(",")}`
+      : lastPage > cfg.maxPages
+        ? `pagination capped below reported end (${cfg.maxPages}/${lastPage})`
+        : truncatedPagination
+          ? "pagination ended before the reported end"
+          : null;
+    if (incompleteReason) {
+      await db.finishRun(runId, {
+        status: "error",
+        pages: pagesDone,
+        cards: allCards.length,
+        isComplete: false,
+        failureReason: incompleteReason,
+        truncationReason:
+          lastPage > cfg.maxPages || truncatedPagination
+            ? incompleteReason
+            : null,
+        error: incompleteReason,
+      });
+      const error = new Error(incompleteReason);
+      error.incomplete = true;
+      throw error;
+    }
 
     // Row existence + identity were already guaranteed at run start
     // (registerSavedSearch); this upsert refreshes the per-run stats.
     const median = computeMedian(
       allCards.map((c) => c.ppm2).filter((v) => v != null && v > 0),
     );
-    await db.upsertSavedSearch({
-      searchKey: search.searchKey,
-      name: search.name,
-      url: base.href,
-      category: search.category,
-      listingCount: allCards.length,
-      median,
-      newCount,
-      dropCount,
-    });
+    const stats =
+      typeof db.commitSearchIngestion === "function"
+        ? await db.commitSearchIngestion({
+            runId,
+            search: {
+              searchKey: search.searchKey,
+              name: search.name,
+              url: base.href,
+              category: search.category ?? null,
+            },
+            cards: allCards,
+            stateObservations: buildSearchObservations(allCards, {
+              searchKey: search.searchKey,
+              category: search.category,
+              runId,
+            }),
+            priceEvents: buildSearchPriceEvents(allCards),
+            membership: {
+              searchKey: search.searchKey,
+              articleIds: allCards.map((c) => c.articleId),
+            },
+            run: {
+              status: "ok",
+              isComplete: true,
+              pages: pagesDone,
+              cards: allCards.length,
+              listingCount: allCards.length,
+              median,
+            },
+            analytics: { invalidateFrom: new Date() },
+          })
+        : await db.saveCards(allCards);
+
+    const newCount = Number(stats?.newCount || 0);
+    const dropCount = Number(stats?.dropCount || 0);
+    if (typeof db.commitSearchIngestion !== "function")
+      await db.upsertSavedSearch({
+        searchKey: search.searchKey,
+        name: search.name,
+        url: base.href,
+        category: search.category,
+        listingCount: allCards.length,
+        median,
+        newCount,
+        dropCount,
+      });
 
     const ids = allCards.map((c) => c.articleId).filter(Boolean);
-    await db.refreshSearchResults(search.searchKey, ids);
+    if (typeof db.commitSearchIngestion !== "function")
+      await db.refreshSearchResults(search.searchKey, ids);
 
     // ── Enrichment ───────────────────────────────────────────────────────────
     // Search payloads already carry pins, dates, seller type and m² for free;
@@ -238,6 +316,10 @@ async function scrapeSearch(
           return false;
         })
         .map((p) => p.id);
+
+      if (typeof db.markDetailAttempts === "function") {
+        await db.markDetailAttempts(needDetail);
+      }
 
       log(
         `⌖ enriching ${pending.length}/${total} pending listing(s) ` +

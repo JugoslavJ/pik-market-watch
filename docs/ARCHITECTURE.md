@@ -104,4 +104,32 @@ Operational view of the scraper itself — market filters don't apply here.
 - **Needs scraper/schema work**: `views` and `favorites` are overwrite-in-place counters, so no history/trend is possible without snapshotting them (e.g. a `listing_stats_history` table). `api_price_history` (OLX's own server-side price log, ~7 % coverage) could power hidden-drop detection we can't see between cycles.
 
 
+## Refactored evidence and analytics layers
 
+The scraper keeps `Db` as the compatibility facade, while new writes are
+separated into these additive layers:
+
+- raw source responses (`raw_api_responses`) are retained for 30 days;
+- normalized search/detail observations live in `listing_state_history`;
+- canonical current and historical price evidence lives in
+  `listing_price_events`, keyed by article, effective time, normalized price,
+  and price state;
+- `listing_daily` reconstructs one row per article and Sarajevo calendar day.
+
+Search/detail evidence outranks imported OLX history at equal timestamps.
+Declared sale/rent type is preserved even when price quality is invalid;
+current unpriced/invalid observations create null-price boundaries. Sales below
+3,000 KM, rents below 50 KM, areas outside 5–500 m², and sale prices outside
+1–15,000 KM/m² are rejected from the relevant canonical metric. A valid price
+without a valid area remains part of price history but has no KM/m² value.
+
+Daily analytics carries active listings through missed scrapes for 14 days,
+marks those rows stale, treats today as provisional, and labels historical
+membership/attributes inferred from later evidence. Rebuilds are range-based
+and retryable through `analytics_refresh_state`; they never use current
+`search_results` to filter historical dates.
+
+Operational replay commands are `node src/migrate-only.js` for schema-only
+startup and `node src/backfill-price-history.js` for offline legacy history
+conversion. The latter supports dry runs, bounded batches, maximum listings,
+and resumable checkpoints without making OLX requests.

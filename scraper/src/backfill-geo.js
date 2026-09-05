@@ -44,6 +44,10 @@ const log = makeLogger("backfill");
     missed = 0;
   const t0 = Date.now();
 
+  if (typeof db.markDetailAttempts === "function") {
+    await db.markDetailAttempts(targets.map((target) => target.articleId));
+  }
+
   await fetchDetailsInBatches(
     targets.map((t) => t.articleId),
     {

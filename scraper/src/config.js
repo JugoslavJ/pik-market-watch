@@ -85,6 +85,8 @@ module.exports = {
   apiTimeoutMs: num(process.env.API_TIMEOUT_MS, 20000), // per-request HTTP timeout
   healthPort: num(process.env.HEALTH_PORT, 9100),
   maxGeoFetches: num(process.env.MAX_GEO_FETCHES, 25), // /api/listings detail calls per run
+  detailRefreshDays: num(process.env.DETAIL_REFRESH_DAYS, 7),
+  rawResponseRetentionDays: num(process.env.RAW_RESPONSE_RETENTION_DAYS, 30),
   geoConcurrency: num(process.env.GEO_CONCURRENCY, 2), // parallel detail calls
   geoDelayMs: num(process.env.GEO_DELAY_MS, 1200), // politeness gap between batches
   minRunGapMinutes: num(process.env.SCRAPE_MIN_GAP_MINUTES, 45), // skip boot cycle if a run finished this recently

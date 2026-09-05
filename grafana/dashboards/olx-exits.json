@@ -348,7 +348,7 @@
         "y": 5
       },
       "title": "Exit KM/m² vs asking KM/m² — daily medians",
-      "description": "Green line: last askings of ads that closed. Blue: all observed snapshot medians. A widening gap = softening.",
+      "description": "Green line: exit askings of ads that closed. Blue: pooled reconstructed daily inventory asking median for the selected filters. Estimated, stale and provisional fields expose historical availability quality.",
       "type": "timeseries",
       "options": {
         "legend": {
@@ -379,7 +379,7 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT date_trunc('day', ph.scraped_at) AS time,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY ph.ppm2) AS \"asking KM/m2 (snapshots)\"\nFROM price_history ph\nJOIN listings_filtered(ARRAY[${category:sqlstring}], ${min_sqm:int}, ${max_sqm:int}, ARRAY[${neighborhood:sqlstring}]) la ON la.article_id = ph.article_id\nWHERE ph.ppm2 > 0\n  AND $__timeFilter(ph.scraped_at)\n  AND room_bucket(la.rooms) = ANY (ARRAY[${rooms:sqlstring}])\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time,\n       median AS \"asking KM/m2 (daily inventory)\",\n       priced_count AS \"priced sample\",\n       estimated_count AS \"estimated\",\n       stale_count AS \"stale\",\n       provisional_day AS \"provisional\"\nFROM market_daily_filtered(\n  date($__timeFrom() AT TIME ZONE 'Europe/Sarajevo'),\n  date($__timeTo() AT TIME ZONE 'Europe/Sarajevo'),\n  ARRAY[${category:sqlstring}],\n  NULLIF('${min_sqm}', '')::numeric,\n  NULLIF('${max_sqm}', '')::numeric,\n  ARRAY[${rooms:sqlstring}],\n  ARRAY(SELECT CASE WHEN selected = 'sell' THEN 'sale' ELSE selected END FROM unnest(ARRAY[${deal:sqlstring}]) AS t(selected)),\n  ARRAY[${neighborhood:sqlstring}])\nORDER BY day",
           "refId": "B"
         }
       ],
@@ -1024,7 +1024,7 @@
         "y": 41
       },
       "title": "Sell-through rate — weekly · all categories",
-      "description": "Closures that week ÷ estimated live stock (v_market_daily). Rising = faster market; whole database, not filter-aware.",
+      "description": "Weekly priced-share proxy from filtered reconstructed listing-day inventory. It is not a transaction rate; inferred, stale and provisional rows are part of the historical availability model.",
       "type": "timeseries",
       "options": {
         "legend": {
@@ -1045,7 +1045,7 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT day AS time,\n       round(100.0 * closed_n / NULLIF(active_est, 0), 2) AS \"sell-through %\" \nFROM v_market_daily\nWHERE $__timeFilter(day)\nORDER BY 1",
+          "rawSql": "WITH daily AS (\n  SELECT d.day,\n         count(*)::numeric AS inventory,\n         count(*) FILTER (WHERE d.price_state = 'valid')::numeric AS priced\n  FROM v_listing_daily d\n  WHERE d.day BETWEEN date($__timeFrom() AT TIME ZONE 'Europe/Sarajevo')\n                  AND date($__timeTo() AT TIME ZONE 'Europe/Sarajevo')\n\n  AND (COALESCE(cardinality(ARRAY[${category:sqlstring}]), 0) = 0\n    OR d.category_memberships && ARRAY[${category:sqlstring}]\n    OR d.category = ANY (ARRAY[${category:sqlstring}]))\n  AND ('${min_sqm}' = '' OR d.sqm IS NULL OR d.sqm >= NULLIF('${min_sqm}', '')::numeric)\n  AND ('${max_sqm}' = '' OR d.sqm IS NULL OR d.sqm <= NULLIF('${max_sqm}', '')::numeric)\n  AND (COALESCE(cardinality(ARRAY[${rooms:sqlstring}]), 0) = 0\n    OR d.rooms = ANY (ARRAY[${rooms:sqlstring}])\n    OR room_bucket(d.rooms) = ANY (ARRAY[${rooms:sqlstring}]))\n  AND d.deal = ANY (ARRAY(SELECT CASE WHEN selected = 'sell' THEN 'sale' ELSE selected END FROM unnest(ARRAY[${deal:sqlstring}]) AS t(selected)))\n  AND (COALESCE(cardinality(ARRAY[${neighborhood:sqlstring}]), 0) = 0\n    OR d.neighborhood = ANY (ARRAY[${neighborhood:sqlstring}])\n    OR d.location = ANY (ARRAY[${neighborhood:sqlstring}]))\n  GROUP BY d.day\n), weekly AS (\n  SELECT date_trunc('week', day::timestamp)::date AS week,\n         avg(inventory) AS inventory,\n         avg(priced) AS priced\n  FROM daily GROUP BY 1\n)\nSELECT week::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time,\n       round(100.0 * priced / NULLIF(inventory, 0), 2) AS \"sell-through %\"\nFROM weekly ORDER BY week",
           "refId": "A"
         }
       ],
@@ -1309,13 +1309,13 @@
           "type": "postgres",
           "uid": "olx-postgres"
         },
-        "definition": "SELECT category AS __value, category AS __text FROM saved_searches WHERE category IS NOT NULL GROUP BY category ORDER BY 1",
+        "definition": "SELECT category AS __value, category AS __text FROM (SELECT category FROM saved_searches WHERE category IS NOT NULL UNION SELECT unnest(category_memberships) FROM listing_daily) s WHERE category IS NOT NULL GROUP BY category ORDER BY 1",
         "includeAll": true,
         "label": "Category",
         "multi": false,
         "name": "category",
         "options": [],
-        "query": "SELECT category AS __value, category AS __text FROM saved_searches WHERE category IS NOT NULL GROUP BY category ORDER BY 1",
+        "query": "SELECT category AS __value, category AS __text FROM (SELECT category FROM saved_searches WHERE category IS NOT NULL UNION SELECT unnest(category_memberships) FROM listing_daily) s WHERE category IS NOT NULL GROUP BY category ORDER BY 1",
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
@@ -1359,13 +1359,13 @@
           "type": "postgres",
           "uid": "olx-postgres"
         },
-        "definition": "SELECT bucket AS __value, bucket AS __text FROM (\n  SELECT room_bucket(rooms) AS bucket\n  FROM v_active_listings WHERE is_rent = FALSE\n) s GROUP BY bucket ORDER BY bucket",
+        "definition": "SELECT bucket AS __value, bucket AS __text FROM (SELECT room_bucket(rooms) AS bucket FROM v_active_listings UNION SELECT room_bucket(rooms) FROM v_listing_daily WHERE rooms IS NOT NULL) s WHERE bucket IS NOT NULL GROUP BY bucket ORDER BY 1",
         "includeAll": true,
         "label": "Rooms",
         "multi": false,
         "name": "rooms",
         "options": [],
-        "query": "SELECT bucket AS __value, bucket AS __text FROM (\n  SELECT room_bucket(rooms) AS bucket\n  FROM v_active_listings WHERE is_rent = FALSE\n) s GROUP BY bucket ORDER BY bucket",
+        "query": "SELECT bucket AS __value, bucket AS __text FROM (SELECT room_bucket(rooms) AS bucket FROM v_active_listings UNION SELECT room_bucket(rooms) FROM v_listing_daily WHERE rooms IS NOT NULL) s WHERE bucket IS NOT NULL GROUP BY bucket ORDER BY 1",
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
@@ -1382,13 +1382,13 @@
           "type": "postgres",
           "uid": "olx-postgres"
         },
-        "definition": "SELECT d AS __value, d AS __text FROM (\n  SELECT COALESCE(NULLIF(location, ''), '(unmapped)') AS d FROM listings WHERE latitude IS NOT NULL\n  UNION ALL SELECT '(no pin)'\n) s GROUP BY d ORDER BY d",
+        "definition": "SELECT neighborhood AS __value, neighborhood AS __text FROM (SELECT neighborhood FROM v_listing_daily WHERE neighborhood IS NOT NULL UNION SELECT '(no pin)') s GROUP BY neighborhood ORDER BY 1",
         "includeAll": true,
         "label": "Neighborhood",
         "multi": true,
         "name": "neighborhood",
         "options": [],
-        "query": "SELECT d AS __value, d AS __text FROM (\n  SELECT COALESCE(NULLIF(location, ''), '(unmapped)') AS d FROM listings WHERE latitude IS NOT NULL\n  UNION ALL SELECT '(no pin)'\n) s GROUP BY d ORDER BY d",
+        "query": "SELECT neighborhood AS __value, neighborhood AS __text FROM (SELECT neighborhood FROM v_listing_daily WHERE neighborhood IS NOT NULL UNION SELECT '(no pin)') s GROUP BY neighborhood ORDER BY 1",
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
@@ -1423,7 +1423,7 @@
     "from": "now-90d",
     "to": "now"
   },
-  "timezone": "browser",
+  "timezone": "Europe/Sarajevo",
   "title": "OLX.ba Exits & Price Endings",
   "uid": "olx-exits",
   "version": 1,

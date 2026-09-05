@@ -26,7 +26,12 @@ function ensureSchema(pool) {
 /** Wipe all data tables (schema objects stay). Keeps tests order-independent. */
 async function reset(pool) {
   await pool.query(`TRUNCATE listings, price_history, saved_searches,
-                            search_results, scrape_runs RESTART IDENTITY CASCADE`);
+                            search_results, scrape_runs, raw_api_responses,
+                            listing_state_history, listing_price_events,
+                            listing_daily RESTART IDENTITY CASCADE`);
+  await pool.query(`UPDATE analytics_refresh_state
+                       SET pending_from_day = NULL, pending_through_day = NULL,
+                           last_successful_refresh_at = NULL, updated_at = now()`);
 }
 
 /** Fresh Db wired to TEST_DATABASE_URL with the schema ensured (suite bootstrap). */

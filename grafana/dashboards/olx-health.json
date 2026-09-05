@@ -1173,7 +1173,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 50
+        "y": 55
       },
       "panels": [],
       "id": 20
@@ -1213,7 +1213,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 51
+        "y": 56
       },
       "title": "Errors grouped — last 7 d",
       "description": "scrape_runs error messages with digits masked to '#', so one recurring bug (markup change, timeout on one search) separates from many transient ones.",
@@ -1282,7 +1282,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 61
+        "y": 66
       },
       "title": "Run duration over time",
       "description": "Average (blue) and worst-case (orange) runtime per hour across all searches. A gradual creep is the leading indicator of OLX throttling before runs start failing.",
@@ -1311,6 +1311,206 @@
         }
       ],
       "id": 22
+    },
+    {
+      "type": "row",
+      "title": "Refactor data quality",
+      "id": 23,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 50
+      },
+      "panels": []
+    },
+    {
+      "id": 24,
+      "title": "Incomplete searches · 24 h",
+      "type": "stat",
+      "description": "Search runs that completed with an incomplete or truncated result set. These observations must not be treated as authoritative inventory closures.",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 51
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "—"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT count(*)::bigint AS incomplete\nFROM scrape_runs\nWHERE is_complete = FALSE\n  AND started_at > now() - INTERVAL '24 hours'",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "title": "Detail backlog · eligible actives",
+      "type": "stat",
+      "description": "Active listings seen within the 14-day eligibility window without successful detail enrichment.",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 51
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "—"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT count(*)::bigint AS backlog\nFROM listings\nWHERE closed_at IS NULL\n  AND last_seen > now() - INTERVAL '14 days'\n  AND details_fetched_at IS NULL",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 26,
+      "title": "Rejected history · 30 d",
+      "type": "stat",
+      "description": "Canonical price evidence rejected as invalid or conflicting during the last 30 days.",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 51
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "—"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT count(*)::bigint AS rejected\nFROM listing_price_events\nWHERE price_state IN ('invalid', 'conflict')\n  AND ingested_at > now() - INTERVAL '30 days'",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 27,
+      "title": "Analytics refresh age",
+      "type": "stat",
+      "description": "Seconds since the last successful listing_daily rebuild. A growing value means pending historical analytics work or a failed refresh.",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 51
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "—"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT COALESCE(EXTRACT(EPOCH FROM (now() - last_successful_refresh_at)), 0)::bigint AS age_seconds\nFROM analytics_refresh_state\nWHERE scope = 'listing_daily'",
+          "refId": "A"
+        }
+      ]
     }
   ],
   "refresh": "5m",
@@ -1332,13 +1532,13 @@
           "type": "postgres",
           "uid": "olx-postgres"
         },
-        "definition": "SELECT category AS __value, category AS __text FROM saved_searches WHERE category IS NOT NULL GROUP BY category ORDER BY 1",
+        "definition": "SELECT category AS __value, category AS __text FROM (SELECT category FROM saved_searches WHERE category IS NOT NULL UNION SELECT unnest(category_memberships) FROM listing_daily) s WHERE category IS NOT NULL GROUP BY category ORDER BY 1",
         "includeAll": true,
         "label": "Category",
         "multi": false,
         "name": "category",
         "options": [],
-        "query": "SELECT category AS __value, category AS __text FROM saved_searches WHERE category IS NOT NULL GROUP BY category ORDER BY 1",
+        "query": "SELECT category AS __value, category AS __text FROM (SELECT category FROM saved_searches WHERE category IS NOT NULL UNION SELECT unnest(category_memberships) FROM listing_daily) s WHERE category IS NOT NULL GROUP BY category ORDER BY 1",
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
@@ -1351,7 +1551,7 @@
     "from": "now-48h",
     "to": "now"
   },
-  "timezone": "browser",
+  "timezone": "Europe/Sarajevo",
   "title": "OLX Scraper Health",
   "uid": "olx-health",
   "version": 1,

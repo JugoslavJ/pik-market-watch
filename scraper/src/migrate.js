@@ -2,26 +2,19 @@
 // Startup migration runner: applies db/init/*.sql (filename order) exactly
 // once, tracked in a schema_migrations table.
 //
-// Why the tolerant path exists: volumes initialized before this mechanism
-// already contain 01's tables. Replaying 01 there fails immediately with
-// "duplicate object"; that specific failure is treated as "file is already
-// effectively present", logged, and NOT recorded — so any *new* file (02,
-// 03, …) still applies, and the duplicate-heavy one simply retries harmlessly
-// on every boot. All other errors crash startup loudly.
+// The complete migration run uses one dedicated pool client and one
+// transaction. A transaction-scoped advisory lock serializes multiple scraper
+// processes before either process reads the migration ledger. This matters for
+// a deploy where two instances can start at the same time: a migration and its
+// tracking row are one atomic unit, and a failed migration rolls back both.
 //
-// Each file runs in PostgreSQL's implicit transaction for multi-statement
-// simple queries, so a file is applied completely or not at all.
+// Migration errors are deliberately not made tolerant. The consolidated
+// schema and the generated neighborhood migration are idempotent themselves;
+// swallowing an unexpected error would make a partially applied database look
+// healthy and prevent the next boot from surfacing the problem.
 
 const fs = require("fs");
 const path = require("path");
-
-// SQLSTATEs whose meaning is "that object already exists".
-const DUPLICATE_CODES = new Set([
-  "42P07", // duplicate_table (also views)
-  "42710", // duplicate_object (constraints, functions, …)
-  "42701", // duplicate_column
-  "42723", // duplicate_function
-]);
 
 async function applyMigrations(pool, dir, log = () => {}) {
   if (!dir || !fs.existsSync(dir)) {
@@ -29,39 +22,66 @@ async function applyMigrations(pool, dir, log = () => {}) {
     return;
   }
 
-  await pool.query(
-    `CREATE TABLE IF NOT EXISTS schema_migrations (
-       filename   TEXT PRIMARY KEY,
-       applied_at TIMESTAMPTZ NOT NULL DEFAULT now())`,
-  );
-
   const files = fs
     .readdirSync(dir)
     .filter((f) => f.endsWith(".sql"))
     .sort();
-  for (const file of files) {
-    const done = await pool.query(
-      "SELECT 1 FROM schema_migrations WHERE filename = $1",
-      [file],
-    );
-    if (done.rowCount) continue;
+  const client = await pool.connect();
+  const applied = [];
+  let inTransaction = false;
 
-    const sql = fs.readFileSync(path.join(dir, file), "utf8");
-    try {
-      await pool.query(sql);
-      await pool.query("INSERT INTO schema_migrations (filename) VALUES ($1)", [
-        file,
-      ]);
-      log(`applied ${file}`);
-    } catch (err) {
-      if (DUPLICATE_CODES.has(err.code)) {
-        log(`skipped ${file} — objects already exist (${err.code})`);
-      } else {
+  try {
+    await client.query("BEGIN");
+    inTransaction = true;
+
+    // hashtextextended gives us a stable bigint advisory-lock key without
+    // reserving a magic integer that could collide with application locks.
+    await client.query(
+      "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+      ["pik-market-watch schema migrations"],
+    );
+    await client.query(
+      `CREATE TABLE IF NOT EXISTS schema_migrations (
+         filename   TEXT PRIMARY KEY,
+         applied_at TIMESTAMPTZ NOT NULL DEFAULT now())`,
+    );
+
+    for (const file of files) {
+      const done = await client.query(
+        "SELECT 1 FROM schema_migrations WHERE filename = $1",
+        [file],
+      );
+      if (done.rowCount) continue;
+
+      const sql = fs.readFileSync(path.join(dir, file), "utf8");
+      try {
+        await client.query(sql);
+        await client.query(
+          "INSERT INTO schema_migrations (filename) VALUES ($1)",
+          [file],
+        );
+        applied.push(file);
+      } catch (err) {
         throw new Error(`migration ${file} failed: ${err.message}`, {
           cause: err,
         });
       }
     }
+
+    await client.query("COMMIT");
+    inTransaction = false;
+    for (const file of applied) log(`applied ${file}`);
+  } catch (err) {
+    if (inTransaction) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackError) {
+        err.rollbackError = rollbackError;
+      }
+    }
+    throw err;
+  } finally {
+    client.release();
   }
 }
 

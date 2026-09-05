@@ -110,6 +110,16 @@ async function runAll(db) {
     }
   }
 
+  if (okRuns > 0 && typeof db.rebuildDailyInventory === "function") {
+    try {
+      await db.rebuildDailyInventory();
+      if (typeof db.purgeRawResponses === "function")
+        await db.purgeRawResponses();
+    } catch (err) {
+      log(`✖ analytics maintenance failed: ${err.message || err}`);
+    }
+  }
+
   state.lastRunAt = new Date().toISOString();
 }
 

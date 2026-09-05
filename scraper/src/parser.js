@@ -15,6 +15,17 @@
 
 const BIH_BBOX = { latMin: 42.4, latMax: 46.4, lonMin: 15.5, lonMax: 19.9 };
 
+const {
+  dateFromUnixSeconds,
+  finiteNumber,
+  normalizeArea,
+  normalizeDealType,
+  normalizeHistoryWithRejections,
+  normalizeId,
+  normalizePpm2,
+  normalizePrice,
+} = require("./normalization");
+
 function inBiH(lat, lon) {
   return (
     lat >= BIH_BBOX.latMin &&
@@ -26,26 +37,9 @@ function inBiH(lat, lon) {
 
 // ── value coercion helpers ───────────────────────────────────────────────────
 
-function cleanNumberString(v) {
-  return String(v ?? "").replace(/\s/g, "");
-}
-
 /** Tolerant float: handles "1.636", "72,5", "1636". Returns null outside [min,max]. */
 function numOrNull(v, min, max) {
-  const s = cleanNumberString(v);
-  if (!s) return null;
-  const hasComma = s.includes(","),
-    hasDot = s.includes(".");
-  let t = s;
-  if (hasComma && hasDot) {
-    t =
-      s.lastIndexOf(".") > s.lastIndexOf(",")
-        ? s.replace(/,/g, "")
-        : s.replace(/\./g, "").replace(",", ".");
-  } else if (hasComma) {
-    t = s.replace(",", ".");
-  }
-  const n = parseFloat(t);
+  const n = finiteNumber(v);
   return Number.isFinite(n) && n >= min && n <= max ? n : null;
 }
 
@@ -143,7 +137,7 @@ const CHAR_CODE_HANDLERS = {
 /** Article id from a listing URL (/artikal/<id>…). */
 function extractArticleId(url) {
   const m = String(url || "").match(/\/artikal\/(\d+)/i);
-  return m ? m[1] : null;
+  return m && normalizeId(m[1]) !== null ? m[1] : null;
 }
 
 // ── shared bits ──────────────────────────────────────────────────────────────
@@ -159,8 +153,12 @@ function specialLabelValue(item, label) {
 
 /** Coordinates only when plausible inside BiH. */
 function pinOf(loc) {
-  const lat = Number(loc && loc.lat),
-    lon = Number(loc && loc.lon);
+  const point =
+    loc && loc.location && typeof loc.location === "object"
+      ? loc.location
+      : loc;
+  const lat = finiteNumber(point && point.lat),
+    lon = finiteNumber(point && point.lon);
   if (!Number.isFinite(lat) || !Number.isFinite(lon) || !inBiH(lat, lon)) {
     return { latitude: null, longitude: null };
   }
@@ -176,26 +174,28 @@ function pinOf(loc) {
  */
 function parseSearchItem(item) {
   if (!item || typeof item !== "object") return null;
-  const id = Number(item.id);
-  if (!Number.isFinite(id)) return null;
+  const id = normalizeId(item.id);
+  if (id === null) return null;
   const title = typeof item.title === "string" ? item.title.trim() : "";
   if (title.length <= 2) return null; // too short to be a real listing title
 
   const url = `https://olx.ba/artikal/${id}`;
 
-  // price: 0 means "Na upit" (display_price says so explicitly).
-  const priceNum = Number(item.price);
-  const price = Number.isFinite(priceNum) && priceNum > 0 ? priceNum : null;
   const displayPrice =
     typeof item.display_price === "string" ? item.display_price.trim() : "";
+  const dealType = normalizeDealType(item.listing_type);
+  const isRent = dealType === "rent";
+  const priceQuality = normalizePrice(item.price, dealType, {
+    displayPrice,
+  });
+  const price = priceQuality.price;
   const priceText =
-    displayPrice || (price === null ? "Na upit" : String(price));
-
-  let isRent = /rent|iznajm|najam/i.test(String(item.listing_type || ""));
+    displayPrice ||
+    (priceQuality.state === "unpriced" ? "Na upit" : String(item.price ?? ""));
   const isStudio = /garsonjera/i.test(title);
 
   // Sanity bounds for floor area (m²).
-  const sqm = numOrNull(specialLabelValue(item, "Kvadrata"), 5, 500);
+  const sqm = normalizeArea(specialLabelValue(item, "Kvadrata"));
 
   let rooms = isStudio ? "0" : null;
   if (!isStudio) {
@@ -208,12 +208,7 @@ function parseSearchItem(item) {
     }
   }
 
-  // Mislabelled ads: implausibly cheap "sale" prices are really rents.
-  if (!isRent && price !== null && price < 3000) isRent = true;
-
-  let ppm2 =
-    !isRent && price !== null && sqm > 0 ? Math.round(price / sqm) : null;
-  if (ppm2 !== null && ppm2 > 15000) ppm2 = null; // implausible parse
+  const ppm2 = normalizePpm2(price, sqm, dealType);
 
   return {
     articleId: id,
@@ -225,14 +220,16 @@ function parseSearchItem(item) {
     priceText,
     ppm2,
     isRent,
+    dealType,
+    priceState: priceQuality.state,
+    priceReason: priceQuality.reason,
+    pricePresent: Object.prototype.hasOwnProperty.call(item, "price"),
     ...pinOf(item.location),
     // Search cards only carry the renewal/bump stamp (`date`), never the true
     // creation time — that lives solely on the ad's own endpoint. Emitted as
     // renewedAt so saveCards() can refresh it every cycle without ever
     // polluting published_at (day created).
-    renewedAt: Number.isFinite(Number(item.date))
-      ? new Date(Number(item.date) * 1000)
-      : null,
+    renewedAt: dateFromUnixSeconds(item.date),
     sellerType: SELLER_TYPES.has(item.user_type) ? item.user_type : null,
     apiStatus: typeof item.status === "string" ? item.status : null,
   };
@@ -271,21 +268,36 @@ function parseSearchPage(payload) {
  */
 function parseListingDetail(json, fallbackId) {
   if (!json || typeof json !== "object") return null;
-  const articleId = Number.isFinite(Number(json.id))
-    ? Number(json.id)
-    : Number(fallbackId);
-  if (!Number.isFinite(articleId)) return null;
+  const articleId = normalizeId(json.id) ?? normalizeId(fallbackId);
+  if (articleId === null) return null;
+
+  const displayPrice =
+    typeof json.display_price === "string" ? json.display_price.trim() : "";
+  const dealType = normalizeDealType(json.listing_type);
+  const isRent = dealType === "rent";
+  const priceQuality = normalizePrice(json.price, dealType, { displayPrice });
+  const historyResult = normalizeHistoryWithRejections(json.price_history, {
+    dealType,
+  });
 
   const detail = {
     articleId,
     ...pinOf(json.location),
     sqm: null,
-    publishedAt: Number.isFinite(Number(json.created_at))
-      ? new Date(Number(json.created_at) * 1000)
-      : null,
-    renewedAt: Number.isFinite(Number(json.date))
-      ? new Date(Number(json.date) * 1000)
-      : null,
+    publishedAt: dateFromUnixSeconds(json.created_at),
+    renewedAt: dateFromUnixSeconds(json.date),
+    price: priceQuality.price,
+    priceText:
+      displayPrice ||
+      (priceQuality.state === "unpriced"
+        ? "Na upit"
+        : String(json.price ?? "")),
+    ppm2: null,
+    isRent,
+    dealType,
+    priceState: priceQuality.state,
+    priceReason: priceQuality.reason,
+    pricePresent: Object.prototype.hasOwnProperty.call(json, "price"),
     sellerType:
       json.user && SELLER_TYPES.has(json.user.type) ? json.user.type : null,
     roomsDetail: null,
@@ -306,16 +318,15 @@ function parseListingDetail(json, fallbackId) {
     favorites: smallInt(json.favorites, 0, 1000000),
     characteristics: {},
     apiStatus: typeof json.status === "string" ? json.status : null,
-    apiPriceHistory: Array.isArray(json.price_history)
-      ? json.price_history
-          .filter((p) => p && Number.isFinite(Number(p.price)))
-          .map((p) => ({
-            price: Number(p.price),
-            date: Number.isFinite(Number(p.created_at))
-              ? Number(p.created_at)
-              : null,
-          }))
+    // Keep the source response separately; apiPriceHistory is retained as a
+    // compatibility field but is now the normalized, valid-only timeline.
+    sourcePriceHistory: Array.isArray(json.price_history)
+      ? json.price_history.map((entry) => ({ ...entry }))
       : null,
+    apiPriceHistory: Array.isArray(json.price_history)
+      ? historyResult.events
+      : null,
+    priceHistoryRejections: historyResult.rejected,
   };
 
   for (const attr of Array.isArray(json.attributes) ? json.attributes : []) {
@@ -326,10 +337,9 @@ function parseListingDetail(json, fallbackId) {
     const trimmed = String(raw).trim();
     if (trimmed === "") continue;
 
-    const numeric = /^-?\d+(?:\.\d+)?$/.test(cleanNumberString(trimmed));
-    detail.characteristics[code] = numeric
-      ? numOrNull(trimmed, -Infinity, Infinity)
-      : trimmed;
+    const parsedNumeric = finiteNumber(trimmed);
+    const numeric = parsedNumeric !== null;
+    detail.characteristics[code] = numeric ? parsedNumeric : trimmed;
 
     const handler = CHAR_CODE_HANDLERS[code];
     if (handler) handler(trimmed, detail);
@@ -338,9 +348,11 @@ function parseListingDetail(json, fallbackId) {
   // kvadrata is stored raw above AND feeds the typed sqm column (same 5–500
   // sanity bounds as the search-card path).
   if (detail.characteristics["kvadrata"] != null) {
-    const v = numOrNull(detail.characteristics["kvadrata"], 5, 500);
+    const v = normalizeArea(detail.characteristics["kvadrata"]);
     if (v !== null) detail.sqm = v;
   }
+
+  detail.ppm2 = normalizePpm2(detail.price, detail.sqm, detail.dealType);
 
   return detail;
 }

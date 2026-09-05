@@ -45,11 +45,11 @@ needsDb(
     const pool = new Pool({ connectionString: await recreateDb("mig_fresh") });
     await applyMigrations(pool, FULL_DIR, log);
     assert.equal(await fnCount(pool), 2);
-    assert.equal(await recorded(pool), 2); // 01-schema + 11-neighborhoods
+    assert.equal(await recorded(pool), 4); // 01-schema + 11-neighborhoods + 12/13-refactor
 
     await applyMigrations(pool, FULL_DIR, log); // second boot
     assert.equal(await fnCount(pool), 2);
-    assert.equal(await recorded(pool), 2);
+    assert.equal(await recorded(pool), 4);
 
     // Dashboard panel query runs through the freshly created function:
     const r = await pool.query(
@@ -92,7 +92,7 @@ needsDb(
     // Boot against the squashed directory: nothing to apply, nothing breaks.
     await applyMigrations(pool, FULL_DIR, log);
     assert.equal(await fnCount(pool), 2);
-    assert.equal(await recorded(pool), 12); // 2 on-disk files + 10 historical rows
+    assert.equal(await recorded(pool), 14); // 4 on-disk files + 10 historical rows
 
     const r = await pool.query(
       "SELECT count(*)::int AS n FROM listings_filtered(ARRAY['apartments'], 0, 99999, NULL)",
@@ -146,7 +146,7 @@ needsDb(
 
     await applyMigrations(pool, FULL_DIR, log);
     assert.equal(await fnCount(pool), 2);
-    assert.equal(await recorded(pool), 2);
+    assert.equal(await recorded(pool), 4);
 
     // Self-heal added the closure columns, and the legacy row remains
     // queryable through the dashboard's exact filter call:
@@ -190,6 +190,60 @@ needsDb(
       await pool.query(`SELECT count(*)::int AS n FROM information_schema.columns
     WHERE table_name = 'v_active_listings' AND column_name = 'details_fetched_at'`);
     assert.equal(vc.rows[0].n, 1);
+    await pool.end();
+  },
+);
+
+needsDb(
+  "migrations: refactor contract tables, indexes and run metadata exist",
+  async () => {
+    const pool = new Pool({
+      connectionString: await recreateDb("mig_refactor_contract"),
+    });
+    await applyMigrations(pool, FULL_DIR, log);
+
+    const tables = await pool.query(`
+      SELECT table_name
+        FROM information_schema.tables
+       WHERE table_schema = 'public'
+         AND table_name IN (
+           'raw_api_responses', 'listing_state_history', 'listing_price_events',
+           'listing_daily', 'analytics_refresh_state')`);
+    assert.deepEqual(tables.rows.map((row) => row.table_name).sort(), [
+      "analytics_refresh_state",
+      "listing_daily",
+      "listing_price_events",
+      "listing_state_history",
+      "raw_api_responses",
+    ]);
+
+    const runColumns = await pool.query(`
+      SELECT column_name
+        FROM information_schema.columns
+       WHERE table_name = 'scrape_runs'
+         AND column_name IN ('is_complete', 'failure_reason', 'truncation_reason')`);
+    assert.deepEqual(runColumns.rows.map((row) => row.column_name).sort(), [
+      "failure_reason",
+      "is_complete",
+      "truncation_reason",
+    ]);
+
+    const dailyKey = await pool.query(`
+      SELECT count(*)::int AS n
+        FROM pg_constraint
+       WHERE conrelid = 'listing_daily'::regclass
+         AND contype = 'p'`);
+    assert.equal(dailyKey.rows[0].n, 1);
+
+    const refresh = await pool.query(
+      "SELECT scope FROM analytics_refresh_state WHERE scope = 'listing_daily'",
+    );
+    assert.deepEqual(refresh.rows, [{ scope: "listing_daily" }]);
+    const analytics = await pool.query(`
+      SELECT count(*)::int AS n
+        FROM information_schema.routines
+       WHERE routine_name IN ('market_daily_filtered', 'rebuild_listing_daily')`);
+    assert.equal(analytics.rows[0].n, 2);
     await pool.end();
   },
 );

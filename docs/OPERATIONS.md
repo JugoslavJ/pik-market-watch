@@ -8,12 +8,14 @@ Configuration knobs, backups, scraping/deployment workflows and troubleshooting.
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `olx` / — / `olx` | Database credentials (required password) |
 | `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD` | `admin` / required | Grafana login |
 | `SCRAPE_INTERVAL_MINUTES` | `720` | Minutes between scheduled scrapes |
+| `DETAIL_REFRESH_DAYS` | `7` | Refresh successful listing details after this many days |
+| `RAW_RESPONSE_RETENTION_DAYS` | `30` | Retain raw search/detail JSON for this many days |
 | `POSTGRES_APP_PASSWORD` / `POSTGRES_READER_PASSWORD` | required | Role passwords (see `db/init/zz-database-roles.sh`) — **URL-safe characters only** (`openssl rand -hex 24`); they are interpolated into `postgres://` URLs |
 | `GRAFANA_BIND` | `0.0.0.0` | Interface for the published `:3000` port — set to a LAN/WireGuard IP to keep dashboards off the public internet |
 | `SCRAPE_USER_AGENT` | bundled Chrome UA | Override when the default ages into an obvious bot fingerprint |
 | `ALERT_EMAIL_TO` + `GRAFANA_SMTP_*` | unset | Recipient + SMTP host/user/password/from for the provisioned *"No successful scrape in 26 h"* alert; without SMTP the rule still evaluates and shows state in the Grafana UI (uncomment `GF_SMTP_*` in compose to deliver mail) |
 
-Scraper-only tuning (set in `docker-compose.yml`'s `environment:` block): `MAX_PAGES` (30 pages × `API_PER_PAGE`), `CONCURRENCY` (3 pages in parallel), `PAGE_DELAY_MS` (1500 ms between waves), `API_PER_PAGE` (40), `API_TIMEOUT_MS` (20000), `MAX_GEO_FETCHES` (25 `/api/listings` calls per run), `SEARCH_URLS="url1,url2"` instead of the JSON file.
+Scraper-only tuning (set in `docker-compose.yml`'s `environment:` block): `MAX_PAGES` (30 pages × `API_PER_PAGE`), `CONCURRENCY` (3 pages in parallel), `PAGE_DELAY_MS` (1500 ms between waves), `API_PER_PAGE` (40), `API_TIMEOUT_MS` (20000), `MAX_GEO_FETCHES` (25 `/api/listings` calls per run), `DETAIL_REFRESH_DAYS` (7), `RAW_RESPONSE_RETENTION_DAYS` (30), `SEARCH_URLS="url1,url2"` instead of the JSON file.
 
 ---
 ## Operations
@@ -125,6 +127,19 @@ docker compose run --rm scraper node src/backfill-geo.js             # active li
 docker compose run --rm scraper node src/backfill-geo.js --all       # everything ever stored
 docker compose run --rm scraper node src/backfill-geo.js --max=100   # cap the run size
 # long runs: add -d --name olx-backfill and follow with `docker logs -f olx-backfill`
+```
+
+Apply database migrations without starting a scrape:
+
+```bash
+docker compose run --rm scraper node src/migrate-only.js
+```
+
+Convert legacy price history offline (no OLX requests):
+
+```bash
+docker compose run --rm scraper node src/backfill-price-history.js --dry-run
+docker compose run --rm scraper node src/backfill-price-history.js --checkpoint=/tmp/price-history.checkpoint
 ```
 
 One-off scrape (testing, or triggered by an external cron) — `compose run`
@@ -304,5 +319,3 @@ server-side files, or touch anything outside this database.
   `remote-restore.sh` audits archive ownership before dropping anything, so drifted dumps fail fast with the offending owners printed.
 
 > Note: scraping olx.ba is for personal analysis only — keep intervals polite.
-
-

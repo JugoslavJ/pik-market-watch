@@ -184,7 +184,10 @@ async function fetchDetailsInBatches(articleIds, opts, log = () => {}) {
       batch.map(async (id) => {
         if (delayMs) await sleep(delayMs);
         try {
-          return parseListingDetail(await fetchListing(id, timeoutMs), id);
+          const sourcePayload = await fetchListing(id, timeoutMs);
+          const parsed = parseListingDetail(sourcePayload, id);
+          if (parsed) parsed.sourcePayload = sourcePayload;
+          return parsed;
         } catch (err) {
           log(
             `⌖ ${id}: detail fetch failed (${String(err.message || err).slice(0, 120)})`,

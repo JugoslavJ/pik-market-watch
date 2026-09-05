@@ -104,6 +104,8 @@ services:
     environment:
       DATABASE_URL: postgres://${POSTGRES_APP_USER:-olx_app}:${POSTGRES_APP_PASSWORD}@db:5432/${POSTGRES_DB:-olx}
       SCRAPE_INTERVAL_MINUTES: ${SCRAPE_INTERVAL_MINUTES:-720}
+      DETAIL_REFRESH_DAYS: ${DETAIL_REFRESH_DAYS:-7}
+      RAW_RESPONSE_RETENTION_DAYS: ${RAW_RESPONSE_RETENTION_DAYS:-30}
       # NOTE: do NOT add RUN_ONCE here. Combined with this service's restart
       # policy, a finished one-shot container would be relaunched forever
       # (= endless scrape loop). For one-off runs use:
