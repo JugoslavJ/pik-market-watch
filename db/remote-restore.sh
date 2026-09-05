@@ -83,8 +83,9 @@ fi
 # DEFAULT ACL entries are excluded: build_toc filters those separately and
 # their trailing token is a grantee, not the owner.
 drifted=$(docker compose exec -T db sh -c "
-    pg_restore -l '$incoming' | grep -v '^;' | grep -v 'DEFAULT ACL' |
-    awk '\$NF != \"$app_user\" {print \$NF}' | sort -u" 2>/dev/null || :)
+    pg_restore -l '/backups/olx-sync-incoming.dump' |
+    grep -v '^;' | grep -v 'DEFAULT ACL' |
+    awk '\$NF != \"$app_user\" {print \$NF}' | sort -u")
 if [ -n "$drifted" ]; then
   echo "RESTORE_ERROR: archive contains objects not owned by $app_user:" >&2
   printf '%s\n' "$drifted" | sed 's/^/RESTORE_ERROR:   /' >&2
@@ -193,4 +194,3 @@ if [ "$was_running" = "1" ]; then
 fi
 
 echo "RESTORE_OK $stamp ($size bytes)"
-

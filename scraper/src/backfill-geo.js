@@ -15,6 +15,7 @@
 const config = require("./config");
 const Db = require("./db");
 const { fetchDetailsInBatches } = require("./api");
+const { PARSER_BUILD_VERSION } = require("./parser");
 const { makeLogger } = require("./util");
 
 const log = makeLogger("backfill");
@@ -24,7 +25,9 @@ const log = makeLogger("backfill");
   const maxArg = process.argv.find((a) => /^--max=\d+$/.test(a));
   const max = maxArg ? parseInt(maxArg.split("=")[1], 10) : Infinity;
 
-  const db = new Db(config.databaseUrl);
+  const db = new Db(config.databaseUrl, {
+    rawResponseRetentionDays: config.rawResponseRetentionDays,
+  });
   await db.waitUntilReady();
 
   const targets = (
@@ -54,6 +57,15 @@ const log = makeLogger("backfill");
       timeoutMs: config.apiTimeoutMs,
       concurrency: config.geoConcurrency,
       delayMs: config.geoDelayMs,
+      onError: db.archiveResponseDiagnostic
+        ? (articleId, error) =>
+            db.archiveResponseDiagnostic({
+              articleId,
+              requestKind: "detail",
+              error,
+              buildVersion: PARSER_BUILD_VERSION,
+            })
+        : undefined,
       async onBatch(results, doneCount, total) {
         // A fetched listing counts as done even when nothing new was learned —
         // details_fetched_at prevents endlessly re-fetching barren ads.

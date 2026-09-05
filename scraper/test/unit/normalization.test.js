@@ -5,6 +5,7 @@ const assert = require("node:assert/strict");
 const {
   PRICE_STATES,
   dateFromUnixSeconds,
+  finiteNumber,
   normalizeArea,
   normalizeHistoryWithRejections,
   normalizeId,
@@ -44,6 +45,15 @@ test("numeric IDs, locale strings, area bounds and missing-area prices are safe"
   assert.equal(normalizePpm2(3000, null, "sale"), null);
   assert.equal(normalizePpm2(3000, 5, "sale"), 600);
   assert.equal(normalizePpm2(3000, 1, "sale"), null);
+});
+
+test("localized numbers accept validated grouping and decimal separators", () => {
+  assert.equal(finiteNumber("1.234,50"), 1234.5);
+  assert.equal(finiteNumber("1,234.50"), 1234.5);
+  assert.equal(finiteNumber("12.345,67", { integerLike: true }), 12345.67);
+  assert.equal(finiteNumber("72,5"), 72.5);
+  assert.equal(finiteNumber("1.23.456"), null);
+  assert.equal(finiteNumber("1.234,5.6"), null);
 });
 
 test("history accepts API and stored formats, sorts and exact-deduplicates", () => {

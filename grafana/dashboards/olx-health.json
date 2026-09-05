@@ -1375,7 +1375,7 @@
       "id": 25,
       "title": "Detail backlog · eligible actives",
       "type": "stat",
-      "description": "Active listings seen within the 14-day eligibility window without successful detail enrichment.",
+      "description": "Active listings eligible for a detail attempt: missing required fields, stale detail data or newer non-detail price evidence, subject to the retry cooldown.",
       "gridPos": {
         "h": 4,
         "w": 6,
@@ -1413,16 +1413,16 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT count(*)::bigint AS backlog\nFROM listings\nWHERE closed_at IS NULL\n  AND last_seen > now() - INTERVAL '14 days'\n  AND details_fetched_at IS NULL",
+          "rawSql": "SELECT count(*)::bigint AS backlog\nFROM listings\nWHERE closed_at IS NULL\n  AND last_seen > now() - INTERVAL '14 days'\n  AND (latitude IS NULL\n       OR longitude IS NULL\n       OR (sqm IS NULL AND price IS NOT NULL AND NOT is_rent)\n       OR details_fetched_at IS NULL\n       OR details_fetched_at <= now() - INTERVAL '7 days'\n       OR EXISTS (SELECT 1 FROM listing_price_events pe\n                 WHERE pe.article_id = listings.article_id\n                   AND pe.source <> 'detail'\n                   AND pe.ingested_at > COALESCE(listings.details_fetched_at, '-infinity'::timestamptz)))\n  AND (details_fetched_at IS NOT NULL\n       OR last_enrichment_attempted_at IS NULL\n       OR last_enrichment_attempted_at <= now() - INTERVAL '720 minutes')",
           "refId": "A"
         }
       ]
     },
     {
       "id": 26,
-      "title": "Rejected history · 30 d",
+      "title": "Invalid or conflicting price evidence · 30 d",
       "type": "stat",
-      "description": "Canonical price evidence rejected as invalid or conflicting during the last 30 days.",
+      "description": "Stored price assertions classified as invalid or conflicting during the last 30 days; these rows are retained evidence and excluded from the canonical priced state.",
       "gridPos": {
         "h": 4,
         "w": 6,
@@ -1507,7 +1507,163 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT EXTRACT(EPOCH FROM (now() - last_successful_refresh_at))::bigint AS age_seconds\nFROM analytics_refresh_state\nWHERE scope = 'listing_daily' AND last_successful_refresh_at IS NOT NULL",
+          "rawSql": "SELECT CASE WHEN s.scope IS NULL OR s.last_successful_refresh_at IS NULL THEN NULL\n            ELSE EXTRACT(EPOCH FROM (now() - s.last_successful_refresh_at))::bigint END AS age_seconds\nFROM (VALUES ('listing_daily'::text)) expected(scope)\nLEFT JOIN analytics_refresh_state s ON s.scope = expected.scope",
+          "refId": "A"
+        }
+      ]
+    }
+    ,{
+      "id": 28,
+      "title": "Per-search freshness & phases",
+      "type": "table",
+      "description": "Each enabled saved search is evaluated independently. Freshness is based on the newest authoritative completed success; a failed or incomplete latest run remains visible beside the last success.",
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 55
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "unit": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "success_age_min"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "m"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "phase"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH searches AS (\n  SELECT ss.search_key, ss.name, COALESCE(ss.category, '(none)') AS category, ss.url,\n         ss.last_scraped_at,\n         latest.status AS latest_status, latest.started_at AS latest_started_at,\n         latest.finished_at AS latest_finished_at, latest.is_complete AS latest_is_complete,\n         latest.error AS latest_error, latest.failure_reason, latest.truncation_reason,\n         success.finished_at AS last_success_at\n  FROM saved_searches ss\n  LEFT JOIN LATERAL (\n    SELECT r.status, r.started_at, r.finished_at, r.is_complete, r.error,\n           r.failure_reason, r.truncation_reason\n    FROM scrape_runs r\n    WHERE r.search_key = ss.search_key\n    ORDER BY r.id DESC\n    LIMIT 1\n  ) latest ON TRUE\n  LEFT JOIN LATERAL (\n    SELECT r.finished_at\n    FROM scrape_runs r\n    WHERE r.search_key = ss.search_key\n      AND r.status = 'ok'\n      AND r.is_complete = TRUE\n      AND r.finished_at IS NOT NULL\n    ORDER BY r.finished_at DESC\n    LIMIT 1\n  ) success ON TRUE\n  WHERE ss.category IS NULL OR ss.category = ANY (ARRAY[${category:sqlstring}])\n)\nSELECT name, category, search_key,\n       CASE\n         WHEN last_success_at IS NULL THEN 'never successful'\n         WHEN last_success_at < now() - INTERVAL '6 hours' THEN 'stale'\n         WHEN latest_status = 'running' THEN 'running'\n         WHEN latest_status = 'error' THEN 'failed'\n         WHEN latest_is_complete = FALSE THEN 'incomplete'\n         ELSE 'ok'\n       END AS phase,\n       round(EXTRACT(EPOCH FROM (now() - last_success_at)) / 60)::int AS success_age_min,\n       latest_status, latest_is_complete, latest_started_at, latest_finished_at,\n       last_success_at, failure_reason, truncation_reason,\n       left(COALESCE(latest_error, ''), 240) AS latest_error, url\nFROM searches\nORDER BY last_success_at ASC NULLS FIRST, latest_started_at DESC NULLS LAST",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 29,
+      "title": "Analytics queue & freshness",
+      "type": "table",
+      "description": "A missing or never successful listing_daily refresh is shown explicitly as unknown. Pending age starts at the earliest invalidated Sarajevo day; an empty pending range means no queued rebuild is known.",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 67
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "unit": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "refresh_age_s"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "pending_age_h"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "h"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH expected AS (\n  SELECT 'listing_daily'::text AS scope\n), state AS (\n  SELECT e.scope, s.pending_from_day, s.pending_through_day,\n         s.last_successful_refresh_at, s.completed_through_day, s.updated_at\n  FROM expected e\n  LEFT JOIN analytics_refresh_state s ON s.scope = e.scope\n)\nSELECT CASE\n         WHEN last_successful_refresh_at IS NULL THEN 'unknown'\n         WHEN pending_from_day IS NOT NULL THEN 'pending'\n         ELSE 'current'\n       END AS status,\n       CASE WHEN last_successful_refresh_at IS NULL THEN NULL\n            ELSE EXTRACT(EPOCH FROM (now() - last_successful_refresh_at))::bigint END AS refresh_age_s,\n       CASE WHEN pending_from_day IS NULL THEN NULL\n            ELSE round(EXTRACT(EPOCH FROM (now() - (pending_from_day::timestamp AT TIME ZONE 'Europe/Sarajevo'))) / 3600.0, 1) END AS pending_age_h,\n       pending_from_day, pending_through_day, completed_through_day,\n       last_successful_refresh_at, updated_at\nFROM state",
           "refId": "A"
         }
       ]

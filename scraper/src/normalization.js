@@ -54,30 +54,68 @@ function finiteNumber(value, { integerLike = false } = {}) {
   if (!text) return null;
   text = text.replace(/(?:KM|BAM|EUR|USD|€|\$)/gi, "");
   text = text.trim();
-  if (!text || !/^[+-]?(?:\d+(?:[.,]\d+)?|[.,]\d+)$/.test(text)) {
+  if (!text) return null;
+
+  const sign = /^[+-]/.test(text) ? text[0] : "";
+  const unsigned = sign ? text.slice(1) : text;
+  if (!unsigned || !/^[\d.,]+$/.test(unsigned)) {
     return null;
   }
 
-  const commas = (text.match(/,/g) || []).length;
-  const dots = (text.match(/\./g) || []).length;
+  const commas = (unsigned.match(/,/g) || []).length;
+  const dots = (unsigned.match(/\./g) || []).length;
   if (commas && dots) {
     // The final separator is the decimal separator; all preceding separators
     // are grouping marks (1.234,50 and 1,234.50 both work).
-    const decimal = text.lastIndexOf(",") > text.lastIndexOf(".") ? "," : ".";
+    const decimal =
+      unsigned.lastIndexOf(",") > unsigned.lastIndexOf(".") ? "," : ".";
     const grouping = decimal === "," ? /\./g : /,/g;
-    text = text.replace(grouping, "").replace(decimal, ".");
-  } else if (commas) {
-    if (integerLike && /^[-+]?\d{1,3}(?:,\d{3})+$/.test(text)) {
-      text = text.replace(/,/g, "");
-    } else {
-      text = text.replace(",", ".");
+    const decimalIndex = unsigned.lastIndexOf(decimal);
+    const whole = unsigned.slice(0, decimalIndex);
+    const fractional = unsigned.slice(decimalIndex + 1);
+    if (
+      (decimal === "," ? commas : dots) !== 1 ||
+      !fractional ||
+      !/^\d+$/.test(fractional) ||
+      !validIntegerGrouping(whole, decimal === "," ? "." : ",")
+    ) {
+      return null;
     }
-  } else if (dots && integerLike && /^[-+]?\d{1,3}(?:\.\d{3})+$/.test(text)) {
-    text = text.replace(/\./g, "");
+    text = `${sign}${whole.replace(grouping, "")}.${fractional}`;
+  } else if (commas) {
+    if (commas > 1) {
+      if (!validIntegerGrouping(unsigned, ",")) return null;
+      text = `${sign}${unsigned.replace(/,/g, "")}`;
+    } else if (integerLike && /^\d{1,3},\d{3}$/.test(unsigned)) {
+      text = `${sign}${unsigned.replace(",", "")}`;
+    } else {
+      text = `${sign}${unsigned.replace(",", ".")}`;
+    }
+  } else if (dots) {
+    if (dots > 1) {
+      if (!validIntegerGrouping(unsigned, ".")) return null;
+      text = `${sign}${unsigned.replace(/\./g, "")}`;
+    } else if (integerLike && /^\d{1,3}\.\d{3}$/.test(unsigned)) {
+      text = `${sign}${unsigned.replace(".", "")}`;
+    } else {
+      text = `${sign}${unsigned}`;
+    }
+  } else {
+    text = `${sign}${unsigned}`;
   }
 
   const n = Number(text);
   return Number.isFinite(n) ? n : null;
+}
+
+function validIntegerGrouping(value, separator) {
+  if (/^\d+$/.test(value)) return true;
+  const groups = value.split(separator);
+  return (
+    groups.length > 1 &&
+    /^\d{1,3}$/.test(groups[0]) &&
+    groups.slice(1).every((group) => /^\d{3}$/.test(group))
+  );
 }
 
 function normalizeDealType(value) {

@@ -167,6 +167,25 @@ needsDb(
       [KEY_B],
     );
     assert.equal(links.rows[0].n, 0);
+
+    const history = await db.pool.query(
+      `SELECT source, price::text AS price, ppm2, is_closed, closed_at
+         FROM listing_state_history
+        WHERE article_id = 6006 AND event_type = 'closed'`,
+    );
+    assert.equal(history.rows.length, 1);
+    assert.equal(history.rows[0].source, "lifecycle");
+    assert.equal(history.rows[0].price, "100000.00");
+    assert.equal(history.rows[0].ppm2, 2000);
+    assert.equal(history.rows[0].is_closed, true);
+    assert.ok(history.rows[0].closed_at);
+
+    const refresh = await db.pool.query(
+      `SELECT pending_from_day, pending_through_day
+         FROM analytics_refresh_state WHERE scope = 'listing_daily'`,
+    );
+    assert.ok(refresh.rows[0].pending_from_day);
+    assert.ok(refresh.rows[0].pending_through_day);
   },
 );
 

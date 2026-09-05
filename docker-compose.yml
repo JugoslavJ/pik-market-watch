@@ -85,6 +85,63 @@ services:
     ports:
       - "127.0.0.1:5432:5432"   # host access for psql/GUIs; delete line to keep internal
 
+  # Schema changes run as a completed, one-shot job. Keeping this separate
+  # makes deploy order explicit and prevents a normal scraper restart from
+  # becoming the migration control plane.
+  migrator:
+    build: ./scraper
+    # `scrape` activates it automatically as scraper's dependency; `migrate`
+    # also permits an explicit schema-only run on the dashboard host.
+    profiles: ["migrate", "scrape", "maintenance"]
+    restart: "no"
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs:
+      - /tmp
+    pids_limit: 32
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_APP_USER:-olx_app}:${POSTGRES_APP_PASSWORD}@db:5432/${POSTGRES_DB:-olx}
+    volumes:
+      - ./db/init:/db/init:ro
+    entrypoint: ["node", "src/migrate-only.js"]
+    networks:
+      - backend
+
+  # Run retention and daily analytics independently from upstream scraping.
+  # Invoke on a host scheduler with --profile maintenance.
+  maintenance:
+    build: ./scraper
+    profiles: ["maintenance"]
+    restart: "no"
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs:
+      - /tmp
+    pids_limit: 32
+    depends_on:
+      db:
+        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_APP_USER:-olx_app}:${POSTGRES_APP_PASSWORD}@db:5432/${POSTGRES_DB:-olx}
+      MIGRATIONS_ON_STARTUP: "0"
+      RAW_RESPONSE_RETENTION_DAYS: ${RAW_RESPONSE_RETENTION_DAYS:-30}
+    volumes:
+      - ./db/init:/db/init:ro
+    entrypoint: ["node", "src/maintenance-only.js"]
+    networks:
+      - backend
+
   scraper:
     build: ./scraper
     container_name: olx-scraper
@@ -101,18 +158,25 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
     environment:
       DATABASE_URL: postgres://${POSTGRES_APP_USER:-olx_app}:${POSTGRES_APP_PASSWORD}@db:5432/${POSTGRES_DB:-olx}
+      # Migrations are gated by the completed migrator job. Set this to 1
+      # only for a deliberately standalone scraper deployment.
+      MIGRATIONS_ON_STARTUP: ${MIGRATIONS_ON_STARTUP:-0}
       SCRAPE_INTERVAL_MINUTES: ${SCRAPE_INTERVAL_MINUTES:-720}
       DETAIL_REFRESH_DAYS: ${DETAIL_REFRESH_DAYS:-7}
+      DETAIL_JOB_LEASE_MINUTES: ${DETAIL_JOB_LEASE_MINUTES:-30}
       RAW_RESPONSE_RETENTION_DAYS: ${RAW_RESPONSE_RETENTION_DAYS:-30}
+      ABANDONED_RUN_AFTER_MINUTES: ${ABANDONED_RUN_AFTER_MINUTES:-180}
       # NOTE: do NOT add RUN_ONCE here. Combined with this service's restart
       # policy, a finished one-shot container would be relaunched forever
       # (= endless scrape loop). For one-off runs use:
       #   docker compose run --rm scraper node src/index.js --once
     volumes:
       - ./config:/config:ro      # scraper reads /config/searches.json
-      - ./db/init:/db/init:ro    # scraper applies db/init/*.sql on startup
+      - ./db/init:/db/init:ro    # fallback migrations for standalone scraper runs
     ports:
       - "127.0.0.1:9100:9100"   # health/status JSON endpoint
     healthcheck:

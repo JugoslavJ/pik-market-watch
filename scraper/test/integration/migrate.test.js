@@ -7,6 +7,7 @@
 //      place by the self-heal block in 01-schema.sql
 const fs = require("node:fs");
 const path = require("node:path");
+const os = require("node:os");
 const assert = require("node:assert/strict");
 const { Pool } = require("pg");
 const applyMigrations = require("../../src/migrate");
@@ -52,6 +53,19 @@ needsDb(
     await applyMigrations(pool, FULL_DIR, log);
     assert.equal(await fnCount(pool), 2);
     assert.deepEqual(await recorded(pool), currentMigrations);
+    const checksums = await pool.query(
+      "SELECT filename, checksum FROM schema_migrations WHERE filename = ANY($1::text[]) ORDER BY filename",
+      [currentMigrations],
+    );
+    assert.deepEqual(
+      checksums.rows,
+      currentMigrations.map((filename) => ({
+        filename,
+        checksum: applyMigrations.migrationChecksum(
+          fs.readFileSync(path.join(FULL_DIR, filename), "utf8"),
+        ),
+      })),
+    );
 
     await applyMigrations(pool, FULL_DIR, log); // second boot
     assert.equal(await fnCount(pool), 2);
@@ -62,7 +76,67 @@ needsDb(
       "SELECT count(*)::int AS n FROM listings_filtered(ARRAY['apartments'], 0, 99999, NULL)",
     );
     assert.equal(typeof r.rows[0].n, "number");
+    const numeric = await pool.query(
+      "SELECT dashboard_numeric('1.5') AS valid, dashboard_numeric('1e3') AS malformed, dashboard_numeric('') AS blank",
+    );
+    assert.equal(Number(numeric.rows[0].valid), 1.5);
+    assert.equal(numeric.rows[0].malformed, null);
+    assert.equal(numeric.rows[0].blank, null);
     await pool.end();
+  },
+);
+
+needsDb(
+  "migrations: baselines legacy ledger rows and rejects edited applied files",
+  async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "pik-migrations-"));
+    const filename = "001-probe.sql";
+    const filePath = path.join(tempDir, filename);
+    const original = "CREATE TABLE migration_integrity_probe (id integer);\n";
+    fs.writeFileSync(filePath, original);
+
+    const pool = new Pool({
+      connectionString: await recreateDb("mig_integrity"),
+    });
+    try {
+      await applyMigrations(pool, tempDir, log);
+      const expected = applyMigrations.migrationChecksum(original);
+      assert.deepEqual(
+        (
+          await pool.query(
+            "SELECT checksum FROM schema_migrations WHERE filename = $1",
+            [filename],
+          )
+        ).rows,
+        [{ checksum: expected }],
+      );
+
+      // Simulate a pre-checksum ledger row. It is baselined once and remains
+      // protected against edits on subsequent boots.
+      await pool.query(
+        "UPDATE schema_migrations SET checksum = NULL WHERE filename = $1",
+        [filename],
+      );
+      await applyMigrations(pool, tempDir, log);
+      assert.equal(
+        (
+          await pool.query(
+            "SELECT checksum FROM schema_migrations WHERE filename = $1",
+            [filename],
+          )
+        ).rows[0].checksum,
+        expected,
+      );
+
+      fs.writeFileSync(filePath, `${original}-- edited after deployment\n`);
+      await assert.rejects(
+        applyMigrations(pool, tempDir, log),
+        /migration 001-probe\.sql has changed after being applied/,
+      );
+    } finally {
+      await pool.end();
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   },
 );
 
@@ -217,13 +291,14 @@ needsDb(
        WHERE table_schema = 'public'
          AND table_name IN (
            'raw_api_responses', 'listing_state_history', 'listing_price_events',
-           'listing_daily', 'analytics_refresh_state')`);
+           'listing_daily', 'analytics_refresh_state', 'scrape_run_pages')`);
     assert.deepEqual(tables.rows.map((row) => row.table_name).sort(), [
       "analytics_refresh_state",
       "listing_daily",
       "listing_price_events",
       "listing_state_history",
       "raw_api_responses",
+      "scrape_run_pages",
     ]);
 
     const runColumns = await pool.query(`

@@ -179,6 +179,63 @@ needsDb(
 );
 
 needsDb(
+  "raw response archives retain source payload and bounded diagnostics",
+  async () => {
+    await db.archiveSearchResponse({
+      runId: null,
+      requestKind: "search",
+      requestUrl: "https://olx.ba/api/search?category_id=23&page=1",
+      parserVersion: "search-v1",
+      buildVersion: "test-build",
+      payload: {
+        items: [{ id: 7003 }],
+        meta: { total: 1 },
+      },
+      sourcePayload: {
+        data: [{ id: 7003, title: "source" }],
+        meta: { total: 1, last_page: 1 },
+      },
+      requestMetadata: {
+        method: "GET",
+        url: "https://olx.ba/api/search?category_id=23&page=1",
+      },
+      responseMetadata: {
+        status: 200,
+        contentType: "application/json",
+        bytes: 42,
+        attempts: 1,
+      },
+    });
+    await db.archiveResponseDiagnostic({
+      articleId: null,
+      requestKind: "search",
+      requestUrl: "https://olx.ba/api/search?category_id=23&page=2",
+      error: Object.assign(new Error("blocked"), {
+        requestMetadata: { method: "GET" },
+        responseMetadata: { status: 403 },
+        diagnostic: { kind: "http", status: 403, body: "challenge" },
+      }),
+      buildVersion: "test-build",
+    });
+    const rows = await db.pool.query(
+      `SELECT parser_version, build_version, payload, source_payload,
+              request_metadata, response_metadata, diagnostic
+         FROM raw_api_responses
+        WHERE request_url LIKE '%category_id=23%'
+        ORDER BY id`,
+    );
+    assert.equal(rows.rows.length, 2);
+    assert.equal(rows.rows[0].build_version, "test-build");
+    assert.deepEqual(rows.rows[0].source_payload.data, [
+      { id: 7003, title: "source" },
+    ]);
+    assert.equal(rows.rows[0].response_metadata.status, 200);
+    assert.equal(rows.rows[1].diagnostic.kind, "http");
+    assert.equal(rows.rows[1].response_metadata.status, 403);
+  },
+);
+
+needsDb(
   "scalars are first-wins; renewed_at moves forward; characteristics merge",
   async () => {
     await seed(7002);
@@ -409,3 +466,71 @@ needsDb("daily rebuild normalizes nullable inferred flags", async () => {
   assert.equal(daily.membership_inferred, false);
   assert.equal(daily.attributes_inferred, false);
 });
+
+needsDb(
+  "daily rebuild preserves conflicting price quality without counting it as priced",
+  async () => {
+    const observedAt = new Date("2026-02-10T10:00:00Z");
+    await seed(7011, { price: 100000, sqm: 50, ppm2: 2000 }, KEY_A, observedAt);
+
+    await db.recordPriceEvents([
+      {
+        articleId: 7011,
+        effectiveAt: observedAt,
+        ingestedAt: new Date("2026-02-10T10:01:00Z"),
+        price: 90000,
+        dealType: "sale",
+        source: "detail",
+        isCurrent: true,
+        provenance: { observation: "conflicting_test_assertion" },
+      },
+    ]);
+
+    await db.pool.query(
+      "SELECT * FROM rebuild_listing_daily($1::date, $1::date)",
+      ["2026-02-10"],
+    );
+    const daily = await db.pool.query(
+      `SELECT price_state, price, ppm2
+         FROM listing_daily WHERE article_id = 7011 AND day = '2026-02-10'`,
+    );
+    assert.equal(daily.rows[0].price_state, "conflict");
+    assert.equal(daily.rows[0].price, null);
+    assert.equal(daily.rows[0].ppm2, null);
+  },
+);
+
+needsDb(
+  "detail enrichment records a historical detail_update observation",
+  async () => {
+    await seed(7012, { sqm: null, ppm2: null });
+    await db.enrichListings([
+      {
+        articleId: 7012,
+        latitude: 44.78,
+        longitude: 17.19,
+        sqm: 62,
+        price: 124000,
+        ppm2: 2000,
+        isRent: false,
+        sellerType: "private",
+        characteristics: { heating: "gas" },
+      },
+    ]);
+
+    const history = await db.pool.query(
+      `SELECT source, event_type, sqm, price, ppm2,
+            filter_attributes->>'sellerType' AS seller_type,
+            filter_attributes->>'latitude' AS latitude
+       FROM listing_state_history
+      WHERE article_id = 7012 AND event_type = 'detail_update'`,
+    );
+    assert.equal(history.rows.length, 1);
+    assert.equal(history.rows[0].source, "detail");
+    assert.equal(history.rows[0].sqm, "62.00");
+    assert.equal(history.rows[0].price, "124000.00");
+    assert.equal(history.rows[0].ppm2, 2000);
+    assert.equal(history.rows[0].seller_type, "private");
+    assert.equal(history.rows[0].latitude, "44.78");
+  },
+);

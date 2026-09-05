@@ -334,8 +334,8 @@
         "x": 16,
         "y": 1
       },
-      "title": "Sell-through · 30 d",
-      "description": "Closed ads ÷ (closed + active) over the last month — how much of current supply is leaving. Exit prices are last ASKING prices, not transaction prices.",
+      "title": "Observed exit ratio · 30 d",
+      "description": "Observed closed ads ÷ (closed + active) over the last month. This is a disappearance proxy; exit prices are last ASKING prices, not transaction prices.",
       "type": "stat",
       "options": {
         "colorMode": "value",
@@ -804,7 +804,7 @@
         "x": 14,
         "y": 13
       },
-      "title": "Closed / estimated active — weekly · all categories",
+      "title": "Closed / estimated active — daily · all categories",
       "description": "All categories and all deals. This is the same inventory-flow definition shown on Home, expressed as closed observations divided by estimated active inventory; it is not a transaction measure.",
       "type": "timeseries",
       "options": {

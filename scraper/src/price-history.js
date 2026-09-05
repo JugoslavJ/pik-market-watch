@@ -69,6 +69,15 @@ function normalizeEvent(event, { now = new Date() } = {}) {
   );
   if (!effectiveAt) return reject("invalid_effective_at");
 
+  const observedAtValue = event.observedAt ?? event.observed_at;
+  const observedAt =
+    observedAtValue == null ? effectiveAt : dateValue(observedAtValue);
+  if (!observedAt) return reject("invalid_observed_at");
+
+  const renewedAtValue = event.renewedAt ?? event.renewed_at;
+  const renewedAt = renewedAtValue == null ? null : dateValue(renewedAtValue);
+  if (renewedAtValue != null && !renewedAt) return reject("invalid_renewed_at");
+
   const source = String(event.source ?? "").trim();
   if (!source) return reject("missing_source");
 
@@ -76,6 +85,14 @@ function normalizeEvent(event, { now = new Date() } = {}) {
   if (provenance === null) return reject("invalid_provenance");
 
   const current = isCurrentEvent(event);
+  const effectiveAtBasis = String(
+    event.effectiveAtBasis ??
+      event.effective_at_basis ??
+      (current ? "observed" : "legacy"),
+  );
+  if (!["observed", "source_history", "legacy"].includes(effectiveAtBasis)) {
+    return reject("invalid_effective_at_basis");
+  }
   const explicitState = event.priceState ?? event.price_state;
   let priceState = explicitState == null ? null : String(explicitState);
   let price = event.price;
@@ -90,7 +107,13 @@ function normalizeEvent(event, { now = new Date() } = {}) {
     price = null;
     if (!current) return reject("historical_null_boundary");
   } else {
-    const quality = normalizePrice(price, dealTypeOf(event.dealType));
+    // Search events carry both dealType and the legacy isRent flag. Prefer
+    // the normalized dimension, while accepting the boolean for older event
+    // producers during the contract migration.
+    const quality = normalizePrice(
+      price,
+      dealTypeOf(event.dealType ?? (event.isRent === true ? "rent" : null)),
+    );
     if (quality.state === PRICE_STATES.VALID) {
       price = quality.price;
       priceState = PRICE_STATES.VALID;
@@ -121,6 +144,9 @@ function normalizeEvent(event, { now = new Date() } = {}) {
     event: {
       articleId,
       effectiveAt,
+      observedAt,
+      renewedAt,
+      effectiveAtBasis,
       ingestedAt: ingestedDate,
       price: priceState === PRICE_STATES.VALID ? price : null,
       priceState,
@@ -311,13 +337,17 @@ async function recordPriceEvents(pool, events, options = {}) {
     for (const event of insertedEvents) {
       const inserted = await client.query(
         `INSERT INTO listing_price_events
-           (article_id, effective_at, ingested_at, price, price_state, source, provenance)
-         VALUES ($1, $2, COALESCE($3::timestamptz, now()), $4, $5, $6, $7::jsonb)
+           (article_id, effective_at, observed_at, renewed_at, effective_at_basis,
+            ingested_at, price, price_state, source, provenance)
+         VALUES ($1, $2, $3, $4, $5, COALESCE($6::timestamptz, now()), $7, $8, $9, $10::jsonb)
          ON CONFLICT (article_id, effective_at, price, price_state) DO NOTHING
          RETURNING id`,
         [
           event.articleId,
           event.effectiveAt,
+          event.observedAt,
+          event.renewedAt,
+          event.effectiveAtBasis,
           event.ingestedAt,
           event.price,
           event.priceState,

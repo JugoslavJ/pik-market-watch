@@ -74,3 +74,115 @@ groups:
                   type: threshold
               expression: B
               type: threshold
+      - uid: olx-search-stale-6h
+        title: Saved search stale or failing
+        condition: C
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: >-
+            At least one enabled saved search has no authoritative successful
+            scrape in 6 h. Open OLX Health → Per-search freshness & phases to
+            identify the failed or stale search.
+          runbook_url: https://github.com/JugoslavJ/pik-market-watch/blob/main/docs/OPERATIONS.md
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: olx-postgres
+            model:
+              rawSql: |
+                SELECT count(*)::int AS stale_searches
+                  FROM saved_searches ss
+                  LEFT JOIN LATERAL (
+                    SELECT r.finished_at
+                      FROM scrape_runs r
+                     WHERE r.search_key = ss.search_key
+                       AND r.status = 'ok'
+                       AND r.is_complete = TRUE
+                       AND r.finished_at IS NOT NULL
+                     ORDER BY r.finished_at DESC
+                     LIMIT 1
+                  ) success ON TRUE
+                 WHERE success.finished_at IS NULL
+                    OR success.finished_at < now() - interval '6 hours';
+              format: table
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions: []
+              expression: A
+              reducer: last
+              type: reduce
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: gte
+                  operator:
+                    type: and
+                  query:
+                    params: [C]
+                  type: threshold
+              expression: B
+              type: threshold
+      - uid: olx-analytics-pending-26h
+        title: Analytics refresh pending
+        condition: C
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: >-
+            Listing analytics is missing, has never completed, or has pending
+            work older than 26 h. Check OLX Health → Analytics refresh age and
+            the analytics queue details.
+          runbook_url: https://github.com/JugoslavJ/pik-market-watch/blob/main/docs/OPERATIONS.md
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: olx-postgres
+            model:
+              rawSql: |
+                WITH expected AS (
+                  SELECT 'listing_daily'::text AS scope
+                )
+                SELECT CASE
+                         WHEN s.scope IS NULL
+                           OR s.last_successful_refresh_at IS NULL THEN 1
+                         WHEN s.pending_from_day IS NOT NULL
+                          AND (now() - (s.pending_from_day::timestamp AT TIME ZONE 'Europe/Sarajevo'))
+                              > interval '26 hours' THEN 1
+                         WHEN s.last_successful_refresh_at < now() - interval '26 hours' THEN 1
+                         ELSE 0
+                       END::int AS unhealthy
+                  FROM expected e
+                  LEFT JOIN analytics_refresh_state s ON s.scope = e.scope;
+              format: table
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions: []
+              expression: A
+              reducer: last
+              type: reduce
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: gte
+                  operator:
+                    type: and
+                  query:
+                    params: [C]
+                  type: threshold
+              expression: B
+              type: threshold

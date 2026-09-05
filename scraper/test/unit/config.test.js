@@ -56,6 +56,33 @@ function runWith(envOverrides, fixture) {
   return JSON.parse(out);
 }
 
+function runConfigFailure(envOverrides, fixture) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "olx-cfg-invalid-"));
+  const file = path.join(dir, "searches.json");
+  if (fixture !== undefined) fs.writeFileSync(file, fixture);
+  const script = `require(${JSON.stringify(CONFIG_PATH)});`;
+  try {
+    assert.throws(
+      () =>
+        execFileSync(process.execPath, ["-e", script], {
+          env: {
+            ...process.env,
+            ...envOverrides,
+            SEARCHES_FILE: fixture !== undefined ? file : "",
+          },
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "pipe"],
+        }),
+      (error) => {
+        error.message += ` ${error.stderr?.toString() || ""}`;
+        return true;
+      },
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 test("loadSearches: name kept, category trimmed, page stripped from key", () => {
   const [s] = runWith(
     {},
@@ -124,4 +151,48 @@ test("loadSearches: SEARCH_URLS env overrides the file entirely", () => {
   assert.equal(s.name, "pretraga");
   assert.equal(s.category, null);
   assert.equal(s.searchKey, "/pretraga?kat=17");
+});
+
+test("numeric configuration rejects zero concurrency and numeric prefixes", () => {
+  runConfigFailure({ CONCURRENCY: "0" });
+  runConfigFailure({ API_TIMEOUT_MS: "20ms" });
+});
+
+test("numeric configuration enforces bounded ports and positive intervals", () => {
+  runConfigFailure({ HEALTH_PORT: "65536" });
+  runConfigFailure({ SCRAPE_INTERVAL_MINUTES: "-1" });
+});
+
+test("migration startup fallback accepts explicit boolean values", () => {
+  const script = `
+    const cfg = require(${JSON.stringify(CONFIG_PATH)});
+    process.stdout.write(JSON.stringify(cfg.migrationsOnStartup));
+  `;
+  const out = execFileSync(process.execPath, ["-e", script], {
+    env: { ...process.env, MIGRATIONS_ON_STARTUP: "0", SEARCHES_FILE: "" },
+    encoding: "utf8",
+  });
+  assert.equal(out, "false");
+});
+
+test("migration startup fallback defaults to enabled outside Compose", () => {
+  const script = `
+    const cfg = require(${JSON.stringify(CONFIG_PATH)});
+    process.stdout.write(JSON.stringify(cfg.migrationsOnStartup));
+  `;
+  const env = { ...process.env, SEARCHES_FILE: "" };
+  delete env.MIGRATIONS_ON_STARTUP;
+  const out = execFileSync(process.execPath, ["-e", script], {
+    env,
+    encoding: "utf8",
+  });
+  assert.equal(out, "true");
+});
+
+test("migration startup fallback rejects ambiguous values", () => {
+  runConfigFailure({ MIGRATIONS_ON_STARTUP: "sometimes" });
+});
+
+test("an existing malformed searches file fails loudly", () => {
+  runConfigFailure({}, "{ definitely not json }");
 });

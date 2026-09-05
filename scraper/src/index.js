@@ -23,17 +23,18 @@ const state = {
   searches: config.searches.map((s) => ({ name: s.name, url: s.url })),
 };
 
-async function runAll(db) {
+async function runAllUnlocked(db) {
   if (!config.searches.length) {
     log(
       "No searches configured — mount /config/searches.json " +
         "(see config/searches.example.json) or set SEARCH_URLS.",
     );
     state.lastStatus = "idle: no searches configured";
-    return;
+    return { okRuns: 0, failedRuns: 0, skipped: 0, totalCards: 0 };
   }
 
   let okRuns = 0;
+  let failedRuns = 0;
   let totalCards = 0;
   let skipped = 0;
   for (const search of config.searches) {
@@ -59,6 +60,7 @@ async function runAll(db) {
       state.totalRuns += 1;
       state.lastStatus = "ok";
     } catch (err) {
+      failedRuns += 1;
       state.failedRuns += 1;
       state.lastStatus = "error";
       log(`✖ "${search.name}" failed: ${err.message || err}`);
@@ -120,6 +122,27 @@ async function runAll(db) {
   }
 
   state.lastRunAt = new Date().toISOString();
+  return { okRuns, failedRuns, skipped, totalCards };
+}
+
+async function runAll(db) {
+  const lease = await db.tryAcquireCycleLease?.();
+  if (db.tryAcquireCycleLease && !lease) {
+    state.lastStatus = "skipped: another scraper cycle is running";
+    return {
+      okRuns: 0,
+      failedRuns: 0,
+      skipped: config.searches.length,
+      totalCards: 0,
+    };
+  }
+  try {
+    return await runAllUnlocked(db);
+  } finally {
+    await lease
+      ?.release()
+      .catch((err) => log(`cycle lease release failed: ${err.message || err}`));
+  }
 }
 
 function startHealthServer() {
@@ -143,7 +166,16 @@ async function main() {
     rawResponseRetentionDays: config.rawResponseRetentionDays,
   });
   await db.waitUntilReady();
-  await applyMigrations(db.pool, config.migrationsDir, log);
+  if (config.migrationsOnStartup) {
+    await applyMigrations(db.pool, config.migrationsDir, log);
+  } else {
+    log("schema migrations delegated to the migration job");
+  }
+  const abandonedRuns = await db.recoverAbandonedRuns(
+    config.abandonedRunAfterMinutes,
+  );
+  if (abandonedRuns > 0)
+    log(`↻ recovered ${abandonedRuns} abandoned scraper run(s)`);
   const historyBackfill = await db.backfillLegacyPriceHistory(log);
   if (!historyBackfill.skipped && historyBackfill.inserted)
     log(
@@ -156,30 +188,50 @@ async function main() {
   );
 
   let timer = null;
+  let activeCycle = null;
+  let healthServer = null;
   let stopping = false;
   const shutdown = async (signal) => {
     if (stopping) return;
     stopping = true;
     log(`${signal} received — shutting down`);
     if (timer) clearInterval(timer);
+    // Allow an in-flight cycle to finish its current request/transaction before
+    // closing the pool. A deadline prevents a stuck upstream from blocking
+    // container termination forever.
+    if (activeCycle) {
+      await Promise.race([
+        activeCycle.catch(() => {}),
+        new Promise((resolve) => setTimeout(resolve, 30_000)),
+      ]);
+    }
+    healthServer?.closeAllConnections?.();
+    if (healthServer)
+      await new Promise((resolve) => healthServer.close(resolve));
     await db.close().catch(() => {});
-    process.exit(0);
+    process.exitCode = 0;
   };
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
 
   // Serve the health endpoint from t=0 so container healthchecks pass while
   // the initial scrape is still running.
-  const healthServer = startHealthServer();
+  healthServer = startHealthServer();
 
-  await runAll(db);
+  activeCycle = runAll(db);
+  const initialResult = await activeCycle;
+  activeCycle = null;
 
   if (config.runOnce) {
     await db.close();
     await new Promise((resolve) => healthServer.close(resolve));
     healthServer.closeAllConnections?.(); // drop keep-alive healthcheck sockets
-    log("RUN_ONCE complete");
-    return; // nothing left keeping the event loop alive - process exits 0
+    const failed = initialResult.failedRuns > 0;
+    process.exitCode = failed ? 1 : 0;
+    log(
+      `RUN_ONCE complete (${failed ? `${initialResult.failedRuns} search(es) failed` : "ok"})`,
+    );
+    return; // nothing left keeping the event loop alive
   }
 
   // Reentrancy guard: a slow cycle (many pages × waves + 65 s rate-limit
@@ -191,10 +243,11 @@ async function main() {
       return;
     }
     running = true;
-    runAll(db)
+    activeCycle = runAll(db)
       .catch((err) => log("scheduled run failed:", err.message || err))
       .finally(() => {
         running = false;
+        activeCycle = null;
       });
   }, config.intervalMinutes * 60000);
   log("scheduler running — waiting for the next interval");

@@ -27,11 +27,13 @@ docker compose up -d --build
 | `GRAFANA_BIND` | `0.0.0.0` | Host interface for Grafana port 3000. Bind a LAN or VPN address when appropriate. |
 | `SCRAPE_INTERVAL_MINUTES` | `720` | Scheduled scraper cadence when the `scrape` profile is enabled. |
 | `DETAIL_REFRESH_DAYS` | `7` | Age at which successful detail evidence becomes eligible for refresh. |
+| `DETAIL_JOB_LEASE_MINUTES` | `30` | Database lease duration for an in-flight durable detail job (maximum 24 hours). |
 | `RAW_RESPONSE_RETENTION_DAYS` | `30` | Search-response evidence retention period. |
+| `ABANDONED_RUN_AFTER_MINUTES` | `180` | Age after which startup marks an unfinished `running` scrape as abandoned. |
 | `BACKUP_RETENTION_DAYS` | `14` | Days of database and Grafana archives retained by `db-backup`; `0` disables pruning. |
 | `ALERT_EMAIL_TO` | unset | Recipient for provisioned alerting. Mail also requires enabling and configuring the `GF_SMTP_*` entries in `docker-compose.yml`. |
 
-Search configuration is read from `config/searches.json`; `SEARCH_URLS` is an environment override for a bare scraper process or an explicit `docker compose run -e SEARCH_URLS=...` invocation. The scraper also accepts `SCRAPE_USER_AGENT`, `HEALTH_PORT`, and pacing/health variables (`MAX_PAGES`, `CONCURRENCY`, `PAGE_DELAY_MS`, `API_PER_PAGE`, `API_TIMEOUT_MS`, `MAX_GEO_FETCHES`, `GEO_CONCURRENCY`, `GEO_DELAY_MS`, `SCRAPE_MIN_GAP_MINUTES`, and `HEALTH_FAILURE_THRESHOLD`). Compose does not inject them from `.env`; pass them explicitly with `docker compose run -e NAME=value` or set them in a supported deployment change.
+Search configuration is read from `config/searches.json`; `SEARCH_URLS` is an environment override for a bare scraper process or an explicit `docker compose run -e SEARCH_URLS=...` invocation. The scraper also accepts `SCRAPE_USER_AGENT`, `HEALTH_PORT`, and pacing/health variables (`MAX_PAGES`, `CONCURRENCY`, `PAGE_DELAY_MS`, `API_PER_PAGE`, `API_TIMEOUT_MS`, `MAX_GEO_FETCHES`, `GEO_CONCURRENCY`, `GEO_DELAY_MS`, `SCRAPE_MIN_GAP_MINUTES`, `ABANDONED_RUN_AFTER_MINUTES`, `DETAIL_JOB_LEASE_MINUTES`, and `HEALTH_FAILURE_THRESHOLD`). Compose injects `ABANDONED_RUN_AFTER_MINUTES` and `DETAIL_JOB_LEASE_MINUTES`; pass the other tuning variables explicitly with `docker compose run -e NAME=value` or set them in a supported deployment change.
 
 ## Normal operation
 
@@ -40,12 +42,20 @@ docker compose ps
 docker compose logs -f scraper
 docker compose --profile scrape run --rm scraper node src/index.js --once
 docker compose restart scraper
-docker compose run --rm scraper node src/migrate-only.js
+docker compose --profile migrate run --build --rm migrator
+docker compose --profile maintenance run --build --rm maintenance
 ```
 
 The first command shows service health. The `scraper` service exists only when the `scrape` profile is enabled; add `COMPOSE_PROFILES=scrape` to `.env` to schedule it locally. A one-off `compose run` is safe for manual collection because it does not inherit the service restart policy.
 
-Migrations run automatically at normal scraper startup and are tracked by filename. Use `migrate-only.js` when schema changes must be applied without collecting data. Do not run a tracked migration manually as the bootstrap user: application objects must remain owned by `olx_app` (or the configured app role).
+Migrations run through the profile-only `migrator` job and are tracked by
+filename plus a SHA-256 checksum. The `scrape` profile activates that job as a
+completed dependency before the scraper starts. Existing filename-only ledgers
+are baselined once; an edited applied file then fails the migration job. The
+scraper keeps a startup migration fallback for bare-metal runs; Compose sets
+`MIGRATIONS_ON_STARTUP=0` because the deployment gate already ran. Do not run
+a tracked migration manually as the bootstrap user: application objects must
+remain owned by `olx_app` (or the configured app role).
 
 Detail backfill is separate from normal collection:
 
@@ -55,7 +65,13 @@ docker compose --profile scrape run --rm scraper node src/backfill-geo.js --all
 docker compose --profile scrape run --rm scraper node src/backfill-geo.js --max=100
 ```
 
-The default backfill targets recently active rows; `--all` includes closed history. The legacy price-history conversion makes no OLX requests:
+The default backfill targets recently active rows; `--all` includes closed history. The legacy price-history conversion also makes no OLX requests.
+The `maintenance` profile rebuilds pending daily analytics and purges expired
+raw responses without making OLX requests. Schedule it independently so
+housekeeping continues during an upstream outage. To inspect a retained
+response offline, run `docker compose --profile scrape run --rm scraper node
+src/replay-response.js --id=<raw-response-id>`; replay only reads and parses
+the retained payload.
 
 ```bash
 docker compose --profile scrape run --rm scraper node src/backfill-price-history.js --dry-run
@@ -90,6 +106,9 @@ docker compose start scraper
 
 Use a disposable database to rehearse a dump before production recovery. The Grafana archive is a separate volume backup; restore it only with Grafana stopped and with a preserved copy of the current Grafana volume. `GRAFANA_SECRET_KEY` must match the one used when the archive was created to recover encrypted datasource secrets.
 
+For the post-deploy OPC checks (Grafana interpolation, role boundaries, query
+plans, and a disposable restore), follow [INSTANCE-VERIFICATION.md](INSTANCE-VERIFICATION.md).
+
 ## Home-machine scrape and sync
 
 The supported sync path collects locally, creates a custom dump, and streams it to the remote forced-command endpoint. Configure these user environment variables on the scraping machine: `OLX_INSTANCE_HOST`, `OLX_SSH_USER`, and `OLX_SYNC_KEY`; optionally set `OLX_KNOWN_HOSTS_FILE` to enforce a pinned host key. The sync key’s public half must be authorized on the destination with a forced command that invokes `db/remote-restore.sh`.
@@ -105,7 +124,7 @@ The restore endpoint receives and validates the archive, audits ownership, saves
 
 The GitHub Actions workflow tests pushes to `main` (except documentation/geography-only changes) and deploys successful main or manually dispatched runs. The deploy needs `OCI_HOST`, `OCI_USER`, and `OCI_SSH_PRIVATE_KEY`; `OCI_KNOWN_HOSTS` is recommended for strict host-key checking, and `DEPLOY_DIR` optionally overrides the remote checkout path.
 
-Before the first deployment, create the destination directory and its ignored local configuration: `.env`, `config/searches.json`, and `tls/grafana.crt` / `tls/grafana.key`. The workflow ships tracked files, maintains a remote tracked-file manifest, and removes only files that were previously tracked but are absent from the new revision. It never cleans ignored configuration, backups, TLS material, logs, or Docker volumes. `scripts/deploy-stack.sh` then checks required local secrets and certificates, runs `docker compose up -d --build --remove-orphans`, restarts Grafana to reload provisioning, and waits for database and Grafana health.
+Before the first deployment, create the destination directory and its ignored local configuration: `.env`, `config/searches.json`, and `tls/grafana.crt` / `tls/grafana.key`. The workflow ships tracked files, maintains a remote tracked-file manifest, and removes only files that were previously tracked but are absent from the new revision. It never cleans ignored configuration, backups, TLS material, logs, or Docker volumes. `scripts/deploy-stack.sh` then checks required local secrets and certificates, runs the profile-only `migrator` job, starts the database/Grafana/backup services, restarts Grafana to reload provisioning, and waits for database and Grafana health. A failed migration exits before the dashboard is restarted.
 
 ## Diagnosis
 

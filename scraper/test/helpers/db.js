@@ -27,10 +27,13 @@ function ensureSchema(pool) {
 async function reset(pool) {
   await pool.query(`TRUNCATE listings, price_history, saved_searches,
                             search_results, scrape_runs, raw_api_responses,
+                            scrape_run_pages,
                             listing_state_history, listing_price_events,
-                            listing_daily RESTART IDENTITY CASCADE`);
+                            listing_daily, analytics_daily_coverage
+                            RESTART IDENTITY CASCADE`);
   await pool.query(`UPDATE analytics_refresh_state
                        SET pending_from_day = NULL, pending_through_day = NULL,
+                           completed_through_day = NULL,
                            last_successful_refresh_at = NULL, updated_at = now()`);
 }
 

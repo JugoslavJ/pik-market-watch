@@ -19,6 +19,14 @@ Set strong values for every required secret in `.env` before starting. This star
 docker compose --profile scrape run --rm scraper node src/index.js --once
 ```
 
+When the `scrape` profile is enabled, Compose first completes the `migrator`
+job (`src/migrate-only.js`) and only then starts the scraper. To apply schema
+changes on a dashboard-only host, run `docker compose --profile migrate run
+--build --rm migrator` before restarting clients.
+
+Retention and daily analytics can run independently of scraping with
+`docker compose --profile maintenance run --build --rm maintenance`.
+
 Grafana is at `https://localhost:3000`; the generated self-signed certificate causes a browser warning until you trust it. When the scrape profile runs, `http://localhost:9100` provides health/status JSON.
 
 ## Configure searches
@@ -42,6 +50,8 @@ cd scraper
 npm ci
 npm test
 npm run test:integration
+npm run test:dashboards
+npm run replay:response -- --id=123
 npm run lint
 npm run format:check
 npm run lint:syntax

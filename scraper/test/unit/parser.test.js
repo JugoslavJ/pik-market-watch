@@ -10,6 +10,7 @@ const path = require("node:path");
 const {
   extractArticleId,
   parseSearchItem,
+  parseSearchItems,
   parseSearchPage,
   parseListingDetail,
 } = require("../../src/parser");
@@ -175,6 +176,19 @@ test("search item: junk entries → null", () => {
   assert.equal(parseSearchItem(null), null);
   assert.equal(parseSearchItem({}), null);
   assert.equal(parseSearchItem({ id: 13, title: "ab" }), null);
+});
+
+test("search items: parser diagnostics distinguish rejected entries", () => {
+  const result = parseSearchItems([
+    { id: 13, title: "ab" },
+    { id: 14, title: "Valid listing" },
+    null,
+  ]);
+  assert.equal(result.cards.length, 1);
+  assert.deepEqual(
+    result.rejected.map((entry) => entry.reason),
+    ["invalid_title", "not_an_object"],
+  );
 });
 
 test("detail: attributes[] feed typed columns and characteristics", () => {

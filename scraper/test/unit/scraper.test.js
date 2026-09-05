@@ -59,6 +59,7 @@ function fakeDb(queueImpl) {
     refreshed: [],
     enriched: [],
     finishedRuns: [],
+    pageManifests: [],
   };
   return {
     rec,
@@ -72,10 +73,21 @@ function fakeDb(queueImpl) {
     async archiveSearchResponse(row) {
       rec.archived = [...(rec.archived || []), row];
     },
+    async recordScrapePageManifest(row) {
+      rec.pageManifests.push(row);
+    },
     async commitSearchIngestion(payload) {
       rec.savedCards = payload.cards;
       rec.upserts.push({ ...payload.search, ...payload.run });
       rec.refreshed.push(payload.membership.articleIds);
+      // The real commitSearchIngestion finalizes a successful run in the same
+      // transaction as the authoritative ingestion. Mirror that contract so
+      // the double-finalization regression is visible in these unit tests.
+      rec.finishedRuns.push({
+        status: payload.run.status,
+        pages: payload.run.pages,
+        cards: payload.run.cards,
+      });
       return { newCount: payload.cards.length, dropCount: 0 };
     },
     async enrichmentQueue(ids, cap) {
@@ -147,6 +159,8 @@ test("single-page search: one fetch, ok run, correct stats and refresh", async (
   assert.deepEqual(db.rec.finishedRuns, [{ status: "ok", pages: 1, cards: 2 }]);
   assert.deepEqual(db.rec.refreshed, [[1, 2]]);
   assert.equal(db.rec.upserts[0].listingCount, 2);
+  assert.equal(db.rec.pageManifests[0].responseState, "ok");
+  assert.equal(db.rec.pageManifests[0].isAuthoritative, true);
 });
 
 test("multi-page search: waves cover pages 2..last_page", async () => {
@@ -174,7 +188,7 @@ test("wave of pure duplicates marks pagination incomplete (OLX repeats past the 
     2: { items: dupes, meta: meta(4, 2, 2) }, // same ids → freshInWave 0
   });
   await assert.rejects(
-    run(db, {}, { fetchSearchPage: fetchPage }),
+    run(db, {}, { fetchSearchPage: fetchPage, pace: async () => {} }),
     /pagination ended/,
   );
 
@@ -198,6 +212,9 @@ test("empty page mid-wave marks pagination incomplete", async () => {
   assert.deepEqual(fetchPage.fetched, [1, 2, 3]);
   assert.equal(db.rec.finishedRuns[0].status, "error");
   assert.equal(db.rec.finishedRuns[0].isComplete, false);
+  assert.equal(db.rec.finishedRuns.length, 1);
+  assert.match(db.rec.finishedRuns[0].failureReason, /pagination ended/);
+  assert.match(db.rec.finishedRuns[0].truncationReason, /pagination ended/);
 });
 
 test("MAX_PAGES caps pagination even when last_page is huge", async () => {
@@ -268,7 +285,7 @@ test("filterless URL fails LOUDLY before touching the database", async () => {
   assert.equal(db.rec.finishedRuns.length, 0);
 });
 
-test("blank page 1: one retry, then loud failure with an error run record", async () => {
+test("verified empty page 1 commits an authoritative zero-result run", async () => {
   let page1Visits = 0;
   const fetchPage = async (url) => {
     if (Number(url.searchParams.get("page")) !== 1)
@@ -278,14 +295,38 @@ test("blank page 1: one retry, then loud failure with an error run record", asyn
   };
   const db = fakeDb();
 
-  await assert.rejects(
-    run(db, {}, { fetchSearchPage: fetchPage }),
-    /0 listings after retry/,
-  );
-  assert.equal(page1Visits, 2); // initial + single retry
+  const result = await run(db, {}, { fetchSearchPage: fetchPage });
+  assert.equal(result.cards, 0);
+  assert.equal(page1Visits, 1);
   assert.equal(db.rec.savedSearches.length, 1); // identity registered first…
-  assert.match(db.rec.finishedRuns[0].error, /0 listings/);
-  assert.equal(db.rec.finishedRuns[0].status, "error"); // …run marked failed
+  assert.equal(db.rec.finishedRuns[0].status, "ok");
+  assert.equal(db.rec.finishedRuns[0].isComplete, undefined);
+  assert.equal(db.rec.pageManifests[0].responseState, "verified_empty");
+  assert.equal(db.rec.pageManifests[0].isAuthoritative, true);
+});
+
+test("malformed empty page 1 retries and never commits closures", async () => {
+  let page1Visits = 0;
+  const fetchPage = async (url) => {
+    if (Number(url.searchParams.get("page")) !== 1)
+      throw new Error("should stop at page 1");
+    page1Visits += 1;
+    return { items: [], meta: meta(4, 1, 1) };
+  };
+  const db = fakeDb();
+
+  await assert.rejects(
+    run(db, {}, { fetchSearchPage: fetchPage, pace: async () => {} }),
+    /not an authoritative result/,
+  );
+  assert.equal(page1Visits, 2);
+  assert.equal(db.rec.finishedRuns[0].status, "error");
+  assert.equal(db.rec.finishedRuns[0].isComplete, false);
+  assert.deepEqual(db.rec.refreshed, []);
+  assert.deepEqual(
+    db.rec.pageManifests.map((row) => row.responseState),
+    ["malformed", "malformed"],
+  );
 });
 
 // ── enrichment ───────────────────────────────────────────────────────────────
@@ -384,6 +425,78 @@ test("enrichment merge: null/empty detail fields never clobber known facts", asy
   assert.equal(row.apiPriceHistory, undefined);
 });
 
+test("durable detail jobs claim work and record success or retryable failure", async () => {
+  const db = fakeDb(() => ({
+    pending: [
+      { id: 50, unpinned: false, missingSqm: false, neverDetailed: true },
+      { id: 51, unpinned: false, missingSqm: false, neverDetailed: true },
+    ],
+    total: 2,
+  }));
+  const claims = [];
+  const outcomes = [];
+  db.requeueExpiredDetailJobs = async () => 0;
+  db.claimDetailJobs = async (ids, limit, options) => {
+    claims.push({ ids, limit, options });
+    return ids.map((articleId, index) => ({
+      articleId,
+      attemptCount: index + 1,
+      leaseUntil: new Date(),
+    }));
+  };
+  db.recordDetailJobOutcome = async (articleId, outcome) => {
+    outcomes.push({ articleId, ...outcome });
+  };
+
+  const fetchPage = pageFetcher({
+    1: {
+      items: [rawCard(50), rawCard(51)],
+      meta: meta(2, 1, 1),
+    },
+  });
+  const fetchDetailsInBatches = async (ids, opts) => {
+    await opts.onError(
+      51,
+      Object.assign(new Error("upstream timeout"), {
+        status: 503,
+      }),
+    );
+    return [
+      {
+        articleId: ids[0],
+        views: 7,
+      },
+      null,
+    ];
+  };
+
+  const result = await run(
+    db,
+    {},
+    { fetchSearchPage: fetchPage, fetchDetailsInBatches },
+  );
+
+  assert.equal(result.enriched, 1);
+  assert.deepEqual(claims, [
+    {
+      ids: [50, 51],
+      limit: 2,
+      options: { leaseMinutes: 30, allowSucceeded: true },
+    },
+  ]);
+  assert.deepEqual(
+    outcomes.map(({ articleId, outcome, httpStatus }) => ({
+      articleId,
+      outcome,
+      httpStatus,
+    })),
+    [
+      { articleId: 51, outcome: "retryable_failure", httpStatus: 503 },
+      { articleId: 50, outcome: "success", httpStatus: undefined },
+    ],
+  );
+});
+
 test("MAX_GEO_FETCHES=0 disables the enrichment pass entirely", async () => {
   let queueCalled = false;
   const db = fakeDb(() => {
@@ -401,6 +514,63 @@ test("MAX_GEO_FETCHES=0 disables the enrichment pass entirely", async () => {
 
   assert.equal(queueCalled, false);
   assert.equal(res.enriched, 0);
+});
+
+test("enrichment failure preserves the committed successful run", async () => {
+  const db = fakeDb(() => ({
+    pending: [
+      { id: 40, unpinned: false, missingSqm: false, neverDetailed: true },
+    ],
+    total: 1,
+  }));
+  const fetchPage = pageFetcher({
+    1: { items: [rawCard(40)], meta: meta(1, 1, 1) },
+  });
+
+  const logs = [];
+  const fetchDetailsInBatches = async () => {
+    throw new Error("detail service unavailable");
+  };
+
+  const result = await scrapeSearch(
+    db,
+    SEARCH,
+    baseCfg(),
+    (message) => logs.push(message),
+    { fetchSearchPage: fetchPage, fetchDetailsInBatches },
+  );
+
+  assert.equal(result.cards, 1);
+  assert.equal(result.enriched, 0);
+  assert.equal(db.rec.finishedRuns.length, 1);
+  assert.deepEqual(db.rec.finishedRuns[0], {
+    status: "ok",
+    pages: 1,
+    cards: 1,
+  });
+  assert.ok(
+    logs.some((message) =>
+      message.includes("enrichment failed after committed ingestion"),
+    ),
+  );
+});
+
+test("registration failure finishes the started run once", async () => {
+  const db = fakeDb();
+  db.registerSavedSearch = async () => {
+    throw new Error("saved search write failed");
+  };
+
+  await assert.rejects(
+    run(db, {}, { fetchSearchPage: pageFetcher({}) }),
+    /saved search write failed/,
+  );
+  assert.equal(db.rec.finishedRuns.length, 1);
+  assert.equal(db.rec.finishedRuns[0].isComplete, false);
+  assert.match(
+    db.rec.finishedRuns[0].failureReason,
+    /saved search write failed/,
+  );
 });
 
 // ── pagesInWave: pure pagination boundary rules ──────────────────────────────

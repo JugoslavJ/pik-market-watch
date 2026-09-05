@@ -43,19 +43,34 @@ function buildSearchObservations(
 }
 
 function buildSearchPriceEvents(cards, { observedAt = new Date() } = {}) {
-  return cards.map((card) => ({
-    articleId: Number(card.articleId),
-    effectiveAt: card.renewedAt || observedAt,
-    ingestedAt: observedAt,
-    price: card.price ?? null,
-    priceState: card.priceState || (card.price == null ? "unpriced" : "valid"),
-    source: "search",
-    isCurrent: true,
-    provenance: {
-      observation: "search_card",
-      priceReason: card.priceReason ?? null,
-    },
-  }));
+  return cards.map((card) => {
+    // Price normalization depends on the deal dimension. Keep both fields on
+    // the event because callers that only have the legacy boolean still need
+    // to preserve rent thresholds at the canonical importer boundary.
+    const dealType = card.dealType || (card.isRent ? "rent" : "sale");
+    return {
+      articleId: Number(card.articleId),
+      // The search response is evidence observed at this instant.  A
+      // renewal timestamp describes the listing, but must not move the
+      // evidence backward in the analytics timeline.
+      effectiveAt: observedAt,
+      observedAt,
+      renewedAt: card.renewedAt ?? null,
+      effectiveAtBasis: "observed",
+      ingestedAt: observedAt,
+      price: card.price ?? null,
+      priceState:
+        card.priceState || (card.price == null ? "unpriced" : "valid"),
+      dealType,
+      isRent: dealType === "rent",
+      source: "search",
+      isCurrent: true,
+      provenance: {
+        observation: "search_card",
+        priceReason: card.priceReason ?? null,
+      },
+    };
+  });
 }
 
 function buildLifecycleTransitionEvents({

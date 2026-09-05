@@ -15,6 +15,15 @@
 
 const BIH_BBOX = { latMin: 42.4, latMax: 46.4, lonMin: 15.5, lonMax: 19.9 };
 
+// The package version is the fallback build identity; deployments can inject a
+// commit/tag through PARSER_BUILD_VERSION so archived payloads remain
+// replayable after parser changes. Keep the value bounded for DB diagnostics.
+const PARSER_BUILD_VERSION = String(
+  process.env.PARSER_BUILD_VERSION || require("../package.json").version,
+)
+  .trim()
+  .slice(0, 128);
+
 const {
   dateFromUnixSeconds,
   finiteNumber,
@@ -236,6 +245,40 @@ function parseSearchItem(item) {
 }
 
 /**
+ * Parse all cards while retaining a small, bounded diagnostic for entries the
+ * normalizer rejects.  A null card is useful for the ingestion path, but a
+ * page containing rejected entries is not authoritative for closure logic.
+ */
+function parseSearchItems(items) {
+  if (!Array.isArray(items))
+    return { cards: [], rejected: [{ reason: "data_not_array" }] };
+
+  const cards = [];
+  const rejected = [];
+  for (const item of items) {
+    try {
+      const card = parseSearchItem(item);
+      if (card) {
+        cards.push(card);
+        continue;
+      }
+      let reason = "invalid_item";
+      if (!item || typeof item !== "object") reason = "not_an_object";
+      else if (normalizeId(item.id) === null) reason = "invalid_id";
+      else if (typeof item.title !== "string" || item.title.trim().length <= 2)
+        reason = "invalid_title";
+      rejected.push({ reason });
+    } catch (error) {
+      rejected.push({
+        reason: "parser_exception",
+        error: String(error?.message || error).slice(0, 160),
+      });
+    }
+  }
+  return { cards, rejected };
+}
+
+/**
  * A validated /api/search payload → { cards, meta }.
  * Cards carry the fields needed by transactional search ingestion and detail
  * enrichment.
@@ -249,8 +292,10 @@ function parseSearchPage(payload) {
   ) {
     throw new Error("search payload lacks data[]/meta.total");
   }
+  const parsed = parseSearchItems(payload.data);
   return {
-    cards: payload.data.map(parseSearchItem).filter(Boolean),
+    cards: parsed.cards,
+    rejected: parsed.rejected,
     meta: {
       total: Number(payload.meta.total),
       lastPage: Number(payload.meta.last_page),
@@ -364,7 +409,9 @@ function parseListingDetail(json, fallbackId) {
 // stay module-internal — no external consumer.
 module.exports = {
   extractArticleId,
+  PARSER_BUILD_VERSION,
   parseSearchItem,
+  parseSearchItems,
   parseSearchPage,
   parseListingDetail,
 };

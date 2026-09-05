@@ -8,6 +8,12 @@ const { Pool } = require("pg");
 const { recordPriceEvents } = require("./price-history");
 const { runBackfill } = require("./price-history-backfill");
 
+// Search ingestion and the periodic lifecycle sweep both mutate the current
+// membership and closure state.  Serializing them with one advisory lock
+// keeps a closure from racing a sighting that is being committed.
+const LISTING_LIFECYCLE_LOCK = "pik-market-watch listing lifecycle";
+const SCRAPE_CYCLE_LOCK = "pik-market-watch scrape cycle";
+
 // ── Bulk-write column plumbing ───────────────────────────────────────────────
 // The enrichment write feeds row data through unnest($n::type[] …) arrays.
 // Each spec below is the SINGLE source of truth for its query's column list:
@@ -106,6 +112,43 @@ class Db {
     }
   }
 
+  /**
+   * Acquire a process-wide scrape lease on a dedicated session connection.
+   * A transaction-scoped lock would only serialize writes; this lease also
+   * prevents two scraper processes from fetching the same cycle concurrently.
+   */
+  async tryAcquireCycleLease() {
+    const client = await this.pool.connect();
+    try {
+      const result = await client.query(
+        "SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS acquired",
+        [SCRAPE_CYCLE_LOCK],
+      );
+      if (!result.rows[0]?.acquired) {
+        client.release();
+        return null;
+      }
+      let released = false;
+      return {
+        release: async () => {
+          if (released) return;
+          released = true;
+          try {
+            await client.query(
+              "SELECT pg_advisory_unlock(hashtextextended($1, 0))",
+              [SCRAPE_CYCLE_LOCK],
+            );
+          } finally {
+            client.release();
+          }
+        },
+      };
+    } catch (error) {
+      client.release();
+      throw error;
+    }
+  }
+
   /** Store a source response without coupling retention to scraper logic. */
   async archiveSearchResponse({
     runId,
@@ -115,12 +158,20 @@ class Db {
     fetchedAt = new Date(),
     parserVersion = "search-v1",
     payload,
+    sourcePayload = null,
+    requestMetadata = {},
+    responseMetadata = {},
+    buildVersion = "unknown",
+    diagnostic = null,
   }) {
     await this.pool.query(
       `INSERT INTO raw_api_responses
-         (run_id, article_id, request_kind, request_url, fetched_at, expires_at, parser_version, payload)
+         (run_id, article_id, request_kind, request_url, fetched_at, expires_at,
+          parser_version, payload, source_payload, request_metadata,
+          response_metadata, build_version, diagnostic)
        VALUES ($1, $2, $3, $4, $5::timestamptz,
-               $5::timestamptz + make_interval(days => $6::int), $7, $8::jsonb)`,
+               $5::timestamptz + make_interval(days => $6::int), $7, $8::jsonb,
+               $9::jsonb, $10::jsonb, $11::jsonb, $12, $13::jsonb)`,
       [
         runId ?? null,
         articleId ?? null,
@@ -129,12 +180,26 @@ class Db {
         fetchedAt,
         this.rawResponseRetentionDays,
         parserVersion,
-        JSON.stringify(payload),
+        JSON.stringify(payload ?? {}),
+        sourcePayload == null ? null : JSON.stringify(sourcePayload),
+        JSON.stringify(requestMetadata ?? {}),
+        JSON.stringify(responseMetadata ?? {}),
+        String(buildVersion || "unknown").slice(0, 128),
+        diagnostic == null ? null : JSON.stringify(diagnostic),
       ],
     );
   }
 
-  async archiveDetailResponse({ articleId, payload, fetchedAt = new Date() }) {
+  async archiveDetailResponse({
+    articleId,
+    payload,
+    sourcePayload = payload,
+    fetchedAt = new Date(),
+    requestMetadata,
+    responseMetadata,
+    buildVersion,
+    diagnostic = null,
+  }) {
     return this.archiveSearchResponse({
       articleId,
       requestKind: "detail",
@@ -142,7 +207,100 @@ class Db {
       fetchedAt,
       parserVersion: "detail-v1",
       payload,
+      sourcePayload,
+      requestMetadata,
+      responseMetadata,
+      buildVersion,
+      diagnostic,
     });
+  }
+
+  /** Store bounded transport/parser diagnostics without changing fetch flow. */
+  async archiveResponseDiagnostic({
+    runId = null,
+    articleId = null,
+    requestKind = articleId == null ? "search" : "detail",
+    requestUrl,
+    error,
+    fetchedAt = new Date(),
+    parserVersion = requestKind === "detail" ? "detail-v1" : "search-v1",
+    buildVersion = "unknown",
+  }) {
+    const diagnostic = error?.diagnostic || {
+      kind: "request",
+      message: String(error?.message || error || "unknown error").slice(0, 500),
+    };
+    return this.archiveSearchResponse({
+      runId,
+      articleId,
+      requestKind,
+      requestUrl:
+        requestUrl ||
+        (articleId == null
+          ? "https://olx.ba/api/search"
+          : `https://olx.ba/api/listings/${articleId}`),
+      fetchedAt,
+      parserVersion,
+      payload: {},
+      sourcePayload: error?.sourcePayload ?? null,
+      requestMetadata: error?.requestMetadata ?? {},
+      responseMetadata: error?.responseMetadata ?? {},
+      buildVersion,
+      diagnostic,
+    });
+  }
+
+  /** Persist one page attempt and its parser/authority diagnostics. */
+  async recordScrapePageManifest({
+    runId,
+    pageNumber,
+    attempt = 1,
+    fetchedAt = new Date(),
+    requestUrl,
+    responseState,
+    expectedTotal = null,
+    expectedLastPage = null,
+    responsePage = null,
+    responsePerPage = null,
+    rawItemCount = 0,
+    parsedItemCount = 0,
+    duplicateItemCount = 0,
+    parseRejections = [],
+    error = null,
+    isAuthoritative = false,
+  }) {
+    const rejectionList = Array.isArray(parseRejections)
+      ? parseRejections.slice(0, 100)
+      : [];
+    await this.pool.query(
+      `INSERT INTO scrape_run_pages
+         (run_id, page_number, attempt, fetched_at, request_url,
+          response_state, expected_total, expected_last_page, response_page,
+          response_per_page, raw_item_count, parsed_item_count,
+          duplicate_item_count, parse_rejection_count, parse_rejections,
+          error, is_authoritative)
+       VALUES ($1,$2,$3,$4::timestamptz,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
+               $15::jsonb,$16,$17)`,
+      [
+        runId,
+        pageNumber,
+        attempt,
+        fetchedAt,
+        requestUrl,
+        responseState,
+        expectedTotal,
+        expectedLastPage,
+        responsePage,
+        responsePerPage,
+        Math.max(0, Number(rawItemCount) || 0),
+        Math.max(0, Number(parsedItemCount) || 0),
+        Math.max(0, Number(duplicateItemCount) || 0),
+        rejectionList.length,
+        JSON.stringify(rejectionList),
+        error == null ? null : String(error).slice(0, 1000),
+        Boolean(isAuthoritative),
+      ],
+    );
   }
 
   /**
@@ -164,7 +322,7 @@ class Db {
       await client.query("BEGIN");
       await client.query(
         "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
-        ["pik-market-watch search ingestion"],
+        [LISTING_LIFECYCLE_LOCK],
       );
 
       const previous = await client.query(
@@ -476,7 +634,9 @@ class Db {
               (SELECT min((effective_at AT TIME ZONE 'Europe/Sarajevo')::date)
                  FROM listing_price_events
                 WHERE price_state = 'valid' AND price IS NOT NULL) AS first_priced_day,
-              (SELECT min(day) FROM listing_daily) AS first_daily_day
+              (SELECT min(day) FROM listing_daily) AS first_daily_day,
+              (SELECT from_day FROM analytics_daily_rebuild_window()) AS window_from_day,
+              (SELECT through_day FROM analytics_daily_rebuild_window()) AS window_through_day
          FROM analytics_refresh_state WHERE scope = 'listing_daily'`,
     );
     const today = new Date().toLocaleDateString("en-CA", {
@@ -484,7 +644,14 @@ class Db {
     });
     const sqlDay = (day) =>
       day instanceof Date
-        ? day.toISOString().slice(0, 10)
+        ? // node-postgres parses PostgreSQL DATE values at local midnight.
+          // Formatting through UTC can therefore move Sarajevo's date back by
+          // one day on a Budapest/UTC-offset process.
+          [day.getFullYear(), day.getMonth() + 1, day.getDate()]
+            .map((part, index) =>
+              index === 0 ? String(part) : String(part).padStart(2, "0"),
+            )
+            .join("-")
         : String(day).slice(0, 10);
     const state = r.rows[0] || {};
     const historicalStart = state.first_priced_day
@@ -493,6 +660,23 @@ class Db {
     const existingStart = state.first_daily_day
       ? sqlDay(state.first_daily_day)
       : null;
+
+    // Migration 17 tracks empty-day coverage and a contiguous completion
+    // watermark. Prefer that bounded window when available; the fallback
+    // below keeps older test fixtures and pre-migration databases functional.
+    const plannedFrom = state.window_from_day
+      ? sqlDay(state.window_from_day)
+      : null;
+    const plannedThrough = state.window_through_day
+      ? sqlDay(state.window_through_day)
+      : null;
+    if (plannedFrom && plannedThrough) {
+      return this.pool.query(
+        "SELECT * FROM rebuild_listing_daily($1::date, $2::date)",
+        [plannedFrom, plannedThrough],
+      );
+    }
+
     const starts = [state.pending_from_day].filter(Boolean).map(sqlDay);
 
     // A newly migrated database can have normalized evidence but no daily
@@ -527,32 +711,111 @@ class Db {
    */
   async closeUnseenListings(activeKeys) {
     if (!activeKeys.length) return 0;
-    // Deconfigured searches first — their links (and the only record of which
-    // category they conferred) go away here, so freeze stranded ads'
-    // closing_category before the links are gone.
-    await this.pool.query(
-      `WITH doomed AS (
-         DELETE FROM search_results sr
-          WHERE sr.search_key <> ALL($1::text[])
-         RETURNING sr.article_id AS article_id, sr.search_key AS search_key
-       )
-       UPDATE listings l
-          SET closing_category = COALESCE(l.closing_category,
-                (SELECT ss.category FROM saved_searches ss
-                  WHERE ss.search_key = doomed.search_key))
-         FROM doomed
-        WHERE l.article_id = doomed.article_id
-          AND l.closing_category IS NULL`,
-      [activeKeys],
-    );
-    const r = await this.pool.query(
-      `UPDATE listings l
-          SET closed_at = now(), closing_price = price, closing_ppm2 = ppm2
-        WHERE closed_at IS NULL
-          AND NOT EXISTS (SELECT 1 FROM search_results sr
-                           WHERE sr.article_id = l.article_id)`,
-    );
-    return r.rowCount;
+    const client = await this.pool.connect();
+    const closedAt = new Date();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+        [LISTING_LIFECYCLE_LOCK],
+      );
+
+      // Deconfigured searches first — their links (and the only record of
+      // which category they conferred) go away here, so freeze stranded ads'
+      // closing_category before the links are gone.  This statement is inside
+      // the same transaction as the closure and its history evidence.
+      await client.query(
+        `WITH doomed AS (
+           DELETE FROM search_results sr
+            WHERE sr.search_key <> ALL($1::text[])
+           RETURNING sr.article_id, sr.search_key
+         ), category_by_article AS (
+           SELECT d.article_id, max(ss.category) AS category
+             FROM doomed d
+             LEFT JOIN saved_searches ss ON ss.search_key = d.search_key
+            GROUP BY d.article_id
+         )
+         UPDATE listings l
+            SET closing_category = COALESCE(l.closing_category, d.category)
+           FROM category_by_article d
+          WHERE l.article_id = d.article_id
+            AND l.closing_category IS NULL`,
+        [activeKeys],
+      );
+
+      const closed = await client.query(
+        `UPDATE listings l
+            SET closed_at = $1::timestamptz,
+                closing_price = COALESCE(l.closing_price, l.price),
+                closing_ppm2 = COALESCE(l.closing_ppm2, l.ppm2)
+          WHERE l.closed_at IS NULL
+            AND NOT EXISTS (SELECT 1 FROM search_results sr
+                             WHERE sr.article_id = l.article_id)
+          RETURNING l.article_id, l.closing_category AS category,
+                    l.is_rent, l.sqm, l.rooms,
+                    l.closing_price AS price, l.closing_ppm2 AS ppm2,
+                    l.last_seen`,
+        [closedAt],
+      );
+
+      // A lifecycle sweep can run without a scrape run id.  Still retain a
+      // complete closure observation so daily reconstruction and lifecycle
+      // views have immutable evidence for this transition.
+      for (const row of closed.rows) {
+        await client.query(
+          `INSERT INTO listing_state_history
+             (article_id, effective_at, ingested_at, source, event_type,
+              category, category_membership, is_rent, sqm, rooms, price, ppm2,
+              filter_attributes, last_seen_at, closed_at, is_closed)
+           VALUES ($1, $2, $2, 'lifecycle', 'closed', $3, $4, $5, $6, $7,
+                   $8, $9, '{}'::jsonb, $10, $2, true)`,
+          [
+            Number(row.article_id),
+            closedAt,
+            row.category ?? null,
+            row.category ? [row.category] : [],
+            row.is_rent ?? null,
+            row.sqm ?? null,
+            row.rooms ?? null,
+            row.price ?? null,
+            row.ppm2 ?? null,
+            row.last_seen ?? null,
+          ],
+        );
+      }
+
+      if (closed.rowCount) {
+        // The closure changed current inventory for this local Sarajevo day.
+        // Mark the day dirty in the same transaction as the state transition.
+        await client.query(
+          `INSERT INTO analytics_refresh_state
+             (scope, pending_from_day, pending_through_day, updated_at)
+           VALUES ('listing_daily',
+                   ($1::timestamptz AT TIME ZONE 'Europe/Sarajevo')::date,
+                   ($1::timestamptz AT TIME ZONE 'Europe/Sarajevo')::date,
+                   now())
+           ON CONFLICT (scope) DO UPDATE SET
+             pending_from_day = LEAST(
+               COALESCE(analytics_refresh_state.pending_from_day,
+                        EXCLUDED.pending_from_day),
+               EXCLUDED.pending_from_day),
+             pending_through_day = GREATEST(
+               COALESCE(analytics_refresh_state.pending_through_day,
+                        EXCLUDED.pending_through_day),
+               EXCLUDED.pending_through_day),
+             updated_at = now()`,
+          [closedAt],
+        );
+      }
+
+      await client.query("COMMIT");
+      return closed.rowCount;
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   /**
@@ -588,6 +851,9 @@ class Db {
          FROM listings
         WHERE closed_at IS NULL
           AND article_id = ANY($1::bigint[])
+          AND NOT EXISTS (SELECT 1 FROM detail_jobs dj
+                           WHERE dj.article_id = listings.article_id
+                             AND dj.status = 'terminal')
           AND (details_fetched_at IS NOT NULL
                OR last_enrichment_attempted_at IS NULL
                OR last_enrichment_attempted_at <= now() - make_interval(mins => $3::int))
@@ -618,6 +884,170 @@ class Db {
       })),
       total: r.rows.length ? Number(r.rows[0].pool_total) : 0,
     };
+  }
+
+  /**
+   * Add active listing identities to the durable detail queue. Existing jobs
+   * retain their outcome and retry schedule; a fresh search observation never
+   * erases a terminal result or a currently held lease.
+   *
+   * @param {number[]} articleIds
+   * @returns {Promise<number>} number of newly-created jobs
+   */
+  async enqueueDetailJobs(articleIds) {
+    const ids = [
+      ...new Set((articleIds || []).map(Number).filter(Number.isSafeInteger)),
+    ];
+    if (!ids.length) return 0;
+    const result = await this.pool.query(
+      `INSERT INTO detail_jobs (article_id)
+       SELECT l.article_id FROM listings l
+        WHERE l.article_id = ANY($1::bigint[])
+          AND l.closed_at IS NULL
+       ON CONFLICT (article_id) DO NOTHING`,
+      [ids],
+    );
+    return result.rowCount;
+  }
+
+  /**
+   * Claim ready detail work with a database lease. SKIP LOCKED allows two
+   * workers to share the queue without fetching the same listing. Expired
+   * leases are reclaimed and counted as another attempt.
+   *
+   * @param {number[]} articleIds candidate ids (usually a bounded search set)
+   * @param {number} limit maximum claims
+   * @param {{leaseMinutes?:number, allowSucceeded?:boolean}} options
+   * @returns {Promise<Array<{articleId:number, attemptCount:number,
+   *   leaseUntil:Date}>>}
+   */
+  async claimDetailJobs(
+    articleIds,
+    limit,
+    { leaseMinutes = 30, allowSucceeded = false } = {},
+  ) {
+    const ids = [
+      ...new Set((articleIds || []).map(Number).filter(Number.isSafeInteger)),
+    ];
+    const cap = Math.max(0, Math.floor(Number(limit) || 0));
+    const lease = Math.min(
+      24 * 60,
+      Math.max(1, Math.round(Number(leaseMinutes) || 30)),
+    );
+    if (!ids.length || !cap) return [];
+
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `INSERT INTO detail_jobs (article_id)
+         SELECT l.article_id FROM listings l
+          WHERE l.article_id = ANY($1::bigint[]) AND l.closed_at IS NULL
+         ON CONFLICT (article_id) DO NOTHING`,
+        [ids],
+      );
+      const claimed = await client.query(
+        `WITH candidates AS (
+           SELECT d.article_id
+             FROM detail_jobs d
+             JOIN listings l ON l.article_id = d.article_id
+            WHERE d.article_id = ANY($1::bigint[])
+              AND l.closed_at IS NULL
+              AND (
+                (d.status = 'pending' AND d.next_attempt_at <= now())
+                OR (d.status = 'leased' AND d.lease_until <= now())
+                OR (d.status = 'succeeded' AND $4::boolean)
+              )
+            ORDER BY d.next_attempt_at ASC, d.article_id ASC
+            FOR UPDATE OF d SKIP LOCKED
+            LIMIT $2
+         )
+         UPDATE detail_jobs d
+            SET status = 'leased',
+                attempt_count = d.attempt_count + 1,
+                last_attempted_at = now(),
+                lease_until = now() + make_interval(mins => $3::int),
+                updated_at = now()
+           FROM candidates c
+          WHERE d.article_id = c.article_id
+         RETURNING d.article_id, d.attempt_count, d.lease_until`,
+        [ids, cap, lease, Boolean(allowSucceeded)],
+      );
+      await client.query("COMMIT");
+      return claimed.rows.map((row) => ({
+        articleId: Number(row.article_id),
+        attemptCount: Number(row.attempt_count),
+        leaseUntil: row.lease_until,
+      }));
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Persist the outcome of one claimed detail request. Retryable failures
+   * return the job to pending at nextAttemptAt; terminal outcomes stop future
+   * automatic work until an operator explicitly re-enqueues the identity.
+   */
+  async recordDetailJobOutcome(
+    articleId,
+    { outcome, error = null, httpStatus = null, nextAttemptAt = null } = {},
+  ) {
+    const id = Number(articleId);
+    if (!Number.isSafeInteger(id) || id <= 0)
+      throw new TypeError("articleId must be a positive safe integer");
+    const valid = new Set([
+      "success",
+      "retryable_failure",
+      "terminal_failure",
+      "not_found",
+      "cancelled",
+    ]);
+    if (!valid.has(outcome))
+      throw new TypeError(`invalid detail outcome: ${outcome}`);
+    const terminal = ["terminal_failure", "not_found", "cancelled"].includes(
+      outcome,
+    );
+    const status =
+      outcome === "success" ? "succeeded" : terminal ? "terminal" : "pending";
+    const result = await this.pool.query(
+      `UPDATE detail_jobs
+          SET status = $2,
+              next_attempt_at = CASE WHEN $2 = 'pending'
+                THEN COALESCE($3::timestamptz, now() + INTERVAL '1 hour')
+                ELSE next_attempt_at END,
+              lease_until = NULL,
+              completed_at = CASE WHEN $2 IN ('succeeded', 'terminal') THEN now() ELSE NULL END,
+              last_outcome = $4,
+              last_error = $5,
+              last_http_status = $6,
+              updated_at = now()
+        WHERE article_id = $1
+       RETURNING article_id, status, attempt_count, next_attempt_at,
+                 completed_at, last_outcome, last_error, last_http_status`,
+      [
+        id,
+        status,
+        nextAttemptAt,
+        outcome,
+        error == null ? null : String(error).slice(0, 2000),
+        httpStatus,
+      ],
+    );
+    return result.rows[0] || null;
+  }
+
+  /** Requeue leases abandoned by a crashed worker and return their count. */
+  async requeueExpiredDetailJobs() {
+    const result = await this.pool.query(
+      `UPDATE detail_jobs
+          SET status = 'pending', lease_until = NULL, updated_at = now()
+        WHERE status = 'leased' AND lease_until <= now()`,
+    );
+    return result.rowCount;
   }
 
   /**
@@ -687,6 +1117,10 @@ class Db {
         await this.archiveDetailResponse({
           articleId: row.articleId,
           payload: row.sourcePayload,
+          sourcePayload: row.sourcePayload,
+          requestMetadata: row.sourceRequestMetadata,
+          responseMetadata: row.sourceResponseMetadata,
+          buildVersion: row.sourceBuildVersion,
         });
       }
     }
@@ -764,13 +1198,68 @@ class Db {
         input.params,
       );
 
+      // Detail enrichment is historical evidence as well as a current-state
+      // update. Keep a resolved attribute snapshot so daily reconstruction can
+      // use a later pin/area/detail correction without mutating older search
+      // observations. The source payload remains in raw_api_responses; this
+      // JSON contains only the normalized fields needed by analytics.
+      const detailObservedAt = new Date();
+      for (const row of rows) {
+        const attributes = {
+          latitude: row.latitude ?? null,
+          longitude: row.longitude ?? null,
+          publishedAt: row.publishedAt ?? null,
+          renewedAt: row.renewedAt ?? null,
+          sellerType: row.sellerType ?? null,
+          roomsDetail: row.roomsDetail ?? null,
+          bathrooms: row.bathrooms ?? null,
+          floorNum: row.floorNum ?? null,
+          floorsTotal: row.floorsTotal ?? null,
+          unitLevels: row.unitLevels ?? null,
+          heating: row.heating ?? null,
+          furnished: row.furnished ?? null,
+          condition: row.condition ?? null,
+          parking: row.parking ?? null,
+          garage: row.garage ?? null,
+          elevator: row.elevator ?? null,
+          yearBuilt: row.yearBuilt ?? null,
+          plotSqm: row.plotSqm ?? null,
+          orientation: row.orientation ?? null,
+          views: row.views ?? null,
+          favorites: row.favorites ?? null,
+          characteristics: row.characteristics ?? {},
+          apiStatus: row.apiStatus ?? null,
+        };
+        await client.query(
+          `INSERT INTO listing_state_history
+             (article_id, effective_at, ingested_at, source, event_type,
+              is_rent, sqm, price, ppm2, filter_attributes,
+              membership_inferred, attributes_inferred)
+           SELECT $1, $2, $2, 'detail', 'detail_update', $3, $4, $5, $6,
+                  $7::jsonb, false, false
+             WHERE EXISTS (SELECT 1 FROM listings WHERE article_id = $1)`,
+          [
+            Number(row.articleId),
+            detailObservedAt,
+            row.isRent ?? null,
+            row.sqm ?? null,
+            row.price ?? null,
+            row.ppm2 ?? null,
+            JSON.stringify(attributes),
+          ],
+        );
+      }
+
       const events = [];
       for (const row of rows) {
         const currentState =
           row.priceState ?? (row.price == null ? "unpriced" : "valid");
         events.push({
           articleId: row.articleId,
-          effectiveAt: new Date(),
+          effectiveAt: detailObservedAt,
+          observedAt: detailObservedAt,
+          renewedAt: row.renewedAt ?? null,
+          effectiveAtBasis: "observed",
           price: row.price,
           priceState: currentState,
           dealType: row.dealType ?? (row.isRent ? "rent" : "sale"),
@@ -783,6 +1272,8 @@ class Db {
             articleId: row.articleId,
             effectiveAt:
               history.effectiveAt ?? history.date ?? history.created_at,
+            observedAt: detailObservedAt,
+            effectiveAtBasis: "source_history",
             price: history.price,
             dealType: row.dealType ?? (row.isRent ? "rent" : "sale"),
             source: "api_price_history",
@@ -815,6 +1306,10 @@ class Db {
       "UPDATE listings SET last_enrichment_attempted_at = now() WHERE article_id = ANY($1::bigint[])",
       [ids],
     );
+    // Keep a durable identity row even when a legacy caller still uses the
+    // timestamp-only scheduling API. Outcome state is recorded by the worker
+    // once the individual request resolves.
+    await this.enqueueDetailJobs(ids);
   }
 
   /**
@@ -840,6 +1335,31 @@ class Db {
       [searchKey],
     );
     return r.rows[0].id;
+  }
+
+  /**
+   * Close runs left in `running` after a process crash or forced shutdown.
+   *
+   * This is intentionally age-bounded: a second scraper process may still be
+   * working while this process starts. The startup caller supplies a bound
+   * longer than a normal cycle, and the structured outcome makes the reason
+   * visible without pretending that the run fetched a complete result set.
+   */
+  async recoverAbandonedRuns(maxAgeMinutes = 180) {
+    const minutes = Math.max(1, Math.round(Number(maxAgeMinutes) || 0));
+    const result = await this.pool.query(
+      `UPDATE scrape_runs
+          SET finished_at = now(), status = 'error', is_complete = FALSE,
+              error = 'scraper process stopped before run completion',
+              failure_reason = 'abandoned run recovered at startup',
+              truncation_reason = NULL
+        WHERE status = 'running'
+          AND finished_at IS NULL
+          AND started_at < now() - make_interval(mins => $1::int)
+       RETURNING id`,
+      [minutes],
+    );
+    return result.rowCount;
   }
 
   async finishRun(

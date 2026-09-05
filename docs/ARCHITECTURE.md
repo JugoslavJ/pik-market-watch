@@ -4,13 +4,25 @@ The stack collects configured OLX search results, stores current state and durab
 
 ## Runtime
 
-`scraper/src/index.js` is the production entrypoint. On startup it waits for PostgreSQL, applies the unapplied files in `db/init/`, converts eligible legacy price history, starts the health endpoint, and runs every configured search. Without `--once`, it repeats at `SCRAPE_INTERVAL_MINUTES` and never overlaps cycles. `src/migrate-only.js` applies migrations without scraping; `src/backfill-price-history.js` performs the offline price-history conversion.
+`scraper/src/index.js` is the production entrypoint. In Compose, the
+profile-only `migrator` job first applies the unapplied files in `db/init/` and
+the scraper waits for its successful completion. The scraper's
+`MIGRATIONS_ON_STARTUP` fallback remains enabled for bare-metal runs. After the
+schema gate it marks stale `running` rows as abandoned, converts eligible
+legacy price history, starts the health endpoint, and runs every configured
+search. Each cycle holds a session-level PostgreSQL advisory lease so a second
+scraper process skips rather than fetching the same cycle. Without `--once`, it
+repeats at `SCRAPE_INTERVAL_MINUTES` and never overlaps cycles.
+`src/migrate-only.js` applies migrations without scraping, `src/maintenance-only.js`
+runs retention and analytics maintenance, and `src/replay-response.js` replays a
+retained response without writes. `src/backfill-price-history.js` performs the
+offline price-history conversion.
 
 Searches come from `/config/searches.json`, unless `SEARCH_URLS` is set. Each URL is normalized to a stable search key. The scraper converts it to the OLX JSON search endpoint, fetches page 1 first, then fetches later pages in paced concurrent waves. A blank first page, failed page, or incomplete pagination marks the run unsuccessful; its prior result membership is retained. A cycle with no cards skips the closing pass. These guards prevent a blocked or changed upstream response from mass-closing listings.
 
 For a complete search, one ingestion transaction updates the current listing, search membership, run statistics, search observations, canonical price events, and reopen/close transitions caused by that search. A cycle-level closing pass then closes listings no longer returned by any configured search. Successful cycles rebuild pending daily inventory and remove expired raw search responses.
 
-Detail enrichment is a separate, bounded part of a successful search. The queue prioritizes active rows that have never had a successful detail fetch, are stale, have changed price, or still lack a pin or sale area. Search cards provide the inexpensive facts; detail requests fill richer attributes. Failed detail requests are recorded as attempts but are not treated as successful detail evidence.
+Detail enrichment is a separate, bounded part of a successful search. The queue prioritizes active rows that have never had a successful detail fetch, are stale, have changed price, or still lack a pin or sale area. Search cards provide the inexpensive facts; detail requests fill richer attributes. `detail_jobs` keeps durable claim leases, retry timing and terminal outcomes alongside the scheduling hint on `listings`.
 
 ## Persistence and evidence
 
@@ -21,7 +33,7 @@ Detail enrichment is a separate, bounded part of a successful search. The queue 
 | `scrape_runs` | Per-search execution outcome, page/card counts, completeness, and failure information. |
 | `raw_api_responses` | Retained search payloads with fetch time, parser version, and expiry. Retention is controlled by `RAW_RESPONSE_RETENTION_DAYS`; this is operational evidence, not an indefinite archive. |
 | `listing_state_history` | Immutable search sightings, detail updates, closures, and reopenings. `effective_at` is evidence time; `ingested_at` is when this database learned it. |
-| `listing_price_events` | Canonical price boundaries with a value state (`valid`, `unpriced`, `invalid`, or `conflict`) and provenance. |
+| `listing_price_events` | Canonical price boundaries with a value state (`valid`, `unpriced`, `invalid`, or `conflict`), observation/renewal timestamps, effective-time basis, and provenance. |
 | `listing_daily` | Reconstructed article/day inventory used for historical analytics. |
 | `analytics_refresh_state` | Pending and successful daily-rebuild coverage. |
 | `neighborhoods` | Generated Banja Luka MZ polygons used to resolve listing pins. |

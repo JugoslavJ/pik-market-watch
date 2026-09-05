@@ -46,6 +46,12 @@ fi
 # is reachable; `up` below still works from the local cache otherwise.
 docker compose pull db grafana db-backup || echo "⚠ pull failed, using local images"
 
+# Apply schema changes before publishing dashboards. The migrator is a
+# profile-only one-shot service, so a failed migration stops this deployment
+# before Grafana can observe a partially upgraded contract.
+echo "▶ Applying database migrations"
+docker compose --profile migrate run --build --rm migrator
+
 echo "▶ docker compose up -d --build (build output below, if any)"
 docker compose up -d --build --remove-orphans
 

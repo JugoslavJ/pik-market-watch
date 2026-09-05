@@ -22,7 +22,34 @@ test("canonical importer keeps source time separate and accepts valid history wi
     result.event.effectiveAt.toISOString(),
     "2024-01-02T10:00:00.000Z",
   );
+  assert.equal(result.event.effectiveAtBasis, "legacy");
+  assert.equal(
+    result.event.observedAt.toISOString(),
+    result.event.effectiveAt.toISOString(),
+  );
   assert.equal(result.event.ingestedAt, null);
+});
+
+test("current evidence stores observation and renewal metadata separately", () => {
+  const observedAt = new Date("2026-09-05T12:00:00Z");
+  const renewedAt = new Date("2026-09-04T12:00:00Z");
+  const result = normalizeEvent(
+    {
+      articleId: 43,
+      effectiveAt: observedAt,
+      observedAt,
+      renewedAt,
+      effectiveAtBasis: "observed",
+      price: 100000,
+      source: "search",
+      isCurrent: true,
+    },
+    { now: observedAt },
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.event.observedAt.getTime(), observedAt.getTime());
+  assert.equal(result.event.renewedAt.getTime(), renewedAt.getTime());
+  assert.equal(result.event.effectiveAtBasis, "observed");
 });
 
 test("current unpriced observations become null boundaries, historical invalid prices are quarantined", () => {
