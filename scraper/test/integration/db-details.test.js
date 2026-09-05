@@ -314,3 +314,27 @@ needsDb(
     assert.equal(daily[daily.length - 1].active_est, 1);
   },
 );
+
+needsDb("daily rebuild normalizes nullable inferred flags", async () => {
+  await seed(7010);
+  await db.pool.query(
+    `INSERT INTO listing_state_history
+         (article_id, effective_at, source, event_type, category_membership,
+          filter_attributes, last_seen_at, membership_inferred, attributes_inferred)
+       VALUES ($1, now(), 'search', 'search_sighting', '{}', '{}'::jsonb,
+               now(), false, false)`,
+    [7010],
+  );
+
+  await db.rebuildDailyInventory();
+  const daily = (
+    await db.pool.query(
+      `SELECT membership_inferred, attributes_inferred
+           FROM listing_daily WHERE article_id = 7010`,
+    )
+  ).rows[0];
+
+  assert.ok(daily);
+  assert.equal(daily.membership_inferred, false);
+  assert.equal(daily.attributes_inferred, false);
+});

@@ -220,9 +220,9 @@ BEGIN
          COALESCE(e.observed_effective_at, e.future_effective_at),
          e.event_price_effective_at,
          COALESCE(e.observed_membership_inferred, false)
-           OR e.state_estimated OR e.attrs_estimated,
+           OR e.state_estimated OR COALESCE(e.attrs_estimated, false),
          COALESCE(e.observed_attributes_inferred, false)
-           OR e.state_estimated OR e.attrs_estimated,
+           OR e.state_estimated OR COALESCE(e.attrs_estimated, false),
          (e.activity_at IS NOT NULL
            AND (e.activity_at AT TIME ZONE 'Europe/Sarajevo')::date < e.day),
          e.day = v_today
