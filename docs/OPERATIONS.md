@@ -142,6 +142,12 @@ docker compose run --rm scraper node src/backfill-price-history.js --dry-run
 docker compose run --rm scraper node src/backfill-price-history.js --checkpoint=/tmp/price-history.checkpoint
 ```
 
+Normal scraper startup performs this conversion once and records the
+completion marker in `analytics_refresh_state`. If a refactor deployment was
+already started before that guard existed, run the command above once, then
+rebuild the daily inventory from the earliest imported event; the next
+successful scrape will also detect and repair an incomplete daily range.
+
 One-off scrape (testing, or triggered by an external cron) — `compose run`
 ignores the service's restart policy, so there is no loop risk:
 

@@ -10,6 +10,7 @@ const { Pool } = require("pg");
 const { extractArticleId } = require("./parser");
 const { recordPriceEvents } = require("./price-history");
 const { normalizeEvent } = require("./price-history");
+const { runBackfill } = require("./price-history-backfill");
 
 // ── Bulk-write column plumbing ───────────────────────────────────────────────
 // Both set-based writes feed row data through unnest($n::type[] …) arrays.
@@ -240,7 +241,8 @@ class Db {
     await this.pool.query(
       `INSERT INTO raw_api_responses
          (run_id, article_id, request_kind, request_url, fetched_at, expires_at, parser_version, payload)
-       VALUES ($1, $2, $3, $4, $5, $5 + make_interval(days => $6::int), $7, $8::jsonb)`,
+       VALUES ($1, $2, $3, $4, $5::timestamptz,
+               $5::timestamptz + make_interval(days => $6::int), $7, $8::jsonb)`,
       [
         runId ?? null,
         articleId ?? null,
@@ -508,17 +510,120 @@ class Db {
     }
   }
 
+  /**
+   * Convert legacy price evidence once, after the additive refactor has
+   * created the canonical event table. The marker is set only after a
+   * successful conversion so an interrupted startup can safely retry.
+   */
+  async backfillLegacyPriceHistory(log = () => {}) {
+    const client = await this.pool.connect();
+    let inTransaction = false;
+    try {
+      await client.query("BEGIN");
+      inTransaction = true;
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+        ["pik-market-watch legacy price-history backfill"],
+      );
+      const state = await client.query(
+        `SELECT historical_tracking_boundary
+           FROM analytics_refresh_state
+          WHERE scope = 'listing_daily'`,
+      );
+      if (state.rows[0]?.historical_tracking_boundary) {
+        await client.query("COMMIT");
+        inTransaction = false;
+        return { skipped: true };
+      }
+
+      const legacy = await client.query(
+        `SELECT EXISTS (SELECT 1 FROM price_history) AS has_price_history,
+                EXISTS (
+                  SELECT 1 FROM listings
+                   WHERE jsonb_typeof(api_price_history) = 'array'
+                     AND jsonb_array_length(api_price_history) > 0
+                ) AS has_api_history`,
+      );
+      if (
+        !legacy.rows[0]?.has_price_history &&
+        !legacy.rows[0]?.has_api_history
+      ) {
+        await client.query(
+          `UPDATE analytics_refresh_state
+              SET historical_tracking_boundary = now(), updated_at = now()
+            WHERE scope = 'listing_daily'`,
+        );
+        await client.query("COMMIT");
+        inTransaction = false;
+        return { skipped: false, inserted: 0 };
+      }
+
+      // runBackfill uses the pool so each listing batch remains independently
+      // committed. The advisory lock prevents a second startup from racing
+      // the marker while this work is in progress.
+      const report = await runBackfill({
+        pool: this.pool,
+        logger: (message) => log(message),
+      });
+      await client.query(
+        `UPDATE analytics_refresh_state
+            SET historical_tracking_boundary = now(), updated_at = now()
+          WHERE scope = 'listing_daily'`,
+      );
+      await client.query("COMMIT");
+      inTransaction = false;
+      return report;
+    } catch (error) {
+      if (inTransaction) await client.query("ROLLBACK").catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   /** Rebuild pending historical inventory through the current Sarajevo day. */
   async rebuildDailyInventory() {
     const r = await this.pool.query(
-      `SELECT pending_from_day, pending_through_day
+      `SELECT pending_from_day, pending_through_day,
+              (SELECT min((effective_at AT TIME ZONE 'Europe/Sarajevo')::date)
+                 FROM listing_price_events
+                WHERE price_state = 'valid' AND price IS NOT NULL) AS first_priced_day,
+              (SELECT min(day) FROM listing_daily) AS first_daily_day
          FROM analytics_refresh_state WHERE scope = 'listing_daily'`,
     );
     const today = new Date().toLocaleDateString("en-CA", {
       timeZone: "Europe/Sarajevo",
     });
-    const from = r.rows[0]?.pending_from_day || today;
-    const through = r.rows[0]?.pending_through_day || today;
+    const sqlDay = (day) =>
+      day instanceof Date
+        ? day.toISOString().slice(0, 10)
+        : String(day).slice(0, 10);
+    const state = r.rows[0] || {};
+    const historicalStart = state.first_priced_day
+      ? sqlDay(state.first_priced_day)
+      : null;
+    const existingStart = state.first_daily_day
+      ? sqlDay(state.first_daily_day)
+      : null;
+    const starts = [state.pending_from_day, historicalStart]
+      .filter(Boolean)
+      .map(sqlDay);
+
+    // A newly migrated database can have normalized evidence but no daily
+    // rows (or only today's provisional row). Reconstruct from the earliest
+    // valid price evidence so historical panels recover without a manual
+    // replay. A pending historical import also needs to run through today;
+    // otherwise today's inventory remains stale after the replay.
+    if (historicalStart && (!existingStart || existingStart > historicalStart))
+      starts.push(historicalStart);
+
+    const from = starts.sort()[0] || today;
+    const through =
+      [today, state.pending_through_day]
+        .filter(Boolean)
+        .map(sqlDay)
+        .sort()
+        .at(-1) || today;
     return this.pool.query(
       "SELECT * FROM rebuild_listing_daily($1::date, $2::date)",
       [from, through],

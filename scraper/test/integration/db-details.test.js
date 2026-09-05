@@ -80,6 +80,7 @@ needsDb(
         views: 1234,
         favorites: 7,
         characteristics: { kvadrata: 40, "broj-soba": 2 },
+        sourcePayload: { id: 7001, source: "detail" },
       },
     ]);
     const r = await rowOf(7001);
@@ -107,6 +108,17 @@ needsDb(
     // learned m² on a priced sale ad derives ppm² (100000 / 40):
     assert.equal(Number(r.sqm), 40);
     assert.equal(r.ppm2, 2500);
+    const archived = await db.pool.query(
+      `SELECT request_kind, article_id::int AS article_id, payload
+         FROM raw_api_responses WHERE article_id = 7001`,
+    );
+    assert.deepEqual(archived.rows, [
+      {
+        request_kind: "detail",
+        article_id: 7001,
+        payload: { id: 7001, source: "detail" },
+      },
+    ]);
   },
 );
 

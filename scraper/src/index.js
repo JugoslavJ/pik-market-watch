@@ -143,6 +143,12 @@ async function main() {
   const db = new Db(config.databaseUrl);
   await db.waitUntilReady();
   await applyMigrations(db.pool, config.migrationsDir, log);
+  const historyBackfill = await db.backfillLegacyPriceHistory(log);
+  if (!historyBackfill.skipped && historyBackfill.inserted)
+    log(
+      `legacy price history converted · ${historyBackfill.inserted} event(s) ` +
+        `inserted, ${historyBackfill.quarantined || 0} quarantined`,
+    );
   log(
     `database ready · ${config.searches.length} search(es) · ` +
       `interval ${config.intervalMinutes} min`,
