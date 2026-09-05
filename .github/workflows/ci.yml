@@ -99,8 +99,10 @@ jobs:
         run: |
           SSH="ssh -i ~/.ssh/oci_deploy_key ${SSH_STRICT:--o StrictHostKeyChecking=accept-new} -o BatchMode=yes -o ServerAliveInterval=30"
           $SSH "$OCI_USER@$OCI_HOST" "mkdir -p $DEPLOY_DIR"
-          git ls-files | $SSH "$OCI_USER@$OCI_HOST" "cat > '$DEPLOY_DIR/.deploy-tracked-files.next'"
-          $SSH "$OCI_USER@$OCI_HOST" "DEPLOY_DIR='$DEPLOY_DIR' bash -s" <<'REMOTE_CLEANUP'
+          # Keep DEPLOY_DIR unquoted at the remote shell boundary so a
+          # configured ~/path expands against the OCI user's home directory.
+          git ls-files | $SSH "$OCI_USER@$OCI_HOST" "cat > $DEPLOY_DIR/.deploy-tracked-files.next"
+          $SSH "$OCI_USER@$OCI_HOST" "DEPLOY_DIR=$DEPLOY_DIR bash -s" <<'REMOTE_CLEANUP'
           set -euo pipefail
           old="$DEPLOY_DIR/.deploy-tracked-files"
           next="$DEPLOY_DIR/.deploy-tracked-files.next"
