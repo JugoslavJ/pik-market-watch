@@ -22,6 +22,7 @@ docker compose up -d --build
 | `POSTGRES_READER_USER`, `POSTGRES_READER_PASSWORD` | `olx_reader`, required | Grafana and backup read-only role. |
 | `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD` | `admin`, required | Grafana login. |
 | `GRAFANA_SECRET_KEY` | required | Grafana encryption for stored datasource secrets. |
+| `GRAFANA_CARTO_API_KEY` | unset | CARTO raster basemap key for Grafana geomaps; create one at [carto.com/basemaps/apikey](https://carto.com/basemaps/apikey). |
 | `GRAFANA_BIND` | `0.0.0.0` | Host interface for Grafana port 3000. Bind a LAN or VPN address when appropriate. |
 | `SCRAPE_INTERVAL_MINUTES` | `720` | Scheduled scraper cadence when the `scrape` profile is enabled. |
 | `DETAIL_REFRESH_DAYS` | `7` | Age at which successful detail evidence becomes eligible for refresh. |
