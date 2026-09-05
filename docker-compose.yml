@@ -156,10 +156,11 @@ services:
       GF_SERVER_CERT_KEY: /certs/grafana.key
       # Encrypts datasource secrets at rest inside grafana.db (.env: GRAFANA_SECRET_KEY)
       GF_SECURITY_SECRET_KEY: ${GRAFANA_SECRET_KEY:?set GRAFANA_SECRET_KEY in .env}
-      # Grafana's default geomap basemap uses authenticated CARTO raster tiles.
-      # The key and style are injected at runtime instead of being stored in dashboard JSON.
+      # Grafana's default geomap basemap uses an authenticated CARTO MapLibre
+      # vector style. The key and style are injected at runtime instead of
+      # being stored in dashboard JSON.
       GF_GEOMAP_DEFAULT_BASELAYER_CONFIG: >-
-        {"type":"xyz","config":{"url":"https://basemaps.cartocdn.com/rastertiles/${GRAFANA_CARTO_THEME:-dark}/{z}/{x}/{y}.png?key=${GRAFANA_CARTO_API_KEY:-}","attribution":"© OpenStreetMap contributors © CARTO"}}
+        {"type":"maplibre","config":{"url":"https://basemaps.cartocdn.com/gl/${GRAFANA_CARTO_VECTOR_STYLE:-dark-matter}-gl-style/style.json?key=${GRAFANA_CARTO_API_KEY:-}"}}
       # Consumed by env interpolation in grafana/provisioning/datasources/postgres.yml
       # (read-only role — Grafana never needs write access)
       POSTGRES_READER_USER: ${POSTGRES_READER_USER:-olx_reader}
