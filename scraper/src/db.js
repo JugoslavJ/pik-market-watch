@@ -493,9 +493,7 @@ class Db {
     const existingStart = state.first_daily_day
       ? sqlDay(state.first_daily_day)
       : null;
-    const starts = [state.pending_from_day, historicalStart]
-      .filter(Boolean)
-      .map(sqlDay);
+    const starts = [state.pending_from_day].filter(Boolean).map(sqlDay);
 
     // A newly migrated database can have normalized evidence but no daily
     // rows (or only today's provisional row). Reconstruct from the earliest
