@@ -14,7 +14,11 @@ test.before(async () => {
 test.after(async () => {
   if (db) await db.close();
 });
-test.beforeEach(() => reset(db.pool));
+const cardsBySearch = new Map();
+test.beforeEach(async () => {
+  cardsBySearch.clear();
+  await reset(db.pool);
+});
 
 const KEY_A = "/pretraga?category_id=23";
 const KEY_B = "/pretraga?category_id=26";
@@ -28,22 +32,74 @@ async function register(key, category) {
   });
 }
 
-async function seed(articleId, over = {}, key = KEY_A) {
-  await register(key, "apartments");
-  await db.saveCards([
-    {
-      url: `https://olx.ba/artikal/${articleId}/x`,
-      title: "ad " + articleId,
-      sqm: null,
-      rooms: "2",
-      isRent: false,
-      price: 100000,
-      priceText: "",
-      ppm2: null,
-      ...over,
+const priceEvent = (row, observedAt) => ({
+  articleId: row.articleId,
+  effectiveAt: observedAt,
+  ingestedAt: observedAt,
+  price: row.price,
+  priceState: row.priceState ?? (row.price == null ? "unpriced" : "valid"),
+  dealType: row.isRent ? "rent" : "sale",
+  source: "search",
+  isCurrent: true,
+  provenance: { observation: "search_card" },
+});
+
+async function commitSearch(
+  key,
+  cards,
+  {
+    category = key === KEY_B ? "houses" : "apartments",
+    eventCards = cards,
+    observedAt = new Date(),
+  } = {},
+) {
+  cardsBySearch.set(key, new Map(cards.map((row) => [row.articleId, row])));
+  await register(key, category);
+  const runId = await db.startRun(key);
+  return db.commitSearchIngestion({
+    runId,
+    search: {
+      searchKey: key,
+      name: "search " + key,
+      url: "https://olx.ba" + key,
+      category,
     },
-  ]);
-  await db.refreshSearchResults(key, [articleId]);
+    cards,
+    priceEvents: eventCards.map((row) => priceEvent(row, observedAt)),
+    membership: {
+      searchKey: key,
+      articleIds: cards.map((row) => row.articleId),
+    },
+    run: { status: "ok", isComplete: true, pages: 1, cards: cards.length },
+    analytics: { invalidateFrom: observedAt },
+  });
+}
+
+async function seed(
+  articleId,
+  over = {},
+  key = KEY_A,
+  observedAt = new Date(),
+) {
+  const card = {
+    articleId,
+    url: `https://olx.ba/artikal/${articleId}/x`,
+    title: "ad " + articleId,
+    sqm: null,
+    rooms: "2",
+    isRent: false,
+    price: 100000,
+    priceText: "",
+    ppm2: null,
+    ...over,
+  };
+  const cards = cardsBySearch.get(key) ?? new Map();
+  cards.set(articleId, card);
+  cardsBySearch.set(key, cards);
+  await commitSearch(key, [...cards.values()], {
+    eventCards: [card],
+    observedAt,
+  });
 }
 
 const rowOf = async (id) =>
@@ -261,23 +317,27 @@ needsDb(
 );
 
 needsDb("v_listing_lifecycle exposes opening/closing economics", async () => {
-  await register(KEY_A, "apartments");
-  await seed(7006, { sqm: 50, price: 100000, priceText: "", ppm2: 2000 });
-  await db.saveCards([
+  await seed(
+    7006,
+    { sqm: 50, price: 100000, priceText: "", ppm2: 2000 },
+    KEY_A,
+    new Date("2026-09-05T08:00:00Z"),
+  );
+  await seed(
+    7006,
     {
-      url: "https://olx.ba/artikal/7006/x",
       title: "ad 7006 cut",
       sqm: 50,
-      rooms: "2",
-      isRent: false,
       price: 90000,
       priceText: "",
       ppm2: 1800,
     },
-  ]); // change → history row
-  await db.refreshSearchResults(KEY_A, [7006]);
-  await db.refreshSearchResults(KEY_A, []);
-  await db.closeUnseenListings([KEY_A]);
+    KEY_A,
+    new Date("2026-09-05T09:00:00Z"),
+  );
+  await commitSearch(KEY_A, [], {
+    observedAt: new Date("2026-09-05T10:00:00Z"),
+  });
 
   const lc = (
     await db.pool.query(
@@ -308,8 +368,7 @@ needsDb(
   async () => {
     await seed(7008); // will be closed below
     await seed(7009, {}, KEY_B); // stays open
-    await db.refreshSearchResults(KEY_A, []);
-    await db.closeUnseenListings([KEY_A, KEY_B]);
+    await commitSearch(KEY_A, []);
 
     const daily = (
       await db.pool.query("SELECT * FROM v_market_daily ORDER BY day")

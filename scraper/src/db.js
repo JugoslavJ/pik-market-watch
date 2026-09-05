@@ -1,47 +1,24 @@
 "use strict";
 // PostgreSQL access layer (node-postgres).
 //
-// Write semantics:
-//   - upsert the listing and bump last_seen on every sighting
-//   - append to price_history only when price/ppm² changed (and ppm² known)
-//   - count new listings and price drops per run
+// Search writes, lifecycle transitions and canonical evidence are committed at
+// one transaction boundary. Historical imports use the same event writer.
 
 const { Pool } = require("pg");
-const { extractArticleId } = require("./parser");
 const { recordPriceEvents } = require("./price-history");
-const { normalizeEvent } = require("./price-history");
 const { runBackfill } = require("./price-history-backfill");
 
 // ── Bulk-write column plumbing ───────────────────────────────────────────────
-// Both set-based writes feed row data through unnest($n::type[] …) arrays.
+// The enrichment write feeds row data through unnest($n::type[] …) arrays.
 // Each spec below is the SINGLE source of truth for its query's column list:
 //   [unnest alias, Postgres element type, value source]
 // A string source names a JS property read off every row (`r[src] ?? null`,
 // exactly what the former inline g() helper did); a function source receives
-// the whole row array and returns one column array (ids derived from URLs,
-// JSON.stringify derivations). renderUnnest() renders BOTH the placeholder/
+// the whole row array and returns one column array (for JSON derivations).
+// renderUnnest() renders BOTH the placeholder/
 // cast list interpolated into the SQL and the matching params array from one
 // spec — adding or reordering a field becomes a one-line edit here instead
 // of three hand-synced ones across the SQL signature and the params list.
-const SAVE_CARDS_COLS = [
-  // Same derivation as the dedupe keys built in saveCards(), so the rendered
-  // first param is identical to the old explicit [...unique.keys()].
-  [
-    "article_id",
-    "bigint",
-    (cards) => cards.map((c) => Number(extractArticleId(c.url))),
-  ],
-  ["url", "text", "url"],
-  ["title", "text", "title"],
-  ["sqm", "numeric", "sqm"],
-  ["rooms", "text", "rooms"],
-  ["price", "numeric", "price"],
-  ["price_text", "text", "priceText"],
-  ["ppm2", "integer", "ppm2"],
-  ["is_rent", "boolean", "isRent"],
-  ["renewed_at", "timestamptz", "renewedAt"],
-];
-
 // Short unnest aliases (lat/lon/sqm/chars/api_ph) are load-bearing: the
 // UPDATE clause below reads them via `i.<alias>`.
 const ENRICH_COLS = [
@@ -108,8 +85,12 @@ function renderUnnest(specs, rows) {
 }
 
 class Db {
-  constructor(connectionString) {
+  constructor(connectionString, { rawResponseRetentionDays = 30 } = {}) {
     this.pool = new Pool({ connectionString, max: 5 });
+    this.rawResponseRetentionDays = Math.max(
+      1,
+      Number(rawResponseRetentionDays) || 30,
+    );
   }
 
   /** Retry SELECT 1 until Postgres accepts connections (compose healthcheck covers this too). */
@@ -125,105 +106,6 @@ class Db {
     }
   }
 
-  /**
-   * Upsert a batch of parsed cards in ONE set-based statement (single round
-   * trip; per-card semantics preserved exactly):
-   *   - upsert listing, bump last_seen, reopen (closed_* cleared on re-sight)
-   *   - renewed_at moves monotonically forward (GREATEST ignores NULLs)
-   *   - append price_history: unconditionally for brand-new listings, and for
-   *     known ones only when ppm² is known AND price/ppm² actually changed
-   *   - count new listings and price drops; collect new article ids
-   * Caller guarantees unique article ids (scraper dedupes across pages); the
-   * Map below is defensive insurance against future callers forgetting.
-   * @param {Array<object>} cards — output of parseSearchItem()
-   * @returns {Promise<{newCount:number, dropCount:number, newIds:number[]}>}
-   */
-  async saveCards(cards) {
-    const unique = new Map();
-    for (const card of cards) {
-      const id = Number(extractArticleId(card.url)) || null;
-      if (id !== null && !unique.has(id)) unique.set(id, card);
-    }
-    if (!unique.size) return { newCount: 0, dropCount: 0, newIds: [] };
-
-    const input = renderUnnest(SAVE_CARDS_COLS, [...unique.values()]);
-    const result = await this.pool.query(
-      `WITH input AS (
-         SELECT * FROM unnest(
-             ${input.castsSql})
-           AS t(${input.aliasSql})),
-       prev AS (
-         SELECT l.article_id, l.price AS old_price, l.ppm2 AS old_ppm2
-           FROM listings l JOIN input i USING (article_id)),
-       ins AS (
-         INSERT INTO listings
-           (article_id, url, title, sqm, rooms, price, price_text, ppm2,
-            is_rent, first_seen, last_seen, renewed_at)
-         SELECT i.article_id, i.url, i.title, i.sqm, i.rooms, i.price,
-                i.price_text, i.ppm2, i.is_rent, now(), now(), i.renewed_at
-           FROM input i
-          WHERE NOT EXISTS (SELECT 1 FROM prev p WHERE p.article_id = i.article_id)
-         RETURNING article_id),
-       upd AS (
-         UPDATE listings l SET url = i.url, title = i.title, sqm = i.sqm,
-                 rooms = i.rooms, price = i.price, price_text = i.price_text,
-                 ppm2 = i.ppm2, is_rent = i.is_rent, last_seen = now(),
-                 closed_at = NULL, closing_price = NULL, closing_ppm2 = NULL,
-                 closing_category = NULL,
-                 -- Day renewed moves monotonically forward: GREATEST ignores
-                 -- NULLs on both sides, so a stamp-less card never erases an
-                 -- earlier one and stamps never regress.
-                 renewed_at = GREATEST(l.renewed_at, i.renewed_at)
-           FROM input i WHERE l.article_id = i.article_id),
-       -- History rows: brand-new listings always open their history…
-       hist_new AS (
-         SELECT i.article_id, i.price, i.ppm2
-           FROM input i JOIN ins x USING (article_id)),
-       -- …known ones only when ppm² is known AND something actually changed.
-       hist_changed AS (
-         SELECT i.article_id, i.price, i.ppm2
-           FROM input i JOIN prev p USING (article_id)
-          WHERE i.ppm2 IS NOT NULL
-            AND (p.old_ppm2 IS DISTINCT FROM i.ppm2
-                 OR p.old_price IS DISTINCT FROM i.price)),
-       hist AS (
-         INSERT INTO price_history (article_id, price, ppm2)
-         SELECT article_id, price, ppm2 FROM (
-           SELECT * FROM hist_new UNION ALL SELECT * FROM hist_changed) h),
-       -- A drop = changed, previously had a plausible ppm², and it went down.
-       drops AS (
-         SELECT count(*)::int AS n
-           FROM input i JOIN prev p USING (article_id)
-          WHERE i.ppm2 IS NOT NULL AND p.old_ppm2 IS NOT NULL
-            AND i.ppm2 < p.old_ppm2
-            AND (p.old_ppm2 IS DISTINCT FROM i.ppm2
-                 OR p.old_price IS DISTINCT FROM i.price))
-       SELECT (SELECT count(*)::int FROM ins) AS new_count,
-              (SELECT n FROM drops) AS drop_count,
-              (SELECT array_agg(article_id ORDER BY article_id) FROM ins) AS new_ids`,
-      input.params,
-    );
-    const row = result.rows[0];
-    const saved = {
-      newCount: Number(row.new_count),
-      dropCount: Number(row.drop_count),
-      newIds: (row.new_ids ?? []).map(Number),
-    };
-    await this.recordPriceEvents(
-      [...unique.values()].map((card) => ({
-        articleId: card.articleId ?? extractArticleId(card.url),
-        effectiveAt: new Date(),
-        price: card.price,
-        priceState: card.priceState,
-        dealType: card.dealType,
-        source: "search",
-        isCurrent: true,
-        provenance: { observation: "search_card" },
-      })),
-    );
-    return saved;
-  }
-
   /** Store a source response without coupling retention to scraper logic. */
   async archiveSearchResponse({
     runId,
@@ -234,10 +116,6 @@ class Db {
     parserVersion = "search-v1",
     payload,
   }) {
-    const retentionDays = Math.max(
-      1,
-      Number(process.env.RAW_RESPONSE_RETENTION_DAYS) || 30,
-    );
     await this.pool.query(
       `INSERT INTO raw_api_responses
          (run_id, article_id, request_kind, request_url, fetched_at, expires_at, parser_version, payload)
@@ -249,7 +127,7 @@ class Db {
         requestKind,
         requestUrl,
         fetchedAt,
-        retentionDays,
+        this.rawResponseRetentionDays,
         parserVersion,
         JSON.stringify(payload),
       ],
@@ -268,15 +146,19 @@ class Db {
   }
 
   /**
-   * Atomic search write boundary used by search-lifecycle.js.  The legacy
-   * saveCards/refreshSearchResults methods remain available for compatibility,
-   * while new cycles commit identity, state, price evidence, membership,
-   * lifecycle and run statistics together.
+   * Atomic search write boundary used by search-lifecycle.js.
    */
   async commitSearchIngestion(payload) {
     const client = await this.pool.connect();
     const cards = payload.cards || [];
-    const articleIds = cards.map((card) => Number(card.articleId));
+    const uniqueCards = [
+      ...new Map(
+        cards
+          .map((card) => [Number(card.articleId), card])
+          .filter(([id]) => Number.isInteger(id) && id > 0),
+      ).values(),
+    ];
+    const articleIds = uniqueCards.map((card) => Number(card.articleId));
     const now = new Date();
     try {
       await client.query("BEGIN");
@@ -294,8 +176,28 @@ class Db {
         "SELECT article_id FROM listings WHERE article_id = ANY($1::bigint[]) AND closed_at IS NOT NULL",
         [articleIds],
       );
+      const existing = await client.query(
+        "SELECT article_id, price, ppm2 FROM listings WHERE article_id = ANY($1::bigint[])",
+        [articleIds],
+      );
+      const previousById = new Map(
+        existing.rows.map((row) => [Number(row.article_id), row]),
+      );
+      const newIds = articleIds.filter((id) => !previousById.has(id));
+      const dropCount = uniqueCards.filter((card) => {
+        const previous = previousById.get(Number(card.articleId));
+        return (
+          previous &&
+          card.pricePresent !== false &&
+          card.ppm2 != null &&
+          previous.ppm2 != null &&
+          Number(card.ppm2) < Number(previous.ppm2) &&
+          (Number(card.ppm2) !== Number(previous.ppm2) ||
+            card.price !== previous.price)
+        );
+      }).length;
 
-      for (const card of cards) {
+      for (const card of uniqueCards) {
         const id = Number(card.articleId);
         await client.query(
           `INSERT INTO listings
@@ -313,7 +215,10 @@ class Db {
              is_rent = EXCLUDED.is_rent,
              last_seen = now(),
              renewed_at = GREATEST(listings.renewed_at, EXCLUDED.renewed_at),
-             closed_at = NULL`,
+             closed_at = NULL,
+             closing_price = NULL,
+             closing_ppm2 = NULL,
+             closing_category = NULL`,
           [
             id,
             card.url,
@@ -362,26 +267,7 @@ class Db {
         );
       }
 
-      for (const event of payload.priceEvents || []) {
-        const normalized = normalizeEvent(event, { now });
-        if (!normalized.ok) continue;
-        const value = normalized.event;
-        await client.query(
-          `INSERT INTO listing_price_events
-             (article_id, effective_at, ingested_at, price, price_state, source, provenance)
-           VALUES ($1,$2,COALESCE($3,now()),$4,$5,$6,$7::jsonb)
-           ON CONFLICT (article_id, effective_at, price, price_state) DO NOTHING`,
-          [
-            value.articleId,
-            value.effectiveAt,
-            value.ingestedAt,
-            value.price,
-            value.priceState,
-            value.source,
-            JSON.stringify(value.provenance),
-          ],
-        );
-      }
+      await this.recordPriceEvents(payload.priceEvents || [], { client, now });
 
       const ids = [...new Set(articleIds)];
       await client.query(
@@ -419,9 +305,10 @@ class Db {
           await client.query(
             `UPDATE listings SET closed_at = COALESCE(closed_at, now()),
                     closing_price = COALESCE(closing_price, price),
-                    closing_ppm2 = COALESCE(closing_ppm2, ppm2)
+                    closing_ppm2 = COALESCE(closing_ppm2, ppm2),
+                    closing_category = COALESCE(closing_category, $2)
               WHERE article_id = $1`,
-            [oldId],
+            [oldId, payload.search.category ?? null],
           );
           await client.query(
             `INSERT INTO listing_state_history
@@ -464,8 +351,8 @@ class Db {
           payload.search.category,
           run.listingCount ?? cards.length,
           run.median ?? null,
-          run.newCount ?? 0,
-          run.dropCount ?? 0,
+          newIds.length,
+          dropCount,
         ],
       );
       await client.query(
@@ -482,6 +369,7 @@ class Db {
         ],
       );
       await client.query("COMMIT");
+      return { newCount: newIds.length, dropCount, newIds };
     } catch (error) {
       await client.query("ROLLBACK").catch(() => {});
       throw error;
@@ -669,44 +557,6 @@ class Db {
     return r.rowCount;
   }
 
-  /** Replace a search's result set with the freshly scraped article ids.
-   *
-   * When this DELETE removes an ad's LAST result link (it vanished from this
-   * search and no other search still holds it), its category is frozen into
-   * closing_category — closure deletes links, and dashboards filter closed
-   * ads by that frozen value afterwards (see listings_closed_filtered()).
-   */
-  async refreshSearchResults(searchKey, articleIds) {
-    const ids = [...new Set(articleIds)];
-    await this.pool.query(
-      `WITH doomed AS (
-         DELETE FROM search_results sr
-          WHERE sr.search_key = $1
-            AND NOT (sr.article_id = ANY($2::bigint[]))
-         RETURNING article_id
-       )
-       UPDATE listings l
-          SET closing_category = COALESCE(l.closing_category,
-                (SELECT ss.category FROM saved_searches ss WHERE ss.search_key = $1))
-        WHERE l.article_id IN (SELECT article_id FROM doomed)
-          AND l.closing_category IS NULL
-          -- Data-modifying CTEs run against the PRE-statement snapshot, so the
-          -- "was this the last link?" check must ignore only this search's rows.
-          AND NOT EXISTS (SELECT 1 FROM search_results sr
-                           WHERE sr.article_id = l.article_id
-                             AND sr.search_key <> $1)`,
-      [searchKey, ids],
-    );
-    if (ids.length) {
-      await this.pool.query(
-        `INSERT INTO search_results (search_key, article_id)
-         SELECT $1, x FROM unnest($2::bigint[]) AS x
-         ON CONFLICT (search_key, article_id) DO NOTHING`,
-        [searchKey, ids],
-      );
-    }
-  }
-
   /**
    * Fair-share enrichment queue for one search's result set: active rows that
    * still lack a map pin, m² (on priced sale ads) or a detail visit — ordered
@@ -716,18 +566,13 @@ class Db {
    * @param {number[]} ids — article ids returned by the current run
    * @param {number} limit — max rows to hand back (cfg.maxGeoFetches)
    * @returns {Promise<{pending:Array<{id:number, unpinned:boolean,
-   *   missingSqm:boolean, neverDetailed:boolean}>, total:number}>}
+   *   missingSqm:boolean, neverDetailed:boolean, stale:boolean,
+   *   priceChanged:boolean}>, total:number}>}
    */
   async enrichmentQueue(
     ids,
     limit,
-    {
-      refreshDays = Number(process.env.DETAIL_REFRESH_DAYS) || 7,
-      retryAfterMinutes = Math.max(
-        1,
-        Number(process.env.SCRAPE_INTERVAL_MINUTES) || 720,
-      ),
-    } = {},
+    { refreshDays = 7, retryAfterMinutes = 720 } = {},
   ) {
     if (!ids.length || !(limit > 0)) return { pending: [], total: 0 };
     const r = await this.pool.query(
@@ -735,6 +580,12 @@ class Db {
               (latitude IS NULL)                                  AS unpinned,
               (sqm IS NULL AND price IS NOT NULL AND NOT is_rent) AS missing_sqm,
               (details_fetched_at IS NULL)                        AS never_detailed,
+              (details_fetched_at IS NOT NULL AND
+               details_fetched_at <= now() - make_interval(days => $4::int)) AS stale,
+              EXISTS (SELECT 1 FROM listing_price_events pe
+                       WHERE pe.article_id = listings.article_id
+                         AND pe.source <> 'detail'
+                         AND pe.ingested_at > COALESCE(listings.details_fetched_at, '-infinity'::timestamptz)) AS price_changed,
               COUNT(*) OVER ()                                    AS pool_total
          FROM listings
         WHERE closed_at IS NULL
@@ -764,6 +615,8 @@ class Db {
         unpinned: row.unpinned,
         missingSqm: row.missing_sqm,
         neverDetailed: row.never_detailed,
+        stale: row.stale,
+        priceChanged: row.price_changed,
       })),
       total: r.rows.length ? Number(r.rows[0].pool_total) : 0,
     };
@@ -778,13 +631,7 @@ class Db {
    */
   async getListingsNeedingDetails(
     onlyActive = true,
-    {
-      refreshDays = Number(process.env.DETAIL_REFRESH_DAYS) || 7,
-      retryAfterMinutes = Math.max(
-        1,
-        Number(process.env.SCRAPE_INTERVAL_MINUTES) || 720,
-      ),
-    } = {},
+    { refreshDays = 7, retryAfterMinutes = 720 } = {},
   ) {
     const sql = `SELECT article_id AS "articleId", url FROM listings
                  WHERE (latitude IS NULL
@@ -847,9 +694,12 @@ class Db {
     }
     // Column plumbing comes from ENRICH_COLS above: one spec drives both this
     // SQL's unnest() signature and the params array (see renderUnnest).
-    const input = renderUnnest(ENRICH_COLS, rows);
-    await this.pool.query(
-      `WITH input AS (
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const input = renderUnnest(ENRICH_COLS, rows);
+      await client.query(
+        `WITH input AS (
          SELECT article_id, price, price_text, ppm2_current, is_rent_current,
                 price_present, lat, lon, sqm, published_at, seller_type,
                 rooms_detail, bathrooms, floor_num, floors_total, unit_levels,
@@ -913,37 +763,44 @@ class Db {
           last_enrichment_attempted_at = now()
        FROM input i
        WHERE l.article_id = i.article_id`,
-      input.params,
-    );
+        input.params,
+      );
 
-    const events = [];
-    for (const row of rows) {
-      const currentState =
-        row.priceState ?? (row.price == null ? "unpriced" : "valid");
-      events.push({
-        articleId: row.articleId,
-        effectiveAt: new Date(),
-        price: row.price,
-        priceState: currentState,
-        dealType: row.dealType ?? (row.isRent ? "rent" : "sale"),
-        source: "detail",
-        isCurrent: true,
-        provenance: { observation: "detail_current" },
-      });
-      for (const history of row.apiPriceHistory || []) {
+      const events = [];
+      for (const row of rows) {
+        const currentState =
+          row.priceState ?? (row.price == null ? "unpriced" : "valid");
         events.push({
           articleId: row.articleId,
-          effectiveAt:
-            history.effectiveAt ?? history.date ?? history.created_at,
-          price: history.price,
+          effectiveAt: new Date(),
+          price: row.price,
+          priceState: currentState,
           dealType: row.dealType ?? (row.isRent ? "rent" : "sale"),
-          source: "api_price_history",
-          historical: true,
-          provenance: { observation: "listing_api_price_history" },
+          source: "detail",
+          isCurrent: true,
+          provenance: { observation: "detail_current" },
         });
+        for (const history of row.apiPriceHistory || []) {
+          events.push({
+            articleId: row.articleId,
+            effectiveAt:
+              history.effectiveAt ?? history.date ?? history.created_at,
+            price: history.price,
+            dealType: row.dealType ?? (row.isRent ? "rent" : "sale"),
+            source: "api_price_history",
+            historical: true,
+            provenance: { observation: "listing_api_price_history" },
+          });
+        }
       }
+      await this.recordPriceEvents(events, { client });
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw error;
+    } finally {
+      client.release();
     }
-    await this.recordPriceEvents(events);
   }
 
   /** Shared canonical price-event facade used by ingestion and backfills. */
@@ -966,9 +823,8 @@ class Db {
    * Create/update ONLY the identity columns of a saved search (name/url/
    * category), leaving stats and last_scraped_at untouched. Called at the
    * START of a run so dashboards can attribute 'running' (or failed) runs to
-   * a category instead of showing '(none)'; upsertSavedSearch() fills in the
-   * numbers when the run completes. Also guarantees the row exists before
-   * search_results references it (FK search_results_search_key_fkey).
+   * a category instead of showing '(none)'. The transactional ingestion
+   * operation fills in the run statistics when the run completes.
    */
   async registerSavedSearch({ searchKey, name, url, category }) {
     await this.pool.query(
@@ -977,39 +833,6 @@ class Db {
        ON CONFLICT (search_key) DO UPDATE SET
          name = EXCLUDED.name, url = EXCLUDED.url, category = EXCLUDED.category`,
       [searchKey, name, url, category ?? null],
-    );
-  }
-
-  async upsertSavedSearch({
-    searchKey,
-    name,
-    url,
-    category,
-    listingCount,
-    median,
-    newCount,
-    dropCount,
-  }) {
-    await this.pool.query(
-      `INSERT INTO saved_searches
-         (search_key, name, url, category, last_scraped_at, listing_count, median_ppm2,
-          new_count, drop_count)
-       VALUES ($1, $2, $3, $4, now(), $5, $6, $7, $8)
-       ON CONFLICT (search_key) DO UPDATE SET
-         name = EXCLUDED.name, url = EXCLUDED.url, category = EXCLUDED.category,
-         last_scraped_at = now(),
-         listing_count = EXCLUDED.listing_count, median_ppm2 = EXCLUDED.median_ppm2,
-         new_count = EXCLUDED.new_count, drop_count = EXCLUDED.drop_count`,
-      [
-        searchKey,
-        name,
-        url,
-        category ?? null,
-        listingCount,
-        median,
-        newCount,
-        dropCount,
-      ],
     );
   }
 

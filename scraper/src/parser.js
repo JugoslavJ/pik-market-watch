@@ -168,7 +168,7 @@ function pinOf(loc) {
 // ── search results ───────────────────────────────────────────────────────────
 
 /**
- * One /api/search result object → card (db.saveCards contract) plus the
+ * One /api/search result object → normalized search card plus the
  * enrichment facts the search payload hands us for free.
  * Returns null for non-listing/empty entries.
  */
@@ -227,7 +227,7 @@ function parseSearchItem(item) {
     ...pinOf(item.location),
     // Search cards only carry the renewal/bump stamp (`date`), never the true
     // creation time — that lives solely on the ad's own endpoint. Emitted as
-    // renewedAt so saveCards() can refresh it every cycle without ever
+    // renewedAt so transactional ingestion can refresh it every cycle without ever
     // polluting published_at (day created).
     renewedAt: dateFromUnixSeconds(item.date),
     sellerType: SELLER_TYPES.has(item.user_type) ? item.user_type : null,
@@ -237,7 +237,8 @@ function parseSearchItem(item) {
 
 /**
  * A validated /api/search payload → { cards, meta }.
- * Cards carry extra enrichment keys alongside the saveCards fields.
+ * Cards carry the fields needed by transactional search ingestion and detail
+ * enrichment.
  */
 function parseSearchPage(payload) {
   if (

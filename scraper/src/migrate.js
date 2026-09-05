@@ -1,17 +1,6 @@
 "use strict";
-// Startup migration runner: applies db/init/*.sql (filename order) exactly
-// once, tracked in a schema_migrations table.
-//
-// The complete migration run uses one dedicated pool client and one
-// transaction. A transaction-scoped advisory lock serializes multiple scraper
-// processes before either process reads the migration ledger. This matters for
-// a deploy where two instances can start at the same time: a migration and its
-// tracking row are one atomic unit, and a failed migration rolls back both.
-//
-// Migration errors are deliberately not made tolerant. The consolidated
-// schema and the generated neighborhood migration are idempotent themselves;
-// swallowing an unexpected error would make a partially applied database look
-// healthy and prevent the next boot from surfacing the problem.
+// Apply each db/init SQL filename once. One transaction and advisory lock keep
+// concurrent startup attempts from publishing a partial or duplicated ledger.
 
 const fs = require("fs");
 const path = require("path");
@@ -34,8 +23,6 @@ async function applyMigrations(pool, dir, log = () => {}) {
     await client.query("BEGIN");
     inTransaction = true;
 
-    // hashtextextended gives us a stable bigint advisory-lock key without
-    // reserving a magic integer that could collide with application locks.
     await client.query(
       "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
       ["pik-market-watch schema migrations"],

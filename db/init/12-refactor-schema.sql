@@ -1,12 +1,4 @@
--- ─────────────────────────────────────────────────────────────────────────────
--- Refactor contracts: additive persistence for raw responses, normalized
--- lifecycle/price evidence, daily inventory and analytics invalidation.
---
--- Keep 01-schema.sql (the consolidated schema) and 11-neighborhoods.sql (the
--- generated geographic seed) unchanged. This file is intentionally additive:
--- existing tables and rows remain valid while the new ingestion modules roll
--- out behind the Db compatibility facade.
--- ─────────────────────────────────────────────────────────────────────────────
+-- Evidence, daily inventory, and analytics refresh state.
 
 -- Raw payload retention is bounded by fetched_at. expires_at is materialized
 -- so maintenance can delete in bounded batches without recalculating policy.

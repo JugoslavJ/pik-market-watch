@@ -27,10 +27,12 @@ const log = makeLogger("backfill");
   const db = new Db(config.databaseUrl);
   await db.waitUntilReady();
 
-  const targets = (await db.getListingsNeedingDetails(onlyActive)).slice(
-    0,
-    max,
-  );
+  const targets = (
+    await db.getListingsNeedingDetails(onlyActive, {
+      refreshDays: config.detailRefreshDays,
+      retryAfterMinutes: Math.max(1, config.intervalMinutes),
+    })
+  ).slice(0, max);
   log(
     `${targets.length} listing(s) to fetch (${onlyActive ? "active ≤14d" : "all rows"}${max !== Infinity ? `, capped at ${max}` : ""})`,
   );
@@ -44,9 +46,7 @@ const log = makeLogger("backfill");
     missed = 0;
   const t0 = Date.now();
 
-  if (typeof db.markDetailAttempts === "function") {
-    await db.markDetailAttempts(targets.map((target) => target.articleId));
-  }
+  await db.markDetailAttempts(targets.map((target) => target.articleId));
 
   await fetchDetailsInBatches(
     targets.map((t) => t.articleId),

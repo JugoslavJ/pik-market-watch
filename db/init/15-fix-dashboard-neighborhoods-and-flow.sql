@@ -1,5 +1,4 @@
--- Repair the historical neighborhood projection and repeated-sighting flows.
--- Keep historical location derived from stored observations, never current ads.
+-- Derive historical neighborhood values from stored observations.
 CREATE OR REPLACE FUNCTION analytics_state_neighborhood(p_attributes JSONB)
 RETURNS TEXT LANGUAGE plpgsql STABLE PARALLEL SAFE AS $$
 DECLARE
@@ -24,8 +23,7 @@ BEGIN
 END
 $$;
 
--- Migration 13 writes location but omits neighborhood. Normalize both on every
--- rebuild, including databases with an already-installed migration-13 function.
+-- Normalize both location columns on every rebuild.
 CREATE OR REPLACE FUNCTION normalize_listing_daily_flags()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN

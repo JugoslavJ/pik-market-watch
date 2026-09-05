@@ -97,8 +97,30 @@ const identity = {
   category: "apartments",
 };
 
+async function commitMembership(articleIds) {
+  await db.registerSavedSearch(identity);
+  const runId = await db.startRun(identity.searchKey);
+  const cards = articleIds.map((articleId) => ({
+    articleId,
+    url: `https://olx.ba/artikal/${articleId}`,
+    title: "ad " + articleId,
+    price: null,
+    ppm2: null,
+    isRent: false,
+    pricePresent: false,
+  }));
+  return db.commitSearchIngestion({
+    runId,
+    search: identity,
+    cards,
+    membership: { searchKey: identity.searchKey, articleIds },
+    run: { status: "ok", isComplete: true, pages: 1, cards: cards.length },
+    analytics: { invalidateFrom: new Date() },
+  });
+}
+
 needsDb(
-  "registerSavedSearch sets identity only; upsert adds stats on completion",
+  "registerSavedSearch sets identity only; ingestion adds stats on completion",
   async () => {
     await db.registerSavedSearch(identity);
     let ss = (await db.pool.query("SELECT * FROM saved_searches")).rows[0];
@@ -106,12 +128,21 @@ needsDb(
     assert.equal(ss.listing_count, null);
     assert.equal(ss.last_scraped_at, null);
 
-    await db.upsertSavedSearch({
-      ...identity,
-      listingCount: 42,
-      median: 2000,
-      newCount: 5,
-      dropCount: 1,
+    const runId = await db.startRun(identity.searchKey);
+    await db.commitSearchIngestion({
+      runId,
+      search: identity,
+      cards: [],
+      membership: { searchKey: identity.searchKey, articleIds: [] },
+      run: {
+        status: "ok",
+        isComplete: true,
+        listingCount: 42,
+        median: 2000,
+        newCount: 5,
+        dropCount: 1,
+      },
+      analytics: { invalidateFrom: new Date() },
     });
     ss = (await db.pool.query("SELECT * FROM saved_searches")).rows[0];
     assert.equal(ss.listing_count, 42);
@@ -153,12 +184,11 @@ needsDb(
   },
 );
 
-needsDb("refreshSearchResults replaces the stored result set", async () => {
-  await db.registerSavedSearch(identity);
+needsDb("commitSearchIngestion replaces the stored result set", async () => {
   await seed(5001);
   await seed(5002);
   await seed(5003);
-  await db.refreshSearchResults(identity.searchKey, [5001, 5002]);
+  await commitMembership([5001, 5002]);
   let ids = (
     await db.pool.query(
       "SELECT article_id::int AS id FROM search_results ORDER BY id",
@@ -166,7 +196,7 @@ needsDb("refreshSearchResults replaces the stored result set", async () => {
   ).rows.map((x) => x.id);
   assert.deepEqual(ids, [5001, 5002]);
 
-  await db.refreshSearchResults(identity.searchKey, [5002, 5003]); // 5001 dropped, 5003 added
+  await commitMembership([5002, 5003]); // 5001 dropped, 5003 retained
   ids = (
     await db.pool.query(
       "SELECT article_id::int AS id FROM search_results ORDER BY id",

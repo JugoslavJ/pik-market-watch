@@ -1,10 +1,11 @@
 "use strict";
 // Integration tests for the startup migration runner:
 //   A. fresh database — applies everything, second pass is a clean no-op
-//   B. pre-squash volume — schema_migrations records the retired 01…12
-//      filenames; the consolidated 01 + generated 11 are a clean no-op
+//   B. pre-squash volume — schema_migrations records retired filenames while
+//      the current migration set is a clean no-op
 //   C. tracker-unaware volume — hand-created early tables are upgraded in
 //      place by the self-heal block in 01-schema.sql
+const fs = require("node:fs");
 const path = require("node:path");
 const assert = require("node:assert/strict");
 const { Pool } = require("pg");
@@ -24,10 +25,15 @@ async function fnCount(pool) {
   );
 }
 async function recorded(pool) {
-  return Number(
-    (await pool.query("SELECT count(*) AS n FROM schema_migrations")).rows[0].n,
-  );
+  return (
+    await pool.query("SELECT filename FROM schema_migrations ORDER BY filename")
+  ).rows.map((row) => row.filename);
 }
+
+const currentMigrations = fs
+  .readdirSync(FULL_DIR)
+  .filter((file) => file.endsWith(".sql"))
+  .sort();
 
 // Drop & recreate a dedicated database so cases stay independent of the
 // shared suite DB (which other files bootstrap via ensureSchema).
@@ -45,11 +51,11 @@ needsDb(
     const pool = new Pool({ connectionString: await recreateDb("mig_fresh") });
     await applyMigrations(pool, FULL_DIR, log);
     assert.equal(await fnCount(pool), 2);
-    assert.equal(await recorded(pool), 6); // 01-schema + 11-neighborhoods + 12/13/14/15-refactor
+    assert.deepEqual(await recorded(pool), currentMigrations);
 
     await applyMigrations(pool, FULL_DIR, log); // second boot
     assert.equal(await fnCount(pool), 2);
-    assert.equal(await recorded(pool), 6);
+    assert.deepEqual(await recorded(pool), currentMigrations);
 
     // Dashboard panel query runs through the freshly created function:
     const r = await pool.query(
@@ -92,7 +98,10 @@ needsDb(
     // Boot against the squashed directory: nothing to apply, nothing breaks.
     await applyMigrations(pool, FULL_DIR, log);
     assert.equal(await fnCount(pool), 2);
-    assert.equal(await recorded(pool), 16); // 6 on-disk files + 10 historical rows
+    assert.deepEqual(
+      await recorded(pool),
+      [...currentMigrations, ...retiredNames].sort(),
+    );
 
     const r = await pool.query(
       "SELECT count(*)::int AS n FROM listings_filtered(ARRAY['apartments'], 0, 99999, NULL)",
@@ -146,7 +155,7 @@ needsDb(
 
     await applyMigrations(pool, FULL_DIR, log);
     assert.equal(await fnCount(pool), 2);
-    assert.equal(await recorded(pool), 6);
+    assert.deepEqual(await recorded(pool), currentMigrations);
 
     // Self-heal added the closure columns, and the legacy row remains
     // queryable through the dashboard's exact filter call:

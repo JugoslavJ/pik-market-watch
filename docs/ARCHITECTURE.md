@@ -1,135 +1,58 @@
-# Architecture & data model
+# Architecture and data model
 
-How the tracker stores what it sees, how listings age out, and what the Grafana panels chart.
+The stack collects configured OLX search results, stores current state and durable evidence in PostgreSQL, and serves provisioned Grafana dashboards. It is designed for market observation: an asking price or a listing disappearance is not a verified transaction.
 
-## Database schema
+## Runtime
 
-| Table | Contents |
+`scraper/src/index.js` is the production entrypoint. On startup it waits for PostgreSQL, applies the unapplied files in `db/init/`, converts eligible legacy price history, starts the health endpoint, and runs every configured search. Without `--once`, it repeats at `SCRAPE_INTERVAL_MINUTES` and never overlaps cycles. `src/migrate-only.js` applies migrations without scraping; `src/backfill-price-history.js` performs the offline price-history conversion.
+
+Searches come from `/config/searches.json`, unless `SEARCH_URLS` is set. Each URL is normalized to a stable search key. The scraper converts it to the OLX JSON search endpoint, fetches page 1 first, then fetches later pages in paced concurrent waves. A blank first page, failed page, or incomplete pagination marks the run unsuccessful; its prior result membership is retained. A cycle with no cards skips the closing pass. These guards prevent a blocked or changed upstream response from mass-closing listings.
+
+For a complete search, one ingestion transaction updates the current listing, search membership, run statistics, search observations, canonical price events, and reopen/close transitions caused by that search. A cycle-level closing pass then closes listings no longer returned by any configured search. Successful cycles rebuild pending daily inventory and remove expired raw search responses.
+
+Detail enrichment is a separate, bounded part of a successful search. The queue prioritizes active rows that have never had a successful detail fetch, are stale, have changed price, or still lack a pin or sale area. Search cards provide the inexpensive facts; detail requests fill richer attributes. Failed detail requests are recorded as attempts but are not treated as successful detail evidence.
+
+## Persistence and evidence
+
+| Store | Purpose |
 |---|---|
-| `listings` | One row per article: title, url, sqm, rooms, price, ppm², is_rent, first/last seen, `published_at` (day created) and `renewed_at` (day renewed). Ads gone from every search are closed automatically (`closed_at` + frozen `closing_price`/`closing_ppm2`/`closing_category`). Detail data adds `seller_type`, characteristics (rooms/bath/floor/heating/furnished/condition/parking/garage/elevator/year/orientation/plot m²), `views`/`favorites`, raw `characteristics` JSONB, plus raw API extras (`api_status`, `api_price_history`) |
-| `price_history` | Append-only snapshots; a row is added only when price/ppm² actually changed |
-| `saved_searches` | Watched searches + per-run stats (count, median ppm², new/drop counts) + free-form `category` label for the dashboard filter |
-| `search_results` | Which articles each search returned (refreshed every run) |
-| `scrape_runs` | Run observability: status, pages, cards, error |
-| `neighborhoods` | 56 official Banja Luka MZ polygons as flattened lon/lat rings. `neighborhood_of(lat, lon)` ray-casts a pin to an MZ name (smaller area wins shared-border ties) and falls back to the nearest MZ within 5 km, so pins in seams or hamlets without their own MZ still get a district; stored into `listings.location` on enrichment. Polygons were traced from the city's official MZ map and grid-normalized (`geo/scripts/sweep.js`, `repair.js`); the urban core was digitized by hand (`geo/README.md`). Seeds re-apply on every startup: edit `db/init/11-neighborhoods.sql` (or regenerate it from `geo/banja-luka-mz-final.geojson` via `geo/scripts/gen-sql.js`), then re-run its backfill UPDATE unguarded to relabel stored rows |
-| `v_active_listings` | View: anything seen by a scrape within 14 days |
-| `v_listing_lifecycle` | View: one row per listing — opening vs closing price/ppm², change count, days listed, category |
-| `v_market_daily` | View: per-day new/closed counts and estimated live inventory |
+| `listings` | Current, one-row-per-article state and the latest known attributes. It retains closed listings. |
+| `search_results` and `saved_searches` | Current membership of each configured search and its identity/category. |
+| `scrape_runs` | Per-search execution outcome, page/card counts, completeness, and failure information. |
+| `raw_api_responses` | Retained search payloads with fetch time, parser version, and expiry. Retention is controlled by `RAW_RESPONSE_RETENTION_DAYS`; this is operational evidence, not an indefinite archive. |
+| `listing_state_history` | Immutable search sightings, detail updates, closures, and reopenings. `effective_at` is evidence time; `ingested_at` is when this database learned it. |
+| `listing_price_events` | Canonical price boundaries with a value state (`valid`, `unpriced`, `invalid`, or `conflict`) and provenance. |
+| `listing_daily` | Reconstructed article/day inventory used for historical analytics. |
+| `analytics_refresh_state` | Pending and successful daily-rebuild coverage. |
+| `neighborhoods` | Generated Banja Luka MZ polygons used to resolve listing pins. |
 
-Schema migrations live in `db/init/*.sql`. `01-schema.sql` is the consolidated
-base schema (it absorbed the former incremental migrations — history in git),
-`11-neighborhoods.sql` is **generated** by `geo/scripts/gen-sql.js` (edit the
-GeoJSON source, never the file), and `zz-database-roles.sh` bootstraps runtime
-roles. The Postgres entrypoint runs them on **first** volume start, and the
-scraper re-checks and applies any *unapplied* ones on every startup — tracked
-in a `schema_migrations` table by filename. To change the schema later, drop a
-new **idempotent** migration file into `db/init/` and restart the scraper
-(`docker compose restart scraper`) — nothing else to do.
+`price_history` remains the legacy append-only snapshot table and is still consumed by the conversion path. New canonical price evidence is written through `listing_price_events`; duplicate evidence is idempotent by article, effective time, normalized price, and state.
 
-Manual application still works if you ever need it:
+Current tables answer “what is known now.” Evidence tables answer “what did this source say, and when did we record it?” `listing_daily` answers historical questions by reconstructing state at each Sarajevo calendar-day boundary. It carries explicit `membership_inferred`, `attributes_inferred`, `stale_observation`, and `provisional_day` flags. Historical membership and attributes can be inferred when observations are sparse; today is provisional and active inventory can be carried through the configured 14-day observation window. Treat flagged values as estimates, not direct daily captures.
 
-```bash
-docker exec -i olx-db psql -U olx_app -d olx < db/init/01-schema.sql   # full schema, idempotent
-```
+## Listing lifecycle and details
 
-### Listing lifecycle
+A listing opens when it is first observed. Complete search membership updates `last_seen`; when it disappears from all currently configured searches, the closing pass sets `closed_at` and freezes the last asking price, price per square metre, and category. A later sighting reopens the listing. Listings absent because a search failed are deliberately not closed.
 
-Every scraping cycle ends with a closing pass: any listing that none of the configured searches returned anymore gets `closed_at` set, freezing its last observed price into `closing_price` / `closing_ppm2`. The category of the last search that still returned the ad is frozen into `closing_category`, so closed ads remain filterable even though their `search_results` links are gone. Closed ads drop out of every dashboard panel immediately but stay in `listings` for later analysis. If an ad reappears on olx.ba it reopens automatically on its next sighting (all closing values cleared). A failed scrape never causes closures — its stale result links keep that search's listings open until a successful run sees them gone.
+The closing price is the last observed asking price, not a sale price. `published_at` and `renewed_at` come from source data when available; they differ from local observation time. Detail values include seller type, characteristics, counters, source status, and source price history. Stable scalar detail facts are generally first-wins, characteristics are merged, and a successful detail request updates `details_fetched_at`. Coverage varies by listing and by what OLX exposes.
 
-### Detail-page data (attributes beyond the search card)
+Price quality is explicit. A valid price without valid area can remain price evidence but has no price-per-square-metre value. Dashboard measures therefore exclude unsuitable rows where their query requires a valid price, area, or detail attribute.
 
-Search results already carry map pins, m²/rooms labels, renewal timestamp and seller type; everything else comes from the ad's JSON endpoint (`/api/listings/<id>`, parsed by `parseListingDetail()` into the `05-listing-details.sql` / `07-api-extras.sql` columns):
+## Database ownership and migrations
 
-- **Dates** — the ad endpoint's `created_at` is the true publish time and lands in `published_at` (first-wins); the renewal bump lands in `renewed_at` (`10-listing-dates.sql`) and only ever moves forward. Days-on-market uses creation. Rows whose publish date predates this split stay lower-bound estimates.
-- **Neighborhood** — `location`, derived from the pin via `neighborhood_of()` over the 56 Banja Luka MZ polygons; NULL outside all of them. First-wins, backfilled for existing rows.
-- **Seller type** — `shop` vs `private`, straight from `user.type`.
-- **Characteristics** — rooms, bathrooms, floor, heating, furnished, condition, parking, garage, elevator, year built, plot m², orientation. Every raw `attr_code:value` pair is also kept in the `characteristics` JSONB column, so nothing is lost if OLX renames codes.
-- **Counters & extras** — views, favorites, plus OLX's own price history and status stored raw (`api_price_history` / `api_status`) for cross-checking.
+PostgreSQL initialization runs `db/init/*.sql` only for a new volume. The scraper also records and applies unapplied migrations by filename at startup. Add future schema changes as new idempotent files; do not edit generated neighborhood SQL by hand. The bootstrap database user administers the instance. `olx_app` owns application objects and is used by the scraper and restore endpoint; `olx_reader` is read-only and is used by Grafana and backups.
 
-Detail calls are budgeted per run (`MAX_GEO_FETCHES`) and only made for facts still missing, so steady-state cycles need almost none. Scalars are first-wins, the JSONB map merges on every fetch, and `renewed_at` is the exception that moves forward monotonically. Backfill existing rows anytime with:
-
-```bash
-docker compose run --rm scraper node src/backfill-geo.js             # active listings
-docker compose run --rm scraper node src/backfill-geo.js --all       # everything, resumable
-```
-
----
 ## Dashboards
 
-Four provisioned dashboards live in the **OLX** folder (one JSON each in `grafana/dashboards/`). The two market dashboards share one filter bar — Category, Deal, Rooms, m² range, Neighborhood (multi-select, with `(unmapped)` / `(no pin)` buckets) — and every panel honours those filters plus the time picker. All four cross-link from the top bar, and failed scrape runs appear as red annotations on the market time series.
+Grafana provisions a read-only PostgreSQL datasource and four dashboard definitions from `grafana/dashboards/`:
 
-### OLX.ba Home (`olx-home`)
+- **OLX.ba Home** summarizes current market and scraper health without market filters.
+- **OLX.ba Market Overview** shows active inventory, asking-price trends, search-derived market flow, maps, segments, and selected detail coverage. Its Category, Deal, Rooms, m², and Neighborhood variables scope applicable panels.
+- **OLX.ba Exits & Price Endings** examines closed listings. Exit values are final observed asking values; they are not sales. It uses the same market filters.
+- **OLX Scraper Health** shows run outcomes, freshness, throughput, errors, and data-quality coverage. Its Category variable scopes search-related panels, not the market dataset.
 
-Landing page, no filter bar, whole database: six market KPIs (active listings, median sale KM/m², median rent, gross yield, sell-through 30 d, weekly Δ%), three pipeline KPIs (last successful scrape age, failed runs 24 h, cards 24 h) and two trend charts (inventory flow, weekly sell-through).
+Dashboard formulas are query-specific: comparable-looking ratios can use different scopes and denominators. Read panel titles and query aliases as the authoritative definition. Daily inventory and flow are estimates built from stored evidence, and raw/detailed-data coverage limits map, segmentation, and attribute panels.
 
-### OLX.ba Market Overview (`olx-overview`)
+## Geography
 
-The daily driver: what is on the market right now.
-
-1. **Headline stats** — active listings, new in 7 d, listings with a price drop in 7 d, median asking KM/m² (sales), median rent KM/mo; all respect the Deal filter
-2. **Price trend** — median asking KM/m² over daily snapshots with a p25–p75 band
-3. **Market flow** — new vs closed per day with estimated live inventory (`v_market_daily`, whole database) and the stalest still-active listings (oldest creation day first, with the seller's last renewal day)
-4. **Map** — pinned listings + linked table
-5. **Shopping list** — best-value sales (lowest KM/m²) and recent price drops
-6. **Segments & demand** — actives that cut their price + median biggest cut, median KM/m² by rooms, asking KM/m² by condition, neighborhood breakdown from map pins (Obilicevo, Starcevica, Laus, Lazarevo, Budzak, Centar, Borik, …), most-viewed active listings (`views` from ad pages)
-7. **Investment view** — gross rental yield (median rent × 12 ÷ median sale price), this-week-vs-last median KM/m² stat, price-vs-m² scatter with a least-squares fit line (genuine bargains sit below it), median KM/m² by floor position (labels carry `n=`; coverage still partial), asking KM/m² by seller type (private vs agency)
-8. **Neighborhood economics** — districts ranked by median asking KM/m² with p25–p75 spread (≥ 8 listings each; ignores the Neighborhood filter on purpose so districts stay comparable)
-
-### OLX.ba Exits & Price Endings (`olx-exits`)
-
-Everything about ads that disappeared, i.e. the closest thing olx.ba offers to sold prices. **Exit prices are last *asking* prices observed before removal — not transaction prices.**
-
-1. **Headline stats** — closed listings (30 d), median exit KM/m², sell-through rate (30 d), median days on market for closed ads
-2. **Exit prices vs market** — exit vs asking daily medians side by side (the gap is the softening signal) and a days-on-market distribution
-3. **Recently closed table** — exit price vs original ask, change % (colour-coded), days listed
-4. **Exits by room count**, **exit map** + linked table
-5. **Exit dynamics** — exit-discount buckets (final ask vs original ask) and a weekly sell-through-rate trend (`v_market_daily`, whole database)
-6. **Liquidity deep dive** — days-on-market vs exit-discount scatter (do stale ads exit cheaper?), exit rate by KM/m² quartile, and exit rate by neighborhood over 30 d (which districts actually move)
-
-### OLX Scraper Health (`olx-health`)
-
-Operational view of the scraper itself — market filters don't apply here.
-
-1. **Headline stats** — searches watched, failed runs (24 h), success rate (24 h), age of the last successful scrape, cards scraped (24 h)
-2. **Throughput** — runs per hour stacked ok/error, plus hourly average cards/pages per run (a collapse usually means markup/pagination changed upstream)
-3. **Saved searches** — per-search freshness (`age_min`, colour-coded), listing counts, new/drop counters
-4. **Recent scrape runs** — newest 50 with status colouring and full error text
-5. **Data quality & upstream** — coverage of geo pins / detail fetches / KM-m² / OLX status among actives (how much data the market panels can actually rely on), an OLX-status-vs-our-closure drift table (`api_status` telemetry), and per-search run durations
-6. **Errors & latency** — error messages grouped with digits masked to `#` (tells one recurring bug from many transient failures) and a run-duration trend (avg/max per hour); duration creep is the leading indicator of OLX throttling
-
-## Metrics not charted (yet)
-
-- **Sparse columns, chart with care**: `heating`, `furnished`, `favorites` ARE populated by detail enrichment whenever OLX exposes them (`parser.js`), but exposure is inconsistent across ads — treat them like the other sparse attributes below and check coverage before building panels. (`location` used to be entirely dead but is now filled for Banja Luka pins by the neighborhoods backfill.)
-- **Sparse but charted with caveats**: `floor_num` (~12 % of actives) powers the floor-position gauge, with explicit `n=` counts per bucket so sparsity stays visible. Still too sparse to chart: `parking` (6 %), `elevator` (4 %), `bathrooms` (11 %), `year_built` (20 %). Revisit as detail enrichment converges.
-- **Needs scraper/schema work**: `views` and `favorites` are overwrite-in-place counters, so no history/trend is possible without snapshotting them (e.g. a `listing_stats_history` table). `api_price_history` (OLX's own server-side price log, ~7 % coverage) could power hidden-drop detection we can't see between cycles.
-
-
-## Refactored evidence and analytics layers
-
-The scraper keeps `Db` as the compatibility facade, while new writes are
-separated into these additive layers:
-
-- raw source responses (`raw_api_responses`) are retained for 30 days;
-- normalized search/detail observations live in `listing_state_history`;
-- canonical current and historical price evidence lives in
-  `listing_price_events`, keyed by article, effective time, normalized price,
-  and price state;
-- `listing_daily` reconstructs one row per article and Sarajevo calendar day.
-
-Search/detail evidence outranks imported OLX history at equal timestamps.
-Declared sale/rent type is preserved even when price quality is invalid;
-current unpriced/invalid observations create null-price boundaries. Sales below
-3,000 KM, rents below 50 KM, areas outside 5–500 m², and sale prices outside
-1–15,000 KM/m² are rejected from the relevant canonical metric. A valid price
-without a valid area remains part of price history but has no KM/m² value.
-
-Daily analytics carries active listings through missed scrapes for 14 days,
-marks those rows stale, treats today as provisional, and labels historical
-membership/attributes inferred from later evidence. Rebuilds are range-based
-and retryable through `analytics_refresh_state`; they never use current
-`search_results` to filter historical dates.
-
-Operational replay commands are `node src/migrate-only.js` for schema-only
-startup and `node src/backfill-price-history.js` for offline legacy history
-conversion. The latter supports dry runs, bounded batches, maximum listings,
-and resumable checkpoints without making OLX requests.
+`geo/banja-luka-mz-final.geojson` is the final source for the generated `db/init/11-neighborhoods.sql`. `neighborhood_of(lat, lon)` uses polygon containment, deterministic priority on shared borders, then a nearest-polygon fallback within 5 km. A missing pin is reported as `(no pin)`; a pin outside the supported coverage is `(unmapped)`. See [geo/README.md](../geo/README.md) and [DATA.md](../DATA.md) for the reproducible chain and attribution.

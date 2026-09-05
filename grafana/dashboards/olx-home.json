@@ -804,7 +804,7 @@
         "x": 14,
         "y": 13
       },
-      "title": "Sell-through rate — weekly · all categories",
+      "title": "Closed / estimated active — weekly · all categories",
       "description": "All categories and all deals. This is the same inventory-flow definition shown on Home, expressed as closed observations divided by estimated active inventory; it is not a transaction measure.",
       "type": "timeseries",
       "options": {
@@ -826,7 +826,7 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time,\n       round(100.0 * closed_n / NULLIF(active_est, 0), 2) AS \"sell-through %\"\nFROM v_market_daily\nWHERE day BETWEEN date($__timeFrom() AT TIME ZONE 'Europe/Sarajevo')\n              AND date($__timeTo() AT TIME ZONE 'Europe/Sarajevo')\nORDER BY day",
+      "rawSql": "SELECT day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time,\n       round(100.0 * closed_n / NULLIF(active_est, 0), 2) AS \"closed / estimated active %\"\nFROM v_market_daily\nWHERE day BETWEEN date($__timeFrom() AT TIME ZONE 'Europe/Sarajevo')\n              AND date($__timeTo() AT TIME ZONE 'Europe/Sarajevo')\nORDER BY day",
           "refId": "A"
         }
       ],

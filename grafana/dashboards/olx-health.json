@@ -308,7 +308,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT COALESCE(EXTRACT(EPOCH FROM (now() - max(finished_at))), 0)::bigint\nFROM scrape_runs\nWHERE status = 'ok'",
+          "rawSql": "SELECT EXTRACT(EPOCH FROM (now() - max(finished_at)))::bigint\nFROM scrape_runs\nWHERE status = 'ok' AND finished_at IS NOT NULL",
           "refId": "A"
         }
       ],
@@ -1314,7 +1314,7 @@
     },
     {
       "type": "row",
-      "title": "Refactor data quality",
+      "title": "Data quality",
       "id": 23,
       "gridPos": {
         "h": 1,
@@ -1507,7 +1507,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT COALESCE(EXTRACT(EPOCH FROM (now() - last_successful_refresh_at)), 0)::bigint AS age_seconds\nFROM analytics_refresh_state\nWHERE scope = 'listing_daily'",
+          "rawSql": "SELECT EXTRACT(EPOCH FROM (now() - last_successful_refresh_at))::bigint AS age_seconds\nFROM analytics_refresh_state\nWHERE scope = 'listing_daily' AND last_successful_refresh_at IS NOT NULL",
           "refId": "A"
         }
       ]

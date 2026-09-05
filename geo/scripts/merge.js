@@ -12,8 +12,8 @@ const GEO = path.join(__dirname, '..');
 const core = JSON.parse(fs.readFileSync(path.join(GEO, 'city-core.geojson'), 'utf8'));
 const traced = JSON.parse(fs.readFileSync(path.join(GEO, 'banja-luka-mz.geojson'), 'utf8'));
 
-// mz_id -> display name (map labels; PROGRESS §7 + debug/ls-*.png sheets,
-// cross-checked against osm/places.json + Wikipedia where available)
+// mz_id -> display name from map labels, cross-checked against
+// osm/places.json where available.
 const NAMES = {
   1: 'Šimani', 2: 'Verići', 3: 'Potkozarje', 4: 'Mišin Han', 5: 'Prijakovci',
   6: 'Piskavica', 7: 'Dragočaj', 8: 'Gornja Piskavica', 9: 'Kuljani', 10: 'Zalužani',
@@ -223,4 +223,3 @@ const outPath = path.join(GEO, 'banja-luka-mz-final.geojson');
 fs.writeFileSync(outPath, JSON.stringify(out, null, 1) + '\n');
 console.log(`\nwrote ${outPath}: ${out.features.length} features ` +
   `(${drawn.length} manual + ${keptTraced.length} traced)`);
-

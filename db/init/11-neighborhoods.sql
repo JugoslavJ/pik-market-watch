@@ -21,10 +21,7 @@
 --
 -- Idempotent; applied automatically by the scraper on startup, or once with:
 --   docker exec -i olx-db psql -U olx_app -d olx < db/init/11-neighborhoods.sql
---   ^ the APP role — never hand-apply as the bootstrap superuser (-U olx):
---     superuser-owned objects broke enrichment ("permission denied for table
---     neighborhoods") and then the instance sync (2026-08-24; see
---     docs/OPERATIONS.md · Troubleshooting).
+--   ^ use the application role for objects consumed by enrichment.
 -- To re-label already-stored rows after a tweak, re-run the backfill UPDATE at
 -- the bottom WITHOUT the "location IS NULL" guard.
 -- ─────────────────────────────────────────────────────────────────────────────

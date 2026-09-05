@@ -1,7 +1,4 @@
--- Keep legacy versions of rebuild_listing_daily safe when an inferred
--- attribute expression evaluates to SQL NULL.  Migration 13 fixes the
--- function for fresh databases; this trigger protects databases that already
--- have the migration-13 function installed.
+-- Keep inferred flags non-null even when a rebuild expression yields SQL NULL.
 
 UPDATE listing_daily
    SET membership_inferred = COALESCE(membership_inferred, false),

@@ -69,15 +69,14 @@ function fakeDb(queueImpl) {
     async registerSavedSearch(s) {
       rec.savedSearches.push(s);
     },
-    async saveCards(cards) {
-      rec.savedCards = cards;
-      return { newCount: cards.length, dropCount: 0 };
+    async archiveSearchResponse(row) {
+      rec.archived = [...(rec.archived || []), row];
     },
-    async upsertSavedSearch(u) {
-      rec.upserts.push(u);
-    },
-    async refreshSearchResults(_key, ids) {
-      rec.refreshed.push(ids);
+    async commitSearchIngestion(payload) {
+      rec.savedCards = payload.cards;
+      rec.upserts.push({ ...payload.search, ...payload.run });
+      rec.refreshed.push(payload.membership.articleIds);
+      return { newCount: payload.cards.length, dropCount: 0 };
     },
     async enrichmentQueue(ids, cap) {
       return queueImpl
@@ -86,6 +85,9 @@ function fakeDb(queueImpl) {
     },
     async enrichListings(rows) {
       rec.enriched.push(...rows);
+    },
+    async markDetailAttempts(ids) {
+      rec.detailAttempts = [...(rec.detailAttempts || []), ...ids];
     },
     async finishRun(_id, info) {
       rec.finishedRuns.push(info);
@@ -344,11 +346,14 @@ test("enrichment: detail calls only where search cards cannot answer", async () 
   );
 
   assert.deepEqual(detailIds, [10, 21, 22]); // exactly the gaps
-  assert.equal(res.enriched, 5); // 24 had no card → skipped
+  assert.equal(res.enriched, 3); // only successful detail responses are persisted
   const byId = Object.fromEntries(db.rec.enriched.map((r) => [r.articleId, r]));
   assert.equal(byId[10].sqm, 99); // detail fact wins…
-  assert.equal(byId[20].sqm, 50); // …card fact kept when no detail ran
-  assert.equal(byId[23].latitude, 44.77); // card pin survives
+  assert.equal(
+    db.rec.savedCards.find((r) => r.articleId === 23).latitude,
+    44.77,
+  );
+  assert.equal(db.rec.savedCards.find((r) => r.articleId === 20).sqm, 50);
 });
 
 test("enrichment merge: null/empty detail fields never clobber known facts", async () => {

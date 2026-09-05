@@ -19,14 +19,35 @@ test.beforeEach(() => reset(db.pool));
 const KEY_A = "/pretraga?category_id=23";
 const KEY_B = "/pretraga?category_id=26";
 
-async function seenVia(key, articleId, over = {}) {
-  await db.registerSavedSearch({
+function searchFor(key, category = key === KEY_B ? "houses" : "apartments") {
+  return {
     searchKey: key,
     name: "search " + key,
     url: "https://olx.ba" + key,
-    category: "apartments",
+    category,
+  };
+}
+
+async function commitSearch(key, cards, category) {
+  const search = searchFor(key, category);
+  await db.registerSavedSearch(search);
+  const runId = await db.startRun(key);
+  return db.commitSearchIngestion({
+    runId,
+    search,
+    cards,
+    membership: {
+      searchKey: key,
+      articleIds: cards.map((row) => row.articleId),
+    },
+    run: { status: "ok", isComplete: true, pages: 1, cards: cards.length },
+    analytics: { invalidateFrom: new Date() },
   });
+}
+
+async function seenVia(key, articleId, over = {}) {
   const card = {
+    articleId,
     url: `https://olx.ba/artikal/${articleId}/x`,
     title: "ad " + articleId,
     sqm: 50,
@@ -37,8 +58,7 @@ async function seenVia(key, articleId, over = {}) {
     ppm2: 2000,
     ...over,
   };
-  await db.saveCards([card]);
-  await db.refreshSearchResults(key, [articleId]);
+  await commitSearch(key, [card]);
 }
 const rowOf = async (id) =>
   (
@@ -58,9 +78,7 @@ needsDb("listings returned by a live search are never closed", async () => {
 needsDb("a vanished ad closes with its last price recorded", async () => {
   await seenVia(KEY_A, 6002, { price: 95000, ppm2: 1900 });
   // Next cycle: the search no longer returns it.
-  await db.refreshSearchResults(KEY_A, []);
-  const n = await db.closeUnseenListings([KEY_A]);
-  assert.equal(n, 1);
+  await commitSearch(KEY_A, []);
   const r = await rowOf(6002);
   assert.ok(r.closed_at);
   assert.equal(r.closing_price, "95000.00");
@@ -68,58 +86,57 @@ needsDb("a vanished ad closes with its last price recorded", async () => {
 });
 
 needsDb("closure freezes closing_category; reopening clears it", async () => {
-  await db.registerSavedSearch({
-    searchKey: KEY_B,
-    name: "search B",
-    url: "https://olx.ba" + KEY_B,
-    category: "houses",
-  });
   await seenVia(KEY_A, 6010); // category apartments via KEY_A
-  await db.refreshSearchResults(KEY_A, []); // last link gone → stamp
-  await db.closeUnseenListings([KEY_A]);
+  await commitSearch(KEY_A, []); // last link gone → close atomically
   let r = await rowOf(6010);
   assert.ok(r.closed_at);
   assert.equal(r.closing_category, "apartments");
 
   // The frozen category survives while the raw row sits closed…
-  await db.closeUnseenListings([KEY_A]);
+  await commitSearch(KEY_A, []);
   assert.equal((await rowOf(6010)).closing_category, "apartments");
 
   // …and is cleared when the ad reappears:
-  await db.saveCards([
-    {
-      url: "https://olx.ba/artikal/6010/x",
-      title: "back",
-      sqm: 50,
-      rooms: "2",
-      price: 90000,
-      priceText: "",
-      ppm2: 1800,
-      isRent: false,
-    },
-  ]);
+  await seenVia(KEY_A, 6010, {
+    title: "back",
+    price: 90000,
+    priceText: "",
+    ppm2: 1800,
+  });
   r = await rowOf(6010);
   assert.equal(r.closed_at, null);
   assert.equal(r.closing_category, null);
+  const transitions = await db.pool.query(
+    `SELECT event_type
+       FROM listing_state_history
+      WHERE article_id = 6010
+      ORDER BY id`,
+  );
+  assert.deepEqual(
+    transitions.rows.map((row) => row.event_type),
+    ["closed", "reopened"],
+  );
 });
 
 needsDb(
   "closure is idempotent — closing values are frozen, not refreshed",
   async () => {
     await seenVia(KEY_A, 6003);
-    await db.refreshSearchResults(KEY_A, []);
-    await db.closeUnseenListings([KEY_A]);
-    const n = await db.closeUnseenListings([KEY_A]);
-    assert.equal(n, 0); // already closed → untouched
-    const r = await rowOf(6003);
-    assert.ok(r.closed_at);
+    await commitSearch(KEY_A, []);
+    const first = await rowOf(6003);
+    await commitSearch(KEY_A, []);
+    const second = await rowOf(6003);
+    assert.deepEqual(second.closed_at, first.closed_at);
+    const transitions = await db.pool.query(
+      "SELECT count(*)::int AS n FROM listing_state_history WHERE article_id = 6003 AND event_type = 'closed'",
+    );
+    assert.equal(transitions.rows[0].n, 1);
   },
 );
 
 needsDb("unpriced ads close too — with a NULL closing price", async () => {
   await seenVia(KEY_A, 6004, { price: null, priceText: "Na upit", ppm2: null });
-  await db.refreshSearchResults(KEY_A, []);
-  await db.closeUnseenListings([KEY_A]);
+  await commitSearch(KEY_A, []);
   const r = await rowOf(6004);
   assert.ok(r.closed_at);
   assert.equal(r.closing_price, null);
@@ -128,33 +145,13 @@ needsDb("unpriced ads close too — with a NULL closing price", async () => {
 needsDb(
   "a listing shared by several searches stays open until all drop it",
   async () => {
-    await db.registerSavedSearch({
-      searchKey: KEY_B,
-      name: "search B",
-      url: "https://olx.ba" + KEY_B,
-      category: "houses",
-    });
     await seenVia(KEY_A, 6005);
-    await db.saveCards([
-      {
-        url: "https://olx.ba/artikal/6005/x",
-        title: "dup",
-        sqm: 50,
-        rooms: "2",
-        price: 100000,
-        priceText: "",
-        ppm2: 2000,
-        isRent: false,
-      },
-    ]);
-    await db.refreshSearchResults(KEY_B, [6005]);
+    await seenVia(KEY_B, 6005, { title: "dup", priceText: "" });
 
-    await db.refreshSearchResults(KEY_A, []); // dropped from A only
-    await db.closeUnseenListings([KEY_A, KEY_B]);
+    await commitSearch(KEY_A, []); // dropped from A only
     assert.equal((await rowOf(6005)).closed_at, null);
 
-    await db.refreshSearchResults(KEY_B, []); // now gone from both
-    await db.closeUnseenListings([KEY_A, KEY_B]);
+    await commitSearch(KEY_B, []); // now gone from both
     assert.ok((await rowOf(6005)).closed_at);
   },
 );
@@ -193,23 +190,16 @@ needsDb(
   "re-sighting a closed ad reopens it and clears closing values",
   async () => {
     await seenVia(KEY_A, 6008, { price: 90000 });
-    await db.refreshSearchResults(KEY_A, []);
-    await db.closeUnseenListings([KEY_A]);
+    await commitSearch(KEY_A, []);
     assert.ok((await rowOf(6008)).closed_at);
 
     // The ad reappears on olx.ba:
-    await db.saveCards([
-      {
-        url: "https://olx.ba/artikal/6008/x",
-        title: "back again",
-        sqm: 50,
-        rooms: "2",
-        price: 88000,
-        priceText: "88.000 KM",
-        ppm2: 1760,
-        isRent: false,
-      },
-    ]);
+    await seenVia(KEY_A, 6008, {
+      title: "back again",
+      price: 88000,
+      priceText: "88.000 KM",
+      ppm2: 1760,
+    });
     const r = await rowOf(6008);
     assert.equal(r.closed_at, null);
     assert.equal(r.closing_price, null);
@@ -232,8 +222,7 @@ needsDb(
     );
     assert.equal(before.rows[0].n, 1);
 
-    await db.refreshSearchResults(KEY_A, []);
-    await db.closeUnseenListings([KEY_A]);
+    await commitSearch(KEY_A, []);
     const after = await db.pool.query(
       "SELECT count(*)::int AS n FROM v_active_listings WHERE article_id = 6009",
     );

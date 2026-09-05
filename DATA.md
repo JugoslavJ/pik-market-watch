@@ -1,12 +1,10 @@
-# Data provenance & licensing
+# Data provenance and licensing
 
-AGPLv3 covers the repo's code (scraper, SQL schema, scripts, dashboard JSON).
-The committed geographic data has separate origins:
+The repository’s code, SQL, scripts, and dashboard definitions are licensed under AGPLv3. The geographic inputs below have separate provenance and may carry additional attribution or share-alike obligations.
 
-| Artifact | Origin | Notes |
+| Artifact | Origin | Use and attribution |
 |---|---|---|
-| `db/init/11-neighborhoods.sql`, `geo/banja-luka-mz*.geojson` | 56 official Banja Luka *mesne zajednice* (MZ) polygons, hand-digitized from the city's official MZ boundary map | No open-data license published by the city; traced here for personal analysis. Attribute the City of Banja Luka if you redistribute. The shipped set was grid-normalized on 2026-08-25 (`geo/scripts/repair.js`: overlaps resolved, seams ≤ 160 m closed, 12 m simplification), so it differs slightly from the unrepaired auto-traced set (`geo/banja-luka-mz.geojson`). |
-| `geo/osm/*.json`, `*.txt` | OpenStreetMap via Overpass API queries | © OpenStreetMap contributors, ODbL 1.0. Derived works may trigger ODbL share-alike/attribution obligations independent of this repo's license. |
-| `geo/city-core.geojson` | Hand-drawn dashboard filter polygon | Same terms as the code. |
+| `geo/banja-luka-mz.geojson`, `geo/city-core.geojson`, `geo/banja-luka-mz-final.geojson`, and generated `db/init/11-neighborhoods.sql` | Banja Luka mjesne zajednice (MZ) boundaries traced from the city’s official map | The city map has no identified open-data licence in this repository. Use for personal analysis with attribution to the City of Banja Luka; obtain suitable permission before wider redistribution. |
+| `geo/osm/*.json` and `geo/osm/*.txt` | OpenStreetMap contributors, retrieved through the included Overpass queries | © OpenStreetMap contributors, ODbL 1.0. Derived-database, attribution, and share-alike obligations may apply independently of AGPLv3. |
 
-Everything else in the repo is original work under AGPLv3.
+The final GeoJSON is the source used to generate the database seed. It combines the hand-drawn city core with traced boundaries and is normalized by the checked-in geography tools. See [geo/README.md](geo/README.md) for the reproducible workflow. The data is intended for approximate neighborhood assignment from listing map pins; it is not an authoritative cadastral boundary dataset.

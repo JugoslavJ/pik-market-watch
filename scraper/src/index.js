@@ -110,11 +110,10 @@ async function runAll(db) {
     }
   }
 
-  if (okRuns > 0 && typeof db.rebuildDailyInventory === "function") {
+  if (okRuns > 0) {
     try {
       await db.rebuildDailyInventory();
-      if (typeof db.purgeRawResponses === "function")
-        await db.purgeRawResponses();
+      await db.purgeRawResponses();
     } catch (err) {
       log(`✖ analytics maintenance failed: ${err.message || err}`);
     }
@@ -140,7 +139,9 @@ function startHealthServer() {
 }
 
 async function main() {
-  const db = new Db(config.databaseUrl);
+  const db = new Db(config.databaseUrl, {
+    rawResponseRetentionDays: config.rawResponseRetentionDays,
+  });
   await db.waitUntilReady();
   await applyMigrations(db.pool, config.migrationsDir, log);
   const historyBackfill = await db.backfillLegacyPriceHistory(log);

@@ -337,7 +337,7 @@
             "showPoints": "never",
             "spanNulls": true
           },
-          "unit": "none"
+          "unit": "percent"
         },
         "overrides": []
       },
@@ -1002,7 +1002,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "sell-through %"
+              "options": "priced share %"
             },
             "properties": [
               {
@@ -1023,7 +1023,7 @@
         "x": 8,
         "y": 41
       },
-      "title": "Sell-through rate — weekly · all categories",
+      "title": "Priced share — weekly · all categories",
       "description": "Weekly priced-share proxy from filtered reconstructed listing-day inventory. It is not a transaction rate; inferred, stale and provisional rows are part of the historical availability model.",
       "type": "timeseries",
       "options": {
@@ -1045,7 +1045,7 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "WITH daily AS (\n  SELECT d.day,\n         count(*)::numeric AS inventory,\n         count(*) FILTER (WHERE d.price_state = 'valid')::numeric AS priced\n  FROM v_listing_daily d\n  WHERE d.day BETWEEN date($__timeFrom() AT TIME ZONE 'Europe/Sarajevo')\n                  AND date($__timeTo() AT TIME ZONE 'Europe/Sarajevo')\n\n  AND (COALESCE(cardinality(ARRAY[${category:sqlstring}]), 0) = 0\n    OR d.category_memberships && ARRAY[${category:sqlstring}]\n    OR d.category = ANY (ARRAY[${category:sqlstring}]))\n  AND ('${min_sqm}' = '' OR d.sqm IS NULL OR d.sqm >= NULLIF('${min_sqm}', '')::numeric)\n  AND ('${max_sqm}' = '' OR d.sqm IS NULL OR d.sqm <= NULLIF('${max_sqm}', '')::numeric)\n  AND (COALESCE(cardinality(ARRAY[${rooms:sqlstring}]), 0) = 0\n    OR d.rooms = ANY (ARRAY[${rooms:sqlstring}])\n    OR room_bucket(d.rooms) = ANY (ARRAY[${rooms:sqlstring}]))\n  AND d.deal = ANY (ARRAY(SELECT CASE WHEN selected = 'sell' THEN 'sale' ELSE selected END FROM unnest(ARRAY[${deal:sqlstring}]) AS t(selected)))\n  AND (COALESCE(cardinality(ARRAY[${neighborhood:sqlstring}]), 0) = 0\n    OR d.neighborhood = ANY (ARRAY[${neighborhood:sqlstring}])\n    OR d.location = ANY (ARRAY[${neighborhood:sqlstring}]))\n  GROUP BY d.day\n), weekly AS (\n  SELECT date_trunc('week', day::timestamp)::date AS week,\n         avg(inventory) AS inventory,\n         avg(priced) AS priced\n  FROM daily GROUP BY 1\n)\nSELECT week::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time,\n       round(100.0 * priced / NULLIF(inventory, 0), 2) AS \"sell-through %\"\nFROM weekly ORDER BY week",
+          "rawSql": "WITH daily AS (\n  SELECT d.day,\n         count(*)::numeric AS inventory,\n         count(*) FILTER (WHERE d.price_state = 'valid')::numeric AS priced\n  FROM v_listing_daily d\n  WHERE d.day BETWEEN date($__timeFrom() AT TIME ZONE 'Europe/Sarajevo')\n                  AND date($__timeTo() AT TIME ZONE 'Europe/Sarajevo')\n\n  AND (COALESCE(cardinality(ARRAY[${category:sqlstring}]), 0) = 0\n    OR d.category_memberships && ARRAY[${category:sqlstring}]\n    OR d.category = ANY (ARRAY[${category:sqlstring}]))\n  AND ('${min_sqm}' = '' OR d.sqm IS NULL OR d.sqm >= NULLIF('${min_sqm}', '')::numeric)\n  AND ('${max_sqm}' = '' OR d.sqm IS NULL OR d.sqm <= NULLIF('${max_sqm}', '')::numeric)\n  AND (COALESCE(cardinality(ARRAY[${rooms:sqlstring}]), 0) = 0\n    OR d.rooms = ANY (ARRAY[${rooms:sqlstring}])\n    OR room_bucket(d.rooms) = ANY (ARRAY[${rooms:sqlstring}]))\n  AND d.deal = ANY (ARRAY(SELECT CASE WHEN selected = 'sell' THEN 'sale' ELSE selected END FROM unnest(ARRAY[${deal:sqlstring}]) AS t(selected)))\n  AND (COALESCE(cardinality(ARRAY[${neighborhood:sqlstring}]), 0) = 0\n    OR d.neighborhood = ANY (ARRAY[${neighborhood:sqlstring}])\n    OR d.location = ANY (ARRAY[${neighborhood:sqlstring}]))\n  GROUP BY d.day\n), weekly AS (\n  SELECT date_trunc('week', day::timestamp)::date AS week,\n         avg(inventory) AS inventory,\n         avg(priced) AS priced\n  FROM daily GROUP BY 1\n)\nSELECT week::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time,\n       round(100.0 * priced / NULLIF(inventory, 0), 2) AS \"priced share %\"\nFROM weekly ORDER BY week",
           "refId": "A"
         }
       ],

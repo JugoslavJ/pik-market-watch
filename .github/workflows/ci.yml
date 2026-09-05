@@ -99,6 +99,24 @@ jobs:
         run: |
           SSH="ssh -i ~/.ssh/oci_deploy_key ${SSH_STRICT:--o StrictHostKeyChecking=accept-new} -o BatchMode=yes -o ServerAliveInterval=30"
           $SSH "$OCI_USER@$OCI_HOST" "mkdir -p $DEPLOY_DIR"
+          git ls-files | $SSH "$OCI_USER@$OCI_HOST" "cat > '$DEPLOY_DIR/.deploy-tracked-files.next'"
+          $SSH "$OCI_USER@$OCI_HOST" "DEPLOY_DIR='$DEPLOY_DIR' bash -s" <<'REMOTE_CLEANUP'
+          set -euo pipefail
+          old="$DEPLOY_DIR/.deploy-tracked-files"
+          next="$DEPLOY_DIR/.deploy-tracked-files.next"
+          if [ -f "$old" ]; then
+            while IFS= read -r path; do
+              [ -n "$path" ] || continue
+              case "$path" in
+                /*|../*|*/../*|.env|config/searches.json|tls/*|backups/*|logs/*) continue ;;
+              esac
+              if ! grep -Fqx -- "$path" "$next"; then
+                rm -f -- "$DEPLOY_DIR/$path"
+              fi
+            done < "$old"
+          fi
+          mv -f -- "$next" "$old"
+          REMOTE_CLEANUP
           git archive --format=tar.gz HEAD | $SSH "$OCI_USER@$OCI_HOST" "tar -xzf - -C $DEPLOY_DIR"
           echo "Shipped $(git archive --format=tar HEAD | tar -tf - | wc -l) files to $OCI_USER@$OCI_HOST:$DEPLOY_DIR"
 

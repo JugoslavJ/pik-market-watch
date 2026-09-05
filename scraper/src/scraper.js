@@ -83,6 +83,18 @@ async function scrapeSearch(
   const failedPages = new Set();
   let truncatedPagination = false;
 
+  const archivePage = async (url, response) => {
+    await db.archiveSearchResponse({
+      runId,
+      searchKey: search.searchKey,
+      requestKind: "search",
+      requestUrl: url.href,
+      fetchedAt: new Date(),
+      parserVersion: "search-v1",
+      payload: response,
+    });
+  };
+
   const accept = (cards) => {
     let fresh = 0;
     for (const c of cards || []) {
@@ -117,6 +129,7 @@ async function scrapeSearch(
     const u = new URL(base.href);
     u.searchParams.set("page", String(pageNo));
     const r = await fetchSearchPage(u, cfg.apiTimeoutMs);
+    await archivePage(u, r);
     const lp = Number(r.meta.last_page);
     if (Number.isFinite(lp) && lp > 0) lastPage = Math.min(lastPage, lp);
     if (trackRate(r.remaining, r.limit)) await pace(65000);
@@ -212,61 +225,42 @@ async function scrapeSearch(
       throw error;
     }
 
-    // Row existence + identity were already guaranteed at run start
-    // (registerSavedSearch); this upsert refreshes the per-run stats.
     const median = computeMedian(
       allCards.map((c) => c.ppm2).filter((v) => v != null && v > 0),
     );
-    const stats =
-      typeof db.commitSearchIngestion === "function"
-        ? await db.commitSearchIngestion({
-            runId,
-            search: {
-              searchKey: search.searchKey,
-              name: search.name,
-              url: base.href,
-              category: search.category ?? null,
-            },
-            cards: allCards,
-            stateObservations: buildSearchObservations(allCards, {
-              searchKey: search.searchKey,
-              category: search.category,
-              runId,
-            }),
-            priceEvents: buildSearchPriceEvents(allCards),
-            membership: {
-              searchKey: search.searchKey,
-              articleIds: allCards.map((c) => c.articleId),
-            },
-            run: {
-              status: "ok",
-              isComplete: true,
-              pages: pagesDone,
-              cards: allCards.length,
-              listingCount: allCards.length,
-              median,
-            },
-            analytics: { invalidateFrom: new Date() },
-          })
-        : await db.saveCards(allCards);
-
-    const newCount = Number(stats?.newCount || 0);
-    const dropCount = Number(stats?.dropCount || 0);
-    if (typeof db.commitSearchIngestion !== "function")
-      await db.upsertSavedSearch({
+    const stats = await db.commitSearchIngestion({
+      runId,
+      search: {
         searchKey: search.searchKey,
         name: search.name,
         url: base.href,
+        category: search.category ?? null,
+      },
+      cards: allCards,
+      stateObservations: buildSearchObservations(allCards, {
+        searchKey: search.searchKey,
         category: search.category,
+        runId,
+      }),
+      priceEvents: buildSearchPriceEvents(allCards),
+      membership: {
+        searchKey: search.searchKey,
+        articleIds: allCards.map((c) => c.articleId),
+      },
+      run: {
+        status: "ok",
+        isComplete: true,
+        pages: pagesDone,
+        cards: allCards.length,
         listingCount: allCards.length,
         median,
-        newCount,
-        dropCount,
-      });
+      },
+      analytics: { invalidateFrom: new Date() },
+    });
 
+    const newCount = Number(stats?.newCount || 0);
+    const dropCount = Number(stats?.dropCount || 0);
     const ids = allCards.map((c) => c.articleId).filter(Boolean);
-    if (typeof db.commitSearchIngestion !== "function")
-      await db.refreshSearchResults(search.searchKey, ids);
 
     // ── Enrichment ───────────────────────────────────────────────────────────
     // Search payloads already carry pins, dates, seller type and m² for free;
@@ -279,6 +273,10 @@ async function scrapeSearch(
       const { pending, total } = await db.enrichmentQueue(
         ids,
         cfg.maxGeoFetches,
+        {
+          refreshDays: cfg.detailRefreshDays ?? 7,
+          retryAfterMinutes: Math.max(1, cfg.intervalMinutes ?? 720),
+        },
       );
       const targets = pending.map((p) => p.id);
       const byCard = new Map(allCards.map((c) => [c.articleId, c]));
@@ -287,13 +285,17 @@ async function scrapeSearch(
       const rows = new Map();
       let unpinnedN = 0,
         missingSqmN = 0,
-        neverDetailedN = 0;
+        neverDetailedN = 0,
+        staleN = 0,
+        priceChangedN = 0;
       for (const p of pending) {
         const c = byCard.get(p.id);
         if (!c) continue;
         if (p.unpinned) unpinnedN++;
         if (p.missingSqm) missingSqmN++;
         if (p.neverDetailed) neverDetailedN++;
+        if (p.stale) staleN++;
+        if (p.priceChanged) priceChangedN++;
         rows.set(p.id, {
           articleId: p.id,
           latitude: c.latitude,
@@ -311,20 +313,20 @@ async function scrapeSearch(
           const r = rows.get(p.id);
           if (!r) return false;
           if (p.neverDetailed) return true; // characteristics/views/history
+          if (p.stale || p.priceChanged) return true;
           if (p.missingSqm && r.sqm == null) return true;
           if (p.unpinned && r.latitude == null) return true;
           return false;
         })
         .map((p) => p.id);
 
-      if (typeof db.markDetailAttempts === "function") {
-        await db.markDetailAttempts(needDetail);
-      }
+      await db.markDetailAttempts(needDetail);
 
       log(
         `⌖ enriching ${pending.length}/${total} pending listing(s) ` +
           `(${unpinnedN} without pin, ${missingSqmN} without m², ` +
-          `${neverDetailedN} never detailed)` +
+          `${neverDetailedN} never detailed, ${staleN} stale, ` +
+          `${priceChangedN} changed price)` +
           (needDetail.length ? ` · ${needDetail.length} detail call(s)` : ""),
       );
 
@@ -337,18 +339,22 @@ async function scrapeSearch(
         },
         log,
       );
+      const successfulRows = new Map();
       for (const d of details) {
         if (!d) continue; // a failed call leaves search-level facts in place
         const row = rows.get(d.articleId);
+        if (!row) continue;
         for (const [k, v] of Object.entries(d)) {
           if (k === "articleId" || v == null) continue;
           if (k === "characteristics" && !Object.keys(v).length) continue;
           row[k] = v; // non-null detail facts override search-level ones
         }
+        successfulRows.set(d.articleId, row);
       }
 
-      if (rows.size) await db.enrichListings([...rows.values()]);
-      enrichedCount = rows.size;
+      if (successfulRows.size)
+        await db.enrichListings([...successfulRows.values()]);
+      enrichedCount = successfulRows.size;
       log(`⌖ enriched ${enrichedCount}/${targets.length} listing(s)`);
     }
 

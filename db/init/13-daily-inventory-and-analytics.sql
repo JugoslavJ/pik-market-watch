@@ -1,7 +1,5 @@
--- Package 06: historical daily inventory and reusable analytics.
--- This migration is deliberately additive.  It consumes only the normalized
--- state/price contracts from 12-refactor-schema.sql; current search_results
--- and current listing attributes are not historical sources.
+-- Historical daily inventory and reusable analytics. Reconstruction consumes
+-- normalized state and price evidence, not current listing attributes.
 
 ALTER TABLE listing_daily
   ADD COLUMN IF NOT EXISTS category_memberships TEXT[] NOT NULL DEFAULT '{}';

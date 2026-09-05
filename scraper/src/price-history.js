@@ -135,7 +135,7 @@ function eventKey(event) {
   return [
     event.articleId,
     event.effectiveAt.toISOString(),
-    event.price == null ? "null" : String(event.price),
+    priceKey(event.price),
     event.priceState,
   ].join("|");
 }
@@ -148,13 +148,17 @@ function rowKey(row) {
   return [
     Number(row.article_id),
     new Date(row.effective_at).toISOString(),
-    row.price == null ? "null" : String(row.price),
+    priceKey(row.price),
     row.price_state,
   ].join("|");
 }
 
+function priceKey(value) {
+  return value == null ? "null" : String(Number(value));
+}
+
 function signature(event) {
-  return `${event.price == null ? "null" : event.price}|${event.priceState}`;
+  return `${priceKey(event.price)}|${event.priceState}`;
 }
 
 function dayInSarajevo(date) {
@@ -197,9 +201,10 @@ async function recordPriceEvents(pool, events, options = {}) {
   }
   if (!normalized.length) return result;
 
-  const client = await pool.connect();
+  const client = options.client || (await pool.connect());
+  const ownsTransaction = !options.client;
   try {
-    await client.query("BEGIN");
+    if (ownsTransaction) await client.query("BEGIN");
 
     const articleIds = [...new Set(normalized.map((event) => event.articleId))];
     const effectiveTimes = [
@@ -216,7 +221,7 @@ async function recordPriceEvents(pool, events, options = {}) {
     result.rejected += missing.length;
     const usable = normalized.filter((event) => present.has(event.articleId));
     if (!usable.length) {
-      await client.query("COMMIT");
+      if (ownsTransaction) await client.query("COMMIT");
       return result;
     }
 
@@ -256,8 +261,7 @@ async function recordPriceEvents(pool, events, options = {}) {
       const competing =
         rows.some(
           (row) =>
-            `${row.price == null ? "null" : String(row.price)}|${row.price_state}` !==
-            signature(event),
+            `${priceKey(row.price)}|${row.price_state}` !== signature(event),
         ) ||
         pendingEvents.some(
           (candidate) => signature(candidate) !== signature(event),
@@ -272,9 +276,7 @@ async function recordPriceEvents(pool, events, options = {}) {
         );
         candidateSignatures.add(signature(event));
         for (const row of rows) {
-          candidateSignatures.add(
-            `${row.price == null ? "null" : String(row.price)}|${row.price_state}`,
-          );
+          candidateSignatures.add(`${priceKey(row.price)}|${row.price_state}`);
         }
         const conflict = {
           ...event,
@@ -344,13 +346,13 @@ async function recordPriceEvents(pool, events, options = {}) {
         [days.from, days.through],
       );
     }
-    await client.query("COMMIT");
+    if (ownsTransaction) await client.query("COMMIT");
     return result;
   } catch (error) {
-    await client.query("ROLLBACK").catch(() => {});
+    if (ownsTransaction) await client.query("ROLLBACK").catch(() => {});
     throw error;
   } finally {
-    client.release();
+    if (ownsTransaction) client.release();
   }
 }
 
