@@ -1316,7 +1316,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH cuts AS (\n  SELECT DISTINCT pc.article_id\n  FROM v_listing_price_changes pc\n  WHERE pc.delta < 0 AND pc.deal = ANY (ARRAY(SELECT CASE WHEN selected = 'sell' THEN 'sale' ELSE selected END FROM unnest(ARRAY[${deal:sqlstring}]) AS t(selected)))\n)\nSELECT count(*)::text\nFROM cuts c\nJOIN listings_filtered(ARRAY[${category:sqlstring}], NULLIF('${min_sqm}', '')::numeric, NULLIF('${max_sqm}', '')::numeric, ARRAY[${neighborhood:sqlstring}], false) l\n  ON l.article_id = c.article_id\nWHERE TRUE\n\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])",
+          "rawSql": "WITH cuts AS (\n  SELECT DISTINCT pc.article_id\n  FROM v_listing_price_changes pc\n  WHERE pc.delta < 0 AND pc.deal = ANY (ARRAY(SELECT CASE WHEN selected = 'sell' THEN 'sale' ELSE selected END FROM unnest(ARRAY[${deal:sqlstring}]) AS t(selected)))\n)\nSELECT count(*) AS actives\nFROM cuts c\nJOIN listings_filtered(ARRAY[${category:sqlstring}], NULLIF('${min_sqm}', '')::numeric, NULLIF('${max_sqm}', '')::numeric, ARRAY[${neighborhood:sqlstring}], false) l\n  ON l.article_id = c.article_id\nWHERE TRUE\n\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])",
           "refId": "A"
         }
       ],
