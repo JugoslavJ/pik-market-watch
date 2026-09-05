@@ -263,7 +263,7 @@ GROUP BY 1 ORDER BY 1`),
     }
     if (variable.name === "neighborhood") {
       variable.definition = variable.query =
-        "SELECT neighborhood AS __value, neighborhood AS __text FROM (SELECT neighborhood FROM v_listing_daily WHERE neighborhood IS NOT NULL UNION SELECT '(no pin)') s GROUP BY neighborhood ORDER BY 1";
+        "SELECT neighborhood AS __value, neighborhood AS __text FROM (SELECT neighborhood FROM v_listing_daily WHERE neighborhood IS NOT NULL UNION SELECT location FROM v_listing_daily WHERE location IS NOT NULL UNION SELECT COALESCE(NULLIF(location, ''), CASE WHEN latitude IS NULL THEN '(no pin)' ELSE '(unmapped)' END) FROM listings UNION SELECT '(no pin)' UNION SELECT '(unmapped)') s GROUP BY neighborhood ORDER BY 1";
     }
   }
 });
@@ -286,7 +286,7 @@ updateDashboard("olx-exits.json", (d) => {
     }
     if (variable.name === "neighborhood") {
       variable.definition = variable.query =
-        "SELECT neighborhood AS __value, neighborhood AS __text FROM (SELECT neighborhood FROM v_listing_daily WHERE neighborhood IS NOT NULL UNION SELECT '(no pin)') s GROUP BY neighborhood ORDER BY 1";
+        "SELECT neighborhood AS __value, neighborhood AS __text FROM (SELECT neighborhood FROM v_listing_daily WHERE neighborhood IS NOT NULL UNION SELECT location FROM v_listing_daily WHERE location IS NOT NULL UNION SELECT COALESCE(NULLIF(location, ''), CASE WHEN latitude IS NULL THEN '(no pin)' ELSE '(unmapped)' END) FROM listings UNION SELECT '(no pin)' UNION SELECT '(unmapped)') s GROUP BY neighborhood ORDER BY 1";
     }
   }
 });

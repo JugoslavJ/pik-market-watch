@@ -753,7 +753,7 @@
         "y": 13
       },
       "title": "Inventory flow — new vs closed per day · all categories",
-      "description": "All categories and all deals. Historical state flow includes new, closed and reopened observations; active inventory is estimated from reconstructed daily rows and may include stale carry-forward rows.",
+      "description": "All categories and deals. New counts each article once on its first discovery date; repeated sightings and renewals are not additions. Closed and reopened count lifecycle events. Active inventory is reconstructed and may include inferred or stale observations; today is provisional.",
       "type": "timeseries",
       "options": {
         "legend": {

@@ -45,11 +45,11 @@ needsDb(
     const pool = new Pool({ connectionString: await recreateDb("mig_fresh") });
     await applyMigrations(pool, FULL_DIR, log);
     assert.equal(await fnCount(pool), 2);
-    assert.equal(await recorded(pool), 5); // 01-schema + 11-neighborhoods + 12/13/14-refactor
+    assert.equal(await recorded(pool), 6); // 01-schema + 11-neighborhoods + 12/13/14/15-refactor
 
     await applyMigrations(pool, FULL_DIR, log); // second boot
     assert.equal(await fnCount(pool), 2);
-    assert.equal(await recorded(pool), 5);
+    assert.equal(await recorded(pool), 6);
 
     // Dashboard panel query runs through the freshly created function:
     const r = await pool.query(
@@ -92,7 +92,7 @@ needsDb(
     // Boot against the squashed directory: nothing to apply, nothing breaks.
     await applyMigrations(pool, FULL_DIR, log);
     assert.equal(await fnCount(pool), 2);
-    assert.equal(await recorded(pool), 15); // 5 on-disk files + 10 historical rows
+    assert.equal(await recorded(pool), 16); // 6 on-disk files + 10 historical rows
 
     const r = await pool.query(
       "SELECT count(*)::int AS n FROM listings_filtered(ARRAY['apartments'], 0, 99999, NULL)",
@@ -146,7 +146,7 @@ needsDb(
 
     await applyMigrations(pool, FULL_DIR, log);
     assert.equal(await fnCount(pool), 2);
-    assert.equal(await recorded(pool), 5);
+    assert.equal(await recorded(pool), 6);
 
     // Self-heal added the closure columns, and the legacy row remains
     // queryable through the dashboard's exact filter call:

@@ -390,9 +390,9 @@
             "fillOpacity": 10,
             "lineWidth": 2,
             "showPoints": "never",
-            "spanNulls": true
+            "spanNulls": false
           },
-          "unit": "none"
+          "unit": "suffix: KM/m²"
         },
         "overrides": [
           {
@@ -444,6 +444,22 @@
               {
                 "id": "custom.fillOpacity",
                 "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^(inventory|priced sample|estimated|stale|provisional)$"
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "viz": true,
+                  "legend": true,
+                  "tooltip": false
+                }
               }
             ]
           }
@@ -652,7 +668,7 @@
         "y": 15
       },
       "title": "Inventory flow — new vs closed per day · all categories",
-      "description": "All-category lifecycle flow from historical state observations. Bars: new / closed / reopened; line: estimated live inventory. Historical daily rows may be stale or inferred, and today is provisional.",
+      "description": "All categories and deals. New counts each article once on its first discovery date; repeated sightings and renewals are not additions. Closed and reopened count lifecycle events. Active inventory is reconstructed and may include inferred or stale observations; today is provisional.",
       "type": "timeseries",
       "options": {
         "legend": {
@@ -2219,13 +2235,13 @@
           "type": "postgres",
           "uid": "olx-postgres"
         },
-        "definition": "SELECT neighborhood AS __value, neighborhood AS __text FROM (SELECT neighborhood FROM v_listing_daily WHERE neighborhood IS NOT NULL UNION SELECT '(no pin)') s GROUP BY neighborhood ORDER BY 1",
+        "definition": "SELECT neighborhood AS __value, neighborhood AS __text FROM (SELECT neighborhood FROM v_listing_daily WHERE neighborhood IS NOT NULL UNION SELECT location FROM v_listing_daily WHERE location IS NOT NULL UNION SELECT COALESCE(NULLIF(location, ''), CASE WHEN latitude IS NULL THEN '(no pin)' ELSE '(unmapped)' END) FROM listings UNION SELECT '(no pin)' UNION SELECT '(unmapped)') s GROUP BY neighborhood ORDER BY 1",
         "includeAll": true,
         "label": "Neighborhood",
         "multi": true,
         "name": "neighborhood",
         "options": [],
-        "query": "SELECT neighborhood AS __value, neighborhood AS __text FROM (SELECT neighborhood FROM v_listing_daily WHERE neighborhood IS NOT NULL UNION SELECT '(no pin)') s GROUP BY neighborhood ORDER BY 1",
+        "query": "SELECT neighborhood AS __value, neighborhood AS __text FROM (SELECT neighborhood FROM v_listing_daily WHERE neighborhood IS NOT NULL UNION SELECT location FROM v_listing_daily WHERE location IS NOT NULL UNION SELECT COALESCE(NULLIF(location, ''), CASE WHEN latitude IS NULL THEN '(no pin)' ELSE '(unmapped)' END) FROM listings UNION SELECT '(no pin)' UNION SELECT '(unmapped)') s GROUP BY neighborhood ORDER BY 1",
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,

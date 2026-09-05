@@ -174,3 +174,54 @@ needsDb("refreshSearchResults replaces the stored result set", async () => {
   ).rows.map((x) => x.id);
   assert.deepEqual(ids, [5002, 5003]);
 });
+
+needsDb(
+  "daily neighborhoods survive rebuild and resolve stored pins",
+  async () => {
+    await seed(6001);
+    await db.pool.query(`INSERT INTO listing_state_history
+    (article_id, effective_at, source, event_type, filter_attributes)
+    VALUES (6001, now() - interval '1 hour', 'search', 'search_sighting',
+      '{"latitude":44.78,"longitude":17.2}')`);
+    await db.pool.query(`SELECT * FROM rebuild_listing_daily(
+    (now() AT TIME ZONE 'Europe/Sarajevo')::date,
+    (now() AT TIME ZONE 'Europe/Sarajevo')::date)`);
+    const {
+      rows: [row],
+    } = await db.pool.query(`SELECT neighborhood, location,
+    neighborhood_of(44.78,17.2) AS expected FROM listing_daily WHERE article_id=6001`);
+    assert.ok(row.expected);
+    assert.equal(row.neighborhood, row.expected);
+    assert.equal(row.location, row.expected);
+  },
+);
+
+needsDb(
+  "market flow counts discovery once despite repeat and backdated sightings",
+  async () => {
+    await seed(6002);
+    await db.pool.query(`INSERT INTO listing_state_history
+    (article_id, effective_at, source, event_type)
+    VALUES (6002, now() - interval '30 days', 'search', 'search_sighting'),
+           (6002, now(), 'search', 'search_sighting'),
+           (6002, now(), 'search', 'search_sighting')`);
+    const {
+      rows: [row],
+    } = await db.pool.query(`SELECT new_n FROM v_market_daily
+    WHERE day=(now() AT TIME ZONE 'Europe/Sarajevo')::date`);
+    assert.equal(row.new_n, 1);
+    // Legacy closures remain visible even after new state observations exist.
+    await db.pool.query(
+      `UPDATE listings SET closed_at=now() WHERE article_id=6002`,
+    );
+    let result = await db.pool.query(`SELECT closed_n FROM v_market_daily
+    WHERE day=(now() AT TIME ZONE 'Europe/Sarajevo')::date`);
+    assert.equal(result.rows[0].closed_n, 1);
+    await db.pool.query(`INSERT INTO listing_state_history
+    (article_id, effective_at, source, event_type)
+    SELECT article_id, closed_at, 'search', 'closed' FROM listings WHERE article_id=6002`);
+    result = await db.pool.query(`SELECT closed_n FROM v_market_daily
+    WHERE day=(now() AT TIME ZONE 'Europe/Sarajevo')::date`);
+    assert.equal(result.rows[0].closed_n, 1);
+  },
+);

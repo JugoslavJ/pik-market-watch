@@ -290,6 +290,17 @@ server-side files, or touch anything outside this database.
 ---
 ## Troubleshooting
 
+- **Active listings stuck at 39, empty map, flat asking-price band, inflated additions**:
+  migration `15-fix-dashboard-neighborhoods-and-flow.sql` repairs historical
+  neighborhood values from stored observation coordinates and counts market
+  additions by `listings.first_seen`, once per article. Repeat search sightings
+  are not additions. Apply with `docker compose run --rm scraper node src/migrate-only.js`
+  (the historical polygon backfill can take several minutes), and deploy the
+  matching dashboard JSON files. Reload the dashboard with Neighborhood set
+  to All so its variable options refresh. The old neighborhood query expanded
+  All to only `(no pin)` because `listing_daily.neighborhood` was never filled.
+  Historical inventory remains reconstructed; its estimated/stale/sample
+  fields describe coverage, not verified transactions.
 - **Zero listings / blocked requests**: olx.ba may throttle or challenge the client. The scraper paces itself (`PAGE_DELAY_MS`, `CONCURRENCY`, `MAX_GEO_FETCHES`) and backs off when `x-ratelimit-remaining` runs low; if a cycle still fails, check http://localhost:9100 and `scrape_runs`, then run `node scripts/check-api.js` inside the image to see what olx.ba returns right now.
   - Built-in guards: a boot cycle is skipped when another run finished within `SCRAPE_MIN_GAP_MINUTES` (default 45), and a cycle returning zero listings everywhere skips its closing pass, so throttling can never mass-close the catalog.
   - Throttle recovery is passive: keep intervals polite and wait; blocked IPs usually clear within hours, and wrongly closed listings reopen automatically on their next sighting.
