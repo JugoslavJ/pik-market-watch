@@ -14,6 +14,10 @@ const deploy = fs.readFileSync(
   path.join(ROOT, "scripts", "deploy-stack.sh"),
   "utf8",
 );
+const caddy = fs.readFileSync(
+  path.join(ROOT, "deploy", "caddy", "Caddyfile.example"),
+  "utf8",
+);
 
 test("Compose gates scraper startup on the profile-only migrator", () => {
   assert.match(
@@ -41,4 +45,20 @@ test("deployment runs migration job before publishing the stack", () => {
   );
   assert.ok(migrateAt >= 0, "deploy script must run the migrator job");
   assert.ok(upAt > migrateAt, "stack startup must follow migration completion");
+});
+
+test("production Grafana settings fail closed before deployment", () => {
+  assert.match(deploy, /GRAFANA_BIND/);
+  assert.match(deploy, /127\.0\.0\.1/);
+  assert.match(deploy, /GRAFANA_DOMAIN/);
+  assert.match(deploy, /GRAFANA_ROOT_URL/);
+  assert.match(deploy, /https:\/\/\*\//);
+  assert.match(deploy, /GRAFANA_ENFORCE_DOMAIN/);
+  assert.match(deploy, /GRAFANA_COOKIE_SECURE/);
+});
+
+test("Caddy example proxies only the private Grafana listener", () => {
+  assert.match(caddy, /grafana\.example\.com\s*\{/);
+  assert.match(caddy, /reverse_proxy 127\.0\.0\.1:3000/);
+  assert.doesNotMatch(caddy, /tls_insecure_skip_verify/);
 });

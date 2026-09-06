@@ -38,6 +38,44 @@ test("example secrets and Compose listeners fail closed", () => {
   assert.match(compose, /backend:\s*\n\s*internal: true/);
 });
 
+test("Grafana is HTTP-only behind a configurable secure reverse proxy", () => {
+  const compose = read("docker-compose.yml");
+  const example = read(".env.example");
+
+  assert.match(compose, /GF_SERVER_PROTOCOL: http/);
+  assert.match(compose, /GF_SERVER_DOMAIN: \$\{GRAFANA_DOMAIN:-localhost\}/);
+  assert.match(
+    compose,
+    /GF_SERVER_ROOT_URL: \$\{GRAFANA_ROOT_URL:-http:\/\/localhost:3000\/\}/,
+  );
+  assert.match(
+    compose,
+    /GF_SERVER_ENFORCE_DOMAIN: \$\{GRAFANA_ENFORCE_DOMAIN:-false\}/,
+  );
+  assert.match(
+    compose,
+    /GF_SECURITY_COOKIE_SECURE: \$\{GRAFANA_COOKIE_SECURE:-false\}/,
+  );
+  assert.match(compose, /GF_SECURITY_COOKIE_SAMESITE: lax/);
+  assert.match(compose, /GF_USERS_ALLOW_SIGN_UP: "false"/);
+  assert.match(
+    compose,
+    /curl -sf http:\/\/localhost:3000\/api\/health \|\| exit 1/,
+  );
+  assert.doesNotMatch(
+    compose,
+    /GF_SERVER_CERT_FILE|GF_SERVER_CERT_KEY|\.\/tls:\/certs/,
+  );
+  assert.doesNotMatch(compose, /GF_SERVER_PROTOCOL: https/);
+  for (const name of [
+    "GRAFANA_DOMAIN",
+    "GRAFANA_ROOT_URL",
+    "GRAFANA_ENFORCE_DOMAIN",
+    "GRAFANA_COOKIE_SECURE",
+  ])
+    assert.match(example, new RegExp(`^${name}=`, "m"));
+});
+
 test("backup publication is verified before atomic rename", () => {
   const backup = read("db/backup.sh");
   assert.match(backup, /umask 077/);

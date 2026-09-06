@@ -23,8 +23,8 @@ for f in .env config/searches.json; do
   fi
 done
 
-# Least-privilege DB roles + Grafana TLS material live only on the
-# machines (git-ignored): fail fast with fix instructions.
+# Least-privilege DB roles live only on the machines (git-ignored): fail fast
+# with fix instructions.
 for v in POSTGRES_PASSWORD POSTGRES_APP_PASSWORD POSTGRES_READER_PASSWORD \
          GRAFANA_ADMIN_PASSWORD GRAFANA_SECRET_KEY; do
   line=$(grep -E "^${v}=" .env | tail -n 1 || true)
@@ -37,16 +37,53 @@ for v in POSTGRES_PASSWORD POSTGRES_APP_PASSWORD POSTGRES_READER_PASSWORD \
       ;;
   esac
 done
+
+# Production Grafana is reachable through Caddy, which terminates public TLS.
+# Keep the container's published port private and fail closed if the production
+# .env still contains the old local/native-TLS settings.
+read_env_value() {
+  local name=$1 line
+  line=$(grep -E "^${name}=" .env | tail -n 1 || true)
+  printf '%s' "${line#*=}" | tr -d '\r'
+}
+
+grafana_bind=$(read_env_value GRAFANA_BIND)
+grafana_domain=$(read_env_value GRAFANA_DOMAIN)
+grafana_root_url=$(read_env_value GRAFANA_ROOT_URL)
+grafana_enforce_domain=$(read_env_value GRAFANA_ENFORCE_DOMAIN)
+grafana_cookie_secure=$(read_env_value GRAFANA_COOKIE_SECURE)
+
+if [ "$grafana_bind" != "127.0.0.1" ]; then
+  echo "✗ GRAFANA_BIND must be 127.0.0.1 in production; port 3000 must stay private."
+  exit 1
+fi
+if ! printf '%s' "$grafana_domain" | grep -Eq '^([A-Za-z0-9]([-A-Za-z0-9]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$'; then
+  echo "✗ GRAFANA_DOMAIN must be a public DNS hostname in production (for example grafana.example.com)."
+  exit 1
+fi
+case "$grafana_root_url" in
+  https://*/)
+    root_host=${grafana_root_url#https://}
+    root_host=${root_host%%/*}
+    if [ "$root_host" != "$grafana_domain" ]; then
+      echo "✗ GRAFANA_ROOT_URL host must match GRAFANA_DOMAIN in production."
+      exit 1
+    fi
+    ;;
+  *)
+    echo "✗ GRAFANA_ROOT_URL must be an HTTPS URL ending in / in production."
+    exit 1
+    ;;
+esac
+if [ "$grafana_enforce_domain" != "true" ] || [ "$grafana_cookie_secure" != "true" ]; then
+  echo "✗ GRAFANA_ENFORCE_DOMAIN and GRAFANA_COOKIE_SECURE must both be true in production."
+  exit 1
+fi
+
 # Non-fatal: without it the alert rule still evaluates & shows UI state, but
 # mail delivery stays inert on the placeholder recipient.
 grep -q '^ALERT_EMAIL_TO=.' .env || \
   echo "⚠ ALERT_EMAIL_TO not set in .env — scrape-silence alert mail is INERT (placeholder recipient)."
-if [ ! -f tls/grafana.crt ] || [ ! -f tls/grafana.key ]; then
-  echo "✗ Missing tls/grafana.crt|key on the instance (Grafana native TLS)."
-  echo "  Fix once over SSH, then re-run this job:"
-  echo "    mkdir -p tls && bash scripts/generate-grafana-cert.sh <instance-ip>"
-  exit 1
-fi
 
 # Refresh the prebuilt images (postgres/grafana pins) if the registry
 # is reachable; `up` below still works from the local cache otherwise.
@@ -96,7 +133,7 @@ while :; do
   echo "   db=$db  grafana=$gr  db-backup=$bk  (t=${SECONDS}s)"
   if [ "$db" = healthy ] && [ "$gr" = healthy ]; then
     echo "✓ Stack healthy — deployed ${GIT_SHA:-unknown} to the instance"
-    echo "  Grafana: https://${OCI_HOST:-<instance-ip>}:3000 (self-signed cert — expect a browser warning)"
+    echo "  Grafana: ${grafana_root_url} (public HTTPS is terminated by Caddy)"
     # The scraper moved to the home machine (compose profile "scrape").
     # --remove-orphans already deleted its container; drop its image too.
     docker images --format '{{.Repository}}:{{.Tag}}' \

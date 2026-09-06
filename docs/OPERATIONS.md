@@ -9,7 +9,6 @@ Create local configuration and searches before starting the stack:
 ```bash
 cp .env.example .env
 cp config/searches.example.json config/searches.json
-bash scripts/generate-grafana-cert.sh
 docker compose up -d --build
 ```
 
@@ -22,9 +21,13 @@ docker compose up -d --build
 | `POSTGRES_READER_USER`, `POSTGRES_READER_PASSWORD`  | `olx_reader`, required | Grafana and backup read-only role.                                                                                               |
 | `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD`      |      `admin`, required | Grafana login.                                                                                                                   |
 | `GRAFANA_SECRET_KEY`                                |               required | Grafana encryption for stored datasource secrets.                                                                                |
+| `GRAFANA_DOMAIN`                                    |             `localhost` | Grafana's externally visible hostname; production must use the Caddy hostname.                                                   |
+| `GRAFANA_ROOT_URL`                                  | `http://localhost:3000/` | Grafana's externally visible URL; production must be HTTPS and end in `/`.                                                       |
+| `GRAFANA_ENFORCE_DOMAIN`                            |               `false` | Reject unexpected Host headers; set `true` in production.                                                                        |
+| `GRAFANA_COOKIE_SECURE`                              |               `false` | Secure Grafana auth cookies; set `true` in production HTTPS.                                                                     |
 | `GRAFANA_CARTO_API_KEY`                             |                  unset | CARTO basemap key for Grafana geomaps; create one at [carto.com/basemaps/apikey](https://carto.com/basemaps/apikey).             |
 | `GRAFANA_CARTO_VECTOR_STYLE`                        |          `dark-matter` | Authenticated CARTO MapLibre vector style: `dark-matter`, `positron`, or `voyager`; recreate Grafana after changing it.          |
-| `GRAFANA_BIND`                                      |          `127.0.0.1` | Host interface for Grafana port 3000. Set an explicit LAN/VPN/WireGuard address for remote access.                               |
+| `GRAFANA_BIND`                                      |          `127.0.0.1` | Host interface for Grafana port 3000. Keep this at `127.0.0.1`; Caddy is the public entry point.                                  |
 | `HEALTH_BIND`                                       |          `127.0.0.1` bare-metal / `0.0.0.0` Compose | Health listener bind address. Compose needs all-interface binding inside the container; the published host port remains loopback-only. |
 | `SCRAPE_INTERVAL_MINUTES`                           |                  `720` | Scheduled scraper cadence when the `scrape` profile is enabled.                                                                  |
 | `DETAIL_REFRESH_DAYS`                               |                    `7` | Age at which successful detail evidence becomes eligible for refresh.                                                            |
@@ -37,6 +40,27 @@ docker compose up -d --build
 | `ALERT_EMAIL_TO`                                    |                  unset | Recipient for provisioned alerting. Mail also requires enabling and configuring the `GF_SMTP_*` entries in `docker-compose.yml`. |
 
 Search configuration is read from `config/searches.json`; `SEARCH_URLS` is an environment override for a bare scraper process or an explicit `docker compose run -e SEARCH_URLS=...` invocation. The scraper also accepts `SCRAPE_USER_AGENT`, `HEALTH_PORT`, and pacing/health variables (`MAX_PAGES`, `CONCURRENCY`, `PAGE_DELAY_MS`, `API_PER_PAGE`, `API_TIMEOUT_MS`, `MAX_GEO_FETCHES`, `GEO_CONCURRENCY`, `GEO_DELAY_MS`, `SCRAPE_MIN_GAP_MINUTES`, `ABANDONED_RUN_AFTER_MINUTES`, `DETAIL_JOB_LEASE_MINUTES`, and `HEALTH_FAILURE_THRESHOLD`). Compose injects `ABANDONED_RUN_AFTER_MINUTES`, `DETAIL_JOB_LEASE_MINUTES`, and `ANALYTICS_REBUILD_MAX_DAYS`; pass the other tuning variables explicitly with `docker compose run -e NAME=value` or set them in a supported deployment change.
+
+Grafana is HTTP-only inside the stack. Local development uses
+`http://localhost:3000`; production uses `Cloudflare → Caddy :443 →
+Grafana 127.0.0.1:3000`. Caddy terminates public TLS and proxies to Grafana
+over host loopback. Port 3000 must not be opened in OCI ingress or published
+on a public interface. Grafana signup remains disabled by default.
+
+For production, add these values to the instance's ignored `.env`:
+
+```dotenv
+GRAFANA_BIND=127.0.0.1
+GRAFANA_DOMAIN=grafana.example.com
+GRAFANA_ROOT_URL=https://grafana.example.com/
+GRAFANA_ENFORCE_DOMAIN=true
+GRAFANA_COOKIE_SECURE=true
+```
+
+The deployment preflight rejects a public bind, local domain, non-HTTPS root
+URL, or insecure/unrestricted production cookie/domain settings. The tracked
+`deploy/caddy/Caddyfile.example` is a starting point for the host Caddy
+configuration; replace the placeholder hostname.
 
 ## Normal operation
 
@@ -198,7 +222,26 @@ application layers. Fixable HIGH/CRITICAL findings are currently reported
 without failing the workflow while the image baseline is tuned; revisit the
 policy after reviewing real findings.
 
-Before the first deployment, create the destination directory and its ignored local configuration: `.env`, `config/searches.json`, and `tls/grafana.crt` / `tls/grafana.key`. The workflow ships tracked files, maintains a remote tracked-file manifest, and removes only files that were previously tracked but are absent from the new revision. It never cleans ignored configuration, backups, TLS material, logs, or Docker volumes. `scripts/deploy-stack.sh` then checks required local secrets and certificates, runs the profile-only `migrator` job, starts the database/Grafana/backup services, restarts Grafana to reload provisioning, and waits for database and Grafana health. A failed migration exits before the dashboard is restarted.
+Before the first deployment, create the destination directory and its ignored
+local configuration: `.env` and `config/searches.json`. The workflow ships
+tracked files, maintains a remote tracked-file manifest, and removes only
+files that were previously tracked but are absent from the new revision. It
+never cleans ignored configuration, backups, logs, or Docker volumes.
+`scripts/deploy-stack.sh` checks required secrets and production Grafana URL
+settings, runs the profile-only `migrator` job, starts the
+database/Grafana/backup services, restarts Grafana to reload provisioning, and
+waits for database and Grafana health. A failed migration exits before the
+dashboard is restarted.
+
+The repository does not install or configure Caddy, OCI networking, or
+Cloudflare. On the OCI host, install Caddy and use
+`deploy/caddy/Caddyfile.example` with the real hostname. Configure Cloudflare
+DNS to point the hostname to OCI and enable proxying, set Cloudflare SSL/TLS
+mode to `Full (strict)`, and allow public TCP 80/443 in OCI while keeping TCP
+3000 closed. Optionally add Cloudflare Access and restrict the origin to
+Cloudflare's current published IP ranges after validating the site. These are
+manual infrastructure changes and no Cloudflare/OCI credentials belong in this
+repository.
 
 ## Diagnosis
 
@@ -206,7 +249,12 @@ Before the first deployment, create the destination directory and its ignored lo
 - **Listings were not closed:** closures require a non-empty cycle and complete search results. Failed searches retain membership and a zero-card cycle skips the closing pass by design.
 - **Stale detail fields or sparse dashboard segments:** detail fetches are capped and source attributes are optional. Check `details_fetched_at`, `last_enrichment_attempted_at`, and the health dashboard’s coverage panels; use a bounded backfill where appropriate.
 - **Migration or ownership error:** run the roles script as shown above, then restart affected clients. Inspect `schema_migrations` and apply normal migrations with `migrate-only.js`; do not repair ownership by applying schema files as the bootstrap user.
-- **Grafana is unavailable:** verify `tls/grafana.crt` and `tls/grafana.key`, `GRAFANA_SECRET_KEY`, and `docker compose logs grafana`. Datasource failures usually indicate missing reader credentials or reader grants; re-run the roles script after a restore.
+- **Grafana is unavailable:** verify `GRAFANA_SECRET_KEY`, the configured
+  `GRAFANA_ROOT_URL`/domain settings, that Caddy is running, and
+  `docker compose logs grafana`. From the OCI host, check
+  `curl -f http://127.0.0.1:3000/api/health`. Datasource failures usually
+  indicate missing reader credentials or reader grants; re-run the roles script
+  after a restore.
 - **Backup is unhealthy:** inspect `docker compose logs db-backup`, confirm a recent `backups/olx-*.dump`, and run `pg_restore -l` on it. The included Grafana alert tracks scrape freshness, not backup freshness.
 - **Sync fails:** retain the local dump and read the remote `RESTORE_ERROR` lines in `logs/sync.log`. Ownership failures must be corrected on the source database before retrying; a restore failure after the schema swap triggers the remote rollback procedure.
 

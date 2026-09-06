@@ -1,19 +1,22 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# Self-signed TLS certificate for Grafana's native HTTPS listener.
+# Legacy standalone helper for Grafana's native HTTPS listener.
+#
+# The Compose stack is now HTTP-only and production TLS belongs to Caddy, so
+# this script is not part of local Compose or OCI deployment.
 #
 #   bash scripts/generate-grafana-cert.sh [extra SANs...]
 #     e.g.  bash scripts/generate-grafana-cert.sh 203.0.113.10 grafana.example.com
 #           args containing ':' become IP: SANs (IPv6), digit-only args become
 #           IPv4 SANs, anything else a DNS: SAN.
 #
-# Writes git-ignored tls/grafana.crt + tls/grafana.key (10 years, EC P-256).
-# docker-compose.yml mounts ./tls into the grafana container (/certs, ro).
+# Writes git-ignored tls/grafana.crt + tls/grafana.key (10 years, EC P-256)
+# for an explicitly standalone Grafana setup.
 # Browsers distrust self-signed certs: compare the SHA-256 fingerprint printed
 # below with what the browser shows on first visit, or import tls/grafana.crt
 # into your OS trust store to silence the warning.
-# Re-run any time (new key, extra SANs, nearing expiry), then:
-#   docker compose up -d --force-recreate grafana
+# Re-run any time (new key, extra SANs, nearing expiry), then restart the
+# standalone Grafana configuration that consumes these files.
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 # Stop MSYS/Git-Bash from rewriting /CN=... args into Windows paths:
@@ -56,7 +59,7 @@ chmod 644 "$CRT"
 if ! chown 472:472 "$CRT" "$KEY" 2>/dev/null; then
   echo "NOTE: could not chown tls files to uid 472 (running unprivileged?)." >&2
   echo "If grafana later fails with 'open /certs/grafana.key: permission denied', run:" >&2
-  echo "  sudo chown 472:472 tls/grafana.crt tls/grafana.key && docker compose up -d --force-recreate grafana" >&2
+  echo "  sudo chown 472:472 tls/grafana.crt tls/grafana.key" >&2
 fi
 
 
@@ -66,4 +69,4 @@ openssl x509 -in "$CRT" -noout -subject -dates -ext subjectAltName
 echo
 openssl x509 -in "$CRT" -noout -fingerprint -sha256
 echo "↑ self-signed: browsers warn until trusted — verify this fingerprint on first visit."
-echo "restart grafana:  docker compose up -d --force-recreate grafana"
+echo "restart the standalone Grafana configuration that consumes these files"

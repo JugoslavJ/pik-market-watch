@@ -218,7 +218,7 @@ services:
       # Listener is https-only (below) → never send auth cookies over http://
       GF_COOKIE_SECURE: "true"
       # Native HTTPS termination — self-signed cert mounted read-only from ./tls
-      GF_SERVER_PROTOCOL: https
+      GF_SERVER_PROTOCOL: http
       GF_SERVER_CERT_FILE: /certs/grafana.crt
       GF_SERVER_CERT_KEY: /certs/grafana.key
       # Encrypts datasource secrets at rest inside grafana.db (.env: GRAFANA_SECRET_KEY)
