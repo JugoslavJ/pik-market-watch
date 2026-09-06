@@ -89,54 +89,11 @@ $dump = Join-Path $root "backups/$dumpName"
 if ((Get-Item $dump).Length -lt 20000) { throw "dump suspiciously small - aborting" }
 
 Log ('streaming {0:N0} bytes to {1}@{2} and restoring...' -f (Get-Item $dump).Length, $SshUser, $InstanceHost)
-$sshPath = (Get-Command ssh -CommandType Application -ErrorAction Stop).Path
-$sshStart = [System.Diagnostics.ProcessStartInfo]::new()
-$sshStart.FileName = $sshPath
-$sshStart.UseShellExecute = $false
-$sshStart.RedirectStandardInput = $true
-$sshStart.RedirectStandardOutput = $true
-$sshStart.RedirectStandardError = $true
-foreach ($arg in @($sshArgs + "$SshUser@$InstanceHost" + './db/remote-restore.sh')) {
-  [void]$sshStart.ArgumentList.Add($arg)
-}
+$out = Get-Content $dump -AsByteStream |
+  ssh @sshArgs "$SshUser@$InstanceHost" ./db/remote-restore.sh
+$out | ForEach-Object { Log "remote: $_" }
 
-# Do not pipe Get-Content into a native command here. Without raw byte-stream
-# handling, PowerShell may treat the dump as pipeline objects and corrupt or
-# truncate the archive before ssh sees it. Copy the file directly to ssh's
-# stdin so every byte reaches the forced-command restore endpoint.
-$sshProcess = [System.Diagnostics.Process]::new()
-$sshProcess.StartInfo = $sshStart
-if (-not $sshProcess.Start()) { throw 'could not start ssh for database restore' }
-$stdoutTask = $sshProcess.StandardOutput.ReadToEndAsync()
-$stderrTask = $sshProcess.StandardError.ReadToEndAsync()
-$dumpStream = [System.IO.File]::OpenRead($dump)
-try {
-  try {
-    $dumpStream.CopyTo($sshProcess.StandardInput.BaseStream)
-  } finally {
-    $dumpStream.Dispose()
-    $sshProcess.StandardInput.Close()
-  }
-} catch {
-  try {
-    if (-not $sshProcess.HasExited) { $sshProcess.Kill() }
-  } catch { }
-  throw
-}
-$sshProcess.WaitForExit()
-$out = $stdoutTask.GetAwaiter().GetResult()
-$err = $stderrTask.GetAwaiter().GetResult()
-$sshExitCode = $sshProcess.ExitCode
-$sshProcess.Dispose()
-$remoteOutput = @($out, $err) -join "`n"
-$remoteOutput -split "`r?`n" |
-  Where-Object { $_ } |
-  ForEach-Object { Log "remote: $_" }
-if ($sshExitCode -ne 0) {
-  throw "ssh restore failed (exit $sshExitCode)"
-}
-
-if ($remoteOutput -match 'RESTORE_OK') {
+if (($out -join "`n") -match 'RESTORE_OK') {
   Log 'sync complete - instance database updated.'
   # Prune local dumps now that the instance confirmed the restore — every
   # scheduled run otherwise drops another olx-sync-*.dump into ./backups

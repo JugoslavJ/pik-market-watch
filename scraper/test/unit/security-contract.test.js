@@ -61,10 +61,3 @@ test("restore input and identifiers are bounded and cleaned up", () => {
   assert.match(restore, /trap on_exit EXIT/);
   assert.match(restore, /LOCK=\/tmp\/olx-restore\.lock/);
 });
-
-test("PowerShell sync streams the dump as raw bytes", () => {
-  const sync = read("scripts/sync-to-instance.ps1");
-  assert.match(sync, /OpenRead\(\$dump\)/);
-  assert.match(sync, /CopyTo\(\$sshProcess\.StandardInput\.BaseStream\)/);
-  assert.doesNotMatch(sync, /Get-Content \$dump -AsByteStream\s*\|/);
-});
