@@ -7,7 +7,7 @@ const assert = require("node:assert/strict");
 const { needsDb, reset, setupDb } = require("../helpers/db.js");
 
 let db;
-const sarajevoDay = (value) =>
+const banjaLukaDay = (value) =>
   value.toLocaleDateString("en-CA", { timeZone: "Europe/Sarajevo" });
 
 test.before(async () => {
@@ -111,7 +111,7 @@ needsDb(
     ).rows;
 
     assert.deepEqual(
-      rows.map((row) => sarajevoDay(row.day)),
+      rows.map((row) => banjaLukaDay(row.day)),
       ["2026-01-10", "2026-01-12"],
     );
     const reopened = rows[1];

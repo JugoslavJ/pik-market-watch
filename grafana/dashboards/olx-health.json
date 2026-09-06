@@ -1594,7 +1594,7 @@
       "id": 29,
       "title": "Analytics queue & freshness",
       "type": "table",
-      "description": "A missing or never successful listing_daily refresh is shown explicitly as unknown. Pending age starts at the earliest invalidated Sarajevo day; an empty pending range means no queued rebuild is known.",
+      "description": "A missing or never successful listing_daily refresh is shown explicitly as unknown. Pending age starts at the earliest invalidated Banja Luka day; an empty pending range means no queued rebuild is known.",
       "gridPos": {
         "h": 8,
         "w": 24,

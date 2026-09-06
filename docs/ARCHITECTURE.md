@@ -40,7 +40,7 @@ Detail enrichment is a separate, bounded part of a successful search. The queue 
 
 `price_history` remains the legacy append-only snapshot table and is still consumed by the conversion path. New canonical price evidence is written through `listing_price_events`; duplicate evidence is idempotent by article, effective time, normalized price, and state.
 
-Current tables answer “what is known now.” Evidence tables answer “what did this source say, and when did we record it?” `listing_daily` answers historical questions by reconstructing state at each Sarajevo calendar-day boundary. It carries explicit `membership_inferred`, `attributes_inferred`, `stale_observation`, and `provisional_day` flags. Historical membership and attributes can be inferred when observations are sparse; today is provisional and active inventory can be carried through the configured 14-day observation window. Treat flagged values as estimates, not direct daily captures.
+Current tables answer “what is known now.” Evidence tables answer “what did this source say, and when did we record it?” `listing_daily` answers historical questions by reconstructing state at each Banja Luka calendar-day boundary. It carries explicit `membership_inferred`, `attributes_inferred`, `stale_observation`, and `provisional_day` flags. Historical membership and attributes can be inferred when observations are sparse; today is provisional and active inventory can be carried through the configured 14-day observation window. Treat flagged values as estimates, not direct daily captures.
 
 ## Listing lifecycle and details
 

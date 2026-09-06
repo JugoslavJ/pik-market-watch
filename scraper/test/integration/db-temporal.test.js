@@ -8,7 +8,7 @@ const { needsDb, reset, setupDb } = require("../helpers/db.js");
 
 let db;
 
-const sarajevoDay = (value) => {
+const banjaLukaDay = (value) => {
   if (!(value instanceof Date)) return String(value).slice(0, 10);
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "Europe/Sarajevo",
@@ -58,7 +58,7 @@ async function insertEvidence(articleId, at) {
 }
 
 needsDb(
-  "daily rebuild uses a half-open Sarajevo day interval at midnight",
+  "daily rebuild uses a half-open Banja Luka day interval at midnight",
   async () => {
     // 2026-01-11 00:00 in Sarajevo is 2026-01-10 23:00 UTC.
     const midnight = "2026-01-10T23:00:00.000Z";
@@ -71,7 +71,7 @@ needsDb(
          FROM listing_daily WHERE article_id = 8801 ORDER BY day`,
     );
     assert.deepEqual(
-      rows.rows.map((row) => sarajevoDay(row.day)),
+      rows.rows.map((row) => banjaLukaDay(row.day)),
       ["2026-01-11"],
     );
     assert.deepEqual(rows.rows[0].price_effective_at, new Date(midnight));
@@ -99,7 +99,7 @@ needsDb(
     const state = await db.pool.query(
       "SELECT completed_through_day FROM analytics_refresh_state WHERE scope = 'listing_daily'",
     );
-    assert.equal(sarajevoDay(state.rows[0].completed_through_day), through);
+    assert.equal(banjaLukaDay(state.rows[0].completed_through_day), through);
 
     await db.pool.query("DELETE FROM analytics_daily_coverage WHERE day = $1", [
       day(-2),
@@ -108,8 +108,8 @@ needsDb(
       "SELECT * FROM analytics_daily_rebuild_window($1::date)",
       [asOf],
     );
-    assert.equal(sarajevoDay(window.rows[0].from_day), day(-2));
-    assert.equal(sarajevoDay(window.rows[0].through_day), asOf);
+    assert.equal(banjaLukaDay(window.rows[0].from_day), day(-2));
+    assert.equal(banjaLukaDay(window.rows[0].through_day), asOf);
     assert.equal(window.rows[0].reason, "missing_day");
   },
 );

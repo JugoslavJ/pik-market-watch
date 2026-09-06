@@ -53,6 +53,24 @@ function normalizeSearchKey(href) {
   u.searchParams.delete("page");
   u.searchParams.delete("olx_scrape");
   u.hash = "";
+  // URL query order is not part of the search's meaning. Keep the API's
+  // established filter order for readable keys, then sort all other names.
+  const preferred = new Map([
+    ["category_id", 0],
+    ["canton", 1],
+    ["cities", 2],
+  ]);
+  const params = [...u.searchParams.entries()].map((entry, index) => ({
+    entry,
+    index,
+  }));
+  params.sort(
+    (a, b) =>
+      (preferred.get(a.entry[0]) ?? 10) - (preferred.get(b.entry[0]) ?? 10) ||
+      (a.entry[0] < b.entry[0] ? -1 : a.entry[0] > b.entry[0] ? 1 : 0) ||
+      a.index - b.index,
+  );
+  u.search = new URLSearchParams(params.map(({ entry }) => entry)).toString();
   return u.pathname + u.search;
 }
 
@@ -191,6 +209,12 @@ module.exports = {
     min: 1,
   }), // parallel detail calls
   geoDelayMs: integer("GEO_DELAY_MS", process.env.GEO_DELAY_MS, 1200), // politeness gap between batches
+  rateLimitCooldownMs: integer(
+    "RATE_LIMIT_COOLDOWN_MS",
+    process.env.RATE_LIMIT_COOLDOWN_MS,
+    65000,
+    { min: 0, max: 24 * 60 * 60 * 1000 },
+  ), // fallback when the API omits a reset timestamp
   minRunGapMinutes: integer(
     "SCRAPE_MIN_GAP_MINUTES",
     process.env.SCRAPE_MIN_GAP_MINUTES,

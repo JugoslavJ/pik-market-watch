@@ -74,14 +74,74 @@ function errorContext(error, request, response, diagnostic) {
   error.requestMetadata = request;
   error.responseMetadata = response;
   error.diagnostic = diagnostic;
+  if (diagnostic?.kind && error.kind == null) error.kind = diagnostic.kind;
   return error;
 }
 
 class ApiError extends Error {
-  constructor(message, status = null) {
+  constructor(message, status = null, { kind = null, retryable = null } = {}) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.kind = kind;
+    this.retryable = retryable;
+  }
+}
+
+/** Shared request budget for all calls made during one scrape cycle. */
+class RateBudget {
+  constructor({
+    reserve = RATE_RESERVE,
+    cooldownMs = 65000,
+    wait = sleep,
+    now = Date.now,
+    onLow = () => {},
+  } = {}) {
+    this.reserve = Math.max(0, Number(reserve) || 0);
+    this.cooldownMs = Math.max(0, Number(cooldownMs) || 0);
+    this.wait = wait;
+    this.now = now;
+    this.onLow = onLow;
+    this.blockedUntil = 0;
+    this.lowHandled = false;
+    this.remaining = null;
+    this.limit = null;
+  }
+
+  async beforeRequest() {
+    await this.waitIfBlocked();
+  }
+
+  async waitIfBlocked() {
+    const delay = Math.ceil(this.blockedUntil - this.now());
+    if (delay > 0) {
+      await this.wait(delay);
+      this.blockedUntil = 0;
+    }
+  }
+
+  observe(headers) {
+    const remaining = numericHeader(headers, "x-ratelimit-remaining");
+    const limit = numericHeader(headers, "x-ratelimit-limit");
+    this.observeValues(remaining, limit);
+  }
+
+  observeValues(remaining, limit = null) {
+    if (remaining != null) this.remaining = remaining;
+    if (limit != null) this.limit = limit;
+    if (remaining != null && remaining < this.reserve && !this.lowHandled) {
+      this.lowHandled = true;
+      this.blockedUntil = Math.max(
+        this.blockedUntil,
+        this.now() + this.cooldownMs,
+      );
+      this.onLow(remaining, limit);
+    }
+  }
+
+  onRateLimited(retryAfterMs) {
+    const delay = retryAfterMs ?? this.cooldownMs;
+    this.blockedUntil = Math.max(this.blockedUntil, this.now() + delay);
   }
 }
 
@@ -169,7 +229,9 @@ async function fetchJson(url, timeoutMs, policy = {}) {
   const maxAttempts = policy.maxAttempts ?? MAX_REQUEST_ATTEMPTS;
   const wait = policy.wait ?? sleep;
   const random = policy.random ?? Math.random;
+  const rateBudget = policy.rateBudget;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    if (rateBudget) await rateBudget.beforeRequest();
     let res;
     try {
       res = await fetch(target, {
@@ -193,6 +255,7 @@ async function fetchJson(url, timeoutMs, policy = {}) {
         },
       );
     }
+    if (rateBudget) rateBudget.observe(res.headers);
     // Cheap pre-flight: honor a declared Content-Length before reading at all.
     const declared = numericHeader(res.headers, "content-length");
     if (declared != null && declared > MAX_BODY_BYTES)
@@ -238,6 +301,8 @@ async function fetchJson(url, timeoutMs, policy = {}) {
     };
     if (!res.ok) {
       const retryAfter = parseRetryAfter(res.headers.get("retry-after"));
+      if (rateBudget && res.status === 429)
+        rateBudget.onRateLimited(retryAfter);
       if (RETRYABLE_STATUSES.has(res.status) && attempt < maxAttempts) {
         await wait(retryDelay(attempt, retryAfter, random));
         continue;
@@ -319,11 +384,12 @@ async function fetchSearchPage(apiUrl, timeoutMs, policy) {
 async function fetchListing(
   articleId,
   timeoutMs,
-  { includeMetadata = false } = {},
+  { includeMetadata = false, rateBudget } = {},
 ) {
   const result = await fetchJson(
     `${API_ORIGIN}/api/listings/${articleId}`,
     timeoutMs,
+    { rateBudget },
   );
   const { body } = result;
   if (!body || typeof body !== "object" || body.id !== Number(articleId)) {
@@ -356,17 +422,26 @@ async function fetchListing(
  * @param {(…args:any[])=>void} [log]
  */
 async function fetchDetailsInBatches(articleIds, opts, log = () => {}) {
-  const { timeoutMs, concurrency = 2, delayMs = 0, onBatch, onError } = opts;
+  const {
+    timeoutMs,
+    concurrency = 2,
+    delayMs = 0,
+    onBatch,
+    onError,
+    rateBudget,
+    wait = sleep,
+  } = opts;
   const all = [];
   let done = 0;
   for (let i = 0; i < articleIds.length; i += Math.max(1, concurrency)) {
+    if (i > 0 && delayMs > 0) await wait(delayMs);
     const batch = articleIds.slice(i, i + concurrency);
     const results = await Promise.all(
       batch.map(async (id) => {
-        if (delayMs) await sleep(delayMs);
         try {
           const fetched = await fetchListing(id, timeoutMs, {
             includeMetadata: true,
+            rateBudget,
           });
           const sourcePayload = fetched.body;
           let parsed;
@@ -449,12 +524,11 @@ function hasApiFilter(apiUrl) {
   return FILTER_PARAMS.some((p) => apiUrl.searchParams.has(p));
 }
 
-// Exported surface = what callers actually consume. RATE_RESERVE is read by
-// scrapeSearch()'s throttle; everything else here is called directly.
-// (API_ORIGIN and ApiError stay module-internal — no external consumer;
-// readBodyCapped / MAX_BODY_BYTES are exported for their unit tests.)
+// Exported surface = what callers actually consume. API_ORIGIN stays
+// internal; ApiError is public for durable outcome classification.
 module.exports = {
   ApiError,
+  RateBudget,
   RATE_RESERVE,
   MAX_BODY_BYTES,
   MAX_REQUEST_ATTEMPTS,

@@ -1672,7 +1672,7 @@
         }
       ],
       "title": "Neighborhood breakdown — actives",
-      "description": "District assigned from the ad's map pin (approximate rectangles — db/init/11-neighborhoods.sql). (unmapped) = pin outside every district, usually surrounding settlements.",
+      "description": "District assigned from the ad's map pin (approximate rectangles — db/init/02-neighborhoods.sql). (unmapped) = pin outside every district, usually surrounding settlements.",
       "type": "table"
     },
     {
@@ -2115,7 +2115,7 @@
         "y": 81
       },
       "title": "Districts ranked — median asking KM/m² · sales",
-      "description": "Where is it expensive: every district with ≥8 sale listings, ranked by median asking price per m² with the p25–p75 spread. Deliberately ignores the Neighborhood filter (so all districts stay comparable); Category/Rooms/Deal still apply. Districts come from map pins (db/init/11-neighborhoods.sql).",
+      "description": "Where is it expensive: every district with ≥8 sale listings, ranked by median asking price per m² with the p25–p75 spread. Deliberately ignores the Neighborhood filter (so all districts stay comparable); Category/Rooms/Deal still apply. Districts come from map pins (db/init/02-neighborhoods.sql).",
       "type": "table",
       "options": {
         "cellHeight": "sm",

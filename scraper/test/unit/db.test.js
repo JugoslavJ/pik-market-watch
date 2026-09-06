@@ -4,7 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const Db = require("../../src/db");
 
-const todayInSarajevo = () =>
+const todayInBanjaLuka = () =>
   new Date().toLocaleDateString("en-CA", {
     timeZone: "Europe/Sarajevo",
   });
@@ -19,8 +19,8 @@ test("rebuildDailyInventory refreshes pending days instead of all history", asyn
         return {
           rows: [
             {
-              pending_from_day: todayInSarajevo(),
-              pending_through_day: todayInSarajevo(),
+              pending_from_day: todayInBanjaLuka(),
+              pending_through_day: todayInBanjaLuka(),
               first_priced_day: "2021-03-22",
               first_daily_day: "2021-03-22",
             },
@@ -35,7 +35,7 @@ test("rebuildDailyInventory refreshes pending days instead of all history", asyn
 
   assert.equal(calls.length, 2);
   assert.match(calls[1][0], /rebuild_listing_daily/);
-  assert.deepEqual(calls[1][1], [todayInSarajevo(), todayInSarajevo()]);
+  assert.deepEqual(calls[1][1], [todayInBanjaLuka(), todayInBanjaLuka()]);
 });
 
 test("rebuildDailyInventory backfills from history when daily coverage is missing", async () => {
@@ -62,7 +62,7 @@ test("rebuildDailyInventory backfills from history when daily coverage is missin
 
   await db.rebuildDailyInventory();
 
-  assert.deepEqual(calls[1][1], ["2021-03-22", todayInSarajevo()]);
+  assert.deepEqual(calls[1][1], ["2021-03-22", todayInBanjaLuka()]);
 });
 
 test("rebuildDailyInventory chunks a bounded maintenance window", async () => {

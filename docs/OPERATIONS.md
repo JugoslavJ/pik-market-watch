@@ -15,24 +15,25 @@ docker compose up -d --build
 
 `POSTGRES_PASSWORD`, `POSTGRES_APP_PASSWORD`, `POSTGRES_READER_PASSWORD`, `GRAFANA_ADMIN_PASSWORD`, and `GRAFANA_SECRET_KEY` must be changed from example values. Application and reader passwords are embedded in a PostgreSQL URL, so use URL-safe values such as `openssl rand -hex 24`.
 
-| Setting | Default | Consumer |
-|---|---:|---|
-| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | `olx`, required, `olx` | PostgreSQL bootstrap database. |
-| `POSTGRES_APP_USER`, `POSTGRES_APP_PASSWORD` | `olx_app`, required | Scraper and restore owner role. |
-| `POSTGRES_READER_USER`, `POSTGRES_READER_PASSWORD` | `olx_reader`, required | Grafana and backup read-only role. |
-| `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD` | `admin`, required | Grafana login. |
-| `GRAFANA_SECRET_KEY` | required | Grafana encryption for stored datasource secrets. |
-| `GRAFANA_CARTO_API_KEY` | unset | CARTO basemap key for Grafana geomaps; create one at [carto.com/basemaps/apikey](https://carto.com/basemaps/apikey). |
-| `GRAFANA_CARTO_VECTOR_STYLE` | `dark-matter` | Authenticated CARTO MapLibre vector style: `dark-matter`, `positron`, or `voyager`; recreate Grafana after changing it. |
-| `GRAFANA_BIND` | `0.0.0.0` | Host interface for Grafana port 3000. Bind a LAN or VPN address when appropriate. |
-| `SCRAPE_INTERVAL_MINUTES` | `720` | Scheduled scraper cadence when the `scrape` profile is enabled. |
-| `DETAIL_REFRESH_DAYS` | `7` | Age at which successful detail evidence becomes eligible for refresh. |
-| `DETAIL_JOB_LEASE_MINUTES` | `30` | Database lease duration for an in-flight durable detail job (maximum 24 hours). |
-| `RAW_RESPONSE_RETENTION_DAYS` | `30` | Search-response evidence retention period. |
-| `ANALYTICS_REBUILD_MAX_DAYS` | `31` | Maximum Sarajevo days rebuilt per maintenance transaction. |
-| `ABANDONED_RUN_AFTER_MINUTES` | `180` | Age after which startup marks an unfinished `running` scrape as abandoned. |
-| `BACKUP_RETENTION_DAYS` | `14` | Days of database and Grafana archives retained by `db-backup`; `0` disables pruning. |
-| `ALERT_EMAIL_TO` | unset | Recipient for provisioned alerting. Mail also requires enabling and configuring the `GF_SMTP_*` entries in `docker-compose.yml`. |
+| Setting                                             |                Default | Consumer                                                                                                                         |
+| --------------------------------------------------- | ---------------------: | -------------------------------------------------------------------------------------------------------------------------------- |
+| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | `olx`, required, `olx` | PostgreSQL bootstrap database.                                                                                                   |
+| `POSTGRES_APP_USER`, `POSTGRES_APP_PASSWORD`        |    `olx_app`, required | Scraper and restore owner role.                                                                                                  |
+| `POSTGRES_READER_USER`, `POSTGRES_READER_PASSWORD`  | `olx_reader`, required | Grafana and backup read-only role.                                                                                               |
+| `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD`      |      `admin`, required | Grafana login.                                                                                                                   |
+| `GRAFANA_SECRET_KEY`                                |               required | Grafana encryption for stored datasource secrets.                                                                                |
+| `GRAFANA_CARTO_API_KEY`                             |                  unset | CARTO basemap key for Grafana geomaps; create one at [carto.com/basemaps/apikey](https://carto.com/basemaps/apikey).             |
+| `GRAFANA_CARTO_VECTOR_STYLE`                        |          `dark-matter` | Authenticated CARTO MapLibre vector style: `dark-matter`, `positron`, or `voyager`; recreate Grafana after changing it.          |
+| `GRAFANA_BIND`                                      |              `0.0.0.0` | Host interface for Grafana port 3000. Bind a LAN or VPN address when appropriate.                                                |
+| `SCRAPE_INTERVAL_MINUTES`                           |                  `720` | Scheduled scraper cadence when the `scrape` profile is enabled.                                                                  |
+| `DETAIL_REFRESH_DAYS`                               |                    `7` | Age at which successful detail evidence becomes eligible for refresh.                                                            |
+| `DETAIL_JOB_LEASE_MINUTES`                          |                   `30` | Database lease duration for an in-flight durable detail job (maximum 24 hours).                                                  |
+| `RAW_RESPONSE_RETENTION_DAYS`                       |                   `30` | Search-response evidence retention period.                                                                                       |
+| `ANALYTICS_REBUILD_MAX_DAYS`                        |                   `31` | Maximum Banja Luka days rebuilt per maintenance transaction.                                                                      |
+| `ABANDONED_RUN_AFTER_MINUTES`                       |                  `180` | Age after which startup marks an unfinished `running` scrape as abandoned.                                                       |
+| `RATE_LIMIT_COOLDOWN_MS`                            |                `65000` | Fallback pause when the upstream rate-limit window is low and no reset is advertised.                                            |
+| `BACKUP_RETENTION_DAYS`                             |                   `14` | Days of database and Grafana archives retained by `db-backup`; `0` disables pruning.                                             |
+| `ALERT_EMAIL_TO`                                    |                  unset | Recipient for provisioned alerting. Mail also requires enabling and configuring the `GF_SMTP_*` entries in `docker-compose.yml`. |
 
 Search configuration is read from `config/searches.json`; `SEARCH_URLS` is an environment override for a bare scraper process or an explicit `docker compose run -e SEARCH_URLS=...` invocation. The scraper also accepts `SCRAPE_USER_AGENT`, `HEALTH_PORT`, and pacing/health variables (`MAX_PAGES`, `CONCURRENCY`, `PAGE_DELAY_MS`, `API_PER_PAGE`, `API_TIMEOUT_MS`, `MAX_GEO_FETCHES`, `GEO_CONCURRENCY`, `GEO_DELAY_MS`, `SCRAPE_MIN_GAP_MINUTES`, `ABANDONED_RUN_AFTER_MINUTES`, `DETAIL_JOB_LEASE_MINUTES`, and `HEALTH_FAILURE_THRESHOLD`). Compose injects `ABANDONED_RUN_AFTER_MINUTES`, `DETAIL_JOB_LEASE_MINUTES`, and `ANALYTICS_REBUILD_MAX_DAYS`; pass the other tuning variables explicitly with `docker compose run -e NAME=value` or set them in a supported deployment change.
 
@@ -87,8 +88,9 @@ docker compose --profile scrape run --rm scraper node src/backfill-price-history
 
 The current `06-rebuild.sql` definition removes repeated geography and sparse
 history work from the daily INSERT path. The local restored-backup benchmark
-completed a 31-day rebuild in 7.37 seconds; see
-[REBUILD-PERFORMANCE.md](REBUILD-PERFORMANCE.md) for measurements and limits.
+completed a 31-day rebuild in a workload-specific benchmark. Use the checked-in
+[daily rebuild profiling query](../db/diagnostics/profile-daily-rebuild.sql) to
+measure it against a representative database.
 
 Update the checkout on the machine running maintenance before these steps.
 An already executing function continues using its old definition, and its
@@ -168,8 +170,8 @@ docker compose start scraper
 
 Use a disposable database to rehearse a dump before production recovery. The Grafana archive is a separate volume backup; restore it only with Grafana stopped and with a preserved copy of the current Grafana volume. `GRAFANA_SECRET_KEY` must match the one used when the archive was created to recover encrypted datasource secrets.
 
-For the post-deploy OPC checks (Grafana interpolation, role boundaries, query
-plans, and a disposable restore), follow [INSTANCE-VERIFICATION.md](INSTANCE-VERIFICATION.md).
+For post-deploy checks, run the deployment contract and integration tests in
+`scraper/test/` against a disposable instance before changing production data.
 
 ## Home-machine scrape and sync
 

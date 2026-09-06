@@ -14,6 +14,12 @@ const {
 
 const MAX_UNIX_SECONDS = 4102444800; // 2100-01-01
 const VALID_STATES = new Set(Object.values(PRICE_STATES).concat("conflict"));
+const BANJA_LUKA_DAY_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Europe/Sarajevo",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
 
 function reject(reason) {
   return { ok: false, reason };
@@ -187,19 +193,14 @@ function signature(event) {
   return `${priceKey(event.price)}|${event.priceState}`;
 }
 
-function dayInSarajevo(date) {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Europe/Sarajevo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(date);
+function dayInBanjaLuka(date) {
+  const parts = BANJA_LUKA_DAY_FORMATTER.formatToParts(date);
   const values = Object.fromEntries(parts.map((p) => [p.type, p.value]));
   return `${values.year}-${values.month}-${values.day}`;
 }
 
 function minMaxDays(events) {
-  const days = events.map((event) => dayInSarajevo(event.effectiveAt)).sort();
+  const days = events.map((event) => dayInBanjaLuka(event.effectiveAt)).sort();
   return days.length ? { from: days[0], through: days[days.length - 1] } : null;
 }
 
@@ -334,29 +335,44 @@ async function recordPriceEvents(pool, events, options = {}) {
       insertedEvents.push(event);
     }
 
-    for (const event of insertedEvents) {
+    if (insertedEvents.length) {
       const inserted = await client.query(
         `INSERT INTO listing_price_events
            (article_id, effective_at, observed_at, renewed_at, effective_at_basis,
             ingested_at, price, price_state, source, provenance)
-         VALUES ($1, $2, $3, $4, $5, COALESCE($6::timestamptz, now()), $7, $8, $9, $10::jsonb)
-         ON CONFLICT (article_id, effective_at, price, price_state) DO NOTHING
-         RETURNING id`,
+         SELECT article_id, effective_at, observed_at, renewed_at, effective_at_basis,
+                COALESCE(ingested_at, now()), price, price_state, source, provenance
+           FROM jsonb_to_recordset($1::jsonb) AS e(
+             article_id bigint,
+             effective_at timestamptz,
+             observed_at timestamptz,
+             renewed_at timestamptz,
+             effective_at_basis text,
+             ingested_at timestamptz,
+             price numeric,
+             price_state text,
+             source text,
+             provenance jsonb)
+         ON CONFLICT (article_id, effective_at, price, price_state) DO NOTHING`,
         [
-          event.articleId,
-          event.effectiveAt,
-          event.observedAt,
-          event.renewedAt,
-          event.effectiveAtBasis,
-          event.ingestedAt,
-          event.price,
-          event.priceState,
-          event.source,
-          JSON.stringify(event.provenance),
+          JSON.stringify(
+            insertedEvents.map((event) => ({
+              article_id: event.articleId,
+              effective_at: event.effectiveAt,
+              observed_at: event.observedAt,
+              renewed_at: event.renewedAt,
+              effective_at_basis: event.effectiveAtBasis,
+              ingested_at: event.ingestedAt,
+              price: event.price,
+              price_state: event.priceState,
+              source: event.source,
+              provenance: event.provenance,
+            })),
+          ),
         ],
       );
-      if (inserted.rowCount) result.inserted++;
-      else result.duplicate++;
+      result.inserted += inserted.rowCount;
+      result.duplicate += insertedEvents.length - inserted.rowCount;
     }
 
     if (result.inserted) {
@@ -387,7 +403,7 @@ async function recordPriceEvents(pool, events, options = {}) {
 }
 
 module.exports = {
-  dayInSarajevo,
+  dayInBanjaLuka,
   normalizeEvent,
   recordPriceEvents,
 };
