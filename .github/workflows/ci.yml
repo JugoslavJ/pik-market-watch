@@ -46,7 +46,7 @@ jobs:
       - name: Build scraper image for vulnerability scanning
         run: docker build --tag pik-market-watch-scraper:ci .
       - name: Scan scraper image with Trivy
-        uses: aquasecurity/trivy-action@c1824fd6edce30d7ab345a9989de00bbd46ef284 # v0.34.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: pik-market-watch-scraper:ci
           format: table
