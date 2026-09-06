@@ -24,9 +24,6 @@ desktop.ini
 .vscode/
 .idea/
 
-# ── TLS material (self-signed Grafana cert) ──────────────────────────
-/tls/
-
 # ── Geo pipeline intermediates (offline tooling, see geo/README.md) ───
 geo/debug/
 geo/pdf-pages/

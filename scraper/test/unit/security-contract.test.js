@@ -38,7 +38,7 @@ test("example secrets and Compose listeners fail closed", () => {
   assert.match(compose, /backend:\s*\n\s*internal: true/);
 });
 
-test("Grafana is HTTP-only behind a configurable secure reverse proxy", () => {
+test("Grafana is HTTP-only behind Cloudflare Tunnel", () => {
   const compose = read("docker-compose.yml");
   const example = read(".env.example");
 

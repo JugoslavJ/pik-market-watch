@@ -2,7 +2,7 @@
 # pik-market-watch — OLX.ba price tracker
 #   db      : PostgreSQL 16, schema auto-created on first start (db/init/*.sql)
 #   grafana : dashboards over the database → http://localhost:3000 locally
-#             HTTP-only behind Caddy in production; Caddy terminates public TLS
+#             HTTP-only behind Cloudflare Tunnel; public TLS terminates at Cloudflare
 #   db-backup : nightly pg_dump + Grafana-state sidecar into ./backups
 #
 #   scraper : Node, talks to olx.ba's public JSON API (fetch, no browser) —
@@ -214,7 +214,7 @@ services:
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"     # no outbound version-check pings either
       GF_SERVER_ENABLE_GZIP: "true"               # compress dashboard JSON over WAN links
       GF_LOG_LEVEL: "warn"                        # trim log IO; flip back to info when debugging
-      # Caddy/public reverse proxy terminates TLS; Grafana stays HTTP-only on
+      # Cloudflare Tunnel publishes public HTTPS; Grafana stays HTTP-only on
       # the host-loopback published port.
       GF_SERVER_PROTOCOL: http
       GF_SERVER_DOMAIN: ${GRAFANA_DOMAIN:-localhost}
@@ -254,7 +254,7 @@ services:
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
     ports:
       # Keep the host-side listener loopback-only. Production deployment
-      # rejects any GRAFANA_BIND override because Caddy is the public entry point.
+      # rejects any GRAFANA_BIND override; cloudflared is the public entry point.
       - target: 3000
         published: "3000"
         host_ip: ${GRAFANA_BIND:-127.0.0.1}
@@ -268,7 +268,7 @@ services:
       - default                 # SMTP egress (optional alert mail delivery)
       - backend                 # reach db
     healthcheck:
-      # Grafana is HTTP-only; Caddy handles public TLS outside the container.
+      # Grafana is HTTP-only; Cloudflare handles public TLS outside the host.
       test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/health || exit 1"]
       interval: 15s
       timeout: 5s

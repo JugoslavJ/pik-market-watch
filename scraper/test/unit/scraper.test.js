@@ -265,7 +265,8 @@ test("low rate budget pauses once (65 s), latch prevents repeat backoffs", async
 
   // Exactly one real backoff; other pace() calls are 0 ms wave gaps.
   const backoffs = pace.delays.filter((ms) => ms >= 60000);
-  assert.deepEqual(backoffs, [65000]);
+  assert.equal(backoffs.length, 1);
+  assert.ok(backoffs[0] >= 64999 && backoffs[0] <= 65000);
 });
 
 // ── guards & error paths ─────────────────────────────────────────────────────

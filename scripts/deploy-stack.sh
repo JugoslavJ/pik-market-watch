@@ -38,9 +38,9 @@ for v in POSTGRES_PASSWORD POSTGRES_APP_PASSWORD POSTGRES_READER_PASSWORD \
   esac
 done
 
-# Production Grafana is reachable through Caddy, which terminates public TLS.
-# Keep the container's published port private and fail closed if the production
-# .env still contains the old local/native-TLS settings.
+# Production Grafana is reachable through Cloudflare Tunnel, which publishes
+# HTTPS while forwarding to the private HTTP listener. Keep the container's
+# published port private and fail closed if production settings are unsafe.
 read_env_value() {
   local name=$1 line
   line=$(grep -E "^${name}=" .env | tail -n 1 || true)
@@ -133,7 +133,7 @@ while :; do
   echo "   db=$db  grafana=$gr  db-backup=$bk  (t=${SECONDS}s)"
   if [ "$db" = healthy ] && [ "$gr" = healthy ]; then
     echo "✓ Stack healthy — deployed ${GIT_SHA:-unknown} to the instance"
-    echo "  Grafana: ${grafana_root_url} (public HTTPS is terminated by Caddy)"
+    echo "  Grafana: ${grafana_root_url} (public HTTPS is terminated by Cloudflare)"
     # The scraper moved to the home machine (compose profile "scrape").
     # --remove-orphans already deleted its container; drop its image too.
     docker images --format '{{.Repository}}:{{.Tag}}' \

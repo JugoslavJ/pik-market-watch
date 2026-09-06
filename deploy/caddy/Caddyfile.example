@@ -1,6 +1,0 @@
-# Copy to the host's Caddy configuration and replace the placeholder hostname.
-# Caddy terminates public HTTPS and forwards plain HTTP over host loopback to
-# the Grafana container's private publication.
-grafana.example.com {
-    reverse_proxy 127.0.0.1:3000
-}

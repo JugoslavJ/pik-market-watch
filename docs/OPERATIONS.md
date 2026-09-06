@@ -21,13 +21,13 @@ docker compose up -d --build
 | `POSTGRES_READER_USER`, `POSTGRES_READER_PASSWORD`  | `olx_reader`, required | Grafana and backup read-only role.                                                                                               |
 | `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD`      |      `admin`, required | Grafana login.                                                                                                                   |
 | `GRAFANA_SECRET_KEY`                                |               required | Grafana encryption for stored datasource secrets.                                                                                |
-| `GRAFANA_DOMAIN`                                    |             `localhost` | Grafana's externally visible hostname; production must use the Caddy hostname.                                                   |
+| `GRAFANA_DOMAIN`                                    |             `localhost` | Grafana's externally visible hostname; production must use the Cloudflare hostname.                                             |
 | `GRAFANA_ROOT_URL`                                  | `http://localhost:3000/` | Grafana's externally visible URL; production must be HTTPS and end in `/`.                                                       |
 | `GRAFANA_ENFORCE_DOMAIN`                            |               `false` | Reject unexpected Host headers; set `true` in production.                                                                        |
 | `GRAFANA_COOKIE_SECURE`                              |               `false` | Secure Grafana auth cookies; set `true` in production HTTPS.                                                                     |
 | `GRAFANA_CARTO_API_KEY`                             |                  unset | CARTO basemap key for Grafana geomaps; create one at [carto.com/basemaps/apikey](https://carto.com/basemaps/apikey).             |
 | `GRAFANA_CARTO_VECTOR_STYLE`                        |          `dark-matter` | Authenticated CARTO MapLibre vector style: `dark-matter`, `positron`, or `voyager`; recreate Grafana after changing it.          |
-| `GRAFANA_BIND`                                      |          `127.0.0.1` | Host interface for Grafana port 3000. Keep this at `127.0.0.1`; Caddy is the public entry point.                                  |
+| `GRAFANA_BIND`                                      |          `127.0.0.1` | Host interface for Grafana port 3000. Keep this at `127.0.0.1`; cloudflared is the public entry point.                            |
 | `HEALTH_BIND`                                       |          `127.0.0.1` bare-metal / `0.0.0.0` Compose | Health listener bind address. Compose needs all-interface binding inside the container; the published host port remains loopback-only. |
 | `SCRAPE_INTERVAL_MINUTES`                           |                  `720` | Scheduled scraper cadence when the `scrape` profile is enabled.                                                                  |
 | `DETAIL_REFRESH_DAYS`                               |                    `7` | Age at which successful detail evidence becomes eligible for refresh.                                                            |
@@ -42,10 +42,11 @@ docker compose up -d --build
 Search configuration is read from `config/searches.json`; `SEARCH_URLS` is an environment override for a bare scraper process or an explicit `docker compose run -e SEARCH_URLS=...` invocation. The scraper also accepts `SCRAPE_USER_AGENT`, `HEALTH_PORT`, and pacing/health variables (`MAX_PAGES`, `CONCURRENCY`, `PAGE_DELAY_MS`, `API_PER_PAGE`, `API_TIMEOUT_MS`, `MAX_GEO_FETCHES`, `GEO_CONCURRENCY`, `GEO_DELAY_MS`, `SCRAPE_MIN_GAP_MINUTES`, `ABANDONED_RUN_AFTER_MINUTES`, `DETAIL_JOB_LEASE_MINUTES`, and `HEALTH_FAILURE_THRESHOLD`). Compose injects `ABANDONED_RUN_AFTER_MINUTES`, `DETAIL_JOB_LEASE_MINUTES`, and `ANALYTICS_REBUILD_MAX_DAYS`; pass the other tuning variables explicitly with `docker compose run -e NAME=value` or set them in a supported deployment change.
 
 Grafana is HTTP-only inside the stack. Local development uses
-`http://localhost:3000`; production uses `Cloudflare → Caddy :443 →
-Grafana 127.0.0.1:3000`. Caddy terminates public TLS and proxies to Grafana
-over host loopback. Port 3000 must not be opened in OCI ingress or published
-on a public interface. Grafana signup remains disabled by default.
+`http://localhost:3000`; production uses `Cloudflare → Cloudflare Tunnel →
+cloudflared → Grafana 127.0.0.1:3000`. Cloudflare terminates public TLS and
+cloudflared forwards HTTP over host loopback. There is no public OCI 80/443
+ingress requirement, and port 3000 must not be opened in OCI ingress or
+published on a public interface. Grafana signup remains disabled by default.
 
 For production, add these values to the instance's ignored `.env`:
 
@@ -58,9 +59,58 @@ GRAFANA_COOKIE_SECURE=true
 ```
 
 The deployment preflight rejects a public bind, local domain, non-HTTPS root
-URL, or insecure/unrestricted production cookie/domain settings. The tracked
-`deploy/caddy/Caddyfile.example` is a starting point for the host Caddy
-configuration; replace the placeholder hostname.
+URL, or insecure/unrestricted production cookie/domain settings. The tunnel
+configuration is created in Cloudflare and on the OCI host; no tunnel token,
+credentials JSON, or production hostname is stored in this repository.
+
+## Cloudflare Tunnel production setup
+
+The repository supplies the application and its loopback-only listener. Create
+and operate the tunnel manually; do not add its token or credentials to Git.
+
+The intended path is:
+
+```text
+Cloudflare HTTPS → Cloudflare Tunnel → cloudflared on OCI
+                → http://127.0.0.1:3000 → Grafana → PostgreSQL
+```
+
+Use the Cloudflare dashboard to create a tunnel and publish the production
+hostname to the origin service `http://127.0.0.1:3000`. Install `cloudflared`
+on OCI using the dashboard-generated connector instructions and run it as a
+systemd service. Keep the tunnel token or credentials file only in the local
+`/etc/cloudflared` service configuration with owner-only permissions. Never
+place it in `.env`, a tracked Compose file, CI secrets sent to the repository,
+logs, or shell scripts.
+
+Before removing the old host ingress, validate the private origin and tunnel:
+
+```bash
+curl -f http://127.0.0.1:3000/api/health
+systemctl status cloudflared
+journalctl -u cloudflared -n 100 --no-pager
+curl -I https://grafana.example.com
+```
+
+Replace `grafana.example.com` with the real Cloudflare hostname. Confirm the
+hostname loads Grafana over HTTPS, the Cloudflare dashboard reports the tunnel
+as healthy, login cookies are marked Secure, and the Grafana URL is the public
+HTTPS URL. Optional Cloudflare Access can be placed in front of the hostname;
+it does not change Grafana's `GRAFANA_ROOT_URL`.
+
+After the tunnel is verified, perform host cleanup in this order:
+
+1. Stop and disable the legacy public edge service.
+2. Uninstall that service and remove its configuration only after checking it
+   is not used by another application.
+3. Remove old origin certificates only after checking that no other service
+   uses them.
+4. Remove OCI inbound TCP 80 and 443 rules; keep SSH according to the existing
+   access policy and keep TCP 3000 private.
+5. Confirm listeners with `sudo ss -lntp | grep -E ':80|:443|:3000'`.
+
+The expected application listener is `127.0.0.1:3000`; there must be no public
+Grafana listener and no legacy proxy listener on 80 or 443.
 
 ## Normal operation
 
@@ -233,15 +283,11 @@ database/Grafana/backup services, restarts Grafana to reload provisioning, and
 waits for database and Grafana health. A failed migration exits before the
 dashboard is restarted.
 
-The repository does not install or configure Caddy, OCI networking, or
-Cloudflare. On the OCI host, install Caddy and use
-`deploy/caddy/Caddyfile.example` with the real hostname. Configure Cloudflare
-DNS to point the hostname to OCI and enable proxying, set Cloudflare SSL/TLS
-mode to `Full (strict)`, and allow public TCP 80/443 in OCI while keeping TCP
-3000 closed. Optionally add Cloudflare Access and restrict the origin to
-Cloudflare's current published IP ranges after validating the site. These are
-manual infrastructure changes and no Cloudflare/OCI credentials belong in this
-repository.
+The repository does not install or configure `cloudflared`, OCI networking, or
+Cloudflare. The tunnel hostname, connector, token, and optional Access policy
+are manual infrastructure configuration. No Cloudflare/OCI credentials belong
+in this repository, and no public 80/443 or 3000 ingress is needed for the
+tunnel path.
 
 ## Diagnosis
 
@@ -250,9 +296,10 @@ repository.
 - **Stale detail fields or sparse dashboard segments:** detail fetches are capped and source attributes are optional. Check `details_fetched_at`, `last_enrichment_attempted_at`, and the health dashboard’s coverage panels; use a bounded backfill where appropriate.
 - **Migration or ownership error:** run the roles script as shown above, then restart affected clients. Inspect `schema_migrations` and apply normal migrations with `migrate-only.js`; do not repair ownership by applying schema files as the bootstrap user.
 - **Grafana is unavailable:** verify `GRAFANA_SECRET_KEY`, the configured
-  `GRAFANA_ROOT_URL`/domain settings, that Caddy is running, and
+  `GRAFANA_ROOT_URL`/domain settings, `systemctl status cloudflared`, and
   `docker compose logs grafana`. From the OCI host, check
-  `curl -f http://127.0.0.1:3000/api/health`. Datasource failures usually
+  `curl -f http://127.0.0.1:3000/api/health`; then inspect
+  `journalctl -u cloudflared -n 100 --no-pager`. Datasource failures usually
   indicate missing reader credentials or reader grants; re-run the roles script
   after a restore.
 - **Backup is unhealthy:** inspect `docker compose logs db-backup`, confirm a recent `backups/olx-*.dump`, and run `pg_restore -l` on it. The included Grafana alert tracks scrape freshness, not backup freshness.

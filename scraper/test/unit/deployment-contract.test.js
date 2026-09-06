@@ -14,10 +14,6 @@ const deploy = fs.readFileSync(
   path.join(ROOT, "scripts", "deploy-stack.sh"),
   "utf8",
 );
-const caddy = fs.readFileSync(
-  path.join(ROOT, "deploy", "caddy", "Caddyfile.example"),
-  "utf8",
-);
 
 test("Compose gates scraper startup on the profile-only migrator", () => {
   assert.match(
@@ -57,8 +53,21 @@ test("production Grafana settings fail closed before deployment", () => {
   assert.match(deploy, /GRAFANA_COOKIE_SECURE/);
 });
 
-test("Caddy example proxies only the private Grafana listener", () => {
-  assert.match(caddy, /grafana\.example\.com\s*\{/);
-  assert.match(caddy, /reverse_proxy 127\.0\.0\.1:3000/);
-  assert.doesNotMatch(caddy, /tls_insecure_skip_verify/);
+test("Cloudflare Tunnel is the documented public entry point", () => {
+  const operations = fs.readFileSync(
+    path.join(ROOT, "docs", "OPERATIONS.md"),
+    "utf8",
+  );
+  assert.match(operations, /Cloudflare Tunnel/);
+  assert.match(operations, /http:\/\/127\.0\.0\.1:3000/);
+  assert.match(operations, /systemctl status cloudflared/);
+  assert.match(operations, /no public OCI 80\/443\s+ingress/i);
+  assert.equal(
+    fs.existsSync(path.join(ROOT, "deploy", "caddy", "Caddyfile.example")),
+    false,
+  );
+  assert.equal(
+    fs.existsSync(path.join(ROOT, "scripts", "generate-grafana-cert.sh")),
+    false,
+  );
 });

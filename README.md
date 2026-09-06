@@ -27,8 +27,9 @@ Retention and daily analytics can run independently of scraping with
 `docker compose --profile maintenance run --build --rm maintenance`.
 
 Grafana is at `http://localhost:3000` for local development. In production the
-topology is `Cloudflare → Caddy :443 → Grafana 127.0.0.1:3000`; Caddy
-terminates public TLS and Grafana itself does not need a certificate. When the
+topology is `Cloudflare → Cloudflare Tunnel → cloudflared → Grafana
+127.0.0.1:3000`; Cloudflare terminates public TLS and the tunnel forwards HTTP
+over the host loopback. Grafana itself does not need a certificate. When the
 scrape profile runs, `http://localhost:9100` provides health/status JSON.
 Both published ports bind to `127.0.0.1` by default. Do not expose port 3000
 to the Internet; `HEALTH_BIND` is loopback by default for bare-metal runs and
