@@ -90,9 +90,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -153,9 +151,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -216,9 +212,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -280,9 +274,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -334,7 +326,7 @@
         "x": 16,
         "y": 1
       },
-      "title": "Observed exit ratio · 30 d",
+      "title": "Observed exit ratio diagnostic · 30 d",
       "description": "Observed closed ads ÷ (closed + active) over the last month. This is a disappearance proxy; exit prices are last ASKING prices, not transaction prices.",
       "type": "stat",
       "options": {
@@ -344,9 +336,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -361,7 +351,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH c AS (\n  SELECT count(*)::float AS n FROM listings WHERE closed_at > now() - INTERVAL '30 days'\n),\na AS (\n  SELECT count(*)::float AS n FROM v_active_listings\n)\nSELECT COALESCE(round(c.n / NULLIF(c.n + a.n, 0) * 100), 0) FROM c, a",
+          "rawSql": "WITH c AS (\n  SELECT count(*)::float AS n FROM listings WHERE closed_at > now() - INTERVAL '30 days'\n),\na AS (\n  SELECT count(*)::float AS n FROM v_active_listings\n)\nSELECT round(c.n / NULLIF(c.n + a.n, 0) * 100) FROM c, a",
           "refId": "A"
         }
       ],
@@ -412,9 +402,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -495,9 +483,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -512,7 +498,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT round(EXTRACT(EPOCH FROM (now() - max(started_at))) / 60)::int\nFROM scrape_runs\nWHERE status = 'ok'",
+          "rawSql": "SELECT CASE WHEN max(finished_at) IS NULL THEN NULL ELSE round(EXTRACT(EPOCH FROM (now() - max(finished_at))) / 60)::int END\nFROM scrape_runs\nWHERE status = 'ok' AND is_complete = TRUE AND finished_at IS NOT NULL",
           "refId": "A"
         }
       ],
@@ -546,7 +532,7 @@
             ]
           },
           "unit": "short",
-          "noValue": "0"
+          "noValue": "—"
         },
         "overrides": []
       },
@@ -566,9 +552,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -629,9 +613,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -826,7 +808,7 @@
           },
           "editorMode": "code",
           "format": "time_series",
-      "rawSql": "SELECT day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time,\n       round(100.0 * closed_n / NULLIF(active_est, 0), 2) AS \"closed / estimated active %\"\nFROM v_market_daily\nWHERE day BETWEEN date($__timeFrom() AT TIME ZONE 'Europe/Sarajevo')\n              AND date($__timeTo() AT TIME ZONE 'Europe/Sarajevo')\nORDER BY day",
+          "rawSql": "SELECT day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time,\n       round(100.0 * closed_n / NULLIF(active_est, 0), 2) AS \"closed / estimated active %\"\nFROM v_market_daily\nWHERE day BETWEEN date($__timeFrom() AT TIME ZONE 'Europe/Sarajevo')\n              AND date($__timeTo() AT TIME ZONE 'Europe/Sarajevo')\nORDER BY day",
           "refId": "A"
         }
       ],
@@ -835,10 +817,7 @@
   ],
   "refresh": "5m",
   "schemaVersion": 39,
-  "tags": [
-    "olx",
-    "home"
-  ],
+  "tags": ["olx", "home"],
   "templating": {
     "list": []
   },

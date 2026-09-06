@@ -64,6 +64,8 @@ services:
       POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:?set POSTGRES_APP_PASSWORD in .env}
       POSTGRES_READER_USER: ${POSTGRES_READER_USER:-olx_reader}
       POSTGRES_READER_PASSWORD: ${POSTGRES_READER_PASSWORD:?set POSTGRES_READER_PASSWORD in .env}
+      POSTGRES_PUBLIC_READER_USER: ${POSTGRES_PUBLIC_READER_USER:-olx_public_reader}
+      POSTGRES_PUBLIC_READER_PASSWORD: ${POSTGRES_PUBLIC_READER_PASSWORD:?set POSTGRES_PUBLIC_READER_PASSWORD in .env}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./db/init:/docker-entrypoint-initdb.d:ro   # runs on FIRST start only
@@ -222,6 +224,9 @@ services:
       GF_SERVER_ENFORCE_DOMAIN: ${GRAFANA_ENFORCE_DOMAIN:-false}
       GF_SECURITY_COOKIE_SECURE: ${GRAFANA_COOKIE_SECURE:-false}
       GF_SECURITY_COOKIE_SAMESITE: lax
+      # Public sharing is explicit per dashboard; organization-wide anonymous
+      # Viewer access stays disabled because it permits arbitrary queries.
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
       GF_USERS_ALLOW_SIGN_UP: "false"
       # Encrypts datasource secrets at rest inside grafana.db (.env: GRAFANA_SECRET_KEY)
       GF_SECURITY_SECRET_KEY: ${GRAFANA_SECRET_KEY:?set GRAFANA_SECRET_KEY in .env}
@@ -234,7 +239,10 @@ services:
       # (read-only role — Grafana never needs write access)
       POSTGRES_READER_USER: ${POSTGRES_READER_USER:-olx_reader}
       POSTGRES_READER_PASSWORD: ${POSTGRES_READER_PASSWORD}
+      POSTGRES_PUBLIC_READER_USER: ${POSTGRES_PUBLIC_READER_USER:-olx_public_reader}
+      POSTGRES_PUBLIC_READER_PASSWORD: ${POSTGRES_PUBLIC_READER_PASSWORD:?set POSTGRES_PUBLIC_READER_PASSWORD in .env}
       POSTGRES_DB: ${POSTGRES_DB:-olx}
+      SCRAPE_STALE_AFTER_HOURS: ${SCRAPE_STALE_AFTER_HOURS:-26}
       # Consumed by provisioning/alerting/olx-alerts.yml (alert mail recipient).
       # Grafana 13 fatal-VALIDATES email receivers during provisioning: an empty
       # address makes the container exit (deploys stuck unhealthy). The
@@ -252,6 +260,7 @@ services:
       - grafana:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./grafana/public-dashboards:/var/lib/grafana/public-dashboards:ro
     ports:
       # Keep the host-side listener loopback-only. Production deployment
       # rejects any GRAFANA_BIND override; cloudflared is the public entry point.

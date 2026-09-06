@@ -14,6 +14,7 @@ entrypoint and the application migration runner:
 | `05-filters.sql` | Dashboard input parsing and filter functions |
 | `06-rebuild.sql` | Bulk daily reconstruction |
 | `07-triggers.sql` | Direct-write triggers |
+| `08-dashboard-public.sql` | Allowlisted read-only reporting views for external dashboards |
 | `zz-database-roles.sh` | Application ownership and reader permissions |
 
 Fresh volumes execute these files in order. The migrator subsequently records

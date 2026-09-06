@@ -13,3 +13,13 @@ providers:
     options:
       path: /var/lib/grafana/dashboards
       foldersFromFilesStructure: false
+  - name: olx-public-dashboards
+    orgId: 1
+    folder: Public
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/public-dashboards
+      foldersFromFilesStructure: false

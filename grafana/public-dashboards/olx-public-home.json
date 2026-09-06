@@ -1,0 +1,153 @@
+{
+  "annotations": { "list": [] },
+  "editable": false,
+  "graphTooltip": 0,
+  "links": [
+    {
+      "title": "Apartments for sale",
+      "type": "link",
+      "url": "/public-dashboards/4d5e6f708192a3b4c5d6e7f80192a3b"
+    },
+    {
+      "title": "Apartments for rent",
+      "type": "link",
+      "url": "/public-dashboards/2b3c4d5e6f708192a3b4c5d6e7f80192"
+    },
+    {
+      "title": "Observed exits",
+      "type": "link",
+      "url": "/public-dashboards/3c4d5e6f708192a3b4c5d6e7f80192a3"
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Data through · latest completed scrape",
+      "description": "Latest completed successful observation for any tracked category. This is data freshness, not page freshness.",
+      "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 0 },
+      "fieldConfig": {
+        "defaults": { "unit": "dateTimeAsIso" },
+        "overrides": []
+      },
+      "options": {},
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT max(last_success_at) AS data_through FROM dashboard_public.freshness"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "table",
+      "title": "Observed active listings by category and deal",
+      "description": "Distinct observed OLX article IDs, active under the existing 14-day rule. Category counts overlap when one article belongs to multiple saved searches.",
+      "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
+      "gridPos": { "h": 7, "w": 16, "x": 8, "y": 0 },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": { "footer": { "show": true }, "showHeader": true },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+      "rawSql": "SELECT category, deal, count(DISTINCT article_id)::int AS observed_active_listings\nFROM dashboard_public.current_listings\nCROSS JOIN LATERAL unnest(category_memberships) AS categories(category)\nWHERE category IN ('apartments','houses','vacation_homes')\nGROUP BY category, deal\nORDER BY category, deal"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "table",
+      "title": "Sale asking summaries",
+      "description": "Median asking KM/m² for valid priced sale listings. Sample size is shown; no cross-category pooled headline is calculated.",
+      "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 4 },
+      "fieldConfig": { "defaults": { "unit": "currencyBAM" }, "overrides": [] },
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+      "rawSql": "SELECT category, count(DISTINCT article_id)::int AS priced_sample, round(percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2))::int AS median_asking_km_m2\nFROM dashboard_public.current_listings\nCROSS JOIN LATERAL unnest(category_memberships) AS categories(category)\nWHERE category IN ('apartments','houses','vacation_homes')\n  AND deal = 'sale' AND ppm2 > 0\nGROUP BY category\nORDER BY category"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "table",
+      "title": "Rent asking summaries · period as listed",
+      "description": "Rental asking prices are shown without assuming a monthly lease period; is_rent alone does not establish the period.",
+      "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 7 },
+      "fieldConfig": { "defaults": { "unit": "currencyBAM" }, "overrides": [] },
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+      "rawSql": "SELECT category, count(DISTINCT article_id)::int AS priced_sample, round(percentile_cont(0.5) WITHIN GROUP (ORDER BY price))::int AS median_asking_km\nFROM dashboard_public.current_listings\nCROSS JOIN LATERAL unnest(category_memberships) AS categories(category)\nWHERE category IN ('apartments','houses','vacation_homes')\n  AND deal = 'rent' AND price > 0\nGROUP BY category\nORDER BY category"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "table",
+      "title": "Newly observed active listings · 7 days",
+      "description": "Distinct article IDs first observed in the last seven days and still active. Renewals are not counted as new.",
+      "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 11 },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+      "rawSql": "SELECT category, deal, count(DISTINCT article_id)::int AS new_active_listings\nFROM dashboard_public.current_listings\nCROSS JOIN LATERAL unnest(category_memberships) AS categories(category)\nWHERE category IN ('apartments','houses','vacation_homes')\n  AND first_seen >= now() - INTERVAL '7 days'\nGROUP BY category, deal\nORDER BY category, deal"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "Recent asking-price reductions",
+      "description": "Resolved valid-to-valid reductions in the last seven days. The event price and current availability are distinct facts.",
+      "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+      "fieldConfig": { "defaults": { "unit": "currencyBAM" }, "overrides": [] },
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT title, url, deal, neighborhood, prior_price, new_price, reduction_km, reduction_pct, event_at, currently_observed\nFROM dashboard_public.price_reductions\nWHERE event_at >= now() - INTERVAL '7 days'\n  AND category_memberships && ARRAY['apartments','houses','vacation_homes']::text[]\nORDER BY event_at DESC\nLIMIT 50"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "Freshness by tracked category",
+      "description": "A missing completed success is Unknown. The value reflects the latest successful scrape, not a visitor refresh.",
+      "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 22 },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT category, configured_searches, last_success_at, CASE WHEN last_success_at IS NULL THEN 'Unknown' WHEN last_success_at < now() - INTERVAL '26 hours' THEN 'Stale' ELSE 'Current' END AS freshness\nFROM dashboard_public.freshness\nWHERE category IN ('apartments','houses','vacation_homes')\nORDER BY category"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 41,
+  "templating": { "list": [] },
+  "time": { "from": "now-30d", "to": "now" },
+  "timezone": "Europe/Sarajevo",
+  "title": "OLX Public Home",
+  "uid": "olx-public-home",
+  "version": 1
+}

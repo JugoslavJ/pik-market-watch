@@ -69,6 +69,7 @@ npm run lint:syntax
 
 - [Architecture and data model](docs/ARCHITECTURE.md)
 - [Operations](docs/OPERATIONS.md)
+- [Dashboard metric inventory](docs/METRIC-INVENTORY.md)
 - [Security policy](SECURITY.md)
 - [Geographic data workflow](geo/README.md)
 - [Data provenance and licensing](DATA.md)

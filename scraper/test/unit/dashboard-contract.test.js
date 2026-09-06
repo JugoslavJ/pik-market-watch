@@ -11,6 +11,15 @@ const path = require("node:path");
 
 const root = path.resolve(__dirname, "../../..");
 const dashboardDir = path.join(root, "grafana", "dashboards");
+const publicDashboardDir = path.join(root, "grafana", "public-dashboards");
+const publicReportingMigration = fs.readFileSync(
+  path.join(root, "db", "init", "08-dashboard-public.sql"),
+  "utf8",
+);
+const roles = fs.readFileSync(
+  path.join(root, "db", "init", "zz-database-roles.sh"),
+  "utf8",
+);
 const filterMigration = fs.readFileSync(
   path.join(root, "db", "init", "05-filters.sql"),
   "utf8",
@@ -126,4 +135,77 @@ test("health dashboard exposes per-search and analytics freshness state", () => 
   assert.match(alertProvisioning, /uid: olx-analytics-pending-26h/);
   assert.match(alertProvisioning, /stale_searches/);
   assert.match(alertProvisioning, /pending_from_day/);
+});
+
+test("public dashboards are fixed-scope and use only the reporting contract", () => {
+  const expected = [
+    "olx-public-home.json",
+    "olx-public-apartments-sale.json",
+    "olx-public-apartments-rent.json",
+    "olx-public-exits.json",
+  ];
+  for (const name of expected) {
+    const dashboard = JSON.parse(
+      fs.readFileSync(path.join(publicDashboardDir, name), "utf8"),
+    );
+    assert.equal(dashboard.templating?.list?.length, 0, name);
+    assert.ok(
+      dashboard.panels.length >= 5,
+      `${name} should have useful public panels`,
+    );
+    const source = JSON.stringify(dashboard);
+    assert.match(source, /olx-public-postgres/);
+    assert.match(source, /dashboard_public\./);
+    assert.doesNotMatch(source, /gross yield|guaranteed bargain/i);
+    for (const panel of dashboard.panels) {
+      for (const target of panel.targets || []) {
+        assert.doesNotMatch(
+          target.rawSql,
+          /\$\{[^}]+\}/,
+          `${name} panel ${panel.id}`,
+        );
+        if (panel.type === "table") {
+          // Aggregate public tables are bounded by their literal category or
+          // bucket dimensions; row-oriented tables carry the hard LIMIT 50.
+          assert.match(
+            target.rawSql,
+            /LIMIT (?:50|[1-4][0-9])|GROUP BY|WHERE category (?:IN \('apartments'|= 'apartments')/,
+          );
+        }
+      }
+    }
+  }
+});
+
+test("public reporting objects and role setup retain the confidentiality boundary", () => {
+  assert.match(
+    publicReportingMigration,
+    /CREATE SCHEMA IF NOT EXISTS dashboard_public/,
+  );
+  for (const view of [
+    "current_listings",
+    "daily_market",
+    "price_reductions",
+    "exit_cycles",
+    "freshness",
+  ]) {
+    assert.match(
+      publicReportingMigration,
+      new RegExp(`dashboard_public\\.${view}`),
+    );
+  }
+  assert.match(roles, /public_reader_user/);
+  assert.match(roles, /NOINHERIT/);
+  assert.match(
+    roles,
+    /GRANT SELECT ON TABLE dashboard_public\.current_listings/,
+  );
+  assert.match(
+    roles,
+    /REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC/,
+  );
+  assert.match(roles, /default_transaction_read_only = on/);
+  const publicRoleSection = roles.slice(roles.indexOf("-- Public role:"));
+  assert.doesNotMatch(publicRoleSection, /GRANT pg_read_all_data/);
+  assert.doesNotMatch(publicRoleSection, /GRANT USAGE ON ALL SEQUENCES/);
 });

@@ -1,0 +1,150 @@
+{
+  "annotations": { "list": [] },
+  "editable": false,
+  "graphTooltip": 0,
+  "links": [
+    {
+      "title": "Public Home",
+      "type": "link",
+      "url": "/public-dashboards/1a2b3c4d5e6f708192a3b4c5d6e7f801"
+    },
+    {
+      "title": "Apartments for rent",
+      "type": "link",
+      "url": "/public-dashboards/2b3c4d5e6f708192a3b4c5d6e7f80192"
+    },
+    {
+      "title": "Observed exits",
+      "type": "link",
+      "url": "/public-dashboards/3c4d5e6f708192a3b4c5d6e7f80192a3"
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Observed active apartment sale listings",
+      "description": "Distinct article IDs in the fixed apartments + sale scope; active means last seen within 14 days and not closed.",
+      "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "options": {},
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT count(DISTINCT article_id)::int AS observed_active_listings FROM dashboard_public.current_listings WHERE deal = 'sale' AND category_memberships @> ARRAY['apartments']::text[]"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Valid asking KM/m²",
+      "description": "Median sale asking price per m². The sample count is returned beside the metric; insufficient data is NULL.",
+      "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
+      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "currencyBAM" }, "overrides": [] },
+      "options": {},
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT count(*)::int AS priced_sample, round(percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2))::int AS median_asking_km_m2 FROM dashboard_public.current_listings WHERE deal = 'sale' AND category_memberships @> ARRAY['apartments']::text[] AND ppm2 > 0"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "New active listings · 7 days",
+      "description": "First observed in the window, deduplicated by article ID; renewals are excluded.",
+      "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "options": {},
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT count(DISTINCT article_id)::int AS new_active_listings FROM dashboard_public.current_listings WHERE deal = 'sale' AND category_memberships @> ARRAY['apartments']::text[] AND first_seen >= now() - INTERVAL '7 days'"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "table",
+      "title": "Asking-price distribution by neighborhood",
+      "description": "Neighborhood aggregates use a minimum of ten eligible sale listings. (no pin) and (unmapped) are coverage categories, not neighborhoods.",
+      "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "fieldConfig": { "defaults": { "unit": "currencyBAM" }, "overrides": [] },
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT neighborhood, count(*)::int AS sample, round(percentile_cont(0.25) WITHIN GROUP (ORDER BY ppm2))::int AS p25_km_m2, round(percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2))::int AS median_km_m2, round(percentile_cont(0.75) WITHIN GROUP (ORDER BY ppm2))::int AS p75_km_m2\nFROM dashboard_public.current_listings\nWHERE deal = 'sale' AND category_memberships @> ARRAY['apartments']::text[] AND ppm2 > 0\nGROUP BY neighborhood HAVING count(*) >= 10 ORDER BY median_km_m2 DESC"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "table",
+      "title": "Lower asking price relative to comparable listings",
+      "description": "Candidates are compared only within neighborhood + room + area cohorts with at least ten other eligible listings. This is a relative asking-price signal, not fair value.",
+      "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "fieldConfig": { "defaults": { "unit": "currencyBAM" }, "overrides": [] },
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "WITH eligible AS (\n  SELECT *, COALESCE(rooms, '(unknown)') AS room_key, width_bucket(COALESCE(sqm, 0), 0, 300, 6) AS area_band\n  FROM dashboard_public.current_listings\n  WHERE deal = 'sale' AND category_memberships @> ARRAY['apartments']::text[] AND ppm2 > 0\n), cohorts AS (\n  SELECT neighborhood, room_key, area_band, percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) AS cohort_median, count(*) AS cohort_n\n  FROM eligible GROUP BY neighborhood, room_key, area_band HAVING count(*) >= 11\n)\nSELECT e.title, e.url, e.neighborhood, e.rooms, e.sqm, e.ppm2, round(c.cohort_median)::int AS cohort_median_km_m2, (c.cohort_n - 1)::int AS other_listings\nFROM eligible e JOIN cohorts c USING (neighborhood, room_key, area_band)\nWHERE e.ppm2 < c.cohort_median ORDER BY e.ppm2 ASC LIMIT 50"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "Recent reductions · currently observed",
+      "description": "Historical reduction event and current availability are shown separately; prices are asking prices.",
+      "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "fieldConfig": { "defaults": { "unit": "currencyBAM" }, "overrides": [] },
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT title, url, neighborhood, rooms, sqm, prior_price, new_price, reduction_km, reduction_pct, event_at, last_seen\nFROM dashboard_public.price_reductions\nWHERE deal = 'sale' AND category_memberships @> ARRAY['apartments']::text[] AND event_at >= now() - INTERVAL '7 days' AND currently_observed\nORDER BY event_at DESC LIMIT 50"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Daily asking-price trend",
+      "description": "Reconstructed daily apartment-sale inventory. Median and quartiles are asking prices, not transaction prices; missing days are not converted to zero.",
+      "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "fieldConfig": { "defaults": { "unit": "currencyBAM" }, "overrides": [] },
+      "options": {},
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time, round(percentile_cont(0.25) WITHIN GROUP (ORDER BY ppm2))::int AS p25_km_m2, round(percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2))::int AS median_km_m2, round(percentile_cont(0.75) WITHIN GROUP (ORDER BY ppm2))::int AS p75_km_m2, count(*)::int AS priced_sample, bool_or(stale_observation) AS has_stale_observation, bool_or(provisional_day) AS provisional_day\nFROM dashboard_public.daily_market\nWHERE day >= (now() AT TIME ZONE 'Europe/Sarajevo')::date - 30 AND day < (now() AT TIME ZONE 'Europe/Sarajevo')::date AND deal = 'sale' AND category_memberships @> ARRAY['apartments']::text[] AND price_state = 'valid' AND ppm2 > 0\nGROUP BY day ORDER BY day"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 41,
+  "templating": { "list": [] },
+  "time": { "from": "now-30d", "to": "now" },
+  "timezone": "Europe/Sarajevo",
+  "title": "OLX Public · Apartments for Sale",
+  "uid": "olx-public-apartments-sale",
+  "version": 1
+}

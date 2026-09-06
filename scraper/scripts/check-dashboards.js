@@ -8,16 +8,21 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
-const directory = path.resolve(__dirname, "..", "..", "grafana", "dashboards");
-const files = fs
-  .readdirSync(directory)
-  .filter((file) => file.endsWith(".json"))
-  .sort();
+const directory = path.resolve(__dirname, "..", "..", "grafana");
+function dashboardFiles(dir) {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) return dashboardFiles(fullPath);
+    return entry.isFile() && entry.name.endsWith(".json") ? [fullPath] : [];
+  });
+}
+
+const files = dashboardFiles(directory).sort();
 if (!files.length)
   throw new Error(`no dashboard JSON files found in ${directory}`);
 
-for (const file of files) {
-  const fullPath = path.join(directory, file);
+for (const fullPath of files) {
+  const file = path.relative(directory, fullPath);
   const dashboard = JSON.parse(fs.readFileSync(fullPath, "utf8"));
   if (!dashboard.uid || !dashboard.title || !Array.isArray(dashboard.panels))
     throw new Error(`${file}: dashboard must define uid, title and panels[]`);

@@ -25,7 +25,7 @@ done
 
 # Least-privilege DB roles live only on the machines (git-ignored): fail fast
 # with fix instructions.
-for v in POSTGRES_PASSWORD POSTGRES_APP_PASSWORD POSTGRES_READER_PASSWORD \
+for v in POSTGRES_PASSWORD POSTGRES_APP_PASSWORD POSTGRES_READER_PASSWORD POSTGRES_PUBLIC_READER_PASSWORD \
          GRAFANA_ADMIN_PASSWORD GRAFANA_SECRET_KEY; do
   line=$(grep -E "^${v}=" .env | tail -n 1 || true)
   value=${line#*=}
@@ -112,6 +112,12 @@ docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
 
 echo "▶ Applying database migrations"
 docker compose --profile migrate run --build --rm migrator
+
+# The reporting schema is created by the migrator. Re-run the idempotent role
+# helper now so an existing volume receives the public-view allowlist too;
+# fresh volumes already execute it after bootstrap SQL.
+echo "▶ Applying public reporting grants"
+docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
 
 echo "▶ docker compose up -d --build (build output below, if any)"
 docker compose up -d --build --remove-orphans

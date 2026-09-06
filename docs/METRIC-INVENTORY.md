@@ -12,6 +12,10 @@ from silently retaining an obsolete metric label.
 | Exits | Exit-cycle panels | Frozen closure cycle time | Closed listings and lifecycle projection | Closing price is the last observed asking price | A disappearance is an observed exit proxy, not confirmed sale |
 | Home | Flow panels | Banja Luka day | Births, deaths and live-inventory projections | Counts, not priced samples | Backdated or inferred sightings are marked by projection metadata |
 | Health | Scrape and analytics operations | Run completion and refresh time | Saved searches, scrape runs, queue state and refresh watermark | No market-price aggregation | Missing success/refresh state is shown as unknown and can alert |
+| Public Home | Fixed tracked categories (`apartments`, `houses`, `vacation_homes`) | Query time for current rows; event time for reductions | `dashboard_public.current_listings`, `price_reductions`, and `freshness` | Sale KM/m² and rental asking price are reported separately by category | Category counts can overlap; missing success is Unknown |
+| Public Apartments for Sale | Literal `apartments` + `sale` scope | Current 14-day observations and Sarajevo daily projections | `dashboard_public.current_listings` and `daily_market` | Valid sale price and area only; median plus explicit priced sample | Neighborhood aggregates require at least 10 eligible listings |
+| Public Apartments for Rent | Literal `apartments` + `rent` scope | Current 14-day observations and event time | `dashboard_public.current_listings` and `price_reductions` | Asking price as listed; no monthly period is assumed | Publish only as an asking-price view until rental period is verified |
+| Public Exits | Literal `apartments` + `sale` closure cycles | Closure-cycle time | `dashboard_public.exit_cycles` | Last valid asking price at closure, never a transaction price | Reopened cycles remain separate; invalid boundary price is NULL |
 
 Shared filter semantics are implemented in [05-filters.sql](../db/init/05-filters.sql): empty multi-selects mean no
 restriction, numeric bounds are independently optional, and the canonical deal
@@ -19,6 +23,14 @@ values are `sale` and `rent` (`sell` is accepted only as a compatibility input).
 Queries that measure current inventory, event-time changes, daily projections,
 and exit cycles intentionally use different time bases; a panel must state its
 choice instead of implying that all dashboard numbers are directly comparable.
+
+The public dashboards intentionally have no template variables. Their SQL uses
+literal category/deal predicates over the allowlisted `dashboard_public` views;
+the public PostgreSQL role cannot read the underlying evidence tables. Public
+tables have a SQL limit of 50 rows and the UI defaults to the first 25 rows.
+The first release uses fixed 30-day/7-day windows and does not expose a public
+time picker. Sale and rental populations are never pooled for a headline
+statistic, and no gross-yield or bargain/fair-value claim is published.
 
 The CI `npm run test:dashboards` check validates dashboard JSON structure,
 unique panel IDs, and SQL target shape. It complements the SQL contract tests;

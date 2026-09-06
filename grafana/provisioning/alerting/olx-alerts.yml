@@ -74,6 +74,8 @@ groups:
                   type: threshold
               expression: B
               type: threshold
+      # Keep the UID stable for existing Grafana state; the threshold is
+      # configurable and defaults to the 26 h two-cycle window below.
       - uid: olx-search-stale-6h
         title: Saved search stale or failing
         condition: C
@@ -83,7 +85,7 @@ groups:
         annotations:
           summary: >-
             At least one enabled saved search has no authoritative successful
-            scrape in 6 h. Open OLX Health → Per-search freshness & phases to
+            scrape in the configured stale window. Open OLX Health → Per-search freshness & phases to
             identify the failed or stale search.
           runbook_url: https://github.com/JugoslavJ/pik-market-watch/blob/main/docs/OPERATIONS.md
         data:
@@ -107,7 +109,7 @@ groups:
                      LIMIT 1
                   ) success ON TRUE
                  WHERE success.finished_at IS NULL
-                    OR success.finished_at < now() - interval '6 hours';
+                    OR success.finished_at < now() - interval '${SCRAPE_STALE_AFTER_HOURS} hours';
               format: table
           - refId: B
             datasourceUid: __expr__

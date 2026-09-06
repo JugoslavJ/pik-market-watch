@@ -28,3 +28,21 @@ datasources:
       maxIdleConns: 5
     isDefault: true
     editable: false
+  - name: OLX Public Postgres
+    uid: olx-public-postgres
+    type: postgres
+    access: proxy
+    url: db:5432
+    database: ${POSTGRES_DB}
+    user: ${POSTGRES_PUBLIC_READER_USER}
+    secureJsonData:
+      password: ${POSTGRES_PUBLIC_READER_PASSWORD}
+    jsonData:
+      database: ${POSTGRES_DB}
+      sslmode: disable
+      postgresVersion: 1600
+      maxOpenConns: 10
+      maxIdleConns: 2
+      connMaxLifetime: 300
+    isDefault: false
+    editable: false

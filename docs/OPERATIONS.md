@@ -12,13 +12,14 @@ cp config/searches.example.json config/searches.json
 docker compose up -d --build
 ```
 
-`.env.example` intentionally leaves `POSTGRES_PASSWORD`, `POSTGRES_APP_PASSWORD`, `POSTGRES_READER_PASSWORD`, `GRAFANA_ADMIN_PASSWORD`, and `GRAFANA_SECRET_KEY` blank. Set all five before starting or deploying; the deployment preflight rejects blank and legacy `change-me*` values. Application and reader passwords are embedded in a PostgreSQL URL, so use URL-safe values such as `openssl rand -hex 24`.
+`.env.example` intentionally leaves `POSTGRES_PASSWORD`, `POSTGRES_APP_PASSWORD`, `POSTGRES_READER_PASSWORD`, `POSTGRES_PUBLIC_READER_PASSWORD`, `GRAFANA_ADMIN_PASSWORD`, and `GRAFANA_SECRET_KEY` blank. Set all six before starting or deploying; the deployment preflight rejects blank and legacy `change-me*` values. Application and reader passwords are embedded in a PostgreSQL URL, so use URL-safe values such as `openssl rand -hex 24`.
 
 | Setting                                             |                Default | Consumer                                                                                                                         |
 | --------------------------------------------------- | ---------------------: | -------------------------------------------------------------------------------------------------------------------------------- |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | `olx`, required, `olx` | PostgreSQL bootstrap database.                                                                                                   |
 | `POSTGRES_APP_USER`, `POSTGRES_APP_PASSWORD`        |    `olx_app`, required | Scraper and restore owner role.                                                                                                  |
 | `POSTGRES_READER_USER`, `POSTGRES_READER_PASSWORD`  | `olx_reader`, required | Grafana and backup read-only role.                                                                                               |
+| `POSTGRES_PUBLIC_READER_USER`, `POSTGRES_PUBLIC_READER_PASSWORD` | `olx_public_reader`, required | Public Grafana datasource; SELECT is limited to `dashboard_public` views. |
 | `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD`      |      `admin`, required | Grafana login.                                                                                                                   |
 | `GRAFANA_SECRET_KEY`                                |               required | Grafana encryption for stored datasource secrets.                                                                                |
 | `GRAFANA_DOMAIN`                                    |             `localhost` | Grafana's externally visible hostname; production must use the Cloudflare hostname.                                             |
@@ -38,6 +39,7 @@ docker compose up -d --build
 | `RATE_LIMIT_COOLDOWN_MS`                            |                `65000` | Fallback pause when the upstream rate-limit window is low and no reset is advertised.                                            |
 | `BACKUP_RETENTION_DAYS`                             |                   `14` | Days of database and Grafana archives retained by `db-backup`; `0` disables pruning.                                             |
 | `ALERT_EMAIL_TO`                                    |                  unset | Recipient for provisioned alerting. Mail also requires enabling and configuring the `GF_SMTP_*` entries in `docker-compose.yml`. |
+| `SCRAPE_STALE_AFTER_HOURS`                          | `26` | Per-search freshness alert and public freshness label; choose a value that covers the actual scrape cadence. |
 
 Search configuration is read from `config/searches.json`; `SEARCH_URLS` is an environment override for a bare scraper process or an explicit `docker compose run -e SEARCH_URLS=...` invocation. The scraper also accepts `SCRAPE_USER_AGENT`, `HEALTH_PORT`, and pacing/health variables (`MAX_PAGES`, `CONCURRENCY`, `PAGE_DELAY_MS`, `API_PER_PAGE`, `API_TIMEOUT_MS`, `MAX_GEO_FETCHES`, `GEO_CONCURRENCY`, `GEO_DELAY_MS`, `SCRAPE_MIN_GAP_MINUTES`, `ABANDONED_RUN_AFTER_MINUTES`, `DETAIL_JOB_LEASE_MINUTES`, and `HEALTH_FAILURE_THRESHOLD`). Compose injects `ABANDONED_RUN_AFTER_MINUTES`, `DETAIL_JOB_LEASE_MINUTES`, and `ANALYTICS_REBUILD_MAX_DAYS`; pass the other tuning variables explicitly with `docker compose run -e NAME=value` or set them in a supported deployment change.
 
@@ -111,6 +113,70 @@ After the tunnel is verified, perform host cleanup in this order:
 
 The expected application listener is `127.0.0.1:3000`; there must be no public
 Grafana listener and no legacy proxy listener on 80 or 443.
+
+## Public dashboards
+
+Public access uses Grafana externally shared dashboards, not organization-wide
+anonymous Viewer access. `GF_AUTH_ANONYMOUS_ENABLED=false` keeps ordinary
+dashboard URLs, Explore, datasource APIs, and administration authenticated.
+The public dashboards use the separate `OLX Public Postgres` datasource and
+only the read-only `dashboard_public` reporting views. The public role has no
+`pg_read_all_data`, base-table, routine, DML, DDL, or sequence permissions.
+
+The provisioned public UIDs are:
+
+- `olx-public-home` — tracked categories and freshness
+- `olx-public-apartments-sale` — fixed apartments + sale scope
+- `olx-public-apartments-rent` — fixed apartments + rent scope, period as listed
+- `olx-public-exits` — fixed apartments + sale closure cycles
+
+After the first deployment, an authenticated owner runs the idempotent share
+registration helper from a machine that can reach the private Grafana URL:
+
+```bash
+GRAFANA_URL=https://grafana.example.com \
+GRAFANA_ADMIN_USER=admin \
+GRAFANA_ADMIN_PASSWORD='use-the-runtime-secret' \
+  bash scripts/publish-public-dashboards.sh
+```
+
+The helper first reads each existing share and only creates a missing one. It
+uses stable access tokens, disables public time selection and annotations, and
+does not publish any private dashboard. The resulting URLs are
+`<GRAFANA_URL>/public-dashboards/<access-token>`. Configure the existing
+Cloudflare hostname's root redirect to the Home share URL only after all four
+share URLs pass the anonymous checks; keep the normal `/login` owner path.
+Do not put the admin password or Cloudflare credentials in Git or command
+history on a shared machine.
+
+To pause a share while keeping its link, use Grafana's authenticated Shared
+dashboards UI or PATCH the share with `isEnabled:false`. To revoke it, use the
+same UI or the supported API:
+
+```text
+DELETE /api/dashboards/uid/<dashboard-uid>/public-dashboards/<share-uid>
+```
+
+The share UID is returned by the authenticated GET endpoint; it is different
+from the public access token. Revocation is required before rollback or before
+changing a public dashboard's data boundary. Provisioning files do not create
+or re-enable shares, so a revoked share stays revoked across deployments.
+
+Rollout order is: start PostgreSQL, run `zz-database-roles.sh` for ownership
+and role credentials, run the migrator for `08-dashboard-public.sql`, run the
+role helper again to apply the view allowlist, then restart Grafana and inspect
+the private and public providers. Additive reporting views may remain during a
+rollback; revoke/pause shares and restore the previous provisioning/dashboard
+files without deleting either database volume. Database and Grafana backups
+continue to use the existing `olx_reader` role and backup sidecar.
+
+Before publishing, use a fresh browser context with no cookies or authorization
+headers. Verify every approved share loads, public panel responses contain no
+SQL or operational fields, normal query/dashboard/admin endpoints remain
+denied, guessed or revoked tokens return no data, and the public DB role can
+select the five reporting views but cannot read `listings`, use sequences, or
+write to a disposable fixture. Publishing makes all returned values public,
+including future saved changes to that dashboard.
 
 ## Normal operation
 

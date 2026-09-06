@@ -1,0 +1,128 @@
+{
+  "annotations": { "list": [] },
+  "editable": false,
+  "graphTooltip": 0,
+  "links": [
+    {
+      "title": "Public Home",
+      "type": "link",
+      "url": "/public-dashboards/1a2b3c4d5e6f708192a3b4c5d6e7f801"
+    },
+    {
+      "title": "Apartments for sale",
+      "type": "link",
+      "url": "/public-dashboards/4d5e6f708192a3b4c5d6e7f80192a3b"
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Observed apartment-sale exits · 30 days",
+      "description": "Closure cycles observed in the fixed apartment + sale scope. An exit is disappearance from observation, not a confirmed transaction.",
+      "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "options": {},
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT count(*)::int AS observed_exits FROM dashboard_public.exit_cycles WHERE deal = 'sale' AND category_memberships @> ARRAY['apartments']::text[] AND closed_at >= now() - INTERVAL '30 days'"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Median observed duration · days",
+      "description": "Time from first observation of the closure cycle to disappearance. Observation may begin after OLX publication; active listings are excluded.",
+      "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
+      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "d" }, "overrides": [] },
+      "options": {},
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT count(*)::int AS exit_sample, round(percentile_cont(0.5) WITHIN GROUP (ORDER BY days_listed))::int AS median_observed_days FROM dashboard_public.exit_cycles WHERE deal = 'sale' AND category_memberships @> ARRAY['apartments']::text[] AND closed_at >= now() - INTERVAL '30 days' AND days_listed IS NOT NULL"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Reopened cycles · 30 days",
+      "description": "A reopened article creates a new cycle; a preceding closure remains in historical exit counts.",
+      "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "options": {},
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT count(*)::int AS reopened_cycles FROM dashboard_public.exit_cycles WHERE deal = 'sale' AND category_memberships @> ARRAY['apartments']::text[] AND closed_at >= now() - INTERVAL '30 days' AND reopened_cycle"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "table",
+      "title": "Recently observed apartment-sale exits",
+      "description": "Last asking price is resolved at closure time and is not a sale price. NULL means the evidence boundary was not a valid priced state.",
+      "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 4 },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT title, url, closed_at, days_listed, last_asking_price, last_asking_ppm2, rooms, sqm, reopened_cycle\nFROM dashboard_public.exit_cycles\nWHERE deal = 'sale' AND category_memberships @> ARRAY['apartments']::text[] AND closed_at >= now() - INTERVAL '30 days'\nORDER BY closed_at DESC LIMIT 50"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "table",
+      "title": "Observed exits by duration",
+      "description": "Duration buckets describe time observed by this tracker and should not be read as seller or transaction behavior.",
+      "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT CASE WHEN days_listed <= 7 THEN '0–7 days' WHEN days_listed <= 14 THEN '8–14 days' WHEN days_listed <= 30 THEN '15–30 days' WHEN days_listed <= 60 THEN '31–60 days' ELSE '60+ days' END AS duration_bucket, count(*)::int AS observed_exits\nFROM dashboard_public.exit_cycles\nWHERE deal = 'sale' AND category_memberships @> ARRAY['apartments']::text[] AND closed_at >= now() - INTERVAL '30 days' AND days_listed IS NOT NULL\nGROUP BY 1 ORDER BY min(days_listed)"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "Exit freshness and scope",
+      "description": "The exit view is historical and depends on completed analytics; current freshness is shown for the tracked apartment search category.",
+      "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 13 },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT category, configured_searches, last_success_at, CASE WHEN last_success_at IS NULL THEN 'Unknown' WHEN last_success_at < now() - INTERVAL '26 hours' THEN 'Stale' ELSE 'Current' END AS freshness\nFROM dashboard_public.freshness WHERE category = 'apartments'"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 41,
+  "templating": { "list": [] },
+  "time": { "from": "now-30d", "to": "now" },
+  "timezone": "Europe/Sarajevo",
+  "title": "OLX Public · Observed Apartment Exits",
+  "uid": "olx-public-exits",
+  "version": 1
+}

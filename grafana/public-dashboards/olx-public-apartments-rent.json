@@ -1,0 +1,150 @@
+{
+  "annotations": { "list": [] },
+  "editable": false,
+  "graphTooltip": 0,
+  "links": [
+    {
+      "title": "Public Home",
+      "type": "link",
+      "url": "/public-dashboards/1a2b3c4d5e6f708192a3b4c5d6e7f801"
+    },
+    {
+      "title": "Apartments for sale",
+      "type": "link",
+      "url": "/public-dashboards/4d5e6f708192a3b4c5d6e7f80192a3b"
+    },
+    {
+      "title": "Observed exits",
+      "type": "link",
+      "url": "/public-dashboards/3c4d5e6f708192a3b4c5d6e7f80192a3"
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Observed active apartment rental listings",
+      "description": "Distinct article IDs in the fixed apartments + rent scope; active means last seen within 14 days and not closed.",
+      "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "options": {},
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT count(DISTINCT article_id)::int AS observed_active_listings FROM dashboard_public.current_listings WHERE deal = 'rent' AND category_memberships @> ARRAY['apartments']::text[]"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Median asking rent · period as listed",
+      "description": "Median rental asking price. The collected evidence does not establish a monthly lease period, so no KM/month label is used.",
+      "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
+      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "currencyBAM" }, "overrides": [] },
+      "options": {},
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT count(*)::int AS priced_sample, round(percentile_cont(0.5) WITHIN GROUP (ORDER BY price))::int AS median_asking_km FROM dashboard_public.current_listings WHERE deal = 'rent' AND category_memberships @> ARRAY['apartments']::text[] AND price > 0"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "New active rentals · 7 days",
+      "description": "First observed in the window, deduplicated by article ID; renewals are excluded.",
+      "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "options": {},
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT count(DISTINCT article_id)::int AS new_active_listings FROM dashboard_public.current_listings WHERE deal = 'rent' AND category_memberships @> ARRAY['apartments']::text[] AND first_seen >= now() - INTERVAL '7 days'"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "table",
+      "title": "Rent asking summaries by rooms",
+      "description": "Rental prices by room label with sample sizes. Unknown room values are retained as unknown rather than discarded.",
+      "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "fieldConfig": { "defaults": { "unit": "currencyBAM" }, "overrides": [] },
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT COALESCE(rooms, '(unknown)') AS rooms, count(*)::int AS priced_sample, round(percentile_cont(0.5) WITHIN GROUP (ORDER BY price))::int AS median_asking_km\nFROM dashboard_public.current_listings\nWHERE deal = 'rent' AND category_memberships @> ARRAY['apartments']::text[] AND price > 0\nGROUP BY 1 ORDER BY 1"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "table",
+      "title": "Fresh rental listings",
+      "description": "The newest active rental observations in the fixed apartment scope.",
+      "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT title, url, neighborhood, rooms, sqm, price, first_seen, renewed_at, last_seen\nFROM dashboard_public.current_listings\nWHERE deal = 'rent' AND category_memberships @> ARRAY['apartments']::text[]\nORDER BY first_seen DESC LIMIT 50"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "Recent rental reductions",
+      "description": "Resolved valid-to-valid asking-price reductions; historical event time and current availability are separate fields.",
+      "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "fieldConfig": { "defaults": { "unit": "currencyBAM" }, "overrides": [] },
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT title, url, neighborhood, rooms, sqm, prior_price, new_price, reduction_km, reduction_pct, event_at, currently_observed\nFROM dashboard_public.price_reductions\nWHERE deal = 'rent' AND category_memberships @> ARRAY['apartments']::text[] AND event_at >= now() - INTERVAL '7 days'\nORDER BY event_at DESC LIMIT 50"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "Freshness for apartment rentals",
+      "description": "A missing completed success is Unknown. This reflects the latest successful scrape, not a visitor refresh.",
+      "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 12 },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT category, configured_searches, last_success_at, CASE WHEN last_success_at IS NULL THEN 'Unknown' WHEN last_success_at < now() - INTERVAL '26 hours' THEN 'Stale' ELSE 'Current' END AS freshness\nFROM dashboard_public.freshness WHERE category = 'apartments'"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 41,
+  "templating": { "list": [] },
+  "time": { "from": "now-30d", "to": "now" },
+  "timezone": "Europe/Sarajevo",
+  "title": "OLX Public · Apartments for Rent",
+  "uid": "olx-public-apartments-rent",
+  "version": 1
+}

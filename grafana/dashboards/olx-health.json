@@ -78,9 +78,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -149,9 +147,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -220,9 +216,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -291,9 +285,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -354,9 +346,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -612,9 +602,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -747,9 +735,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -828,9 +814,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -899,9 +883,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -970,9 +952,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -1037,9 +1017,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -1092,9 +1070,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -1145,9 +1121,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -1173,7 +1147,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 55
+        "y": 56
       },
       "panels": [],
       "id": 20
@@ -1213,7 +1187,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 56
+        "y": 57
       },
       "title": "Errors grouped — last 7 d",
       "description": "scrape_runs error messages with digits masked to '#', so one recurring bug (markup change, timeout on one search) separates from many transient ones.",
@@ -1223,9 +1197,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -1282,7 +1254,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 66
+        "y": 67
       },
       "title": "Run duration over time",
       "description": "Average (blue) and worst-case (orange) runtime per hour across all searches. A gradual creep is the leading indicator of OLX throttling before runs start failing.",
@@ -1350,9 +1322,7 @@
         "colorMode": "value",
         "graphMode": "none",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -1397,9 +1367,7 @@
         "colorMode": "value",
         "graphMode": "none",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -1444,9 +1412,7 @@
         "colorMode": "value",
         "graphMode": "none",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -1491,9 +1457,7 @@
         "colorMode": "value",
         "graphMode": "none",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -1511,8 +1475,8 @@
           "refId": "A"
         }
       ]
-    }
-    ,{
+    },
+    {
       "id": 28,
       "title": "Per-search freshness & phases",
       "type": "table",
@@ -1521,7 +1485,7 @@
         "h": 12,
         "w": 24,
         "x": 0,
-        "y": 55
+        "y": 76
       },
       "datasource": {
         "type": "postgres",
@@ -1570,9 +1534,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -1585,7 +1547,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH searches AS (\n  SELECT ss.search_key, ss.name, COALESCE(ss.category, '(none)') AS category, ss.url,\n         ss.last_scraped_at,\n         latest.status AS latest_status, latest.started_at AS latest_started_at,\n         latest.finished_at AS latest_finished_at, latest.is_complete AS latest_is_complete,\n         latest.error AS latest_error, latest.failure_reason, latest.truncation_reason,\n         success.finished_at AS last_success_at\n  FROM saved_searches ss\n  LEFT JOIN LATERAL (\n    SELECT r.status, r.started_at, r.finished_at, r.is_complete, r.error,\n           r.failure_reason, r.truncation_reason\n    FROM scrape_runs r\n    WHERE r.search_key = ss.search_key\n    ORDER BY r.id DESC\n    LIMIT 1\n  ) latest ON TRUE\n  LEFT JOIN LATERAL (\n    SELECT r.finished_at\n    FROM scrape_runs r\n    WHERE r.search_key = ss.search_key\n      AND r.status = 'ok'\n      AND r.is_complete = TRUE\n      AND r.finished_at IS NOT NULL\n    ORDER BY r.finished_at DESC\n    LIMIT 1\n  ) success ON TRUE\n  WHERE ss.category IS NULL OR ss.category = ANY (ARRAY[${category:sqlstring}])\n)\nSELECT name, category, search_key,\n       CASE\n         WHEN last_success_at IS NULL THEN 'never successful'\n         WHEN last_success_at < now() - INTERVAL '6 hours' THEN 'stale'\n         WHEN latest_status = 'running' THEN 'running'\n         WHEN latest_status = 'error' THEN 'failed'\n         WHEN latest_is_complete = FALSE THEN 'incomplete'\n         ELSE 'ok'\n       END AS phase,\n       round(EXTRACT(EPOCH FROM (now() - last_success_at)) / 60)::int AS success_age_min,\n       latest_status, latest_is_complete, latest_started_at, latest_finished_at,\n       last_success_at, failure_reason, truncation_reason,\n       left(COALESCE(latest_error, ''), 240) AS latest_error, url\nFROM searches\nORDER BY last_success_at ASC NULLS FIRST, latest_started_at DESC NULLS LAST",
+          "rawSql": "WITH searches AS (\n  SELECT ss.search_key, ss.name, COALESCE(ss.category, '(none)') AS category, ss.url,\n         ss.last_scraped_at,\n         latest.status AS latest_status, latest.started_at AS latest_started_at,\n         latest.finished_at AS latest_finished_at, latest.is_complete AS latest_is_complete,\n         latest.error AS latest_error, latest.failure_reason, latest.truncation_reason,\n         success.finished_at AS last_success_at\n  FROM saved_searches ss\n  LEFT JOIN LATERAL (\n    SELECT r.status, r.started_at, r.finished_at, r.is_complete, r.error,\n           r.failure_reason, r.truncation_reason\n    FROM scrape_runs r\n    WHERE r.search_key = ss.search_key\n    ORDER BY r.id DESC\n    LIMIT 1\n  ) latest ON TRUE\n  LEFT JOIN LATERAL (\n    SELECT r.finished_at\n    FROM scrape_runs r\n    WHERE r.search_key = ss.search_key\n      AND r.status = 'ok'\n      AND r.is_complete = TRUE\n      AND r.finished_at IS NOT NULL\n    ORDER BY r.finished_at DESC\n    LIMIT 1\n  ) success ON TRUE\n  WHERE ss.category IS NULL OR ss.category = ANY (ARRAY[${category:sqlstring}])\n)\nSELECT name, category, search_key,\n       CASE\n         WHEN last_success_at IS NULL THEN 'never successful'\n         WHEN last_success_at < now() - INTERVAL '26 hours' THEN 'stale'\n         WHEN latest_status = 'running' THEN 'running'\n         WHEN latest_status = 'error' THEN 'failed'\n         WHEN latest_is_complete = FALSE THEN 'incomplete'\n         ELSE 'ok'\n       END AS phase,\n       round(EXTRACT(EPOCH FROM (now() - last_success_at)) / 60)::int AS success_age_min,\n       latest_status, latest_is_complete, latest_started_at, latest_finished_at,\n       last_success_at, failure_reason, truncation_reason,\n       left(COALESCE(latest_error, ''), 240) AS latest_error, url\nFROM searches\nORDER BY last_success_at ASC NULLS FIRST, latest_started_at DESC NULLS LAST",
           "refId": "A"
         }
       ]
@@ -1599,7 +1561,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 67
+        "y": 88
       },
       "datasource": {
         "type": "postgres",
@@ -1648,9 +1610,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -1671,11 +1631,7 @@
   ],
   "refresh": "5m",
   "schemaVersion": 39,
-  "tags": [
-    "olx",
-    "scraper",
-    "ops"
-  ],
+  "tags": ["olx", "scraper", "ops"],
   "templating": {
     "list": [
       {
