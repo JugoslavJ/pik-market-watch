@@ -172,6 +172,7 @@ services:
       RAW_RESPONSE_RETENTION_DAYS: ${RAW_RESPONSE_RETENTION_DAYS:-30}
       ANALYTICS_REBUILD_MAX_DAYS: ${ANALYTICS_REBUILD_MAX_DAYS:-31}
       ABANDONED_RUN_AFTER_MINUTES: ${ABANDONED_RUN_AFTER_MINUTES:-180}
+      HEALTH_BIND: ${HEALTH_BIND:-0.0.0.0}
       # NOTE: do NOT add RUN_ONCE here. Combined with this service's restart
       # policy, a finished one-shot container would be relaunched forever
       # (= endless scrape loop). For one-off runs use:
@@ -251,11 +252,11 @@ services:
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
       - ./tls:/certs:ro                        # self-signed HTTPS cert (scripts/generate-grafana-cert.sh)
     ports:
-      # host_ip empty ⇒ all interfaces (historic default); set GRAFANA_BIND in
-      # .env to a LAN/WireGuard IP to keep dashboards off the public internet.
+      # Keep the host-side listener loopback-only unless an explicit LAN/VPN
+      # address is configured in .env.
       - target: 3000
         published: "3000"
-        host_ip: ${GRAFANA_BIND:-0.0.0.0}
+        host_ip: ${GRAFANA_BIND:-127.0.0.1}
         protocol: tcp
         mode: host
     mem_limit: 768m
@@ -328,6 +329,7 @@ volumes:
 networks:
   # Segmentation: db joins ONLY `backend`, so anything on the default network
   # (today's and future containers alike) cannot resolve or reach Postgres.
-  # Not marked `internal:` on purpose — clients need ordinary egress
-  # (olx.ba from the scraper, SMTP from Grafana's optional alerts).
+  # Scraper and Grafana are dual-homed onto `default` for egress; the database
+  # and backend-only jobs use this isolated network for PostgreSQL access.
   backend:
+    internal: true

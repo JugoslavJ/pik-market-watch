@@ -22,10 +22,22 @@
 # No client-controlled input is ever evaluated: the dump path is fixed and
 # the archive must pass pg_restore -l and contain the listings data.
 set -eu
+umask 077
 
 REPO_DIR="${OLX_REPO_DIR:-$HOME/pik-market-watch}"
 BACKUP_DIR="$REPO_DIR/backups"
 MIN_BYTES=20000
+MAX_BYTES="${OLX_SYNC_MAX_BYTES:-536870912}"
+case "$MAX_BYTES" in
+  ''|*[!0-9]*)
+    echo "RESTORE_ERROR: OLX_SYNC_MAX_BYTES must be a positive integer" >&2
+    exit 1
+    ;;
+esac
+if [ "$MAX_BYTES" -le 0 ]; then
+  echo "RESTORE_ERROR: OLX_SYNC_MAX_BYTES must be greater than zero" >&2
+  exit 1
+fi
 # Restore as the least-privileged OWNING role (db/init/zz-database-roles.sh):
 # it must own the restored objects. Names come from .env.
 app_user="$(sed -n 's/^POSTGRES_APP_USER=//p' "$REPO_DIR/.env" 2>/dev/null | tr -d '\r')"
@@ -36,6 +48,27 @@ reader_user="${reader_user:-olx_reader}"
 # $app_user does not, so the schema reset below runs as this role.
 boot_user="$(sed -n 's/^POSTGRES_USER=//p' "$REPO_DIR/.env" 2>/dev/null | tr -d '\r')"
 boot_user="${boot_user:-olx}"
+db_name="$(sed -n 's/^POSTGRES_DB=//p' "$REPO_DIR/.env" 2>/dev/null | tr -d '\r')"
+db_name="${db_name:-olx}"
+
+validate_identifier() {
+  name="$1"
+  value="$2"
+  case "$value" in
+    ''|[!A-Za-z_]*|*[!A-Za-z0-9_]*)
+      echo "RESTORE_ERROR: $name is not a safe PostgreSQL identifier" >&2
+      exit 1
+      ;;
+  esac
+  if [ "${#value}" -gt 63 ]; then
+    echo "RESTORE_ERROR: $name exceeds PostgreSQL's 63-character identifier limit" >&2
+    exit 1
+  fi
+}
+validate_identifier POSTGRES_APP_USER "$app_user"
+validate_identifier POSTGRES_READER_USER "$reader_user"
+validate_identifier POSTGRES_USER "$boot_user"
+validate_identifier POSTGRES_DB "$db_name"
 
 was_running=0   # EXIT trap restarts the scraper if we stop it and then fail
 restore_ok=0
@@ -49,6 +82,7 @@ if ! mkdir "$LOCK" 2>/dev/null; then
 fi
 on_exit() {
   rmdir "$LOCK" 2>/dev/null || :
+  rm -f "$incoming" "$incoming_partial"
   if [ "$was_running" = "1" ] && [ "$restore_ok" != "1" ]; then
     docker compose start scraper >/dev/null 2>&1 || :
     echo "RESTORE_ERROR: aborted after stopping the scraper - restarted it" >&2
@@ -56,13 +90,22 @@ on_exit() {
 }
 trap on_exit EXIT
 incoming="$BACKUP_DIR/olx-sync-incoming.dump"
-cat > "$incoming"
+incoming_partial="$incoming.partial"
+rm -f "$incoming" "$incoming_partial"
+# Read only one byte beyond the configured limit so an untrusted sender cannot
+# fill the restore disk with an arbitrarily large stream.
+head -c "$((MAX_BYTES + 1))" > "$incoming_partial" || :
 
-size=$(stat -c %s "$incoming")
+size=$(stat -c %s "$incoming_partial")
+if [ "$size" -gt "$MAX_BYTES" ]; then
+  echo "RESTORE_ERROR: archive exceeds maximum size ($MAX_BYTES bytes)" >&2
+  exit 1
+fi
 if [ "$size" -lt "$MIN_BYTES" ]; then
   echo "RESTORE_ERROR: archive too small ($size bytes) - transfer truncated?" >&2
   exit 1
 fi
+mv -f "$incoming_partial" "$incoming"
 
 if ! docker compose exec -T db pg_restore -l /backups/olx-sync-incoming.dump >/dev/null 2>&1; then
   echo "RESTORE_ERROR: archive failed pg_restore integrity check" >&2
@@ -144,7 +187,7 @@ fi
 # superuser: it owns the schema itself, which $app_user does not. Ownership is
 # transferred to $app_user afterwards - the dump carries schema-level entries
 # (COMMENT ON SCHEMA, schema ACLs) that only the owner may execute.
-if ! docker compose exec -T db psql -U "$boot_user" -d olx -q -c "
+if ! docker compose exec -T db psql -U "$boot_user" -d "$db_name" -q -c "
        DROP SCHEMA public CASCADE;
        CREATE SCHEMA public;
        ALTER SCHEMA public OWNER TO \"$app_user\";
@@ -161,7 +204,7 @@ restore_failed=0
 # --no-owner: belt-and-braces behind the audit above — a no-op while every
 # entry targets $app_user; if anything ever slips through it degrades to
 # "object owned by the restoring role" instead of failing the whole sync.
-if ! docker compose exec -T db pg_restore -U "$app_user" -d olx --clean --if-exists --no-owner \
+if ! docker compose exec -T db pg_restore -U "$app_user" -d "$db_name" --clean --if-exists --no-owner \
        --single-transaction --use-list=/tmp/toc.use /backups/olx-sync-incoming.dump; then
   restore_failed=1
 fi
@@ -169,7 +212,7 @@ fi
 if [ "$restore_failed" = "1" ]; then
   if [ -n "$prev" ] && build_toc "/backups/$(basename "$prev")" /tmp/toc.prev; then
     echo "RESTORE_ERROR: pg_restore failed - rolling back to previous snapshot $(basename "$prev")" >&2
-    if docker compose exec -T db pg_restore -U "$app_user" -d olx --clean --if-exists --no-owner \
+    if docker compose exec -T db pg_restore -U "$app_user" -d "$db_name" --clean --if-exists --no-owner \
            --single-transaction --use-list=/tmp/toc.prev "/backups/$(basename "$prev")"; then
       echo "RESTORE_ERROR: rollback finished - instance is serving the previous snapshot" >&2
     else
@@ -184,7 +227,7 @@ restore_ok=1
 
 # Belt & braces: FUTURE tables created by migrations must stay readable by
 # Grafana even if some future dump ever lacks the app-role defaults.
-docker compose exec -T db psql -U "$app_user" -d olx -q \
+docker compose exec -T db psql -U "$app_user" -d "$db_name" -q \
   -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO \"$reader_user\";
       ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON SEQUENCES TO \"$reader_user\";" \
   || echo "RESTORE_WARN: could not re-assert default privileges for the reader (non-fatal)" >&2

@@ -9,6 +9,7 @@ const {
   readBodyCapped,
   fetchJson,
   fetchSearchPage,
+  fetchListing,
   parseRetryAfter,
 } = require("../../src/api");
 
@@ -78,6 +79,76 @@ test("rate headers are null-aware when upstream omits them", async () => {
     );
     assert.equal(result.remaining, null);
     assert.equal(result.limit, null);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test("off-origin API targets are rejected before fetch", async () => {
+  const originalFetch = global.fetch;
+  let called = false;
+  global.fetch = async () => {
+    called = true;
+    return jsonResponse({});
+  };
+  try {
+    await assert.rejects(
+      () => fetchJson(new URL("https://evil.example/api/search"), 100),
+      (error) => error.name === "ApiError" && error.kind === "origin",
+    );
+    assert.equal(called, false);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test("API requests fail closed on redirects", async () => {
+  const originalFetch = global.fetch;
+  let options;
+  global.fetch = async (_url, requestOptions) => {
+    options = requestOptions;
+    return jsonResponse({ ok: true });
+  };
+  try {
+    await fetchJson(new URL("https://olx.ba/api/search"), 100);
+    assert.equal(options.redirect, "error");
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test("listing IDs must be positive safe integers", async () => {
+  for (const value of ["abc", -1, 0, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+    await assert.rejects(
+      () => fetchListing(value, 100),
+      (error) => error.name === "ApiError" && error.kind === "input",
+    );
+  }
+});
+
+test("valid listing ID is used in the detail URL", async () => {
+  const originalFetch = global.fetch;
+  let requested;
+  global.fetch = async (url) => {
+    requested = String(url);
+    return jsonResponse({ id: 42 });
+  };
+  try {
+    assert.deepEqual(await fetchListing("42", 100), { id: 42 });
+    assert.equal(requested, "https://olx.ba/api/listings/42");
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test("mismatched returned listing ID still fails", async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async () => jsonResponse({ id: 43 });
+  try {
+    await assert.rejects(
+      () => fetchListing(42, 100),
+      /listing 42: unexpected payload shape/,
+    );
   } finally {
     global.fetch = originalFetch;
   }

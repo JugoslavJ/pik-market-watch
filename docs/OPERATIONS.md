@@ -13,7 +13,7 @@ bash scripts/generate-grafana-cert.sh
 docker compose up -d --build
 ```
 
-`POSTGRES_PASSWORD`, `POSTGRES_APP_PASSWORD`, `POSTGRES_READER_PASSWORD`, `GRAFANA_ADMIN_PASSWORD`, and `GRAFANA_SECRET_KEY` must be changed from example values. Application and reader passwords are embedded in a PostgreSQL URL, so use URL-safe values such as `openssl rand -hex 24`.
+`.env.example` intentionally leaves `POSTGRES_PASSWORD`, `POSTGRES_APP_PASSWORD`, `POSTGRES_READER_PASSWORD`, `GRAFANA_ADMIN_PASSWORD`, and `GRAFANA_SECRET_KEY` blank. Set all five before starting or deploying; the deployment preflight rejects blank and legacy `change-me*` values. Application and reader passwords are embedded in a PostgreSQL URL, so use URL-safe values such as `openssl rand -hex 24`.
 
 | Setting                                             |                Default | Consumer                                                                                                                         |
 | --------------------------------------------------- | ---------------------: | -------------------------------------------------------------------------------------------------------------------------------- |
@@ -24,7 +24,8 @@ docker compose up -d --build
 | `GRAFANA_SECRET_KEY`                                |               required | Grafana encryption for stored datasource secrets.                                                                                |
 | `GRAFANA_CARTO_API_KEY`                             |                  unset | CARTO basemap key for Grafana geomaps; create one at [carto.com/basemaps/apikey](https://carto.com/basemaps/apikey).             |
 | `GRAFANA_CARTO_VECTOR_STYLE`                        |          `dark-matter` | Authenticated CARTO MapLibre vector style: `dark-matter`, `positron`, or `voyager`; recreate Grafana after changing it.          |
-| `GRAFANA_BIND`                                      |              `0.0.0.0` | Host interface for Grafana port 3000. Bind a LAN or VPN address when appropriate.                                                |
+| `GRAFANA_BIND`                                      |          `127.0.0.1` | Host interface for Grafana port 3000. Set an explicit LAN/VPN/WireGuard address for remote access.                               |
+| `HEALTH_BIND`                                       |          `127.0.0.1` bare-metal / `0.0.0.0` Compose | Health listener bind address. Compose needs all-interface binding inside the container; the published host port remains loopback-only. |
 | `SCRAPE_INTERVAL_MINUTES`                           |                  `720` | Scheduled scraper cadence when the `scrape` profile is enabled.                                                                  |
 | `DETAIL_REFRESH_DAYS`                               |                    `7` | Age at which successful detail evidence becomes eligible for refresh.                                                            |
 | `DETAIL_JOB_LEASE_MINUTES`                          |                   `30` | Database lease duration for an in-flight durable detail job (maximum 24 hours).                                                  |
@@ -144,7 +145,7 @@ After success, restart the scheduled scraper with
 
 ## Backup and restore
 
-The `db-backup` service makes a custom-format PostgreSQL dump and a compressed Grafana-volume archive in `./backups/`, verifies each archive, and checks hourly whether a fresh database dump exists. Keep a copy of this directory outside the host.
+The `db-backup` service makes a custom-format PostgreSQL dump and a compressed Grafana-volume archive in `./backups/`, verifies each archive, and checks hourly whether a fresh database dump exists. Each archive is written with owner-only permissions to a `.partial` name, verified, and atomically renamed to its final name. Interrupted or failed writes are removed; a previously verified same-day archive remains usable. Keep an encrypted copy of this directory outside the host and in a separate failure domain.
 
 To make an additional database dump:
 
@@ -182,11 +183,20 @@ pwsh -File scripts\sync-to-instance.ps1
 pwsh -File scripts\register-sync-task.ps1
 ```
 
-The restore endpoint receives and validates the archive, audits ownership, saves a rollback snapshot, pauses a running scraper, restores in a transaction, restores the prior snapshot on failure when available, reasserts reader defaults, and resumes the writer. Its `RESTORE_OK` or `RESTORE_ERROR` output is the protocol consumed by the PowerShell script. Do not use the sync key for an interactive shell.
+The restore endpoint receives and validates the archive, audits ownership, saves a rollback snapshot, pauses a running scraper, restores in a transaction, restores the prior snapshot on failure when available, reasserts reader defaults, and resumes the writer. Input is capped at `OLX_SYNC_MAX_BYTES` (default 512 MiB) and the temporary incoming file is removed on every exit path. Its `RESTORE_OK` or `RESTORE_ERROR` output is the protocol consumed by the PowerShell script. A holder of the restore SSH key has database-administrator-equivalent capability over application data, even though the key is restricted to a forced command and has no interactive shell; protect and rotate it accordingly.
+
+Recovery should be rehearsed periodically against a disposable PostgreSQL
+instance: verify representative data, expected tables, ownership, reader
+access, malformed/oversized input rejection, rollback, and writer restart.
 
 ## Deployment
 
-The GitHub Actions workflow tests pushes to `main` (except documentation/geography-only changes) and deploys successful main or manually dispatched runs. The deploy needs `OCI_HOST`, `OCI_USER`, and `OCI_SSH_PRIVATE_KEY`; `OCI_KNOWN_HOSTS` is recommended for strict host-key checking, and `DEPLOY_DIR` optionally overrides the remote checkout path.
+The GitHub Actions workflow tests pushes to `main` (except documentation/geography-only changes) and deploys successful main or manually dispatched runs. Deployment is restricted to the `main` ref and the protected GitHub `production` environment. Configure environment secrets `OCI_HOST`, `OCI_USER`, `OCI_SSH_PRIVATE_KEY`, and mandatory pinned `OCI_KNOWN_HOSTS`; optionally configure the `DEPLOY_DIR` repository variable. Set the production environment’s deployment branch rule to `main` and consider a required reviewer.
+
+CI builds the scraper image and runs the pinned Trivy action against its OS and
+application layers. Fixable HIGH/CRITICAL findings are currently reported
+without failing the workflow while the image baseline is tuned; revisit the
+policy after reviewing real findings.
 
 Before the first deployment, create the destination directory and its ignored local configuration: `.env`, `config/searches.json`, and `tls/grafana.crt` / `tls/grafana.key`. The workflow ships tracked files, maintains a remote tracked-file manifest, and removes only files that were previously tracked but are absent from the new revision. It never cleans ignored configuration, backups, TLS material, logs, or Docker volumes. `scripts/deploy-stack.sh` then checks required local secrets and certificates, runs the profile-only `migrator` job, starts the database/Grafana/backup services, restarts Grafana to reload provisioning, and waits for database and Grafana health. A failed migration exits before the dashboard is restarted.
 

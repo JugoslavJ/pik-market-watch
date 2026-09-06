@@ -25,11 +25,17 @@ done
 
 # Least-privilege DB roles + Grafana TLS material live only on the
 # machines (git-ignored): fail fast with fix instructions.
-for v in POSTGRES_APP_PASSWORD POSTGRES_READER_PASSWORD GRAFANA_SECRET_KEY; do
-  grep -q "^$v=." .env || {
-    echo "✗ Missing $v in $DEPLOY_DIR/.env (see docs/OPERATIONS.md §Database roles / §Exposing Grafana)."
-    exit 1
-  }
+for v in POSTGRES_PASSWORD POSTGRES_APP_PASSWORD POSTGRES_READER_PASSWORD \
+         GRAFANA_ADMIN_PASSWORD GRAFANA_SECRET_KEY; do
+  line=$(grep -E "^${v}=" .env | tail -n 1 || true)
+  value=${line#*=}
+  value=$(printf '%s' "$value" | tr -d '\r')
+  case "$value" in
+    ""|change-me*)
+      echo "✗ $v must be set to a non-example value in $DEPLOY_DIR/.env (see docs/OPERATIONS.md)."
+      exit 1
+      ;;
+  esac
 done
 # Non-fatal: without it the alert rule still evaluates & shows UI state, but
 # mail delivery stays inert on the placeholder recipient.

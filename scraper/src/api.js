@@ -70,6 +70,10 @@ function requestMetadata(url) {
   };
 }
 
+function trustedTarget(target) {
+  return target.origin === API_ORIGIN;
+}
+
 function errorContext(error, request, response, diagnostic) {
   error.requestMetadata = request;
   error.responseMetadata = response;
@@ -226,6 +230,14 @@ async function readBodyCapped(res, maxBytes) {
 async function fetchJson(url, timeoutMs, policy = {}) {
   const target = url instanceof URL ? url : new URL(String(url));
   const request = requestMetadata(target);
+  if (!trustedTarget(target)) {
+    throw errorContext(
+      new ApiError(`refusing API request to untrusted origin ${target.origin}`),
+      request,
+      null,
+      { kind: "origin", message: "API target origin is not trusted" },
+    );
+  }
   const maxAttempts = policy.maxAttempts ?? MAX_REQUEST_ATTEMPTS;
   const wait = policy.wait ?? sleep;
   const random = policy.random ?? Math.random;
@@ -237,6 +249,7 @@ async function fetchJson(url, timeoutMs, policy = {}) {
       res = await fetch(target, {
         headers: REQUEST_HEADERS,
         signal: AbortSignal.timeout(timeoutMs),
+        redirect: "error",
       });
     } catch (err) {
       if (attempt < maxAttempts) {
@@ -345,6 +358,22 @@ async function fetchJson(url, timeoutMs, policy = {}) {
   }
 }
 
+function validateListingId(articleId) {
+  if (
+    (typeof articleId !== "number" &&
+      !(typeof articleId === "string" && /^\d+$/.test(articleId.trim()))) ||
+    !Number.isSafeInteger(Number(articleId)) ||
+    Number(articleId) <= 0
+  ) {
+    throw new ApiError(
+      `listing id must be a positive safe integer; received ${JSON.stringify(articleId)}`,
+      null,
+      { kind: "input" },
+    );
+  }
+  return Number(articleId);
+}
+
 /**
  * Fetch one search-result page.
  * @returns {Promise<{items:Array, meta:{total:number,last_page:number,current_page:number},
@@ -386,13 +415,14 @@ async function fetchListing(
   timeoutMs,
   { includeMetadata = false, rateBudget } = {},
 ) {
+  const id = validateListingId(articleId);
   const result = await fetchJson(
-    `${API_ORIGIN}/api/listings/${articleId}`,
+    `${API_ORIGIN}/api/listings/${id}`,
     timeoutMs,
     { rateBudget },
   );
   const { body } = result;
-  if (!body || typeof body !== "object" || body.id !== Number(articleId)) {
+  if (!body || typeof body !== "object" || body.id !== id) {
     const error = errorContext(
       new ApiError(`listing ${articleId}: unexpected payload shape`),
       result.requestMetadata,
@@ -537,6 +567,7 @@ module.exports = {
   retryDelay,
   readBodyCapped,
   fetchJson,
+  validateListingId,
   toApiSearchUrl,
   fetchSearchPage,
   fetchListing,

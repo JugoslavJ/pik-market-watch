@@ -81,7 +81,9 @@ if ($LASTEXITCODE -ne 0) { throw "scrape failed (exit $LASTEXITCODE) - instance 
 Log 'dumping database...'
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $dumpName = "olx-sync-$stamp.dump"
-docker compose exec -T db pg_dump -U olx -Fc -f "/backups/$dumpName" olx
+# Read the Compose-configured bootstrap role and database inside the container;
+# this keeps sync aligned with POSTGRES_USER/POSTGRES_DB overrides in .env.
+docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -Fc -f "$1" "$POSTGRES_DB"' sh "/backups/$dumpName"
 if ($LASTEXITCODE -ne 0) { throw "pg_dump failed (exit $LASTEXITCODE)" }
 $dump = Join-Path $root "backups/$dumpName"
 if ((Get-Item $dump).Length -lt 20000) { throw "dump suspiciously small - aborting" }

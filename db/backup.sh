@@ -9,6 +9,7 @@
 # - prunes archives older than BACKUP_RETENTION_DAYS
 
 set -u
+umask 077
 
 BACKUP_DIR=/backups
 GRAFANA_DIR=/grafana-data
@@ -16,6 +17,12 @@ RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-14}
 DAY=86400
 
 echo "$(date -u '+%F %T') backup loop started (retention: ${RETENTION_DAYS} days)"
+
+cleanup_partials() {
+  rm -f "$BACKUP_DIR"/*.partial
+}
+trap 'cleanup_partials; exit 143' INT TERM HUP
+trap cleanup_partials EXIT
 
 while true; do
   newest=$(ls -1t "$BACKUP_DIR"/olx-*.dump 2>/dev/null | head -n 1)
@@ -29,32 +36,38 @@ while true; do
     echo "$(date -u '+%F %T') newest archive younger than 24 h — skipping"
   else
     out="$BACKUP_DIR/olx-$(date +%Y%m%d).dump"
+    partial="$out.partial"
     echo "$(date -u '+%F %T') dumping -> $out"
-    if pg_dump -Fc -f "$out"; then
-      if pg_restore -l "$out" >/dev/null 2>&1; then
+    rm -f "$partial"
+    if pg_dump -Fc -f "$partial"; then
+      if pg_restore -l "$partial" >/dev/null 2>&1; then
+        mv -f "$partial" "$out"
         echo "$(date -u '+%F %T') OK ($(du -h "$out" | cut -f1))"
       else
         echo "$(date -u '+%F %T') archive failed verification — removing"
-        rm -f "$out"
+        rm -f "$partial"
       fi
     else
       echo "$(date -u '+%F %T') pg_dump FAILED — removing partial file"
-      rm -f "$out"
+      rm -f "$partial"
     fi
 
     # ── Grafana state volume (users, prefs, UI-made dashboard edits) ──────────
     gtar="$BACKUP_DIR/grafana-$(date +%Y%m%d).tar.gz"
+    gpartial="$gtar.partial"
     echo "$(date -u '+%F %T') archiving grafana volume -> $gtar"
-    if tar -czf "$gtar" -C "$GRAFANA_DIR" . ; then
-      if tar -tzf "$gtar" >/dev/null 2>&1; then
+    rm -f "$gpartial"
+    if tar -czf "$gpartial" -C "$GRAFANA_DIR" . ; then
+      if tar -tzf "$gpartial" >/dev/null 2>&1; then
+        mv -f "$gpartial" "$gtar"
         echo "$(date -u '+%F %T') OK ($(du -h "$gtar" | cut -f1))"
       else
         echo "$(date -u '+%F %T') grafana archive failed verification — removing"
-        rm -f "$gtar"
+        rm -f "$gpartial"
       fi
     else
       echo "$(date -u '+%F %T') grafana tar FAILED — removing partial file"
-      rm -f "$gtar"
+      rm -f "$gpartial"
     fi
 
     if [ "$RETENTION_DAYS" -gt 0 ]; then

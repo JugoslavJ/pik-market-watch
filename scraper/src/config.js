@@ -180,6 +180,7 @@ module.exports = {
     min: 1,
     max: 65535,
   }),
+  healthBind: (process.env.HEALTH_BIND || "127.0.0.1").trim() || "127.0.0.1",
   maxGeoFetches: integer("MAX_GEO_FETCHES", process.env.MAX_GEO_FETCHES, 25), // /api/listings detail calls per run
   detailRefreshDays: integer(
     "DETAIL_REFRESH_DAYS",

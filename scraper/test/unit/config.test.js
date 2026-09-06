@@ -163,6 +163,29 @@ test("numeric configuration enforces bounded ports and positive intervals", () =
   runConfigFailure({ SCRAPE_INTERVAL_MINUTES: "-1" });
 });
 
+test("health bind defaults to loopback and accepts an explicit bind", () => {
+  const script = `
+    const cfg = require(${JSON.stringify(CONFIG_PATH)});
+    process.stdout.write(cfg.healthBind);
+  `;
+  const base = { ...process.env, SEARCHES_FILE: "" };
+  delete base.HEALTH_BIND;
+  assert.equal(
+    execFileSync(process.execPath, ["-e", script], {
+      env: base,
+      encoding: "utf8",
+    }),
+    "127.0.0.1",
+  );
+  assert.equal(
+    execFileSync(process.execPath, ["-e", script], {
+      env: { ...base, HEALTH_BIND: "0.0.0.0" },
+      encoding: "utf8",
+    }),
+    "0.0.0.0",
+  );
+});
+
 test("migration startup fallback accepts explicit boolean values", () => {
   const script = `
     const cfg = require(${JSON.stringify(CONFIG_PATH)});

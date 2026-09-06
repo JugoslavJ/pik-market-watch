@@ -35,4 +35,18 @@ function healthStatus(state, threshold) {
   return state.consecutiveFailures >= threshold ? 503 : 200;
 }
 
-module.exports = { USER_AGENT, sleep, computeMedian, makeLogger, healthStatus };
+function healthPayload(state) {
+  return {
+    ...state,
+    searches: state.searches.map(({ name }) => ({ name })),
+  };
+}
+
+module.exports = {
+  USER_AGENT,
+  sleep,
+  computeMedian,
+  makeLogger,
+  healthStatus,
+  healthPayload,
+};

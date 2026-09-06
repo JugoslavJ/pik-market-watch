@@ -8,7 +8,7 @@ const config = require("./config");
 const Db = require("./db");
 const applyMigrations = require("./migrate");
 const { scrapeSearch } = require("./scraper");
-const { makeLogger, healthStatus } = require("./util");
+const { makeLogger, healthStatus, healthPayload } = require("./util");
 
 const log = makeLogger("scraper");
 
@@ -20,7 +20,7 @@ const state = {
   failedRuns: 0,
   consecutiveFailures: 0, // fully-failed cycles in a row → drives /health 503
   intervalMinutes: config.intervalMinutes,
-  searches: config.searches.map((s) => ({ name: s.name, url: s.url })),
+  searches: config.searches.map((s) => ({ name: s.name })),
 };
 
 async function runAllUnlocked(db) {
@@ -150,16 +150,22 @@ async function runAll(db) {
 
 function startHealthServer() {
   const server = http.createServer((req, res) => {
+    if (req.url !== "/" && req.url !== "/health") {
+      res.writeHead(404, { "Cache-Control": "no-store" });
+      res.end();
+      return;
+    }
     // 200 normally; 503 once HEALTH_FAILURE_THRESHOLD consecutive cycles have
     // failed end-to-end — so `docker compose ps` shows unhealthy and uptime
     // probes can page. The JSON body is identical either way.
     res.writeHead(healthStatus(state, config.healthFailureThreshold), {
       "Content-Type": "application/json",
+      "Cache-Control": "no-store",
     });
-    res.end(JSON.stringify(state, null, 2));
+    res.end(JSON.stringify(healthPayload(state), null, 2));
   });
-  server.listen(config.healthPort, () =>
-    log(`health endpoint → http://localhost:${config.healthPort}`),
+  server.listen(config.healthPort, config.healthBind, () =>
+    log(`health endpoint → http://${config.healthBind}:${config.healthPort}`),
   );
   return server;
 }

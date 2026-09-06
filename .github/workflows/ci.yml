@@ -40,6 +40,19 @@ jobs:
       - run: npm run test:dashboards
       - run: npm test
       - run: npm run test:integration
+      # Build the same application image used by Compose, then scan its OS and
+      # language layers. Findings are reported first while the baseline is
+      # tuned; no credentials or production environment are available here.
+      - name: Build scraper image for vulnerability scanning
+        run: docker build --tag pik-market-watch-scraper:ci .
+      - name: Scan scraper image with Trivy
+        uses: aquasecurity/trivy-action@c1824fd6edce30d7ab345a9989de00bbd46ef284 # v0.34.0
+        with:
+          image-ref: pik-market-watch-scraper:ci
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
 
   # ── CD: deploy to the Oracle Compute instance ──────────────────────────────
   # Only runs after the suite passed for THIS exact commit, and only for pushes
@@ -51,8 +64,9 @@ jobs:
   deploy:
     needs: test
     if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' || github.event_name == 'push')
+    environment: production
     runs-on: ubuntu-latest
     timeout-minutes: 15   # instance stack is just db + grafana + backup
     concurrency:
@@ -71,34 +85,32 @@ jobs:
         with:
           persist-credentials: false   # archive + ssh only; drop the token
 
-      - name: Pin host key when OCI_KNOWN_HOSTS is set, else accept-new (TOFU)
+      - name: Require pinned SSH host key
         env:
           OCI_KNOWN_HOSTS: ${{ secrets.OCI_KNOWN_HOSTS }}
         run: |
+          set -euo pipefail
+          : "${OCI_KNOWN_HOSTS:?OCI_KNOWN_HOSTS must be configured in the production environment}"
           mkdir -p ~/.ssh
-          if [ -n "$OCI_KNOWN_HOSTS" ]; then
-            # tr -d '\r': secrets copied from Windows files carry CRLF; a
-            # trailing \r corrupts every entry and strict checking would
-            # fail with "Host key verification failed".
-            printf '%s\n' "$OCI_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
-            echo "SSH_STRICT=-o StrictHostKeyChecking=yes" >> "$GITHUB_ENV"
-            echo "host key pinned from OCI_KNOWN_HOSTS — strict checking armed"
-          else
-            echo "SSH_STRICT=-o StrictHostKeyChecking=accept-new" >> "$GITHUB_ENV"
-            echo "⚠ OCI_KNOWN_HOSTS unset — trust-on-first-use fallback (set the secret to pin the host key)"
-          fi
+          # tr -d '\r': secrets copied from Windows files carry CRLF; a
+          # trailing \r corrupts every entry and strict checking would fail.
+          printf '%s\n' "$OCI_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          echo "host key pinned from OCI_KNOWN_HOSTS — strict checking armed"
 
       - name: Write deploy key
         env:
           OCI_SSH_PRIVATE_KEY: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
         run: |
+          set -euo pipefail
+          : "${OCI_SSH_PRIVATE_KEY:?OCI_SSH_PRIVATE_KEY must be configured in the production environment}"
           mkdir -p ~/.ssh
           printf '%s\n' "$OCI_SSH_PRIVATE_KEY" > ~/.ssh/oci_deploy_key
           chmod 600 ~/.ssh/oci_deploy_key
 
       - name: Sync tracked files to the instance
         run: |
-          SSH="ssh -i ~/.ssh/oci_deploy_key ${SSH_STRICT:--o StrictHostKeyChecking=accept-new} -o BatchMode=yes -o ServerAliveInterval=30"
+          SSH="ssh -i ~/.ssh/oci_deploy_key -o UserKnownHostsFile=$HOME/.ssh/known_hosts -o StrictHostKeyChecking=yes -o BatchMode=yes -o ServerAliveInterval=30"
           $SSH "$OCI_USER@$OCI_HOST" "mkdir -p $DEPLOY_DIR"
           # Keep DEPLOY_DIR unquoted at the remote shell boundary so a
           # configured ~/path expands against the OCI user's home directory.
@@ -125,7 +137,7 @@ jobs:
 
       - name: Rebuild stack and wait for health
         run: |
-          ssh -i ~/.ssh/oci_deploy_key ${SSH_STRICT:--o StrictHostKeyChecking=accept-new} \
+          ssh -i ~/.ssh/oci_deploy_key -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o StrictHostKeyChecking=yes \
               -o BatchMode=yes -o ServerAliveInterval=30 \
               "$OCI_USER@$OCI_HOST" "DEPLOY_DIR=$DEPLOY_DIR GIT_SHA=${{ github.sha }} bash -s" \
             < scripts/deploy-stack.sh

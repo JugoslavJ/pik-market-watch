@@ -28,6 +28,7 @@ Retention and daily analytics can run independently of scraping with
 `docker compose --profile maintenance run --build --rm maintenance`.
 
 Grafana is at `https://localhost:3000`; the generated self-signed certificate causes a browser warning until you trust it. When the scrape profile runs, `http://localhost:9100` provides health/status JSON.
+Both published ports bind to `127.0.0.1` by default. Set `GRAFANA_BIND` explicitly for LAN/VPN access; `HEALTH_BIND` is loopback by default for bare-metal runs and is set to `0.0.0.0` only inside Compose so Docker can reach it.
 
 ## Configure searches
 
@@ -63,6 +64,7 @@ npm run lint:syntax
 
 - [Architecture and data model](docs/ARCHITECTURE.md)
 - [Operations](docs/OPERATIONS.md)
+- [Security policy](SECURITY.md)
 - [Geographic data workflow](geo/README.md)
 - [Data provenance and licensing](DATA.md)
 

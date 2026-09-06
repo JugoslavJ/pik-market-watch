@@ -3,7 +3,7 @@
 // Pure function: state object + threshold in, status code out.
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { healthStatus } = require("../../src/util");
+const { healthStatus, healthPayload } = require("../../src/util");
 
 test("healthStatus: fresh scraper and healthy cycles → 200", () => {
   assert.equal(healthStatus({ consecutiveFailures: 0 }, 3), 200);
@@ -22,4 +22,13 @@ test("healthStatus: threshold reached → 503 so the container turns unhealthy",
 test("healthStatus: HEALTH_FAILURE_THRESHOLD=1 flips on the first bad cycle", () => {
   assert.equal(healthStatus({ consecutiveFailures: 0 }, 1), 200);
   assert.equal(healthStatus({ consecutiveFailures: 1 }, 1), 503);
+});
+
+test("healthPayload omits configured search URLs", () => {
+  const payload = healthPayload({
+    consecutiveFailures: 0,
+    searches: [{ name: "Apartments", url: "https://secret.example/search" }],
+  });
+  assert.deepEqual(payload.searches, [{ name: "Apartments" }]);
+  assert.equal(JSON.stringify(payload).includes("secret.example"), false);
 });
