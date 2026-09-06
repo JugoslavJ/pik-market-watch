@@ -136,6 +136,7 @@ services:
       DATABASE_URL: postgres://${POSTGRES_APP_USER:-olx_app}:${POSTGRES_APP_PASSWORD}@db:5432/${POSTGRES_DB:-olx}
       MIGRATIONS_ON_STARTUP: "0"
       RAW_RESPONSE_RETENTION_DAYS: ${RAW_RESPONSE_RETENTION_DAYS:-30}
+      ANALYTICS_REBUILD_MAX_DAYS: ${ANALYTICS_REBUILD_MAX_DAYS:-31}
     volumes:
       - ./db/init:/db/init:ro
     entrypoint: ["node", "src/maintenance-only.js"]
@@ -169,6 +170,7 @@ services:
       DETAIL_REFRESH_DAYS: ${DETAIL_REFRESH_DAYS:-7}
       DETAIL_JOB_LEASE_MINUTES: ${DETAIL_JOB_LEASE_MINUTES:-30}
       RAW_RESPONSE_RETENTION_DAYS: ${RAW_RESPONSE_RETENTION_DAYS:-30}
+      ANALYTICS_REBUILD_MAX_DAYS: ${ANALYTICS_REBUILD_MAX_DAYS:-31}
       ABANDONED_RUN_AFTER_MINUTES: ${ABANDONED_RUN_AFTER_MINUTES:-180}
       # NOTE: do NOT add RUN_ONCE here. Combined with this service's restart
       # policy, a finished one-shot container would be relaunched forever

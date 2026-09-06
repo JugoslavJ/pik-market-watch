@@ -3,8 +3,7 @@
 //   A. fresh database — applies everything, second pass is a clean no-op
 //   B. pre-squash volume — schema_migrations records retired filenames while
 //      the current migration set is a clean no-op
-//   C. tracker-unaware volume — hand-created early tables are upgraded in
-//      place by the self-heal block in 01-schema.sql
+//   C. unsupported legacy databases fail without mutating their data
 const fs = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
@@ -35,6 +34,75 @@ const currentMigrations = fs
   .readdirSync(FULL_DIR)
   .filter((file) => file.endsWith(".sql"))
   .sort();
+
+needsDb(
+  "baseline: Docker-style initialization can be adopted by the runner",
+  async () => {
+    const pool = new Pool({
+      connectionString: await recreateDb("mig_bootstrap"),
+    });
+    try {
+      for (const file of currentMigrations) {
+        await pool.query(fs.readFileSync(path.join(FULL_DIR, file), "utf8"));
+      }
+      await applyMigrations(pool, FULL_DIR, log);
+      assert.deepEqual(await recorded(pool), currentMigrations);
+    } finally {
+      await pool.end();
+    }
+  },
+);
+
+needsDb(
+  "baseline: current volume adopts bulk triggers without historical backfills",
+  async () => {
+    const pool = new Pool({
+      connectionString: await recreateDb("mig_current"),
+    });
+    try {
+      await applyMigrations(pool, FULL_DIR, log);
+      // Simulate the immediately preceding schema, before the bulk optimization.
+      await pool.query(`
+      ALTER TABLE listing_daily DROP COLUMN resolved_state_version CASCADE;
+      CREATE TRIGGER listing_daily_resolve_sparse_state BEFORE INSERT ON listing_daily
+        FOR EACH ROW EXECUTE FUNCTION resolve_listing_daily_sparse_state();
+      CREATE TRIGGER listing_daily_normalize_flags BEFORE INSERT ON listing_daily
+        FOR EACH ROW EXECUTE FUNCTION normalize_listing_daily_flags();
+      DELETE FROM schema_migrations;
+      INSERT INTO schema_migrations (filename) VALUES ('20-scrape-page-manifest.sql');
+      INSERT INTO listings (article_id, url, title, latitude, longitude)
+        VALUES (1, 'test', 'preserved', 44.77, 17.19);
+      INSERT INTO scrape_runs (status, finished_at, is_complete)
+        VALUES ('ok', now(), false);
+    `);
+      await applyMigrations(pool, FULL_DIR, log);
+      assert.deepEqual(
+        (await pool.query("SELECT title, location FROM listings")).rows,
+        [{ title: "preserved", location: null }],
+      );
+      assert.equal(
+        (await pool.query("SELECT is_complete FROM scrape_runs")).rows[0]
+          .is_complete,
+        false,
+      );
+      const triggers = await pool.query(`SELECT tgname FROM pg_trigger
+      WHERE tgrelid = 'listing_daily'::regclass AND NOT tgisinternal ORDER BY tgname`);
+      assert.deepEqual(
+        triggers.rows.map((row) => row.tgname),
+        [
+          "listing_daily_10_resolve_sparse_state",
+          "listing_daily_20_normalize_flags_insert",
+          "listing_daily_normalize_flags_update",
+        ],
+      );
+      await applyMigrations(pool, FULL_DIR, () =>
+        assert.fail("second pass must be a no-op"),
+      );
+    } finally {
+      await pool.end();
+    }
+  },
+);
 
 // Drop & recreate a dedicated database so cases stay independent of the
 // shared suite DB (which other files bootstrap via ensureSchema).
@@ -186,7 +254,7 @@ needsDb(
 );
 
 needsDb(
-  "migrations: tracker-unaware volume is upgraded in place (self-heal)",
+  "migrations: unsupported legacy volume fails atomically with upgrade guidance",
   async () => {
     const pool = new Pool({
       connectionString: await recreateDb("mig_ancient"),
@@ -227,21 +295,23 @@ needsDb(
     );
     await pool.query("INSERT INTO search_results VALUES ('/k', 1)");
 
-    await applyMigrations(pool, FULL_DIR, log);
-    assert.equal(await fnCount(pool), 2);
-    assert.deepEqual(await recorded(pool), currentMigrations);
-
-    // Self-heal added the closure columns, and the legacy row remains
-    // queryable through the dashboard's exact filter call:
-    const cols =
-      await pool.query(`SELECT count(*)::int AS n FROM information_schema.columns
-    WHERE table_name = 'listings'
-      AND column_name IN ('closed_at','closing_price','closing_ppm2')`);
-    assert.equal(cols.rows[0].n, 3);
-    const r = await pool.query(
-      "SELECT count(*)::int AS n FROM listings_filtered(ARRAY['apartments'], 0, 99999, NULL)",
+    await assert.rejects(
+      applyMigrations(pool, FULL_DIR, log),
+      /Database predates the current baseline/,
     );
-    assert.equal(r.rows[0].n, 1);
+    assert.equal(
+      (await pool.query("SELECT title FROM listings WHERE article_id = 1"))
+        .rows[0].title,
+      "legacy row",
+    );
+    assert.equal(
+      (
+        await pool.query(
+          "SELECT to_regclass('public.schema_migrations') AS ledger",
+        )
+      ).rows[0].ledger,
+      null,
+    );
     await pool.end();
   },
 );

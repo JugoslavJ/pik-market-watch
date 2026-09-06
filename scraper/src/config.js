@@ -181,6 +181,12 @@ module.exports = {
     30,
     { min: 1 },
   ),
+  analyticsRebuildMaxDays: integer(
+    "ANALYTICS_REBUILD_MAX_DAYS",
+    process.env.ANALYTICS_REBUILD_MAX_DAYS,
+    31,
+    { min: 1, max: 366 },
+  ),
   geoConcurrency: integer("GEO_CONCURRENCY", process.env.GEO_CONCURRENCY, 2, {
     min: 1,
   }), // parallel detail calls

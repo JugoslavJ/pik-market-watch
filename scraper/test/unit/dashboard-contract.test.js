@@ -12,7 +12,7 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "../../..");
 const dashboardDir = path.join(root, "grafana", "dashboards");
 const filterMigration = fs.readFileSync(
-  path.join(root, "db", "init", "17-dashboard-filter-contract.sql"),
+  path.join(root, "db", "init", "05-filters.sql"),
   "utf8",
 );
 const alertProvisioning = fs.readFileSync(
@@ -50,7 +50,10 @@ test("database filter migration defines shared filter and event-time helpers", (
   assert.match(filterMigration, /CREATE OR REPLACE FUNCTION dashboard_numeric/);
   assert.match(filterMigration, /l\.closed_at IS NULL/);
   assert.match(filterMigration, /p_min_sqm IS NULL OR l\.sqm IS NULL/);
-  assert.match(filterMigration, /CREATE FUNCTION price_changes_filtered/);
+  assert.match(
+    filterMigration,
+    /CREATE OR REPLACE FUNCTION price_changes_filtered/,
+  );
   assert.match(
     filterMigration,
     /analytics_state_neighborhood\(pc\.provenance\)/,

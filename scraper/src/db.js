@@ -13,6 +13,7 @@ const { runBackfill } = require("./price-history-backfill");
 // keeps a closure from racing a sighting that is being committed.
 const LISTING_LIFECYCLE_LOCK = "pik-market-watch listing lifecycle";
 const SCRAPE_CYCLE_LOCK = "pik-market-watch scrape cycle";
+const ANALYTICS_MAINTENANCE_LOCK = "pik-market-watch analytics maintenance";
 
 // ── Bulk-write column plumbing ───────────────────────────────────────────────
 // The enrichment write feeds row data through unnest($n::type[] …) arrays.
@@ -137,6 +138,39 @@ class Db {
             await client.query(
               "SELECT pg_advisory_unlock(hashtextextended($1, 0))",
               [SCRAPE_CYCLE_LOCK],
+            );
+          } finally {
+            client.release();
+          }
+        },
+      };
+    } catch (error) {
+      client.release();
+      throw error;
+    }
+  }
+
+  /** Acquire a process-wide lease so duplicate maintenance jobs skip cleanly. */
+  async tryAcquireAnalyticsMaintenanceLease() {
+    const client = await this.pool.connect();
+    try {
+      const result = await client.query(
+        "SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS acquired",
+        [ANALYTICS_MAINTENANCE_LOCK],
+      );
+      if (!result.rows[0]?.acquired) {
+        client.release();
+        return null;
+      }
+      let released = false;
+      return {
+        release: async () => {
+          if (released) return;
+          released = true;
+          try {
+            await client.query(
+              "SELECT pg_advisory_unlock(hashtextextended($1, 0))",
+              [ANALYTICS_MAINTENANCE_LOCK],
             );
           } finally {
             client.release();
@@ -627,8 +661,12 @@ class Db {
     }
   }
 
-  /** Rebuild pending historical inventory through the current Sarajevo day. */
-  async rebuildDailyInventory() {
+  /**
+   * Rebuild pending historical inventory through the current Sarajevo day.
+   * `maxDays` bounds each transaction so a multi-year first rebuild does not
+   * hold one lock and transaction for the entire interval.
+   */
+  async rebuildDailyInventory({ maxDays = Infinity, log = () => {} } = {}) {
     const r = await this.pool.query(
       `SELECT pending_from_day, pending_through_day,
               (SELECT min((effective_at AT TIME ZONE 'Europe/Sarajevo')::date)
@@ -670,13 +708,6 @@ class Db {
     const plannedThrough = state.window_through_day
       ? sqlDay(state.window_through_day)
       : null;
-    if (plannedFrom && plannedThrough) {
-      return this.pool.query(
-        "SELECT * FROM rebuild_listing_daily($1::date, $2::date)",
-        [plannedFrom, plannedThrough],
-      );
-    }
-
     const starts = [state.pending_from_day].filter(Boolean).map(sqlDay);
 
     // A newly migrated database can have normalized evidence but no daily
@@ -687,17 +718,60 @@ class Db {
     if (historicalStart && (!existingStart || existingStart > historicalStart))
       starts.push(historicalStart);
 
-    const from = starts.sort()[0] || today;
+    const from = plannedFrom || starts.sort()[0] || today;
     const through =
+      plannedThrough ||
       [today, state.pending_through_day]
         .filter(Boolean)
         .map(sqlDay)
         .sort()
-        .at(-1) || today;
-    return this.pool.query(
-      "SELECT * FROM rebuild_listing_daily($1::date, $2::date)",
-      [from, through],
-    );
+        .at(-1) ||
+      today;
+
+    const cap = Number.isFinite(maxDays)
+      ? Math.max(1, Math.floor(Number(maxDays)))
+      : Infinity;
+    if (cap === Infinity) {
+      return this.pool.query(
+        "SELECT * FROM rebuild_listing_daily($1::date, $2::date)",
+        [from, through],
+      );
+    }
+
+    const toUtcDay = (value) => new Date(`${value}T00:00:00Z`);
+    const formatDay = (date) => date.toISOString().slice(0, 10);
+    let cursor = toUtcDay(from);
+    const end = toUtcDay(through);
+    let totalRows = 0;
+    let chunks = 0;
+    while (cursor <= end) {
+      const chunkEnd = new Date(cursor);
+      chunkEnd.setUTCDate(chunkEnd.getUTCDate() + cap - 1);
+      if (chunkEnd > end) chunkEnd.setTime(end.getTime());
+      const chunkFrom = formatDay(cursor);
+      const chunkThrough = formatDay(chunkEnd);
+      const result = await this.pool.query(
+        "SELECT * FROM rebuild_listing_daily($1::date, $2::date)",
+        [chunkFrom, chunkThrough],
+      );
+      totalRows += Number(result.rows?.[0]?.rows_written || 0);
+      chunks += 1;
+      log(`rebuilt daily inventory ${chunkFrom} through ${chunkThrough}`);
+      cursor = new Date(chunkEnd);
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+    return {
+      command: "SELECT * FROM rebuild_listing_daily($1::date, $2::date)",
+      rows: [
+        {
+          from_day: from,
+          through_day: through,
+          rows_written: totalRows,
+          chunks,
+        },
+      ],
+      rowCount: 1,
+    };
   }
 
   /**

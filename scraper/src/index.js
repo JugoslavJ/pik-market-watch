@@ -114,7 +114,10 @@ async function runAllUnlocked(db) {
 
   if (okRuns > 0) {
     try {
-      await db.rebuildDailyInventory();
+      await db.rebuildDailyInventory({
+        maxDays: config.analyticsRebuildMaxDays,
+        log: (message) => log(`analytics: ${message}`),
+      });
       await db.purgeRawResponses();
     } catch (err) {
       log(`✖ analytics maintenance failed: ${err.message || err}`);

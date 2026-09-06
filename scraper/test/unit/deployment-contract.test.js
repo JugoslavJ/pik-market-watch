@@ -32,8 +32,13 @@ test("Compose gates scraper startup on the profile-only migrator", () => {
 });
 
 test("deployment runs migration job before publishing the stack", () => {
+  const ownershipAt = deploy.indexOf("zz-database-roles.sh");
   const migrateAt = deploy.indexOf("docker compose --profile migrate run");
   const upAt = deploy.indexOf("docker compose up -d --build");
+  assert.ok(
+    ownershipAt >= 0 && ownershipAt < migrateAt,
+    "deploy script must repair existing role ownership before migrations",
+  );
   assert.ok(migrateAt >= 0, "deploy script must run the migrator job");
   assert.ok(upAt > migrateAt, "stack startup must follow migration completion");
 });

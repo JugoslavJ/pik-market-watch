@@ -29,11 +29,12 @@ docker compose up -d --build
 | `DETAIL_REFRESH_DAYS` | `7` | Age at which successful detail evidence becomes eligible for refresh. |
 | `DETAIL_JOB_LEASE_MINUTES` | `30` | Database lease duration for an in-flight durable detail job (maximum 24 hours). |
 | `RAW_RESPONSE_RETENTION_DAYS` | `30` | Search-response evidence retention period. |
+| `ANALYTICS_REBUILD_MAX_DAYS` | `31` | Maximum Sarajevo days rebuilt per maintenance transaction. |
 | `ABANDONED_RUN_AFTER_MINUTES` | `180` | Age after which startup marks an unfinished `running` scrape as abandoned. |
 | `BACKUP_RETENTION_DAYS` | `14` | Days of database and Grafana archives retained by `db-backup`; `0` disables pruning. |
 | `ALERT_EMAIL_TO` | unset | Recipient for provisioned alerting. Mail also requires enabling and configuring the `GF_SMTP_*` entries in `docker-compose.yml`. |
 
-Search configuration is read from `config/searches.json`; `SEARCH_URLS` is an environment override for a bare scraper process or an explicit `docker compose run -e SEARCH_URLS=...` invocation. The scraper also accepts `SCRAPE_USER_AGENT`, `HEALTH_PORT`, and pacing/health variables (`MAX_PAGES`, `CONCURRENCY`, `PAGE_DELAY_MS`, `API_PER_PAGE`, `API_TIMEOUT_MS`, `MAX_GEO_FETCHES`, `GEO_CONCURRENCY`, `GEO_DELAY_MS`, `SCRAPE_MIN_GAP_MINUTES`, `ABANDONED_RUN_AFTER_MINUTES`, `DETAIL_JOB_LEASE_MINUTES`, and `HEALTH_FAILURE_THRESHOLD`). Compose injects `ABANDONED_RUN_AFTER_MINUTES` and `DETAIL_JOB_LEASE_MINUTES`; pass the other tuning variables explicitly with `docker compose run -e NAME=value` or set them in a supported deployment change.
+Search configuration is read from `config/searches.json`; `SEARCH_URLS` is an environment override for a bare scraper process or an explicit `docker compose run -e SEARCH_URLS=...` invocation. The scraper also accepts `SCRAPE_USER_AGENT`, `HEALTH_PORT`, and pacing/health variables (`MAX_PAGES`, `CONCURRENCY`, `PAGE_DELAY_MS`, `API_PER_PAGE`, `API_TIMEOUT_MS`, `MAX_GEO_FETCHES`, `GEO_CONCURRENCY`, `GEO_DELAY_MS`, `SCRAPE_MIN_GAP_MINUTES`, `ABANDONED_RUN_AFTER_MINUTES`, `DETAIL_JOB_LEASE_MINUTES`, and `HEALTH_FAILURE_THRESHOLD`). Compose injects `ABANDONED_RUN_AFTER_MINUTES`, `DETAIL_JOB_LEASE_MINUTES`, and `ANALYTICS_REBUILD_MAX_DAYS`; pass the other tuning variables explicitly with `docker compose run -e NAME=value` or set them in a supported deployment change.
 
 ## Normal operation
 
@@ -45,6 +46,10 @@ docker compose restart scraper
 docker compose --profile migrate run --build --rm migrator
 docker compose --profile maintenance run --build --rm maintenance
 ```
+
+The maintenance profile waits for the migrator job. For an explicit run after
+you have already run the migrator successfully, use
+`docker compose --profile maintenance run --build --rm --no-deps maintenance`.
 
 The first command shows service health. The `scraper` service exists only when the `scrape` profile is enabled; add `COMPOSE_PROFILES=scrape` to `.env` to schedule it locally. A one-off `compose run` is safe for manual collection because it does not inherit the service restart policy.
 
@@ -77,6 +82,63 @@ the retained payload.
 docker compose --profile scrape run --rm scraper node src/backfill-price-history.js --dry-run
 docker compose --profile scrape run --rm scraper node src/backfill-price-history.js --checkpoint=/tmp/price-history.checkpoint
 ```
+
+## Applying the daily rebuild performance fix
+
+The current `06-rebuild.sql` definition removes repeated geography and sparse
+history work from the daily INSERT path. The local restored-backup benchmark
+completed a 31-day rebuild in 7.37 seconds; see
+[REBUILD-PERFORMANCE.md](REBUILD-PERFORMANCE.md) for measurements and limits.
+
+Update the checkout on the machine running maintenance before these steps.
+An already executing function continues using its old definition, and its
+locks can block schema application. Stop the scheduled scraper if it runs here:
+
+```text
+docker compose --profile scrape stop scraper
+docker ps --filter label=com.docker.compose.service=maintenance
+```
+
+Stop each listed maintenance container belonging to this checkout using
+`docker stop CONTAINER_NAME` (substitute its actual name). One-off `compose run`
+containers may not appear in `docker compose logs`; use `docker logs -f
+CONTAINER_NAME` while diagnosing them.
+
+Check for remaining rebuilds and EXPLAIN probes. This PowerShell command avoids
+nested shell quoting; `olx` is the default bootstrap user and database name,
+so substitute your configured names if different:
+
+```powershell
+@'
+SELECT pid, state, wait_event_type, wait_event,
+       now() - query_start AS elapsed, left(query, 240) AS query
+FROM pg_stat_activity
+WHERE datname = current_database() AND pid <> pg_backend_pid()
+  AND state <> 'idle' AND query ILIKE '%rebuild_listing_daily%';
+'@ | docker compose exec -T db psql -X -U olx -d olx -P pager=off -x
+```
+
+Cancel any remaining old rebuild or diagnostic session by its inspected PID:
+`'SELECT pg_cancel_backend(12345);' | docker compose exec -T db psql -X -U olx -d olx`
+(replace `12345`). Recheck until none remain; cancelled rebuild transactions
+roll back. On Linux, pass the same SQL directly with `psql -c` instead of the
+PowerShell pipeline.
+
+Then run these commands, proceeding only after each succeeds:
+
+```text
+docker compose --profile migrate run --build --rm --no-deps migrator
+docker compose --profile maintenance run --build --rm --no-deps maintenance
+```
+
+The migrator must finish successfully, applying the baseline through
+`07-triggers.sql` or verifying that its files are already recorded. Use the migrator's application owner;
+do not apply the SQL manually as the bootstrap user. Maintenance logs each
+completed batch's date range and reports total rows in its final JSON result.
+It processes the pending range;
+schema application does not itself force a rebuild of already completed history.
+After success, restart the scheduled scraper with
+`docker compose --profile scrape up -d --build scraper` if it was running here.
 
 ## Backup and restore
 

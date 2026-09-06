@@ -52,7 +52,7 @@ Price quality is explicit. A valid price without valid area can remain price evi
 
 ## Database ownership and migrations
 
-PostgreSQL initialization runs `db/init/*.sql` only for a new volume. The scraper also records and applies unapplied migrations by filename at startup. Add future schema changes as new idempotent files; do not edit generated neighborhood SQL by hand. The bootstrap database user administers the instance. `olx_app` owns application objects and is used by the scraper and restore endpoint; `olx_reader` is read-only and is used by Grafana and backups.
+PostgreSQL initialization runs `db/init/*.sql` only for a new volume. These files contain the current schema split by responsibility; their prefixes express dependency order, not historical fix numbers. The migrator records unapplied files and verifies their checksums before application services start; standalone scraper runs retain a startup fallback. See [the database guide](../db/README.md) for the file map, supported baseline adoption, and future migration policy. Do not edit applied SQL or generated polygon data by hand. The bootstrap database user administers the instance. `olx_app` owns application objects and is used by the scraper and restore endpoint; `olx_reader` is read-only and is used by Grafana and backups.
 
 ## Dashboards
 
@@ -67,4 +67,4 @@ Dashboard formulas are query-specific: comparable-looking ratios can use differe
 
 ## Geography
 
-`geo/banja-luka-mz-final.geojson` is the final source for the generated `db/init/11-neighborhoods.sql`. `neighborhood_of(lat, lon)` uses polygon containment, deterministic priority on shared borders, then a nearest-polygon fallback within 5 km. A missing pin is reported as `(no pin)`; a pin outside the supported coverage is `(unmapped)`. See [geo/README.md](../geo/README.md) and [DATA.md](../DATA.md) for the reproducible chain and attribution.
+`geo/banja-luka-mz-final.geojson` is the final source for the generated `db/init/02-neighborhoods.sql`. `neighborhood_of(lat, lon)` uses polygon containment, deterministic priority on shared borders, then a nearest-polygon fallback within 5 km. A missing pin is reported as `(no pin)`; a pin outside the supported coverage is `(unmapped)`. See [geo/README.md](../geo/README.md) and [DATA.md](../DATA.md) for the reproducible chain and attribution.

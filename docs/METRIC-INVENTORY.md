@@ -13,7 +13,7 @@ from silently retaining an obsolete metric label.
 | Home | Flow panels | Sarajevo day | Births, deaths and live-inventory projections | Counts, not priced samples | Backdated or inferred sightings are marked by projection metadata |
 | Health | Scrape and analytics operations | Run completion and refresh time | Saved searches, scrape runs, queue state and refresh watermark | No market-price aggregation | Missing success/refresh state is shown as unknown and can alert |
 
-Shared filter semantics are implemented in [17-dashboard-filter-contract.sql](../db/init/17-dashboard-filter-contract.sql): empty multi-selects mean no
+Shared filter semantics are implemented in [05-filters.sql](../db/init/05-filters.sql): empty multi-selects mean no
 restriction, numeric bounds are independently optional, and the canonical deal
 values are `sale` and `rent` (`sell` is accepted only as a compatibility input).
 Queries that measure current inventory, event-time changes, daily projections,

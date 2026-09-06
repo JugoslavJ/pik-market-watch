@@ -274,7 +274,7 @@ needsDb(
   "enrichListings stamps the neighborhood from map pins; first-wins",
   async () => {
     await seed(7010);
-    // Trg Krajine area -> inside the Centar 2 MZ polygon (11-neighborhoods.sql):
+    // Trg Krajine area -> inside the Centar 2 MZ polygon (02-neighborhoods.sql):
     await db.enrichListings([
       {
         articleId: 7010,

@@ -1,137 +1,15 @@
--- Temporal contracts for price evidence and daily analytics.
---
--- Current search cards are observed at fetch time.  A renewal/bump stamp is
--- useful metadata, but it is not evidence that the asking price changed on
--- that date.  New writers should populate observed_at and, when available,
--- renewed_at while keeping effective_at equal to observed_at.  Historical
--- imports continue to use effective_at as their source-dated assertion.
-ALTER TABLE listing_price_events
-  ADD COLUMN IF NOT EXISTS observed_at TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS renewed_at TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS effective_at_basis TEXT NOT NULL DEFAULT 'legacy';
+-- Bulk daily reconstruction; resolves state per cutoff and geography per distinct attributes.
 
-ALTER TABLE listing_price_events
-  DROP CONSTRAINT IF EXISTS listing_price_events_effective_at_basis_ck;
-ALTER TABLE listing_price_events
-  ADD CONSTRAINT listing_price_events_effective_at_basis_ck
-  CHECK (effective_at_basis IN ('observed', 'source_history', 'legacy'));
-
--- Existing rows are deliberately marked legacy.  Their dates cannot be
--- repaired safely: a renewal date is not a price-change date.
-UPDATE listing_price_events
-   SET observed_at = COALESCE(observed_at, ingested_at),
-       effective_at_basis = COALESCE(NULLIF(effective_at_basis, ''), 'legacy')
- WHERE observed_at IS NULL OR effective_at_basis IS NULL OR effective_at_basis = '';
-
-CREATE INDEX IF NOT EXISTS listing_price_events_observed_idx
-  ON listing_price_events (article_id, observed_at DESC)
-  WHERE observed_at IS NOT NULL;
-
-COMMENT ON COLUMN listing_price_events.effective_at IS
-  'Source/evidence time used for temporal reconstruction. For current observations this is fetch time.';
-COMMENT ON COLUMN listing_price_events.observed_at IS
-  'Database fetch/observation time for current evidence; NULL for source-history assertions.';
-COMMENT ON COLUMN listing_price_events.renewed_at IS
-  'Source renewal/bump timestamp, retained as metadata and never used as price effective time.';
-COMMENT ON COLUMN listing_price_events.effective_at_basis IS
-  'How effective_at was established: observed, source_history, or legacy/unknown.';
-
-ALTER TABLE analytics_refresh_state
-  ADD COLUMN IF NOT EXISTS completed_through_day DATE;
-
--- Coverage is separate from listing_daily because a valid empty market day
--- has no article rows.  It is the durable distinction between "rebuilt and
--- empty" and "never rebuilt".
-CREATE TABLE IF NOT EXISTS analytics_daily_coverage (
-  day          DATE PRIMARY KEY,
-  rebuilt_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
-  provisional  BOOLEAN NOT NULL DEFAULT FALSE
-);
-CREATE INDEX IF NOT EXISTS analytics_daily_coverage_rebuilt_idx
-  ON analytics_daily_coverage (rebuilt_at DESC);
-
-COMMENT ON COLUMN analytics_refresh_state.completed_through_day IS
-  'Latest contiguous Sarajevo day whose daily projection was successfully rebuilt and finalized.';
-
--- Return a safe maintenance window. The completed watermark makes an empty
--- day distinguishable from a day that was never rebuilt, and therefore lets a
--- scheduler recover a missed interval after an outage.
-CREATE OR REPLACE FUNCTION analytics_daily_rebuild_window(p_as_of_day DATE DEFAULT NULL)
-RETURNS TABLE (from_day DATE, through_day DATE, reason TEXT)
-LANGUAGE plpgsql STABLE AS $$
-DECLARE
-  v_today DATE := LEAST(
-    COALESCE(p_as_of_day, (now() AT TIME ZONE 'Europe/Sarajevo')::date),
-    (now() AT TIME ZONE 'Europe/Sarajevo')::date
-  );
-  v_pending_from DATE;
-  v_pending_through DATE;
-  v_completed DATE;
-  v_first_evidence DATE;
-  v_first_daily DATE;
-  v_missing_day DATE;
-  v_from DATE;
-BEGIN
-  SELECT pending_from_day, pending_through_day, completed_through_day
-    INTO v_pending_from, v_pending_through, v_completed
-    FROM analytics_refresh_state
-   WHERE scope = 'listing_daily';
-
-  SELECT LEAST(
-           (SELECT min((effective_at AT TIME ZONE 'Europe/Sarajevo')::date)
-              FROM listing_state_history),
-           (SELECT min((effective_at AT TIME ZONE 'Europe/Sarajevo')::date)
-              FROM listing_price_events))
-    INTO v_first_evidence;
-  SELECT min(day) INTO v_first_daily FROM listing_daily;
-
-  IF v_first_evidence IS NOT NULL AND v_today > v_first_evidence THEN
-    SELECT min(days.day::date) INTO v_missing_day
-      FROM generate_series(v_first_evidence, v_today - 1, interval '1 day') AS days(day)
-     WHERE NOT EXISTS (
-       SELECT 1 FROM analytics_daily_coverage c
-        WHERE c.day = days.day::date
-     );
-  END IF;
-
-  -- Do not include the first-ever evidence date once a contiguous watermark
-  -- exists: doing so would turn every maintenance tick into a full-history
-  -- rebuild. A new database (without a watermark) starts at its first
-  -- evidence; an existing database resumes from pending/missing days.
-  SELECT min(candidate) INTO v_from
-    FROM (VALUES
-      (v_pending_from),
-      (v_missing_day),
-      (CASE WHEN v_completed IS NOT NULL THEN v_completed + 1 END),
-      (CASE WHEN v_completed IS NULL THEN COALESCE(v_first_evidence, v_first_daily) END),
-      (v_today)
-    ) AS candidates(candidate)
-   WHERE candidate IS NOT NULL;
-
-  -- A future pending bound can be created by a clock-skewed importer; the
-  -- rebuild function itself clamps it to today, so the helper does too.
-  v_from := LEAST(COALESCE(v_from, v_today), v_today);
-  RETURN QUERY
-  SELECT v_from,
-         v_today,
-         CASE
-           WHEN v_missing_day IS NOT NULL THEN 'missing_day'
-           WHEN v_pending_from IS NOT NULL THEN 'pending_evidence'
-           WHEN v_completed IS NULL THEN 'no_completed_watermark'
-           WHEN v_completed < v_today - 1 THEN 'missing_or_unfinalized_days'
-           ELSE 'provisional_today'
-         END;
-END
-$$;
-
--- Rebuild with half-open temporal intervals.  An event exactly at Sarajevo
--- midnight belongs to the new day, never to the preceding day.
 CREATE OR REPLACE FUNCTION rebuild_listing_daily(
   p_from_day DATE,
   p_through_day DATE
 )
 RETURNS TABLE (from_day DATE, through_day DATE, rows_written BIGINT)
-LANGUAGE plpgsql VOLATILE AS $$
+LANGUAGE plpgsql VOLATILE
+-- The lateral reconstruction plan has high estimated cost even for a tiny
+-- window; compiling it on each call costs more than executing small batches.
+SET jit = off
+AS $$
 DECLARE
   v_today DATE := (now() AT TIME ZONE 'Europe/Sarajevo')::date;
   v_from DATE := p_from_day;
@@ -156,14 +34,8 @@ BEGIN
 
   DELETE FROM listing_daily WHERE day BETWEEN v_from AND v_through;
 
-  INSERT INTO listing_daily (
-    day, article_id, price, price_state, ppm2, is_rent, sqm, rooms,
-    category, category_memberships, location, filter_attributes,
-    state_effective_at, price_effective_at, membership_inferred,
-    attributes_inferred, stale_observation, provisional_day
-  )
   WITH
-  days AS (
+  days AS MATERIALIZED (
     SELECT d::date AS day,
            CASE WHEN d::date = v_today
                 -- A scraper timestamp is supplied by the application clock;
@@ -183,7 +55,7 @@ BEGIN
     SELECT a.article_id, d.day, d.endpoint
       FROM articles a CROSS JOIN days d
   ),
-  facts AS (
+  facts AS MATERIALIZED (
     SELECT g.*,
            op.effective_at AS observed_effective_at,
            op.id AS observed_id,
@@ -292,7 +164,11 @@ BEGIN
              ELSE FALSE
            END AS is_active
       FROM resolved r
-  )
+  ),
+  base (day, article_id, price, price_state, ppm2, is_rent, sqm, rooms,
+    category, category_memberships, location, filter_attributes,
+    state_effective_at, price_effective_at, membership_inferred,
+    attributes_inferred, stale_observation, provisional_day, observed_id, endpoint) AS MATERIALIZED (
   SELECT e.day, e.article_id,
          CASE WHEN e.event_price_state = 'valid' THEN e.event_price END,
          COALESCE(e.event_price_state, 'unknown'),
@@ -304,7 +180,7 @@ BEGIN
               THEN round(e.event_price / NULLIF(e.state_sqm, 0))::int END,
          e.state_is_rent, e.state_sqm, e.state_rooms,
          COALESCE(e.state_category, e.state_membership[1]), e.state_membership,
-         analytics_state_neighborhood(e.state_attributes), e.state_attributes,
+         NULL::text, e.state_attributes,
          COALESCE(e.observed_effective_at, e.future_effective_at),
          e.event_price_effective_at,
          COALESCE(e.observed_membership_inferred, false)
@@ -313,10 +189,105 @@ BEGIN
            OR e.state_estimated OR COALESCE(e.attrs_estimated, false),
          (e.activity_at IS NOT NULL
            AND (e.activity_at AT TIME ZONE 'Europe/Sarajevo')::date < e.day),
-         e.day = v_today
+         e.day = v_today, e.observed_id, e.endpoint
     FROM eligible e
    WHERE e.is_active
-     AND (e.observed_id IS NOT NULL OR (e.first_valid_at IS NOT NULL AND e.first_valid_at < e.endpoint));
+     AND (e.observed_id IS NOT NULL OR (e.first_valid_at IS NOT NULL AND e.first_valid_at < e.endpoint))
+  ),
+
+  -- One fold per historical cutoff, rather than per listing-day. The latest
+  -- history id identifies exactly the same prefix for every day in the group.
+  cutoffs AS MATERIALIZED (
+    SELECT article_id, observed_id, max(endpoint) AS endpoint
+      FROM base WHERE observed_id IS NOT NULL GROUP BY article_id, observed_id
+  ),
+  sparse AS MATERIALIZED (
+    SELECT c.article_id, c.observed_id, s.*, j.attributes, m.memberships
+      FROM cutoffs c
+      CROSS JOIN LATERAL (
+        SELECT
+          (array_agg(h.category ORDER BY h.effective_at DESC, h.id DESC)
+            FILTER (WHERE NULLIF(btrim(h.category), '') IS NOT NULL))[1] AS category,
+          (array_agg(h.is_rent ORDER BY h.effective_at DESC, h.id DESC)
+            FILTER (WHERE h.is_rent IS NOT NULL))[1] AS is_rent,
+          (array_agg(h.sqm ORDER BY h.effective_at DESC, h.id DESC)
+            FILTER (WHERE h.sqm IS NOT NULL))[1] AS sqm,
+          (array_agg(h.rooms ORDER BY h.effective_at DESC, h.id DESC)
+            FILTER (WHERE h.rooms IS NOT NULL))[1] AS rooms
+          FROM listing_state_history h
+         WHERE h.article_id = c.article_id AND h.effective_at < c.endpoint
+           AND h.event_type IN ('search_sighting', 'detail_update', 'reopened')
+      ) s
+      CROSS JOIN LATERAL (
+        SELECT COALESCE(jsonb_object_agg(a.key, a.value), '{}'::jsonb) AS attributes
+          FROM (
+            SELECT DISTINCT ON (kv.key) kv.key, kv.value
+              FROM listing_state_history h
+              CROSS JOIN LATERAL jsonb_each(
+                CASE WHEN jsonb_typeof(h.filter_attributes) = 'object'
+                     THEN h.filter_attributes ELSE '{}'::jsonb END) kv
+             WHERE h.article_id = c.article_id AND h.effective_at < c.endpoint
+               AND h.event_type IN ('search_sighting', 'detail_update', 'reopened')
+             ORDER BY kv.key, h.effective_at DESC, h.id DESC
+          ) a
+      ) j
+      CROSS JOIN LATERAL (
+        SELECT COALESCE(array_agg(DISTINCT member ORDER BY member), '{}'::text[]) AS memberships
+          FROM listing_state_history h
+          CROSS JOIN LATERAL unnest(h.category_membership) u(member)
+         WHERE h.article_id = c.article_id AND h.effective_at < c.endpoint
+           AND h.event_type IN ('search_sighting', 'detail_update', 'reopened')
+           AND member IS NOT NULL AND member <> ''
+      ) m
+  ),
+  filled AS MATERIALIZED (
+    SELECT b.day, b.article_id, b.price, b.price_state, b.ppm2,
+           COALESCE(b.is_rent, s.is_rent) AS is_rent,
+           COALESCE(b.sqm, s.sqm) AS sqm,
+           COALESCE(b.rooms, s.rooms) AS rooms,
+           COALESCE(b.category, s.category) AS category,
+           ARRAY(SELECT DISTINCT member FROM unnest(
+             COALESCE(b.category_memberships, '{}'::text[])
+             || COALESCE(s.memberships, '{}'::text[])
+             || CASE WHEN COALESCE(b.category, s.category) IS NULL THEN '{}'::text[]
+                     ELSE ARRAY[COALESCE(b.category, s.category)] END) u(member)
+             WHERE member IS NOT NULL AND member <> '' ORDER BY member) AS category_memberships,
+           COALESCE(s.attributes, '{}'::jsonb) || b.filter_attributes AS filter_attributes,
+           b.state_effective_at, b.price_effective_at,
+           b.membership_inferred OR EXISTS (
+             SELECT 1 FROM unnest(s.memberships) u(member)
+              WHERE NOT (member = ANY(b.category_memberships))) AS membership_inferred,
+           b.attributes_inferred
+             OR (b.category IS NULL AND s.category IS NOT NULL)
+             OR (b.is_rent IS NULL AND s.is_rent IS NOT NULL)
+             OR (b.sqm IS NULL AND s.sqm IS NOT NULL)
+             OR (b.rooms IS NULL AND s.rooms IS NOT NULL)
+             OR EXISTS (SELECT 1 FROM jsonb_object_keys(s.attributes) k(key)
+                         WHERE NOT (b.filter_attributes ? k.key)) AS attributes_inferred,
+           b.stale_observation, b.provisional_day
+      FROM base b LEFT JOIN sparse s
+        ON s.article_id = b.article_id AND s.observed_id = b.observed_id
+  ),
+  inputs AS MATERIALIZED (
+    SELECT DISTINCT filter_attributes FROM filled
+  ),
+  locations AS MATERIALIZED (
+    SELECT filter_attributes, analytics_state_neighborhood(filter_attributes) AS neighborhood
+      FROM inputs
+  )
+  INSERT INTO listing_daily (
+    day, article_id, price, price_state, ppm2, is_rent, sqm, rooms,
+    category, category_memberships, location, filter_attributes,
+    state_effective_at, price_effective_at, membership_inferred,
+    attributes_inferred, stale_observation, provisional_day, neighborhood,
+    resolved_state_version
+  )
+  SELECT f.day, f.article_id, f.price, f.price_state, f.ppm2, f.is_rent, f.sqm, f.rooms,
+         f.category, f.category_memberships, l.neighborhood, f.filter_attributes,
+         f.state_effective_at, f.price_effective_at, f.membership_inferred,
+         f.attributes_inferred, f.stale_observation, f.provisional_day, l.neighborhood, 1
+    FROM filled f JOIN locations l USING (filter_attributes);
+
 
   GET DIAGNOSTICS v_rows = ROW_COUNT;
 

@@ -65,6 +65,38 @@ test("rebuildDailyInventory backfills from history when daily coverage is missin
   assert.deepEqual(calls[1][1], ["2021-03-22", todayInSarajevo()]);
 });
 
+test("rebuildDailyInventory chunks a bounded maintenance window", async () => {
+  const db = new Db("postgres://unused");
+  const calls = [];
+  db.pool = {
+    query: async (...args) => {
+      calls.push(args);
+      if (calls.length === 1)
+        return {
+          rows: [
+            {
+              pending_from_day: null,
+              pending_through_day: null,
+              first_priced_day: "2021-03-22",
+              first_daily_day: null,
+              window_from_day: "2021-03-22",
+              window_through_day: "2021-04-02",
+            },
+          ],
+        };
+      return { rows: [{ rows_written: 3 }] };
+    },
+  };
+
+  const rebuilt = await db.rebuildDailyInventory({ maxDays: 10 });
+
+  assert.equal(calls.length, 3);
+  assert.deepEqual(calls[1][1], ["2021-03-22", "2021-03-31"]);
+  assert.deepEqual(calls[2][1], ["2021-04-01", "2021-04-02"]);
+  assert.equal(rebuilt.rows[0].rows_written, 6);
+  assert.equal(rebuilt.rows[0].chunks, 2);
+});
+
 test("recoverAbandonedRuns closes only stale running runs with structured failure", async () => {
   const db = new Db("postgres://unused");
   const calls = [];
@@ -107,5 +139,21 @@ test("cycle lease keeps a session advisory lock until explicit release", async (
   await lease.release();
   assert.equal(calls.length, 2);
   assert.match(calls[1][0], /pg_advisory_unlock/);
+  assert.equal(released, true);
+});
+
+test("analytics maintenance lease skips a competing process", async () => {
+  const db = new Db("postgres://unused");
+  let released = false;
+  db.pool = {
+    connect: async () => ({
+      query: async () => ({ rows: [{ acquired: false }] }),
+      release: () => {
+        released = true;
+      },
+    }),
+  };
+
+  assert.equal(await db.tryAcquireAnalyticsMaintenanceLease(), null);
   assert.equal(released, true);
 });

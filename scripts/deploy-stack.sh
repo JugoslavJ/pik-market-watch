@@ -49,6 +49,24 @@ docker compose pull db grafana db-backup || echo "⚠ pull failed, using local i
 # Apply schema changes before publishing dashboards. The migrator is a
 # profile-only one-shot service, so a failed migration stops this deployment
 # before Grafana can observe a partially upgraded contract.
+echo "▶ Starting database for ownership checks"
+docker compose up -d db
+db_deadline=$((SECONDS + 120))
+until docker compose exec -T db sh -c 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"' >/dev/null 2>&1; do
+  if [ "$SECONDS" -ge "$db_deadline" ]; then
+    echo "✗ Database did not become ready within 2 min"
+    docker compose logs --tail 80 db
+    exit 1
+  fi
+  sleep 2
+done
+
+# Existing volumes may contain functions created by the bootstrap role before
+# the app-owned migration gate was introduced. Re-assert ownership before the
+# app-role migrator attempts CREATE OR REPLACE FUNCTION.
+echo "▶ Ensuring database role ownership"
+docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
+
 echo "▶ Applying database migrations"
 docker compose --profile migrate run --build --rm migrator
 

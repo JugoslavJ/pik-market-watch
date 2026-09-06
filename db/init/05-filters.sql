@@ -1,8 +1,5 @@
--- Dashboard filter contract (G1-G3).
---
--- Grafana variables are still text at interpolation time.  This helper keeps
--- malformed textbox values from aborting a panel query while allowing the
--- database functions to retain numeric arguments and query plans.
+-- Dashboard input parsing and shared filters.
+
 CREATE OR REPLACE FUNCTION dashboard_numeric(p_value TEXT)
 RETURNS NUMERIC
 LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE AS $$
@@ -26,9 +23,6 @@ EXCEPTION
 END
 $$;
 
--- Current inventory: empty category means all categories, bounds are
--- independently optional, and active inventory excludes explicitly closed
--- listings as well as stale sightings.
 CREATE OR REPLACE FUNCTION listings_filtered(
   p_category TEXT[],
   p_min_sqm NUMERIC,
@@ -58,8 +52,6 @@ LANGUAGE sql STABLE AS $$
                   AND ss.category = ANY (p_category)))
 $$;
 
--- Closed inventory: the frozen closing category remains the first source,
--- with search membership as a compatibility fallback for older closures.
 CREATE OR REPLACE FUNCTION listings_closed_filtered(
   p_category TEXT[],
   p_min_sqm NUMERIC,
@@ -87,13 +79,53 @@ LANGUAGE sql STABLE AS $$
                   AND ss.category = ANY (p_category)))
 $$;
 
--- Price changes filtered by the attributes stored with the event.  This is
--- for "cuts observed in a period" panels; current active-listing panels keep
--- their separate join to listings_filtered.  Deal accepts both the legacy
--- dashboard spelling (sell) and the canonical database spelling (sale).
-DROP FUNCTION IF EXISTS price_changes_filtered(
-  TIMESTAMPTZ, TIMESTAMPTZ, TEXT[], NUMERIC, NUMERIC, TEXT[], TEXT[], TEXT[]);
-CREATE FUNCTION price_changes_filtered(
+CREATE OR REPLACE FUNCTION market_daily_filtered(
+  p_from_day DATE,
+  p_through_day DATE,
+  p_category TEXT[] DEFAULT '{}',
+  p_min_sqm NUMERIC DEFAULT NULL,
+  p_max_sqm NUMERIC DEFAULT NULL,
+  p_rooms TEXT[] DEFAULT '{}',
+  p_deal TEXT[] DEFAULT '{}',
+  p_neighborhood TEXT[] DEFAULT '{}'
+)
+RETURNS TABLE (
+  day DATE, inventory_count BIGINT, priced_count BIGINT,
+  p25 NUMERIC, median NUMERIC, p75 NUMERIC,
+  estimated_count BIGINT, stale_count BIGINT, provisional_day BOOLEAN
+)
+LANGUAGE sql STABLE AS $$
+  SELECT d.day,
+         count(*)::bigint,
+         count(*) FILTER (WHERE d.price_state = 'valid' AND d.ppm2 IS NOT NULL)::bigint,
+         percentile_cont(0.25) WITHIN GROUP (ORDER BY d.ppm2)
+           FILTER (WHERE d.price_state = 'valid' AND d.ppm2 IS NOT NULL),
+         percentile_cont(0.50) WITHIN GROUP (ORDER BY d.ppm2)
+           FILTER (WHERE d.price_state = 'valid' AND d.ppm2 IS NOT NULL),
+         percentile_cont(0.75) WITHIN GROUP (ORDER BY d.ppm2)
+           FILTER (WHERE d.price_state = 'valid' AND d.ppm2 IS NOT NULL),
+         count(*) FILTER (WHERE d.membership_inferred OR d.attributes_inferred)::bigint,
+         count(*) FILTER (WHERE d.stale_observation)::bigint,
+         bool_or(d.provisional_day)
+    FROM listing_daily d
+   WHERE d.day BETWEEN p_from_day AND LEAST(p_through_day, (now() AT TIME ZONE 'Europe/Sarajevo')::date)
+     AND (COALESCE(cardinality(p_category), 0) = 0
+       OR d.category_memberships && p_category
+       OR d.category = ANY (p_category))
+     AND (p_min_sqm IS NULL OR d.sqm IS NULL OR d.sqm >= p_min_sqm)
+     AND (p_max_sqm IS NULL OR d.sqm IS NULL OR d.sqm <= p_max_sqm)
+     AND (COALESCE(cardinality(p_rooms), 0) = 0
+       OR d.rooms = ANY (p_rooms) OR room_bucket(d.rooms) = ANY (p_rooms))
+     AND (COALESCE(cardinality(p_deal), 0) = 0
+       OR (CASE WHEN d.is_rent THEN 'rent' ELSE 'sale' END) = ANY (p_deal))
+     AND (COALESCE(cardinality(p_neighborhood), 0) = 0
+       OR d.neighborhood = ANY (p_neighborhood)
+       OR d.location = ANY (p_neighborhood))
+   GROUP BY d.day
+   ORDER BY d.day
+$$;
+
+CREATE OR REPLACE FUNCTION price_changes_filtered(
   p_from TIMESTAMPTZ,
   p_through TIMESTAMPTZ,
   p_category TEXT[] DEFAULT '{}',
