@@ -70,6 +70,43 @@ if (-not (Test-DockerEngine)) {
   Log 'docker engine ready.'
 }
 
+# Compose can retain stopped dependency containers after Docker Desktop
+# recreates a project network. Such a container still has the old network mode
+# in its config, but no endpoint in NetworkSettings.Networks; `compose run`
+# then fails while starting the dependency with "not connected to the network".
+# Remove only those broken Compose-managed containers. This never touches a
+# volume, and healthy/running containers are left alone.
+function Remove-StaleComposeContainer([string]$service) {
+  $id = (& docker compose --profile scrape ps -aq $service 2>$null |
+    Select-Object -First 1)
+  if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($id)) { return }
+  $id = $id.Trim()
+
+  $status = (& docker inspect --format '{{.State.Status}}' $id 2>$null |
+    Select-Object -First 1)
+  if ($LASTEXITCODE -ne 0 -or $status.Trim() -notin @('created', 'exited', 'dead')) {
+    return
+  }
+
+  $networks = (& docker inspect --format '{{json .NetworkSettings.Networks}}' $id 2>$null |
+    Select-Object -First 1)
+  if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($networks)) { return }
+  try { $networkInfo = $networks.Trim() | ConvertFrom-Json -ErrorAction Stop }
+  catch { return }
+  $attached = @($networkInfo.PSObject.Properties.Value |
+    Where-Object { -not [string]::IsNullOrWhiteSpace($_.NetworkID) })
+  if ($attached.Count -gt 0) { return }
+
+  Log "removing stale Compose container $service ($id) with no network endpoint..."
+  docker rm -f $id *> $null
+  if ($LASTEXITCODE -ne 0) {
+    throw "could not remove stale Compose container $service ($id)"
+  }
+}
+
+Remove-StaleComposeContainer 'db'
+Remove-StaleComposeContainer 'migrator'
+
 Log 'building scraper image from current source...'
 docker compose --profile scrape build scraper
 if ($LASTEXITCODE -ne 0) { throw "scraper image build failed (exit $LASTEXITCODE)" }

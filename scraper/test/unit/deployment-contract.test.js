@@ -43,6 +43,23 @@ test("deployment runs migration job before publishing the stack", () => {
   assert.ok(upAt > migrateAt, "stack startup must follow migration completion");
 });
 
+test("home sync repairs stopped dependencies with stale network endpoints", () => {
+  const sync = fs.readFileSync(
+    path.join(ROOT, "scripts", "sync-to-instance.ps1"),
+    "utf8",
+  );
+  assert.match(sync, /function Remove-StaleComposeContainer/);
+  assert.match(sync, /NetworkSettings\.Networks/);
+  assert.match(sync, /docker rm -f \$id/);
+  assert.match(sync, /Remove-StaleComposeContainer 'db'/);
+  assert.match(sync, /Remove-StaleComposeContainer 'migrator'/);
+  assert.ok(
+    sync.indexOf("Remove-StaleComposeContainer 'migrator'") <
+      sync.indexOf("Log 'building scraper image"),
+    "stale dependency repair must run before the scrape pipeline",
+  );
+});
+
 test("production Grafana settings fail closed before deployment", () => {
   assert.match(deploy, /GRAFANA_BIND/);
   assert.match(deploy, /127\.0\.0\.1/);
