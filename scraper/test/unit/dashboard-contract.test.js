@@ -183,7 +183,7 @@ test("public dashboards are fixed-scope and use only the reporting contract", ()
 });
 
 test("public share access tokens have a valid stable length", () => {
-  const entries = [...publicShareScript.matchAll(/\"([^:\"]+):([a-f0-9]+)\"/g)];
+  const entries = [...publicShareScript.matchAll(/"([^:"]+):([a-f0-9]+)"/g)];
   assert.equal(entries.length, 4);
   for (const [, uid, token] of entries) {
     assert.match(uid, /^olx-public-/);
