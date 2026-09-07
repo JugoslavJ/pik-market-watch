@@ -20,11 +20,11 @@ const SCRAPE_CYCLE_LOCK = "pik-market-watch scrape cycle";
 const ANALYTICS_MAINTENANCE_LOCK = "pik-market-watch analytics maintenance";
 
 class Db {
-  constructor(connectionString, { rawResponseRetentionDays = 30 } = {}) {
+  constructor(connectionString, { rawResponseRetentionDays = 3 } = {}) {
     this.pool = new Pool({ connectionString, max: 5 });
     this.rawResponseRetentionDays = Math.max(
       1,
-      Number(rawResponseRetentionDays) || 30,
+      Number(rawResponseRetentionDays) || 3,
     );
   }
 

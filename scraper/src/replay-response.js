@@ -25,13 +25,20 @@ async function main() {
   try {
     const result = await db.pool.query(
       `SELECT id, request_kind, request_url, fetched_at, parser_version,
-              build_version, source_payload, payload, diagnostic
+              build_version, archive_format, source_payload, payload, diagnostic
          FROM raw_api_responses WHERE id = $1`,
       [id],
     );
     if (!result.rowCount) throw new Error(`raw response ${id} was not found`);
     const row = result.rows[0];
-    const source = row.source_payload || row.payload || {};
+    const source =
+      row.archive_format === "diagnostic-v2"
+        ? null
+        : row.archive_format === "canonical-v2"
+          ? row.request_kind === "search"
+            ? row.source_payload
+            : row.payload
+          : row.source_payload || row.payload;
     const output = {
       id: Number(row.id),
       requestKind: row.request_kind,
@@ -39,14 +46,15 @@ async function main() {
       fetchedAt: row.fetched_at,
       parserVersion: row.parser_version,
       buildVersion: row.build_version,
+      archiveFormat: row.archive_format || "legacy-v1",
       diagnostic: row.diagnostic,
     };
-    if (row.request_kind === "search") {
+    if (source && row.request_kind === "search") {
       const parsed = parseSearchItems(source.data || source.items);
       output.parsedItemCount = parsed.cards.length;
       output.parseRejections = parsed.rejected;
       output.meta = source.meta || null;
-    } else if (row.request_kind === "detail") {
+    } else if (source && row.request_kind === "detail") {
       const detail = parseListingDetail(source, source.id);
       output.detail = detail
         ? {

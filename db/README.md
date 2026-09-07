@@ -15,6 +15,11 @@ entrypoint and the application migration runner:
 | `06-rebuild.sql` | Bulk daily reconstruction |
 | `07-triggers.sql` | Direct-write triggers |
 | `08-dashboard-public.sql` | Allowlisted read-only reporting views for external dashboards |
+| `09-analytics-progress.sql` | Prefix-safe dirty-range consumption for chunked rebuilds |
+| `10-raw-retention.sql` | Three-day expiry default and resumable transition/outcome state |
+| `11-raw-archive-format.sql` | Versioned one-body raw archive contract |
+| `12-publication-history.sql` | Durable publication evidence and history contract |
+| `13-reporting-surface.sql` | Stable private reporting views over the current contract |
 | `zz-database-roles.sh` | Application ownership and reader permissions |
 
 Fresh volumes execute these files in order. The migrator subsequently records

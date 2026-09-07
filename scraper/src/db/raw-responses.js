@@ -20,14 +20,41 @@ module.exports = function installRawResponseMethods(Db) {
       buildVersion = "unknown",
       diagnostic = null,
     }) {
+      const isDiagnostic = diagnostic != null;
+      const hasCanonicalBody =
+        !isDiagnostic &&
+        (requestKind === "detail"
+          ? payload != null || sourcePayload != null
+          : sourcePayload != null);
+      // Search adapters are derived from the original response and therefore
+      // are not written in v2.  Keep detail bodies in `payload` so retained
+      // callers that already select that column remain compatible; the format
+      // discriminator makes the column choice explicit for new readers.
+      const archiveFormat = isDiagnostic
+        ? "diagnostic-v2"
+        : hasCanonicalBody
+          ? "canonical-v2"
+          : "legacy-v1";
+      const storedPayload = isDiagnostic
+        ? null
+        : requestKind === "detail"
+          ? (payload ?? sourcePayload ?? null)
+          : sourcePayload == null
+            ? (payload ?? null)
+            : null;
+      const storedSourcePayload = isDiagnostic
+        ? null
+        : requestKind === "detail"
+          ? null
+          : (sourcePayload ?? null);
       await this.pool.query(
         `INSERT INTO raw_api_responses
            (run_id, article_id, request_kind, request_url, fetched_at, expires_at,
             parser_version, payload, source_payload, request_metadata,
-            response_metadata, build_version, diagnostic)
+            response_metadata, build_version, diagnostic, archive_format)
          VALUES ($1, $2, $3, $4, $5::timestamptz,
-                 $5::timestamptz + make_interval(days => $6::int), $7, $8::jsonb,
-                 $9::jsonb, $10::jsonb, $11::jsonb, $12, $13::jsonb)`,
+                  $5::timestamptz + make_interval(days => $6::int), $7, $8::jsonb,
+                  $9::jsonb, $10::jsonb, $11::jsonb, $12, $13::jsonb, $14)`,
         [
           runId ?? null,
           articleId ?? null,
@@ -36,12 +63,15 @@ module.exports = function installRawResponseMethods(Db) {
           fetchedAt,
           this.rawResponseRetentionDays,
           parserVersion,
-          JSON.stringify(payload ?? {}),
-          sourcePayload == null ? null : JSON.stringify(sourcePayload),
+          storedPayload == null ? null : JSON.stringify(storedPayload),
+          storedSourcePayload == null
+            ? null
+            : JSON.stringify(storedSourcePayload),
           JSON.stringify(requestMetadata ?? {}),
           JSON.stringify(responseMetadata ?? {}),
           String(buildVersion || "unknown").slice(0, 128),
           diagnostic == null ? null : JSON.stringify(diagnostic),
+          archiveFormat,
         ],
       );
     },
@@ -80,13 +110,14 @@ module.exports = function installRawResponseMethods(Db) {
         `INSERT INTO raw_api_responses
            (run_id, article_id, request_kind, request_url, fetched_at, expires_at,
             parser_version, payload, source_payload, request_metadata,
-            response_metadata, build_version, diagnostic)
+            response_metadata, build_version, diagnostic, archive_format)
          SELECT NULL, article_id, 'detail',
                 'https://olx.ba/api/listings/' || article_id::text,
                 fetched_at,
                 fetched_at + make_interval(days => $2::int),
-                'detail-v1', payload, source_payload, request_metadata,
-                response_metadata, build_version, diagnostic
+                 'detail-v1', COALESCE(payload, source_payload), NULL,
+                 request_metadata, response_metadata, build_version, diagnostic,
+                 CASE WHEN diagnostic IS NULL THEN 'canonical-v2' ELSE 'diagnostic-v2' END
            FROM jsonb_to_recordset($1::jsonb) AS r(
              article_id bigint, fetched_at timestamptz, payload jsonb,
              source_payload jsonb, request_metadata jsonb, response_metadata jsonb,
@@ -96,8 +127,8 @@ module.exports = function installRawResponseMethods(Db) {
             rows.map((row) => ({
               article_id: row.articleId,
               fetched_at: row.fetchedAt || new Date(),
-              payload: row.payload ?? {},
-              source_payload: row.sourcePayload ?? null,
+              payload: row.payload ?? row.sourcePayload ?? null,
+              source_payload: null,
               request_metadata: row.requestMetadata ?? {},
               response_metadata: row.responseMetadata ?? {},
               build_version: String(row.buildVersion || "unknown").slice(

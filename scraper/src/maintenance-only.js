@@ -22,20 +22,17 @@ async function main() {
       await applyMigrations(db.pool, config.migrationsDir, (message) =>
         console.log(`[maintenance] ${message}`),
       );
-    console.log("[maintenance] rebuilding pending daily inventory");
-    const rebuilt = await db.rebuildDailyInventory({
+    console.log(
+      "[maintenance] running independent retention and analytics tasks",
+    );
+    const result = await db.runMaintenanceCycle({
       maxDays: config.analyticsRebuildMaxDays,
       log: (message) => console.log(`[maintenance] ${message}`),
     });
-    console.log("[maintenance] purging expired raw responses");
-    const purged = await db.purgeRawResponses();
     console.log(
-      JSON.stringify({
-        rebuilt,
-        purged,
-        completedAt: new Date().toISOString(),
-      }),
+      JSON.stringify({ ...result, completedAt: new Date().toISOString() }),
     );
+    if (!result.ok) process.exitCode = 1;
   } finally {
     if (lease) await lease.release();
     await db.close();

@@ -197,7 +197,7 @@ module.exports = {
   rawResponseRetentionDays: integer(
     "RAW_RESPONSE_RETENTION_DAYS",
     process.env.RAW_RESPONSE_RETENTION_DAYS,
-    30,
+    3,
     { min: 1 },
   ),
   analyticsRebuildMaxDays: integer(

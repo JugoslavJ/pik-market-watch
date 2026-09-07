@@ -33,7 +33,7 @@ docker compose up -d --build
 | `SCRAPE_INTERVAL_MINUTES`                           |                  `720` | Scheduled scraper cadence when the `scrape` profile is enabled.                                                                  |
 | `DETAIL_REFRESH_DAYS`                               |                    `7` | Age at which successful detail evidence becomes eligible for refresh.                                                            |
 | `DETAIL_JOB_LEASE_MINUTES`                          |                   `30` | Database lease duration for an in-flight durable detail job (maximum 24 hours).                                                  |
-| `RAW_RESPONSE_RETENTION_DAYS`                       |                   `30` | Search-response evidence retention period.                                                                                       |
+| `RAW_RESPONSE_RETENTION_DAYS`                       |                    `3` | Live search/detail response retention in days (a rolling 72 hours from `fetched_at`). Existing rows are capped by maintenance.        |
 | `ANALYTICS_REBUILD_MAX_DAYS`                        |                   `31` | Maximum Banja Luka days rebuilt per maintenance transaction.                                                                      |
 | `ABANDONED_RUN_AFTER_MINUTES`                       |                  `180` | Age after which startup marks an unfinished `running` scrape as abandoned.                                                       |
 | `RATE_LIMIT_COOLDOWN_MS`                            |                `65000` | Fallback pause when the upstream rate-limit window is low and no reset is advertised.                                            |
@@ -213,12 +213,28 @@ docker compose --profile scrape run --rm scraper node src/backfill-geo.js --max=
 ```
 
 The default backfill targets recently active rows; `--all` includes closed history. The legacy price-history conversion also makes no OLX requests.
-The `maintenance` profile rebuilds pending daily analytics and purges expired
-raw responses without making OLX requests. Schedule it independently so
-housekeeping continues during an upstream outage. To inspect a retained
+The `maintenance` profile caps legacy raw expiry timestamps, removes proven
+duplicate successful bodies, rebuilds pending daily analytics, and purges
+expired raw responses without making OLX requests. Each operation has an
+independent outcome; schedule it independently so housekeeping continues during
+an upstream outage or failed rebuild. The default live raw horizon is a rolling
+72 hours from `fetched_at`. Run this profile hourly on the host; the expected
+maximum cleanup lag is one hour plus the duration of the maintenance run. The
+legacy expiry transition and duplicate compaction are bounded and idempotent;
+rerunning the same command resumes from remaining rows. To inspect a retained
 response offline, run `docker compose --profile scrape run --rm scraper node
 src/replay-response.js --id=<raw-response-id>`; replay only reads and parses
 the retained payload.
+
+The maintenance JSON reports `publicationEvidence`, `retentionTransition`,
+`duplicateCompaction`, `purged`, and `rebuilt` separately. A failed purge does
+not suppress a rebuild, and a failed rebuild does not suppress purge. Raw
+archive v2 uses one canonical body: successful search records retain the
+original in `source_payload`, successful detail records retain it in `payload`
+for compatibility with existing detail readers, and diagnostic records retain
+bounded metadata without a successful body. Legacy rows replay through the
+`source_payload`/`payload` fallback until expiry. Existing backups retain their
+separate backup policy.
 
 ```bash
 docker compose --profile scrape run --rm scraper node src/backfill-price-history.js --dry-run

@@ -100,6 +100,7 @@ module.exports = function installEnrichmentMethods(Db) {
       const client = await this.pool.connect();
       try {
         await client.query("BEGIN");
+        const detailObservedAt = new Date();
         const input = renderUnnest(ENRICH_COLS, rows);
         await client.query(
           `WITH input AS (
@@ -161,7 +162,25 @@ module.exports = function installEnrichmentMethods(Db) {
           input.params,
         );
 
-        const detailObservedAt = new Date();
+        await client.query(
+          `INSERT INTO listing_publication_evidence
+             (article_id, published_at, observed_at, source, evidence_kind)
+           SELECT article_id, published_at, $2::timestamptz,
+                  'detail', 'upstream_created_at'
+             FROM jsonb_to_recordset($1::jsonb) AS p(
+               article_id bigint, published_at timestamptz)
+            WHERE published_at IS NOT NULL
+           ON CONFLICT (article_id, published_at, source) DO NOTHING`,
+          [
+            JSON.stringify(
+              rows.map((row) => ({
+                article_id: row.articleId,
+                published_at: row.publishedAt ?? null,
+              })),
+            ),
+            detailObservedAt,
+          ],
+        );
         for (const row of rows) {
           const attributes = {
             latitude: row.latitude ?? null,

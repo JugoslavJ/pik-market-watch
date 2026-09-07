@@ -76,9 +76,16 @@ WHERE n.nspname = 'public'
 -- login. This also repairs fresh-volume ownership after bootstrap SQL runs.
 SELECT format('ALTER SCHEMA dashboard_public OWNER TO %I', :'app_user')
 WHERE to_regnamespace('dashboard_public') IS NOT NULL \gexec
+SELECT format('ALTER SCHEMA reporting OWNER TO %I', :'app_user')
+WHERE to_regnamespace('reporting') IS NOT NULL \gexec
 SELECT format('ALTER VIEW %I.%I OWNER TO %I', n.nspname, c.relname, :'app_user')
 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
 WHERE n.nspname = 'dashboard_public'
+  AND c.relkind IN ('v','m')
+  AND pg_get_userbyid(c.relowner) = :'admin_user' \gexec
+SELECT format('ALTER VIEW %I.%I OWNER TO %I', n.nspname, c.relname, :'app_user')
+FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'reporting'
   AND c.relkind IN ('v','m')
   AND pg_get_userbyid(c.relowner) = :'admin_user' \gexec
 
@@ -87,12 +94,18 @@ SELECT format('GRANT pg_read_all_data TO %I', :'reader_user') \gexec
 SELECT format('GRANT USAGE ON SCHEMA public TO %I', :'reader_user') \gexec
 SELECT format('GRANT SELECT ON ALL TABLES IN SCHEMA public TO %I', :'reader_user') \gexec
 SELECT format('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO %I', :'reader_user') \gexec
+SELECT format('GRANT USAGE ON SCHEMA reporting TO %I', :'reader_user')
+WHERE to_regnamespace('reporting') IS NOT NULL \gexec
+SELECT format('GRANT SELECT ON ALL TABLES IN SCHEMA reporting TO %I', :'reader_user')
+WHERE to_regnamespace('reporting') IS NOT NULL \gexec
 -- Defaults are attached to the APP role only: remote restores run as it, and
 -- they cannot replay cross-role defaults FOR the bootstrap user (that was the
 -- "permission denied to change default privileges" sync failure of 2026-08).
 SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT SELECT ON TABLES TO %I',
               :'app_user', :'reader_user') \gexec
 SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT SELECT ON SEQUENCES TO %I',
+              :'app_user', :'reader_user') \gexec
+SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA reporting GRANT SELECT ON TABLES TO %I',
               :'app_user', :'reader_user') \gexec
 
 -- Public role: explicit allowlist only. Do not grant pg_read_all_data,

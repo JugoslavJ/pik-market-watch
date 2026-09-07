@@ -30,7 +30,13 @@ async function runAllUnlocked(db) {
         "(see config/searches.example.json) or set SEARCH_URLS.",
     );
     state.lastStatus = "idle: no searches configured";
-    return { okRuns: 0, failedRuns: 0, skipped: 0, totalCards: 0 };
+    // Housekeeping has no upstream dependency. A deployment with no searches
+    // configured must still cap and purge live raw archives.
+    const maintenance = await db.runMaintenanceCycle({
+      maxDays: config.analyticsRebuildMaxDays,
+      log: (message) => log(`maintenance: ${message}`),
+    });
+    return { okRuns: 0, failedRuns: 0, skipped: 0, totalCards: 0, maintenance };
   }
 
   let okRuns = 0;
@@ -112,20 +118,19 @@ async function runAllUnlocked(db) {
     }
   }
 
-  if (okRuns > 0) {
-    try {
-      await db.rebuildDailyInventory({
-        maxDays: config.analyticsRebuildMaxDays,
-        log: (message) => log(`analytics: ${message}`),
-      });
-      await db.purgeRawResponses();
-    } catch (err) {
-      log(`✖ analytics maintenance failed: ${err.message || err}`);
-    }
-  }
+  // Retention and analytics have separate outcomes. A failed upstream search,
+  // failed rebuild, or skipped cycle must not suppress raw cleanup.
+  const maintenance = await db.runMaintenanceCycle({
+    maxDays: config.analyticsRebuildMaxDays,
+    log: (message) => log(`maintenance: ${message}`),
+  });
+  if (!maintenance.ok)
+    log(
+      `✖ maintenance had independent failures: ${JSON.stringify(maintenance.errors)}`,
+    );
 
   state.lastRunAt = new Date().toISOString();
-  return { okRuns, failedRuns, skipped, totalCards };
+  return { okRuns, failedRuns, skipped, totalCards, maintenance };
 }
 
 async function runAll(db) {
