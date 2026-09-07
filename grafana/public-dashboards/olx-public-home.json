@@ -53,7 +53,7 @@
         {
           "refId": "A",
           "format": "table",
-      "rawSql": "SELECT category, deal, count(DISTINCT article_id)::int AS observed_active_listings\nFROM dashboard_public.current_listings\nCROSS JOIN LATERAL unnest(category_memberships) AS categories(category)\nWHERE category IN ('apartments','houses','vacation_homes')\nGROUP BY category, deal\nORDER BY category, deal"
+          "rawSql": "SELECT category, deal, count(DISTINCT article_id)::int AS observed_active_listings\nFROM dashboard_public.current_listings\nCROSS JOIN LATERAL unnest(category_memberships) AS categories(category)\nWHERE category IN ('apartments','houses','vacation_homes')\nGROUP BY category, deal\nORDER BY category, deal"
         }
       ]
     },
@@ -64,13 +64,21 @@
       "description": "Median asking KM/m² for valid priced sale listings. Sample size is shown; no cross-category pooled headline is calculated.",
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 7, "w": 12, "x": 0, "y": 4 },
-      "fieldConfig": { "defaults": { "unit": "currencyBAM" }, "overrides": [] },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "median_asking_km_m2" },
+            "properties": [{ "id": "unit", "value": "suffix: BAM/m²" }]
+          }
+        ]
+      },
       "options": { "showHeader": true },
       "targets": [
         {
           "refId": "A",
           "format": "table",
-      "rawSql": "SELECT category, count(DISTINCT article_id)::int AS priced_sample, round(percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2))::int AS median_asking_km_m2\nFROM dashboard_public.current_listings\nCROSS JOIN LATERAL unnest(category_memberships) AS categories(category)\nWHERE category IN ('apartments','houses','vacation_homes')\n  AND deal = 'sale' AND ppm2 > 0\nGROUP BY category\nORDER BY category"
+          "rawSql": "SELECT category, count(DISTINCT article_id)::int AS priced_sample, round(percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2))::int AS median_asking_km_m2\nFROM dashboard_public.current_listings\nCROSS JOIN LATERAL unnest(category_memberships) AS categories(category)\nWHERE category IN ('apartments','houses','vacation_homes')\n  AND deal = 'sale' AND ppm2 > 0\nGROUP BY category\nORDER BY category"
         }
       ]
     },
@@ -81,13 +89,21 @@
       "description": "Rental asking prices are shown without assuming a monthly lease period; is_rent alone does not establish the period.",
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 7, "w": 12, "x": 12, "y": 7 },
-      "fieldConfig": { "defaults": { "unit": "currencyBAM" }, "overrides": [] },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "median_asking_km" },
+            "properties": [{ "id": "unit", "value": "suffix: BAM" }]
+          }
+        ]
+      },
       "options": { "showHeader": true },
       "targets": [
         {
           "refId": "A",
           "format": "table",
-      "rawSql": "SELECT category, count(DISTINCT article_id)::int AS priced_sample, round(percentile_cont(0.5) WITHIN GROUP (ORDER BY price))::int AS median_asking_km\nFROM dashboard_public.current_listings\nCROSS JOIN LATERAL unnest(category_memberships) AS categories(category)\nWHERE category IN ('apartments','houses','vacation_homes')\n  AND deal = 'rent' AND price > 0\nGROUP BY category\nORDER BY category"
+          "rawSql": "SELECT category, count(DISTINCT article_id)::int AS priced_sample, round(percentile_cont(0.5) WITHIN GROUP (ORDER BY price))::int AS median_asking_km\nFROM dashboard_public.current_listings\nCROSS JOIN LATERAL unnest(category_memberships) AS categories(category)\nWHERE category IN ('apartments','houses','vacation_homes')\n  AND deal = 'rent' AND price > 0\nGROUP BY category\nORDER BY category"
         }
       ]
     },
@@ -104,7 +120,7 @@
         {
           "refId": "A",
           "format": "table",
-      "rawSql": "SELECT category, deal, count(DISTINCT article_id)::int AS new_active_listings\nFROM dashboard_public.current_listings\nCROSS JOIN LATERAL unnest(category_memberships) AS categories(category)\nWHERE category IN ('apartments','houses','vacation_homes')\n  AND first_seen >= now() - INTERVAL '7 days'\nGROUP BY category, deal\nORDER BY category, deal"
+          "rawSql": "SELECT category, deal, count(DISTINCT article_id)::int AS new_active_listings\nFROM dashboard_public.current_listings\nCROSS JOIN LATERAL unnest(category_memberships) AS categories(category)\nWHERE category IN ('apartments','houses','vacation_homes')\n  AND first_seen >= now() - INTERVAL '7 days'\nGROUP BY category, deal\nORDER BY category, deal"
         }
       ]
     },
@@ -115,7 +131,31 @@
       "description": "Resolved valid-to-valid reductions in the last seven days. The event price and current availability are distinct facts.",
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
-      "fieldConfig": { "defaults": { "unit": "currencyBAM" }, "overrides": [] },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "prior_price" },
+            "properties": [{ "id": "unit", "value": "suffix: BAM" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "new_price" },
+            "properties": [{ "id": "unit", "value": "suffix: BAM" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "reduction_km" },
+            "properties": [{ "id": "unit", "value": "suffix: BAM" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "reduction_pct" },
+            "properties": [{ "id": "unit", "value": "percent" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "event_at" },
+            "properties": [{ "id": "unit", "value": "dateTimeAsIso" }]
+          }
+        ]
+      },
       "options": { "showHeader": true },
       "targets": [
         {

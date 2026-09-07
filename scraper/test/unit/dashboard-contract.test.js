@@ -160,6 +160,7 @@ test("public dashboards are fixed-scope and use only the reporting contract", ()
     const source = JSON.stringify(dashboard);
     assert.match(source, /olx-public-postgres/);
     assert.match(source, /dashboard_public\./);
+    assert.doesNotMatch(source, /currencyBAM/);
     assert.doesNotMatch(source, /gross yield|guaranteed bargain/i);
     for (const panel of dashboard.panels) {
       for (const target of panel.targets || []) {

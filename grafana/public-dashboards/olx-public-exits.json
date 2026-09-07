@@ -73,7 +73,19 @@
       "description": "Last asking price is resolved at closure time and is not a sale price. NULL means the evidence boundary was not a valid priced state.",
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 9, "w": 24, "x": 0, "y": 4 },
-      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "last_asking_price" },
+            "properties": [{ "id": "unit", "value": "suffix: BAM" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "last_asking_ppm2" },
+            "properties": [{ "id": "unit", "value": "suffix: BAM/m²" }]
+          }
+        ]
+      },
       "options": { "showHeader": true },
       "targets": [
         {

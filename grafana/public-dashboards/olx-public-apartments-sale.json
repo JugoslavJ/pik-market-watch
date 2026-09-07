@@ -44,7 +44,15 @@
       "description": "Median sale asking price per m². The sample count is returned beside the metric; insufficient data is NULL.",
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 4, "w": 8, "x": 8, "y": 0 },
-      "fieldConfig": { "defaults": { "unit": "currencyBAM" }, "overrides": [] },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "median_asking_km_m2" },
+            "properties": [{ "id": "unit", "value": "suffix: BAM/m²" }]
+          }
+        ]
+      },
       "options": {},
       "targets": [
         {
@@ -78,7 +86,23 @@
       "description": "Neighborhood aggregates use a minimum of ten eligible sale listings. (no pin) and (unmapped) are coverage categories, not neighborhoods.",
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
-      "fieldConfig": { "defaults": { "unit": "currencyBAM" }, "overrides": [] },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "p25_km_m2" },
+            "properties": [{ "id": "unit", "value": "suffix: BAM/m²" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "median_km_m2" },
+            "properties": [{ "id": "unit", "value": "suffix: BAM/m²" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "p75_km_m2" },
+            "properties": [{ "id": "unit", "value": "suffix: BAM/m²" }]
+          }
+        ]
+      },
       "options": { "showHeader": true },
       "targets": [
         {
@@ -95,7 +119,22 @@
       "description": "Candidates are compared only within neighborhood + room + area cohorts with at least ten other eligible listings. This is a relative asking-price signal, not fair value.",
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
-      "fieldConfig": { "defaults": { "unit": "currencyBAM" }, "overrides": [] },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "ppm2" },
+            "properties": [{ "id": "unit", "value": "suffix: BAM/m²" }]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cohort_median_km_m2"
+            },
+            "properties": [{ "id": "unit", "value": "suffix: BAM/m²" }]
+          }
+        ]
+      },
       "options": { "showHeader": true },
       "targets": [
         {
@@ -112,7 +151,35 @@
       "description": "Historical reduction event and current availability are shown separately; prices are asking prices.",
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
-      "fieldConfig": { "defaults": { "unit": "currencyBAM" }, "overrides": [] },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "prior_price" },
+            "properties": [{ "id": "unit", "value": "suffix: BAM" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "new_price" },
+            "properties": [{ "id": "unit", "value": "suffix: BAM" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "reduction_km" },
+            "properties": [{ "id": "unit", "value": "suffix: BAM" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "reduction_pct" },
+            "properties": [{ "id": "unit", "value": "percent" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "event_at" },
+            "properties": [{ "id": "unit", "value": "dateTimeAsIso" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "last_seen" },
+            "properties": [{ "id": "unit", "value": "dateTimeAsIso" }]
+          }
+        ]
+      },
       "options": { "showHeader": true },
       "targets": [
         {
@@ -129,7 +196,23 @@
       "description": "Reconstructed daily apartment-sale inventory. Median and quartiles are asking prices, not transaction prices; missing days are not converted to zero.",
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
-      "fieldConfig": { "defaults": { "unit": "currencyBAM" }, "overrides": [] },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "p25_km_m2" },
+            "properties": [{ "id": "unit", "value": "suffix: BAM/m²" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "median_km_m2" },
+            "properties": [{ "id": "unit", "value": "suffix: BAM/m²" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "p75_km_m2" },
+            "properties": [{ "id": "unit", "value": "suffix: BAM/m²" }]
+          }
+        ]
+      },
       "options": {},
       "targets": [
         {

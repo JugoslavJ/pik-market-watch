@@ -44,7 +44,15 @@
       "description": "Median rental asking price. The collected evidence does not establish a monthly lease period, so no KM/month label is used.",
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 4, "w": 8, "x": 8, "y": 0 },
-      "fieldConfig": { "defaults": { "unit": "currencyBAM" }, "overrides": [] },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "median_asking_km" },
+            "properties": [{ "id": "unit", "value": "suffix: BAM" }]
+          }
+        ]
+      },
       "options": {},
       "targets": [
         {
@@ -78,7 +86,15 @@
       "description": "Rental prices by room label with sample sizes. Unknown room values are retained as unknown rather than discarded.",
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
-      "fieldConfig": { "defaults": { "unit": "currencyBAM" }, "overrides": [] },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "median_asking_km" },
+            "properties": [{ "id": "unit", "value": "suffix: BAM" }]
+          }
+        ]
+      },
       "options": { "showHeader": true },
       "targets": [
         {
@@ -95,7 +111,15 @@
       "description": "The newest active rental observations in the fixed apartment scope.",
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
-      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "price" },
+            "properties": [{ "id": "unit", "value": "suffix: BAM" }]
+          }
+        ]
+      },
       "options": { "showHeader": true },
       "targets": [
         {
@@ -112,7 +136,31 @@
       "description": "Resolved valid-to-valid asking-price reductions; historical event time and current availability are separate fields.",
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
-      "fieldConfig": { "defaults": { "unit": "currencyBAM" }, "overrides": [] },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "prior_price" },
+            "properties": [{ "id": "unit", "value": "suffix: BAM" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "new_price" },
+            "properties": [{ "id": "unit", "value": "suffix: BAM" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "reduction_km" },
+            "properties": [{ "id": "unit", "value": "suffix: BAM" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "reduction_pct" },
+            "properties": [{ "id": "unit", "value": "percent" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "event_at" },
+            "properties": [{ "id": "unit", "value": "dateTimeAsIso" }]
+          }
+        ]
+      },
       "options": { "showHeader": true },
       "targets": [
         {
