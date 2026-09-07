@@ -367,7 +367,18 @@ tunnel path.
   `curl -f http://127.0.0.1:3000/api/health`; then inspect
   `journalctl -u cloudflared -n 100 --no-pager`. Datasource failures usually
   indicate missing reader credentials or reader grants; re-run the roles script
-  after a restore.
+  after a restore. If the public datasource reports `password authentication
+  failed`, make the database role and Grafana container consume the same current
+  `.env` value (a plain `restart` does not refresh container environment):
+
+  ```bash
+  docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
+  docker compose up -d --force-recreate grafana
+  docker compose logs --tail=100 grafana
+  ```
+
+  Use a URL-safe password such as `openssl rand -hex 24`; never print it in
+  logs or commit it.
 - **Backup is unhealthy:** inspect `docker compose logs db-backup`, confirm a recent `backups/olx-*.dump`, and run `pg_restore -l` on it. The included Grafana alert tracks scrape freshness, not backup freshness.
 - **Sync fails:** retain the local dump and read the remote `RESTORE_ERROR` lines in `logs/sync.log`. Ownership failures must be corrected on the source database before retrying; a restore failure after the schema swap triggers the remote rollback procedure.
 

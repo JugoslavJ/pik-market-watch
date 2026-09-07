@@ -115,7 +115,8 @@ SELECT format('GRANT USAGE ON SCHEMA dashboard_public TO %I', :'public_reader_us
 WHERE to_regnamespace('dashboard_public') IS NOT NULL \gexec
 SELECT format('REVOKE ALL ON ALL TABLES IN SCHEMA dashboard_public FROM %I', :'public_reader_user')
 WHERE to_regnamespace('dashboard_public') IS NOT NULL \gexec
-REVOKE ALL ON ALL TABLES IN SCHEMA dashboard_public FROM PUBLIC;
+SELECT format('REVOKE ALL ON ALL TABLES IN SCHEMA %I FROM PUBLIC', 'dashboard_public')
+WHERE to_regnamespace('dashboard_public') IS NOT NULL \gexec
 SELECT format('GRANT SELECT ON TABLE dashboard_public.current_listings,
                dashboard_public.daily_market,
                dashboard_public.price_reductions,
@@ -124,7 +125,8 @@ SELECT format('GRANT SELECT ON TABLE dashboard_public.current_listings,
 WHERE to_regnamespace('dashboard_public') IS NOT NULL \gexec
 SELECT format('REVOKE ALL ON ALL SEQUENCES IN SCHEMA dashboard_public FROM %I', :'public_reader_user')
 WHERE to_regnamespace('dashboard_public') IS NOT NULL \gexec
-REVOKE ALL ON ALL SEQUENCES IN SCHEMA dashboard_public FROM PUBLIC;
+SELECT format('REVOKE ALL ON ALL SEQUENCES IN SCHEMA %I FROM PUBLIC', 'dashboard_public')
+WHERE to_regnamespace('dashboard_public') IS NOT NULL \gexec
 REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC;
 SELECT format('GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO %I', :'reader_user') \gexec
 SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC',

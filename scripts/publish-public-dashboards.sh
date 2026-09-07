@@ -11,7 +11,7 @@ set -euo pipefail
 
 dashboards=(
   "olx-public-home:1a2b3c4d5e6f708192a3b4c5d6e7f801"
-  "olx-public-apartments-sale:4d5e6f708192a3b4c5d6e7f80192a3b"
+  "olx-public-apartments-sale:4d5e6f708192a3b4c5d6e7f80192a3bc"
   "olx-public-apartments-rent:2b3c4d5e6f708192a3b4c5d6e7f80192"
   "olx-public-exits:3c4d5e6f708192a3b4c5d6e7f80192a3"
 )

@@ -28,6 +28,10 @@ const alertProvisioning = fs.readFileSync(
   path.join(root, "grafana", "provisioning", "alerting", "olx-alerts.yml"),
   "utf8",
 );
+const publicShareScript = fs.readFileSync(
+  path.join(root, "scripts", "publish-public-dashboards.sh"),
+  "utf8",
+);
 
 test("dashboard SQL uses the supported, validated numeric textbox contract", () => {
   const dashboards = fs
@@ -177,6 +181,15 @@ test("public dashboards are fixed-scope and use only the reporting contract", ()
   }
 });
 
+test("public share access tokens have a valid stable length", () => {
+  const entries = [...publicShareScript.matchAll(/\"([^:\"]+):([a-f0-9]+)\"/g)];
+  assert.equal(entries.length, 4);
+  for (const [, uid, token] of entries) {
+    assert.match(uid, /^olx-public-/);
+    assert.match(token, /^[a-f0-9]{32}$/);
+  }
+});
+
 test("public reporting objects and role setup retain the confidentiality boundary", () => {
   assert.match(
     publicReportingMigration,
@@ -208,4 +221,8 @@ test("public reporting objects and role setup retain the confidentiality boundar
   const publicRoleSection = roles.slice(roles.indexOf("-- Public role:"));
   assert.doesNotMatch(publicRoleSection, /GRANT pg_read_all_data/);
   assert.doesNotMatch(publicRoleSection, /GRANT USAGE ON ALL SEQUENCES/);
+  assert.match(
+    publicRoleSection,
+    /WHERE to_regnamespace\('dashboard_public'\) IS NOT NULL \\gexec/,
+  );
 });
