@@ -20,6 +20,7 @@ entrypoint and the application migration runner:
 | `11-raw-archive-format.sql` | Versioned one-body raw archive contract |
 | `12-publication-history.sql` | Durable publication evidence and history contract |
 | `13-reporting-surface.sql` | Stable private reporting views over the current contract |
+| `14-exit-economics.sql` | Indexed per-listing economics for the exits dashboard |
 | `zz-database-roles.sh` | Application ownership and reader permissions |
 
 Fresh volumes execute these files in order. The migrator subsequently records
