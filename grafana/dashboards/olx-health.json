@@ -196,7 +196,7 @@
             ]
           },
           "unit": "percent",
-          "noValue": "—"
+          "noValue": "Unknown"
         },
         "overrides": []
       },
@@ -231,7 +231,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT COALESCE(round(100.0 * count(*) FILTER (WHERE status = 'ok') / NULLIF(count(*), 0)), 0)\nFROM scrape_runs\nWHERE started_at > now() - INTERVAL '24 hours'\n  AND status IN ('ok', 'error')",
+          "rawSql": "SELECT round(100.0 * count(*) FILTER (WHERE status = 'ok') / NULLIF(count(*), 0))\nFROM scrape_runs\nWHERE started_at > now() - INTERVAL '24 hours'\n  AND status IN ('ok', 'error')",
           "refId": "A"
         }
       ],
@@ -276,7 +276,7 @@
         "y": 0
       },
       "title": "Since last successful scrape",
-      "description": "Age of the newest successful run across all searches.",
+      "description": "Age of the newest authoritative completed success across all searches. See per-search freshness below for stalled individual searches.",
       "type": "stat",
       "options": {
         "colorMode": "value",
@@ -300,7 +300,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT EXTRACT(EPOCH FROM (now() - max(finished_at)))::bigint\nFROM scrape_runs\nWHERE status = 'ok' AND finished_at IS NOT NULL",
+          "rawSql": "SELECT EXTRACT(EPOCH FROM (now() - max(finished_at)))::bigint\nFROM scrape_runs\nWHERE status = 'ok' AND is_complete = TRUE AND finished_at IS NOT NULL",
           "refId": "A"
         }
       ],
@@ -527,7 +527,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "title"
+              "options": "name"
             },
             "properties": [
               {
@@ -539,7 +539,7 @@
                 "value": [
                   {
                     "targetBlank": true,
-                    "title": "open on olx.ba",
+                    "title": "Open search on olx.ba",
                     "url": "${__data.fields.url}"
                   }
                 ]
@@ -829,7 +829,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT round(100.0 * count(latitude) / NULLIF(count(*), 0))\nFROM listings\nWHERE closed_at IS NULL\n  AND last_seen > now() - INTERVAL '14 days'",
+          "rawSql": "SELECT round(100.0 * count(*) FILTER (WHERE latitude IS NOT NULL AND longitude IS NOT NULL) / NULLIF(count(*), 0))\nFROM listings\nWHERE closed_at IS NULL\n  AND last_seen > now() - INTERVAL '14 days'",
           "refId": "A"
         }
       ],
@@ -1062,7 +1062,7 @@
         "x": 0,
         "y": 42
       },
-      "title": "OLX server-side status vs our closure state · actives",
+      "title": "OLX status vs closure state · recently seen",
       "description": "Drift detector: rows where olx says active but we marked closed (or vice versa) mean the absence-based closing logic needs attention.",
       "type": "table",
       "options": {
@@ -1180,6 +1180,18 @@
                 "value": 900
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "last_seen"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeAsIso"
+              }
+            ]
           }
         ]
       },
@@ -1210,7 +1222,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT count(*)::int AS runs,\n       left(regexp_replace(regexp_replace(COALESCE(error, '(no message)'), '[0-9]+', '#', 'g'), '\\s+', ' ', 'g'), 120) AS failure_pattern,\n       to_char(max(started_at), 'MM-DD HH24:MI') AS last_seen\nFROM scrape_runs\nWHERE status = 'error'\n  AND started_at > now() - INTERVAL '7 days'\nGROUP BY 2\nORDER BY 1 DESC",
+          "rawSql": "SELECT count(*)::int AS runs,\n       left(regexp_replace(regexp_replace(COALESCE(error, '(no message)'), '[0-9]+', '#', 'g'), '\\s+', ' ', 'g'), 120) AS failure_pattern,\n       max(started_at) AS last_seen\nFROM scrape_runs\nWHERE status = 'error'\n  AND started_at > now() - INTERVAL '7 days'\nGROUP BY 2\nORDER BY 1 DESC",
           "refId": "A"
         }
       ],
@@ -1230,7 +1242,7 @@
             "showPoints": "never",
             "spanNulls": true
           },
-          "unit": "none"
+          "unit": "m"
         },
         "overrides": [
           {
@@ -1336,7 +1348,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT count(*)::bigint AS incomplete\nFROM scrape_runs\nWHERE is_complete = FALSE\n  AND started_at > now() - INTERVAL '24 hours'",
+          "rawSql": "SELECT count(*)::bigint AS incomplete\nFROM scrape_runs\nWHERE is_complete = FALSE AND status IN ('ok', 'error') AND finished_at IS NOT NULL\n  AND started_at > now() - INTERVAL '24 hours'",
           "refId": "A"
         }
       ]
@@ -1644,18 +1656,19 @@
           "type": "postgres",
           "uid": "olx-postgres"
         },
-        "definition": "SELECT category AS __value, category AS __text FROM (SELECT category FROM saved_searches WHERE category IS NOT NULL UNION SELECT unnest(category_memberships) FROM listing_daily) s WHERE category IS NOT NULL GROUP BY category ORDER BY 1",
+        "definition": "SELECT DISTINCT category AS __value, category AS __text FROM saved_searches WHERE category IS NOT NULL ORDER BY 1",
         "includeAll": true,
-        "label": "Category",
+        "label": "Category (search tables)",
         "multi": false,
         "name": "category",
         "options": [],
-        "query": "SELECT category AS __value, category AS __text FROM (SELECT category FROM saved_searches WHERE category IS NOT NULL UNION SELECT unnest(category_memberships) FROM listing_daily) s WHERE category IS NOT NULL GROUP BY category ORDER BY 1",
+        "query": "SELECT DISTINCT category AS __value, category AS __text FROM saved_searches WHERE category IS NOT NULL ORDER BY 1",
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
         "sort": 1,
-        "type": "query"
+        "type": "query",
+        "description": "Filters the Saved searches and Per-search freshness tables."
       }
     ]
   },

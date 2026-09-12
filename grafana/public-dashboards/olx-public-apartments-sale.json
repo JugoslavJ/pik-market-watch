@@ -27,7 +27,10 @@
       "description": "Distinct article IDs in the fixed apartments + sale scope; active means last seen within 14 days and not closed.",
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 4, "w": 8, "x": 0, "y": 0 },
-      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "fieldConfig": { "defaults": {
+        "unit": "short",
+        "noValue": "Unknown"
+      }, "overrides": [] },
       "options": {},
       "targets": [
         {
@@ -45,7 +48,9 @@
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 4, "w": 8, "x": 8, "y": 0 },
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "noValue": "Unknown"
+        },
         "overrides": [
           {
             "matcher": { "id": "byName", "options": "median_asking_km_m2" },
@@ -69,7 +74,10 @@
       "description": "First observed in the window, deduplicated by article ID; renewals are excluded.",
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 4, "w": 8, "x": 16, "y": 0 },
-      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "fieldConfig": { "defaults": {
+        "unit": "short",
+        "noValue": "Unknown"
+      }, "overrides": [] },
       "options": {},
       "targets": [
         {
@@ -87,7 +95,9 @@
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "noValue": "Unknown"
+        },
         "overrides": [
           {
             "matcher": { "id": "byName", "options": "p25_km_m2" },
@@ -120,18 +130,63 @@
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "noValue": "Unknown"
+        },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "ppm2" },
-            "properties": [{ "id": "unit", "value": "suffix: BAM/m²" }]
+            "matcher": {
+              "id": "byName",
+              "options": "ppm2"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: BAM/m²"
+              }
+            ]
           },
           {
             "matcher": {
               "id": "byName",
               "options": "cohort_median_km_m2"
             },
-            "properties": [{ "id": "unit", "value": "suffix: BAM/m²" }]
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: BAM/m²"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "url"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "title"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open on olx.ba",
+                    "url": "${__data.fields.url}",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
           }
         ]
       },
@@ -152,31 +207,111 @@
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "noValue": "Unknown"
+        },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "prior_price" },
-            "properties": [{ "id": "unit", "value": "suffix: BAM" }]
+            "matcher": {
+              "id": "byName",
+              "options": "prior_price"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: BAM"
+              }
+            ]
           },
           {
-            "matcher": { "id": "byName", "options": "new_price" },
-            "properties": [{ "id": "unit", "value": "suffix: BAM" }]
+            "matcher": {
+              "id": "byName",
+              "options": "new_price"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: BAM"
+              }
+            ]
           },
           {
-            "matcher": { "id": "byName", "options": "reduction_km" },
-            "properties": [{ "id": "unit", "value": "suffix: BAM" }]
+            "matcher": {
+              "id": "byName",
+              "options": "reduction_km"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: BAM"
+              }
+            ]
           },
           {
-            "matcher": { "id": "byName", "options": "reduction_pct" },
-            "properties": [{ "id": "unit", "value": "percent" }]
+            "matcher": {
+              "id": "byName",
+              "options": "reduction_pct"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              }
+            ]
           },
           {
-            "matcher": { "id": "byName", "options": "event_at" },
-            "properties": [{ "id": "unit", "value": "dateTimeAsIso" }]
+            "matcher": {
+              "id": "byName",
+              "options": "event_at"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeAsIso"
+              }
+            ]
           },
           {
-            "matcher": { "id": "byName", "options": "last_seen" },
-            "properties": [{ "id": "unit", "value": "dateTimeAsIso" }]
+            "matcher": {
+              "id": "byName",
+              "options": "last_seen"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeAsIso"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "url"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "title"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open on olx.ba",
+                    "url": "${__data.fields.url}",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
           }
         ]
       },
@@ -185,31 +320,78 @@
         {
           "refId": "A",
           "format": "table",
-          "rawSql": "SELECT title, url, neighborhood, rooms, sqm, prior_price, new_price, reduction_km, reduction_pct, event_at, last_seen\nFROM dashboard_public.price_reductions\nWHERE deal = 'sale' AND category_memberships @> ARRAY['apartments']::text[] AND event_at >= now() - INTERVAL '7 days' AND currently_observed\nORDER BY event_at DESC LIMIT 50"
+          "rawSql": "SELECT title, url, neighborhood, rooms, sqm, prior_price, new_price, reduction_km, reduction_pct, event_at, last_seen\nFROM dashboard_public.price_reductions\nWHERE deal = 'sale' AND (category_memberships @> ARRAY['apartments']::text[] OR category = 'apartments') AND event_at >= now() - INTERVAL '7 days' AND currently_observed\nORDER BY event_at DESC LIMIT 50"
         }
       ]
     },
     {
       "id": 7,
       "type": "timeseries",
-      "title": "Daily asking-price trend",
+      "title": "Daily asking-price trend · last 30 complete days",
       "description": "Reconstructed daily apartment-sale inventory. Median and quartiles are asking prices, not transaction prices; missing days are not converted to zero.",
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "noValue": "Unknown",
+          "unit": "suffix: BAM/m²"
+        },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "p25_km_m2" },
-            "properties": [{ "id": "unit", "value": "suffix: BAM/m²" }]
+            "matcher": {
+              "id": "byName",
+              "options": "p25_km_m2"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: BAM/m²"
+              }
+            ]
           },
           {
-            "matcher": { "id": "byName", "options": "median_km_m2" },
-            "properties": [{ "id": "unit", "value": "suffix: BAM/m²" }]
+            "matcher": {
+              "id": "byName",
+              "options": "median_km_m2"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: BAM/m²"
+              }
+            ]
           },
           {
-            "matcher": { "id": "byName", "options": "p75_km_m2" },
-            "properties": [{ "id": "unit", "value": "suffix: BAM/m²" }]
+            "matcher": {
+              "id": "byName",
+              "options": "p75_km_m2"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: BAM/m²"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^(priced_sample|has_stale_observation|provisional_day)$"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "viz": true,
+                  "legend": true,
+                  "tooltip": false
+                }
+              }
+            ]
           }
         ]
       },

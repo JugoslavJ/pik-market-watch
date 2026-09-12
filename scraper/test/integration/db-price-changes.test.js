@@ -61,6 +61,29 @@ async function price(
 }
 
 needsDb(
+  "repeated prices retain the immediately preceding deal and evidence time",
+  async () => {
+    await listing(8903);
+    await state(8903, "2026-08-01", false);
+    await price(8903, "2026-08-01", 100000);
+    await state(8903, "2026-08-02", true);
+    await price(8903, "2026-08-02", 100000);
+    await price(8903, "2026-08-03", 90000);
+    // Modern valid evidence outranks a conflicting legacy assertion at the same time.
+    await price(8903, "2026-08-03", null, "conflict", "legacy_import");
+    const result = await db.pool.query(`SELECT deal, prior_effective_at, delta
+    FROM v_listing_price_changes WHERE article_id=8903`);
+    assert.equal(result.rowCount, 1);
+    assert.equal(result.rows[0].deal, "rent");
+    assert.equal(
+      result.rows[0].prior_effective_at.toISOString(),
+      "2026-08-02T00:00:00.000Z",
+    );
+    assert.equal(Number(result.rows[0].delta), -10000);
+  },
+);
+
+needsDb(
   "price changes resolve same-time competition and honor invalid boundaries",
   async () => {
     const articleId = 8901;

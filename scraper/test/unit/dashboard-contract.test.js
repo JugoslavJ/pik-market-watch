@@ -73,6 +73,38 @@ test("database filter migration defines shared filter and event-time helpers", (
   );
 });
 
+test("dashboard panels do not overlap and mixed metrics retain correct units", () => {
+  for (const dir of [dashboardDir, publicDashboardDir]) {
+    for (const file of fs.readdirSync(dir).filter((f) => f.endsWith(".json"))) {
+      const d = JSON.parse(fs.readFileSync(path.join(dir, file), "utf8"));
+      for (let i = 0; i < d.panels.length; i++)
+        for (const b of d.panels.slice(i + 1)) {
+          const a = d.panels[i],
+            x = a.gridPos,
+            y = b.gridPos;
+          assert.ok(
+            !(
+              x.x < y.x + y.w &&
+              y.x < x.x + x.w &&
+              x.y < y.y + y.h &&
+              y.y < x.y + x.h
+            ),
+            `${file}: panels ${a.id} and ${b.id} overlap`,
+          );
+        }
+    }
+  }
+  const read = (file) =>
+    JSON.parse(fs.readFileSync(path.join(dashboardDir, file), "utf8"));
+  const homeChange = read("olx-home.json").panels.find((p) => p.id === 7);
+  assert.equal(homeChange.fieldConfig.defaults.unit, "percent");
+  assert.doesNotMatch(homeChange.targets[0].rawSql, /"this wk"::int AS/);
+  const exitTrend = read("olx-exits.json").panels.find((p) => p.id === 6);
+  assert.equal(exitTrend.fieldConfig.defaults.unit, "suffix: KM/m²");
+  const yieldPanel = read("olx-overview.json").panels.find((p) => p.id === 27);
+  assert.doesNotMatch(yieldPanel.targets[0].rawSql, /\$\{deal/);
+});
+
 test("dashboard metric labels match their query grain and evidence semantics", () => {
   const read = (name) =>
     JSON.parse(fs.readFileSync(path.join(dashboardDir, name), "utf8"));

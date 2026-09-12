@@ -27,7 +27,10 @@
       "description": "Distinct article IDs in the fixed apartments + rent scope; active means last seen within 14 days and not closed.",
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 4, "w": 8, "x": 0, "y": 0 },
-      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "fieldConfig": { "defaults": {
+        "unit": "short",
+        "noValue": "Unknown"
+      }, "overrides": [] },
       "options": {},
       "targets": [
         {
@@ -45,7 +48,9 @@
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 4, "w": 8, "x": 8, "y": 0 },
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "noValue": "Unknown"
+        },
         "overrides": [
           {
             "matcher": { "id": "byName", "options": "median_asking_km" },
@@ -69,7 +74,10 @@
       "description": "First observed in the window, deduplicated by article ID; renewals are excluded.",
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 4, "w": 8, "x": 16, "y": 0 },
-      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "fieldConfig": { "defaults": {
+        "unit": "short",
+        "noValue": "Unknown"
+      }, "overrides": [] },
       "options": {},
       "targets": [
         {
@@ -87,7 +95,9 @@
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "noValue": "Unknown"
+        },
         "overrides": [
           {
             "matcher": { "id": "byName", "options": "median_asking_km" },
@@ -112,11 +122,51 @@
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "noValue": "Unknown"
+        },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "price" },
-            "properties": [{ "id": "unit", "value": "suffix: BAM" }]
+            "matcher": {
+              "id": "byName",
+              "options": "price"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: BAM"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "url"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "title"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open on olx.ba",
+                    "url": "${__data.fields.url}",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
           }
         ]
       },
@@ -137,27 +187,99 @@
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "noValue": "Unknown"
+        },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "prior_price" },
-            "properties": [{ "id": "unit", "value": "suffix: BAM" }]
+            "matcher": {
+              "id": "byName",
+              "options": "prior_price"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: BAM"
+              }
+            ]
           },
           {
-            "matcher": { "id": "byName", "options": "new_price" },
-            "properties": [{ "id": "unit", "value": "suffix: BAM" }]
+            "matcher": {
+              "id": "byName",
+              "options": "new_price"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: BAM"
+              }
+            ]
           },
           {
-            "matcher": { "id": "byName", "options": "reduction_km" },
-            "properties": [{ "id": "unit", "value": "suffix: BAM" }]
+            "matcher": {
+              "id": "byName",
+              "options": "reduction_km"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: BAM"
+              }
+            ]
           },
           {
-            "matcher": { "id": "byName", "options": "reduction_pct" },
-            "properties": [{ "id": "unit", "value": "percent" }]
+            "matcher": {
+              "id": "byName",
+              "options": "reduction_pct"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              }
+            ]
           },
           {
-            "matcher": { "id": "byName", "options": "event_at" },
-            "properties": [{ "id": "unit", "value": "dateTimeAsIso" }]
+            "matcher": {
+              "id": "byName",
+              "options": "event_at"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeAsIso"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "url"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "title"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open on olx.ba",
+                    "url": "${__data.fields.url}",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
           }
         ]
       },
@@ -166,18 +288,20 @@
         {
           "refId": "A",
           "format": "table",
-          "rawSql": "SELECT title, url, neighborhood, rooms, sqm, prior_price, new_price, reduction_km, reduction_pct, event_at, currently_observed\nFROM dashboard_public.price_reductions\nWHERE deal = 'rent' AND category_memberships @> ARRAY['apartments']::text[] AND event_at >= now() - INTERVAL '7 days'\nORDER BY event_at DESC LIMIT 50"
+          "rawSql": "SELECT title, url, neighborhood, rooms, sqm, prior_price, new_price, reduction_km, reduction_pct, event_at, currently_observed\nFROM dashboard_public.price_reductions\nWHERE deal = 'rent' AND (category_memberships @> ARRAY['apartments']::text[] OR category = 'apartments') AND event_at >= now() - INTERVAL '7 days'\nORDER BY event_at DESC LIMIT 50"
         }
       ]
     },
     {
       "id": 7,
       "type": "table",
-      "title": "Freshness for apartment rentals",
-      "description": "A missing completed success is Unknown. This reflects the latest successful scrape, not a visitor refresh.",
+      "title": "Apartment search freshness · sales + rentals",
+      "description": "Freshness covers every configured search in each category, including both sales and rentals. Unknown means at least one search has no authoritative completed success.",
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 6, "w": 12, "x": 12, "y": 12 },
-      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "fieldConfig": { "defaults": {
+        "noValue": "Unknown"
+      }, "overrides": [] },
       "options": { "showHeader": true },
       "targets": [
         {

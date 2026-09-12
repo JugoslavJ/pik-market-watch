@@ -139,7 +139,7 @@
               }
             ]
           },
-          "unit": "short",
+          "unit": "suffix: KM/m²",
           "noValue": "—"
         },
         "overrides": []
@@ -261,7 +261,7 @@
               }
             ]
           },
-          "unit": "d",
+          "unit": "suffix: days",
           "noValue": "—"
         },
         "overrides": []
@@ -273,7 +273,7 @@
         "y": 0
       },
       "title": "Median days on market · closed 30 d",
-      "description": "Published/first-seen → closed for ads that exited this month. A lower bound until published_at converges.",
+      "description": "Duration from first observed search sighting (or stored first_seen) to closure, across the listing lifetime including reopenings.",
       "type": "stat",
       "options": {
         "colorMode": "value",
@@ -329,9 +329,60 @@
             "showPoints": "never",
             "spanNulls": true
           },
-          "unit": "percent"
+          "unit": "suffix: KM/m²"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^(priced sample|estimated|stale|provisional)$"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "viz": true,
+                  "legend": true,
+                  "tooltip": false
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "exit KM/m2 (closed ads)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "asking KM/m2 (daily inventory)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 9,
@@ -349,7 +400,7 @@
           "showLegend": true
         },
         "tooltip": {
-          "mode": "single",
+          "mode": "multi",
           "sort": "none"
         }
       },
@@ -361,7 +412,7 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT date_trunc('day', l.closed_at) AS time,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY l.closing_ppm2) AS \"exit KM/m2 (closed ads)\"\nFROM listings_closed_filtered(ARRAY[${category:sqlstring}], dashboard_numeric(${min_sqm:sqlstring}), dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]) l\nWHERE l.closing_ppm2 > 0\n  AND $__timeFilter(l.closed_at)\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT date_trunc('day', l.closed_at AT TIME ZONE 'Europe/Sarajevo') AT TIME ZONE 'Europe/Sarajevo' AS time,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY l.closing_ppm2) AS \"exit KM/m2 (closed ads)\"\nFROM listings_closed_filtered(ARRAY[${category:sqlstring}], dashboard_numeric(${min_sqm:sqlstring}), dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]) l\nWHERE l.closing_ppm2 > 0\n  AND $__timeFilter(l.closed_at)\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nGROUP BY 1 ORDER BY 1",
           "refId": "A"
         },
         {
@@ -453,7 +504,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 13
+        "y": 14
       },
       "panels": [],
       "id": 8
@@ -559,7 +610,7 @@
         "h": 11,
         "w": 16,
         "x": 0,
-        "y": 14
+        "y": 15
       },
       "title": "Recently closed — exit price vs original ask",
       "description": "change_pct compares the final asking price with the first one we observed. Negative (red) = exited below its original ask.",
@@ -614,7 +665,7 @@
         "h": 11,
         "w": 8,
         "x": 16,
-        "y": 14
+        "y": 15
       },
       "title": "Exits by room count",
       "description": "Which apartment sizes are actually leaving the market in the selected period.",
@@ -664,7 +715,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 25
+        "y": 26
       },
       "panels": [],
       "id": 11
@@ -727,7 +778,7 @@
         "h": 14,
         "w": 16,
         "x": 0,
-        "y": 26
+        "y": 27
       },
       "title": "Exit map — click a pin to open the ad",
       "description": "Last known pin of ads that closed in the selected period.",
@@ -854,7 +905,7 @@
         "h": 14,
         "w": 8,
         "x": 16,
-        "y": 26
+        "y": 27
       },
       "title": "Closed & pinned — click title to open",
       "description": "Table form of the exit map: closed ads that had pins. Click a title to open the ad on olx.ba.",
@@ -890,7 +941,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 40
+        "y": 41
       },
       "panels": [],
       "id": 14
@@ -921,7 +972,7 @@
         "h": 10,
         "w": 8,
         "x": 0,
-        "y": 41
+        "y": 42
       },
       "title": "Exit discount vs original ask",
       "description": "How final asks compared to the first price we saw. Flat market → most ads exit at their opening ask.",
@@ -1003,7 +1054,7 @@
         "h": 10,
         "w": 16,
         "x": 8,
-        "y": 41
+        "y": 42
       },
       "title": "Priced share — weekly",
       "description": "Weekly priced-share proxy from reconstructed listing-day inventory using the selected dashboard filters. It is not a transaction rate; inferred, stale and provisional rows are part of the historical availability model.",
@@ -1040,7 +1091,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 51
+        "y": 52
       },
       "panels": [],
       "id": 17
@@ -1055,15 +1106,40 @@
           "custom": {},
           "unit": "none"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "days_on_market"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "d"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "exit_vs_opening_pct"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 11,
         "w": 14,
         "x": 0,
-        "y": 52
+        "y": 53
       },
-      "title": "Days on market vs exit discount · sales",
+      "title": "Days on market vs exit discount",
       "description": "Each closed sale ad as a point: how long it sat (x) vs how its final asking price compared to the first one we saw (y). Points drifting downward to the right = stale ads exiting at bigger discounts. Days-on-market is a lower bound until published_at converges; exit prices are askings, not transactions.",
       "type": "xychart",
       "pluginVersion": "13.0.2",
@@ -1133,7 +1209,8 @@
                 "value": null
               }
             ]
-          }
+          },
+          "unit": "percent"
         },
         "overrides": []
       },
@@ -1141,7 +1218,7 @@
         "h": 11,
         "w": 10,
         "x": 14,
-        "y": 52
+        "y": 53
       },
       "title": "Exit rate by KM/m² bracket · 30 d",
       "description": "Share of ads that exited per price bracket, brackets cut at the live quartiles of the combined active+closed pool. Cheap segments may be high-churn; expensive ones may just sit.",
@@ -1239,10 +1316,10 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 63
+        "y": 64
       },
       "title": "Exit rate by neighborhood — 30 d",
-      "description": "Closed ÷ (closed + active) per district over the last month — which areas actually move vs which sit. District from the ad pin; needs ≥10 combined listings; respects Category/Rooms/Deal but not the Neighborhood filter.",
+      "description": "Observed closed ads / (closed + active) by district over the last 30 days. A disappearance proxy, not a transaction rate. Requires at least 10 combined listings; ignores Neighborhood while the other filters apply.",
       "type": "table",
       "options": {
         "cellHeight": "sm",
@@ -1262,7 +1339,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH ex AS (\n  SELECT CASE WHEN l.latitude IS NULL THEN '(no pin)'\n              ELSE COALESCE(NULLIF(l.location, ''), '(unmapped)') END AS district,\n         count(*)::int AS closed_n\n  FROM listings_closed_filtered(ARRAY[${category:sqlstring}], dashboard_numeric(${min_sqm:sqlstring}), dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]) l\n  WHERE l.closed_at > now() - INTERVAL '30 days'\n    AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n    AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\n  GROUP BY 1\n),\nac AS (\n  SELECT CASE WHEN l.latitude IS NULL THEN '(no pin)'\n              ELSE COALESCE(NULLIF(l.location, ''), '(unmapped)') END AS district,\n         count(*)::int AS active_n\n  FROM listings_filtered(ARRAY[${category:sqlstring}], dashboard_numeric(${min_sqm:sqlstring}), dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]) l\n  WHERE room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n    AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\n  GROUP BY 1\n)\nSELECT ex.district, ex.closed_n AS closed_30d, ac.active_n AS actives,\n       round(100.0 * ex.closed_n / NULLIF(ex.closed_n + ac.active_n, 0), 1)::double precision AS exit_rate_pct\nFROM ex\nLEFT JOIN ac USING (district)\nWHERE ex.closed_n + COALESCE(ac.active_n, 0) >= 10\nORDER BY exit_rate_pct DESC",
+          "rawSql": "WITH ex AS (\n  SELECT CASE WHEN l.latitude IS NULL THEN '(no pin)'\n              ELSE COALESCE(NULLIF(l.location, ''), '(unmapped)') END AS district,\n         count(*)::int AS closed_n\n  FROM listings_closed_filtered(ARRAY[${category:sqlstring}], dashboard_numeric(${min_sqm:sqlstring}), dashboard_numeric(${max_sqm:sqlstring}), ARRAY[]::text[]) l\n  WHERE l.closed_at > now() - INTERVAL '30 days'\n    AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n    AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\n  GROUP BY 1\n),\nac AS (\n  SELECT CASE WHEN l.latitude IS NULL THEN '(no pin)'\n              ELSE COALESCE(NULLIF(l.location, ''), '(unmapped)') END AS district,\n         count(*)::int AS active_n\n  FROM listings_filtered(ARRAY[${category:sqlstring}], dashboard_numeric(${min_sqm:sqlstring}), dashboard_numeric(${max_sqm:sqlstring}), ARRAY[]::text[]) l\n  WHERE room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n    AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\n  GROUP BY 1\n)\nSELECT ex.district, ex.closed_n AS closed_30d, COALESCE(ac.active_n, 0) AS actives,\n       round(100.0 * ex.closed_n / NULLIF(ex.closed_n + COALESCE(ac.active_n, 0), 0), 1)::double precision AS exit_rate_pct\nFROM ex\nLEFT JOIN ac USING (district)\nWHERE ex.closed_n + COALESCE(ac.active_n, 0) >= 10\nORDER BY exit_rate_pct DESC",
           "refId": "A"
         }
       ],
@@ -1284,13 +1361,13 @@
           "type": "postgres",
           "uid": "olx-postgres"
         },
-        "definition": "SELECT category AS __value, category AS __text FROM (SELECT category FROM saved_searches WHERE category IS NOT NULL UNION SELECT unnest(category_memberships) FROM (SELECT DISTINCT category_memberships FROM listing_daily) memberships) s WHERE category IS NOT NULL GROUP BY category ORDER BY 1",
+        "definition": "SELECT category AS __value, category AS __text FROM (SELECT category FROM saved_searches UNION SELECT closing_category FROM listings UNION SELECT category FROM listing_daily UNION SELECT unnest(category_memberships) FROM (SELECT DISTINCT category_memberships FROM listing_daily) memberships) s WHERE category IS NOT NULL GROUP BY category ORDER BY 1",
         "includeAll": true,
         "label": "Category",
         "multi": false,
         "name": "category",
         "options": [],
-        "query": "SELECT category AS __value, category AS __text FROM (SELECT category FROM saved_searches WHERE category IS NOT NULL UNION SELECT unnest(category_memberships) FROM (SELECT DISTINCT category_memberships FROM listing_daily) memberships) s WHERE category IS NOT NULL GROUP BY category ORDER BY 1",
+        "query": "SELECT category AS __value, category AS __text FROM (SELECT category FROM saved_searches UNION SELECT closing_category FROM listings UNION SELECT category FROM listing_daily UNION SELECT unnest(category_memberships) FROM (SELECT DISTINCT category_memberships FROM listing_daily) memberships) s WHERE category IS NOT NULL GROUP BY category ORDER BY 1",
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
@@ -1334,13 +1411,13 @@
           "type": "postgres",
           "uid": "olx-postgres"
         },
-        "definition": "SELECT bucket AS __value, bucket AS __text FROM (SELECT DISTINCT room_bucket(rooms) AS bucket FROM (SELECT rooms FROM listings UNION SELECT rooms FROM listing_daily WHERE rooms IS NOT NULL) r) s WHERE bucket IS NOT NULL ORDER BY 1",
+        "definition": "SELECT bucket AS __value, bucket AS __text FROM (SELECT DISTINCT room_bucket(rooms) AS bucket FROM (SELECT rooms FROM listings UNION SELECT rooms FROM listing_daily) r) s WHERE bucket IS NOT NULL ORDER BY 1",
         "includeAll": true,
         "label": "Rooms",
         "multi": false,
         "name": "rooms",
         "options": [],
-        "query": "SELECT bucket AS __value, bucket AS __text FROM (SELECT DISTINCT room_bucket(rooms) AS bucket FROM (SELECT rooms FROM listings UNION SELECT rooms FROM listing_daily WHERE rooms IS NOT NULL) r) s WHERE bucket IS NOT NULL ORDER BY 1",
+        "query": "SELECT bucket AS __value, bucket AS __text FROM (SELECT DISTINCT room_bucket(rooms) AS bucket FROM (SELECT rooms FROM listings UNION SELECT rooms FROM listing_daily) r) s WHERE bucket IS NOT NULL ORDER BY 1",
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,

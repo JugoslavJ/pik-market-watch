@@ -21,6 +21,7 @@ entrypoint and the application migration runner:
 | `12-publication-history.sql` | Durable publication evidence and history contract |
 | `13-reporting-surface.sql` | Stable private reporting views over the current contract |
 | `14-exit-economics.sql` | Indexed per-listing economics for the exits dashboard |
+| `15-dashboard-query-review.sql` | Price-transition lookup optimization, lifecycle indexes, and per-search freshness |
 | `zz-database-roles.sh` | Application ownership and reader permissions |
 
 Fresh volumes execute these files in order. The migrator subsequently records

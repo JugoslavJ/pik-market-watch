@@ -22,13 +22,16 @@
       "description": "Closure cycles observed in the fixed apartment + sale scope. An exit is disappearance from observation, not a confirmed transaction.",
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 4, "w": 8, "x": 0, "y": 0 },
-      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "fieldConfig": { "defaults": {
+        "unit": "short",
+        "noValue": "Unknown"
+      }, "overrides": [] },
       "options": {},
       "targets": [
         {
           "refId": "A",
           "format": "table",
-          "rawSql": "SELECT count(*)::int AS observed_exits FROM dashboard_public.exit_cycles WHERE deal = 'sale' AND category_memberships @> ARRAY['apartments']::text[] AND closed_at >= now() - INTERVAL '30 days'"
+          "rawSql": "SELECT count(*)::int AS observed_exits FROM dashboard_public.exit_cycles WHERE deal = 'sale' AND (category_memberships @> ARRAY['apartments']::text[] OR category = 'apartments') AND closed_at >= now() - INTERVAL '30 days'"
         }
       ]
     },
@@ -39,13 +42,29 @@
       "description": "Time from first observation of the closure cycle to disappearance. Observation may begin after OLX publication; active listings are excluded.",
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 4, "w": 8, "x": 8, "y": 0 },
-      "fieldConfig": { "defaults": { "unit": "d" }, "overrides": [] },
+      "fieldConfig": { "defaults": {
+        "unit": "suffix: days",
+        "noValue": "Unknown"
+      }, "overrides": [
+        {
+          "matcher": {
+            "id": "byName",
+            "options": "exit_sample"
+          },
+          "properties": [
+            {
+              "id": "unit",
+              "value": "short"
+            }
+          ]
+        }
+      ] },
       "options": {},
       "targets": [
         {
           "refId": "A",
           "format": "table",
-          "rawSql": "SELECT count(*)::int AS exit_sample, round(percentile_cont(0.5) WITHIN GROUP (ORDER BY days_listed))::int AS median_observed_days FROM dashboard_public.exit_cycles WHERE deal = 'sale' AND category_memberships @> ARRAY['apartments']::text[] AND closed_at >= now() - INTERVAL '30 days' AND days_listed IS NOT NULL"
+          "rawSql": "SELECT count(*)::int AS exit_sample, round(percentile_cont(0.5) WITHIN GROUP (ORDER BY days_listed))::int AS median_observed_days FROM dashboard_public.exit_cycles WHERE deal = 'sale' AND (category_memberships @> ARRAY['apartments']::text[] OR category = 'apartments') AND closed_at >= now() - INTERVAL '30 days' AND days_listed IS NOT NULL"
         }
       ]
     },
@@ -56,13 +75,16 @@
       "description": "A reopened article creates a new cycle; a preceding closure remains in historical exit counts.",
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 4, "w": 8, "x": 16, "y": 0 },
-      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "fieldConfig": { "defaults": {
+        "unit": "short",
+        "noValue": "Unknown"
+      }, "overrides": [] },
       "options": {},
       "targets": [
         {
           "refId": "A",
           "format": "table",
-          "rawSql": "SELECT count(*)::int AS reopened_cycles FROM dashboard_public.exit_cycles WHERE deal = 'sale' AND category_memberships @> ARRAY['apartments']::text[] AND closed_at >= now() - INTERVAL '30 days' AND reopened_cycle"
+          "rawSql": "SELECT count(*)::int AS reopened_cycles FROM dashboard_public.exit_cycles WHERE deal = 'sale' AND (category_memberships @> ARRAY['apartments']::text[] OR category = 'apartments') AND closed_at >= now() - INTERVAL '30 days' AND reopened_cycle"
         }
       ]
     },
@@ -74,15 +96,75 @@
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 9, "w": 24, "x": 0, "y": 4 },
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "noValue": "Unknown"
+        },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "last_asking_price" },
-            "properties": [{ "id": "unit", "value": "suffix: BAM" }]
+            "matcher": {
+              "id": "byName",
+              "options": "last_asking_price"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: BAM"
+              }
+            ]
           },
           {
-            "matcher": { "id": "byName", "options": "last_asking_ppm2" },
-            "properties": [{ "id": "unit", "value": "suffix: BAM/m²" }]
+            "matcher": {
+              "id": "byName",
+              "options": "last_asking_ppm2"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: BAM/m²"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "url"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "title"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open on olx.ba",
+                    "url": "${__data.fields.url}",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "days_listed"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "d"
+              }
+            ]
           }
         ]
       },
@@ -91,7 +173,7 @@
         {
           "refId": "A",
           "format": "table",
-          "rawSql": "SELECT title, url, closed_at, days_listed, last_asking_price, last_asking_ppm2, rooms, sqm, reopened_cycle\nFROM dashboard_public.exit_cycles\nWHERE deal = 'sale' AND category_memberships @> ARRAY['apartments']::text[] AND closed_at >= now() - INTERVAL '30 days'\nORDER BY closed_at DESC LIMIT 50"
+          "rawSql": "SELECT title, url, closed_at, days_listed, last_asking_price, last_asking_ppm2, rooms, sqm, reopened_cycle\nFROM dashboard_public.exit_cycles\nWHERE deal = 'sale' AND (category_memberships @> ARRAY['apartments']::text[] OR category = 'apartments') AND closed_at >= now() - INTERVAL '30 days'\nORDER BY closed_at DESC LIMIT 50"
         }
       ]
     },
@@ -102,24 +184,28 @@
       "description": "Duration buckets describe time observed by this tracker and should not be read as seller or transaction behavior.",
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
-      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "fieldConfig": { "defaults": {
+        "noValue": "Unknown"
+      }, "overrides": [] },
       "options": { "showHeader": true },
       "targets": [
         {
           "refId": "A",
           "format": "table",
-          "rawSql": "SELECT CASE WHEN days_listed <= 7 THEN '0–7 days' WHEN days_listed <= 14 THEN '8–14 days' WHEN days_listed <= 30 THEN '15–30 days' WHEN days_listed <= 60 THEN '31–60 days' ELSE '60+ days' END AS duration_bucket, count(*)::int AS observed_exits\nFROM dashboard_public.exit_cycles\nWHERE deal = 'sale' AND category_memberships @> ARRAY['apartments']::text[] AND closed_at >= now() - INTERVAL '30 days' AND days_listed IS NOT NULL\nGROUP BY 1 ORDER BY min(days_listed)"
+          "rawSql": "SELECT CASE WHEN days_listed <= 7 THEN '0–7 days' WHEN days_listed <= 14 THEN '8–14 days' WHEN days_listed <= 30 THEN '15–30 days' WHEN days_listed <= 60 THEN '31–60 days' ELSE '60+ days' END AS duration_bucket, count(*)::int AS observed_exits\nFROM dashboard_public.exit_cycles\nWHERE deal = 'sale' AND (category_memberships @> ARRAY['apartments']::text[] OR category = 'apartments') AND closed_at >= now() - INTERVAL '30 days' AND days_listed IS NOT NULL\nGROUP BY 1 ORDER BY min(days_listed)"
         }
       ]
     },
     {
       "id": 6,
       "type": "table",
-      "title": "Exit freshness and scope",
-      "description": "The exit view is historical and depends on completed analytics; current freshness is shown for the tracked apartment search category.",
+      "title": "Apartment search freshness and exit scope",
+      "description": "Freshness covers every configured search in each category, including both sales and rentals. Unknown means at least one search has no authoritative completed success.",
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 13 },
-      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "fieldConfig": { "defaults": {
+        "noValue": "Unknown"
+      }, "overrides": [] },
       "options": { "showHeader": true },
       "targets": [
         {

@@ -27,6 +27,37 @@ async function search(searchKey, category) {
 }
 
 needsDb(
+  "public freshness counts searches and exposes a missing or stale member",
+  async () => {
+    await search("sale", "apartments");
+    await search("rent", "apartments");
+    await db.pool.query(`
+    INSERT INTO scrape_runs (search_key, status, is_complete, finished_at)
+    VALUES ('sale', 'ok', true, '2026-08-01'),
+           ('sale', 'ok', true, '2026-08-03'),
+           ('rent', 'ok', false, '2026-08-04');
+  `);
+    const unknown = await db.pool.query(
+      "SELECT * FROM dashboard_public.freshness",
+    );
+    assert.deepEqual(unknown.rows, [
+      { category: "apartments", configured_searches: 2, last_success_at: null },
+    ]);
+    await db.pool
+      .query(`INSERT INTO scrape_runs (search_key, status, is_complete, finished_at)
+    VALUES ('rent', 'ok', true, '2026-08-02')`);
+    const known = await db.pool.query(
+      "SELECT * FROM dashboard_public.freshness",
+    );
+    assert.equal(known.rows[0].configured_searches, 2);
+    assert.equal(
+      known.rows[0].last_success_at.toISOString(),
+      "2026-08-02T00:00:00.000Z",
+    );
+  },
+);
+
+needsDb(
   "public current listings stay at article grain while category membership overlaps",
   async () => {
     await search("apartments", "apartments");

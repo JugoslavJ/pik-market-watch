@@ -23,12 +23,15 @@
     {
       "id": 1,
       "type": "stat",
-      "title": "Data through · latest completed scrape",
-      "description": "Latest completed successful observation for any tracked category. This is data freshness, not page freshness.",
+      "title": "Data through · all configured searches",
+      "description": "Freshness covers every configured search in each category, including both sales and rentals. Unknown means at least one search has no authoritative completed success.",
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 4, "w": 8, "x": 0, "y": 0 },
       "fieldConfig": {
-        "defaults": { "unit": "dateTimeAsIso" },
+        "defaults": {
+          "unit": "dateTimeAsIso",
+          "noValue": "Unknown"
+        },
         "overrides": []
       },
       "options": {},
@@ -36,7 +39,7 @@
         {
           "refId": "A",
           "format": "table",
-          "rawSql": "SELECT max(last_success_at) AS data_through FROM dashboard_public.freshness"
+          "rawSql": "SELECT CASE WHEN count(last_success_at) = count(*) THEN min(last_success_at) END AS data_through FROM dashboard_public.freshness"
         }
       ]
     },
@@ -47,7 +50,9 @@
       "description": "Distinct observed OLX article IDs, active under the existing 14-day rule. Category counts overlap when one article belongs to multiple saved searches.",
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 7, "w": 16, "x": 8, "y": 0 },
-      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "fieldConfig": { "defaults": {
+        "noValue": "Unknown"
+      }, "overrides": [] },
       "options": { "footer": { "show": true }, "showHeader": true },
       "targets": [
         {
@@ -63,9 +68,11 @@
       "title": "Sale asking summaries",
       "description": "Median asking KM/m² for valid priced sale listings. Sample size is shown; no cross-category pooled headline is calculated.",
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
-      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 4 },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 7 },
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "noValue": "Unknown"
+        },
         "overrides": [
           {
             "matcher": { "id": "byName", "options": "median_asking_km_m2" },
@@ -90,7 +97,9 @@
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 7, "w": 12, "x": 12, "y": 7 },
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "noValue": "Unknown"
+        },
         "overrides": [
           {
             "matcher": { "id": "byName", "options": "median_asking_km" },
@@ -113,8 +122,10 @@
       "title": "Newly observed active listings · 7 days",
       "description": "Distinct article IDs first observed in the last seven days and still active. Renewals are not counted as new.",
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 11 },
-      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+      "fieldConfig": { "defaults": {
+        "noValue": "Unknown"
+      }, "overrides": [] },
       "options": { "showHeader": true },
       "targets": [
         {
@@ -132,27 +143,99 @@
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "noValue": "Unknown"
+        },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "prior_price" },
-            "properties": [{ "id": "unit", "value": "suffix: BAM" }]
+            "matcher": {
+              "id": "byName",
+              "options": "prior_price"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: BAM"
+              }
+            ]
           },
           {
-            "matcher": { "id": "byName", "options": "new_price" },
-            "properties": [{ "id": "unit", "value": "suffix: BAM" }]
+            "matcher": {
+              "id": "byName",
+              "options": "new_price"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: BAM"
+              }
+            ]
           },
           {
-            "matcher": { "id": "byName", "options": "reduction_km" },
-            "properties": [{ "id": "unit", "value": "suffix: BAM" }]
+            "matcher": {
+              "id": "byName",
+              "options": "reduction_km"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: BAM"
+              }
+            ]
           },
           {
-            "matcher": { "id": "byName", "options": "reduction_pct" },
-            "properties": [{ "id": "unit", "value": "percent" }]
+            "matcher": {
+              "id": "byName",
+              "options": "reduction_pct"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              }
+            ]
           },
           {
-            "matcher": { "id": "byName", "options": "event_at" },
-            "properties": [{ "id": "unit", "value": "dateTimeAsIso" }]
+            "matcher": {
+              "id": "byName",
+              "options": "event_at"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeAsIso"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "url"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "title"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open on olx.ba",
+                    "url": "${__data.fields.url}",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
           }
         ]
       },
@@ -161,7 +244,7 @@
         {
           "refId": "A",
           "format": "table",
-          "rawSql": "SELECT title, url, deal, neighborhood, prior_price, new_price, reduction_km, reduction_pct, event_at, currently_observed\nFROM dashboard_public.price_reductions\nWHERE event_at >= now() - INTERVAL '7 days'\n  AND category_memberships && ARRAY['apartments','houses','vacation_homes']::text[]\nORDER BY event_at DESC\nLIMIT 50"
+          "rawSql": "SELECT title, url, deal, neighborhood, prior_price, new_price, reduction_km, reduction_pct, event_at, currently_observed\nFROM dashboard_public.price_reductions\nWHERE event_at >= now() - INTERVAL '7 days'\n  AND (category_memberships && ARRAY['apartments','houses','vacation_homes']::text[] OR category IN ('apartments','houses','vacation_homes'))\nORDER BY event_at DESC\nLIMIT 50"
         }
       ]
     },
@@ -169,10 +252,12 @@
       "id": 7,
       "type": "table",
       "title": "Freshness by tracked category",
-      "description": "A missing completed success is Unknown. The value reflects the latest successful scrape, not a visitor refresh.",
+      "description": "Freshness covers every configured search in each category, including both sales and rentals. Unknown means at least one search has no authoritative completed success.",
       "datasource": { "type": "postgres", "uid": "olx-public-postgres" },
       "gridPos": { "h": 6, "w": 24, "x": 0, "y": 22 },
-      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "fieldConfig": { "defaults": {
+        "noValue": "Unknown"
+      }, "overrides": [] },
       "options": { "showHeader": true },
       "targets": [
         {
