@@ -43,7 +43,7 @@ test("persona dashboards expose the required identity, defaults, and nullable fi
       "apartments",
     );
     assert.equal(variable(dashboard, "neighborhood").current.value, "$__all");
-    assert.equal(variable(dashboard, "neighborhood").allValue, "__mapped__");
+    assert.equal(variable(dashboard, "neighborhood").allValue, "'__mapped__'");
     assert.match(
       variable(dashboard, "neighborhood").query,
       /COALESCE\(neighborhood, 'unknown'\)/,
@@ -64,7 +64,7 @@ test("persona dashboards expose the required identity, defaults, and nullable fi
       );
       assert.equal(
         entry.allValue,
-        "__any__",
+        "'__any__'",
         `${dashboard.uid} ${entry.name} must use a stable Any sentinel`,
       );
     }
@@ -146,7 +146,7 @@ test("agent review controls and rental units remain independently visible", () =
   const agent = dashboards["olx-agent.json"];
   assert.equal(variable(agent, "view").current.value, "below");
   assert.equal(variable(agent, "pricing_position").current.value, "all");
-  assert.equal(variable(agent, "review_signals").allValue, "__any__");
+  assert.equal(variable(agent, "review_signals").allValue, "'__any__'");
   const reviewSql = panels(agent).find((panel) =>
     /Listings to review/.test(panel.title),
   ).targets[0].rawSql;

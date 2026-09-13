@@ -1564,7 +1564,7 @@
         "skipUrlSync": false,
         "sort": 1,
         "type": "query",
-        "allValue": "__mapped__"
+        "allValue": "'__mapped__'"
       },
       {
         "current": {
@@ -1588,7 +1588,7 @@
         "skipUrlSync": false,
         "sort": 1,
         "type": "query",
-        "allValue": "__any__"
+        "allValue": "'__any__'"
       },
       {
         "current": {
@@ -1670,7 +1670,7 @@
         "query": "true,false,unknown",
         "skipUrlSync": false,
         "type": "custom",
-        "allValue": "__any__"
+        "allValue": "'__any__'"
       },
       {
         "current": {
@@ -1694,7 +1694,7 @@
         "skipUrlSync": false,
         "sort": 1,
         "type": "query",
-        "allValue": "__any__"
+        "allValue": "'__any__'"
       },
       {
         "current": {
@@ -1710,7 +1710,7 @@
         "query": "true,false,unknown",
         "skipUrlSync": false,
         "type": "custom",
-        "allValue": "__any__"
+        "allValue": "'__any__'"
       },
       {
         "current": {
@@ -1726,7 +1726,7 @@
         "query": "true,false,unknown",
         "skipUrlSync": false,
         "type": "custom",
-        "allValue": "__any__"
+        "allValue": "'__any__'"
       },
       {
         "current": {
@@ -1750,7 +1750,7 @@
         "skipUrlSync": false,
         "sort": 1,
         "type": "query",
-        "allValue": "__any__"
+        "allValue": "'__any__'"
       },
       {
         "current": {
@@ -1774,7 +1774,7 @@
         "skipUrlSync": false,
         "sort": 1,
         "type": "query",
-        "allValue": "__any__"
+        "allValue": "'__any__'"
       },
       {
         "current": {
