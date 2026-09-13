@@ -214,7 +214,8 @@ docker compose --profile scrape run --rm scraper node src/backfill-geo.js --max=
 
 The default backfill targets recently active rows; `--all` includes closed history. The legacy price-history conversion also makes no OLX requests.
 The `maintenance` profile caps legacy raw expiry timestamps, removes proven
-duplicate successful bodies, rebuilds pending daily analytics, and purges
+duplicate successful bodies, rebuilds pending daily analytics, refreshes the
+current-market OLAP snapshot, and purges
 expired raw responses without making OLX requests. Each operation has an
 independent outcome; schedule it independently so housekeeping continues during
 an upstream outage or failed rebuild. The default live raw horizon is a rolling
@@ -227,7 +228,7 @@ src/replay-response.js --id=<raw-response-id>`; replay only reads and parses
 the retained payload.
 
 The maintenance JSON reports `publicationEvidence`, `retentionTransition`,
-`duplicateCompaction`, `purged`, and `rebuilt` separately. A failed purge does
+`duplicateCompaction`, `purged`, `rebuilt`, and `currentMarket` separately. A failed purge does
 not suppress a rebuild, and a failed rebuild does not suppress purge. Raw
 archive v2 uses one canonical body: successful search records retain the
 original in `source_payload`, successful detail records retain it in `payload`

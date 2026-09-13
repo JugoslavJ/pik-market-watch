@@ -264,6 +264,7 @@ module.exports = function installMaintenanceMethods(Db) {
               Number(
                 value?.updated ??
                   value?.deleted ??
+                  value?.rows_written ??
                   value?.rows?.[0]?.rows_written,
               ) || 0,
             details: value,
@@ -295,7 +296,16 @@ module.exports = function installMaintenanceMethods(Db) {
       // of both upstream success and the rebuild result.
       await run("purged", () => this.purgeRawResponses());
       await run("rebuilt", () => this.rebuildDailyInventory({ maxDays, log }));
+      await run("currentMarket", () => this.refreshCurrentMarket());
       return result;
+    },
+
+    /** Atomically publish the current OLTP state as a Grafana OLAP snapshot. */
+    async refreshCurrentMarket() {
+      const result = await this.pool.query(
+        "SELECT * FROM reporting.refresh_current_market()",
+      );
+      return result.rows[0] || { rows_written: 0, refreshed_at: null };
     },
 
     /**

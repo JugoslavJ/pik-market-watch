@@ -32,6 +32,7 @@ test.beforeEach(async () => {
     SELECT article_id,now()-interval '1 hour','search',price,CASE WHEN price IS NULL THEN 'unpriced' ELSE 'valid' END,
       '{"currency":"BAM"}'::jsonb FROM listings;
   `);
+  await db.refreshCurrentMarket();
 });
 
 function dashboard(persona) {

@@ -31,6 +31,7 @@ async function reset(pool) {
                             listing_state_history, listing_price_events,
                             listing_daily, analytics_daily_coverage
                             RESTART IDENTITY CASCADE`);
+  await pool.query("DELETE FROM reporting.current_listing_scores_olap");
   await pool.query(`UPDATE analytics_refresh_state
                        SET pending_from_day = NULL, pending_through_day = NULL,
                            completed_through_day = NULL,

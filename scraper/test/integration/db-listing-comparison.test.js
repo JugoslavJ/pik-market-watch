@@ -65,9 +65,11 @@ async function seed(entries) {
      FROM jsonb_to_recordset($1) AS x(article_id bigint,price numeric,price_state text,currency text)`,
     [input],
   );
+  await db.refreshCurrentMarket();
 }
 
 async function scores(id) {
+  await db.refreshCurrentMarket();
   const result = await db.pool.query(
     "SELECT * FROM reporting.current_listing_scores WHERE article_id=$1",
     [id],

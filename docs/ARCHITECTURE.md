@@ -20,7 +20,7 @@ offline price-history conversion.
 
 Searches come from `/config/searches.json`, unless `SEARCH_URLS` is set. Each URL is normalized to a stable search key. The scraper converts it to the OLX JSON search endpoint, fetches page 1 first, then fetches later pages in paced concurrent waves. A blank first page, failed page, or incomplete pagination marks the run unsuccessful; its prior result membership is retained. A cycle with no cards skips the closing pass. These guards prevent a blocked or changed upstream response from mass-closing listings.
 
-For a complete search, one ingestion transaction updates the current listing, search membership, run statistics, search observations, canonical price events, and reopen/close transitions caused by that search. A cycle-level closing pass then closes listings no longer returned by any configured search. Successful cycles rebuild pending daily inventory and remove expired raw search responses.
+For a complete search, one ingestion transaction updates the current listing, search membership, run statistics, search observations, canonical price events, and reopen/close transitions caused by that search. A cycle-level closing pass then closes listings no longer returned by any configured search. Successful cycles rebuild pending daily inventory, atomically publish the current-market OLAP snapshot, and remove expired raw search responses.
 
 Detail enrichment is a separate, bounded part of a successful search. The queue prioritizes active rows that have never had a successful detail fetch, are stale, have changed price, or still lack a pin or sale area. Search cards provide the inexpensive facts; detail requests fill richer attributes. `detail_jobs` keeps durable claim leases, retry timing and terminal outcomes alongside the scheduling hint on `listings`.
 
@@ -34,13 +34,15 @@ Detail enrichment is a separate, bounded part of a successful search. The queue 
 | `raw_api_responses` | Retained search payloads with fetch time, parser version, and expiry. Retention is controlled by `RAW_RESPONSE_RETENTION_DAYS`; this is operational evidence, not an indefinite archive. |
 | `listing_state_history` | Immutable search sightings, detail updates, closures, and reopenings. `effective_at` is evidence time; `ingested_at` is when this database learned it. |
 | `listing_price_events` | Canonical price boundaries with a value state (`valid`, `unpriced`, `invalid`, or `conflict`), observation/renewal timestamps, effective-time basis, and provenance. |
-| `listing_daily` | Reconstructed article/day inventory used for historical analytics. |
+| `listing_daily` | OLAP article/day facts used for historical analytics. |
+| `reporting.current_listing_scores_olap` | Physical OLAP snapshot used by current-market Grafana panels. |
+| `reporting.current_market_refresh_state` | Current snapshot generation time, row count, duration, and source watermark. |
 | `analytics_refresh_state` | Pending and successful daily-rebuild coverage. |
 | `neighborhoods` | Generated Banja Luka MZ polygons used to resolve listing pins. |
 
 `price_history` remains the legacy append-only snapshot table and is still consumed by the conversion path. New canonical price evidence is written through `listing_price_events`; duplicate evidence is idempotent by article, effective time, normalized price, and state.
 
-Current tables answer “what is known now.” Evidence tables answer “what did this source say, and when did we record it?” `listing_daily` answers historical questions by reconstructing state at each Banja Luka calendar-day boundary. It carries explicit `membership_inferred`, `attributes_inferred`, `stale_observation`, and `provisional_day` flags. Historical membership and attributes can be inferred when observations are sparse; today is provisional and active inventory can be carried through the configured 14-day observation window. Treat flagged values as estimates, not direct daily captures.
+The scraper writes OLTP current/evidence tables in `public`; Grafana reads OLAP facts exposed through `reporting`. `reporting.current_listing_scores_source` is the canonical OLTP-to-OLAP transformation and is evaluated only by `reporting.refresh_current_market()`. The stable `reporting.current_listing_scores` dashboard contract reads the physical snapshot, so panel concurrency never reconstructs event history. `listing_daily` answers historical questions by reconstructing state at each Banja Luka calendar-day boundary. It carries explicit `membership_inferred`, `attributes_inferred`, `stale_observation`, and `provisional_day` flags. Historical membership and attributes can be inferred when observations are sparse; today is provisional and active inventory can be carried through the configured 14-day observation window. Treat flagged values as estimates, not direct daily captures.
 
 ## Listing lifecycle and details
 

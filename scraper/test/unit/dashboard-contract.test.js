@@ -263,6 +263,20 @@ test("public reporting objects and role setup retain the confidentiality boundar
     /ALTER DEFAULT PRIVILEGES FOR ROLE CURRENT_USER IN SCHEMA reporting/,
   );
   assert.doesNotMatch(reportingFunctionAccess, /TO PUBLIC/);
+  const currentMarketOlap = fs.readFileSync(
+    path.join(root, "db", "init", "19-current-market-olap.sql"),
+    "utf8",
+  );
+  assert.match(
+    currentMarketOlap,
+    /CREATE TABLE IF NOT EXISTS reporting\.current_listing_scores_olap/,
+  );
+  assert.match(
+    currentMarketOlap,
+    /CREATE OR REPLACE VIEW reporting\.current_listing_scores AS/,
+  );
+  assert.match(currentMarketOlap, /reporting\.refresh_current_market\(\)/);
+  assert.match(currentMarketOlap, /pg_advisory_xact_lock/);
   assert.match(roles, /default_transaction_read_only = on/);
   const publicRoleSection = roles.slice(roles.indexOf("-- Public role:"));
   assert.doesNotMatch(publicRoleSection, /GRANT pg_read_all_data/);

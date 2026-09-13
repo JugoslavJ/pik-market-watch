@@ -48,11 +48,16 @@ test("maintenance attempts purge and rebuild independently", async () => {
     calls.push("rebuild");
     throw new Error("rebuild unavailable");
   };
+  db.refreshCurrentMarket = async () => {
+    calls.push("current-market");
+    return { rows_written: 12 };
+  };
   db.recordMaintenanceOutcome = async () => {};
 
   const result = await db.runMaintenanceCycle();
-  assert.deepEqual(calls, ["purge", "rebuild"]);
+  assert.deepEqual(calls, ["purge", "rebuild", "current-market"]);
   assert.equal(result.ok, false);
   assert.match(result.errors.purged, /purge unavailable/);
   assert.match(result.errors.rebuilt, /rebuild unavailable/);
+  assert.equal(result.currentMarket.rows_written, 12);
 });
