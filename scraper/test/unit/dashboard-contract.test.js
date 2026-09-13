@@ -250,6 +250,19 @@ test("public reporting objects and role setup retain the confidentiality boundar
     roles,
     /REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC/,
   );
+  const reportingFunctionAccess = fs.readFileSync(
+    path.join(root, "db", "init", "18-reporting-function-access.sql"),
+    "utf8",
+  );
+  assert.match(
+    reportingFunctionAccess,
+    /GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA reporting TO pg_read_all_data/,
+  );
+  assert.match(
+    reportingFunctionAccess,
+    /ALTER DEFAULT PRIVILEGES FOR ROLE CURRENT_USER IN SCHEMA reporting/,
+  );
+  assert.doesNotMatch(reportingFunctionAccess, /TO PUBLIC/);
   assert.match(roles, /default_transaction_read_only = on/);
   const publicRoleSection = roles.slice(roles.indexOf("-- Public role:"));
   assert.doesNotMatch(publicRoleSection, /GRANT pg_read_all_data/);
