@@ -277,6 +277,18 @@ test("public reporting objects and role setup retain the confidentiality boundar
   );
   assert.match(currentMarketOlap, /reporting\.refresh_current_market\(\)/);
   assert.match(currentMarketOlap, /pg_advisory_xact_lock/);
+  const comparableOlapContract = fs.readFileSync(
+    path.join(root, "db", "init", "20-comparables-olap-contract.sql"),
+    "utf8",
+  );
+  assert.match(
+    comparableOlapContract,
+    /RETURNS SETOF reporting\.current_comparison_inputs/,
+  );
+  assert.match(
+    comparableOlapContract,
+    /FROM reporting\.current_listing_scores_olap t/,
+  );
   assert.match(roles, /default_transaction_read_only = on/);
   const publicRoleSection = roles.slice(roles.indexOf("-- Public role:"));
   assert.doesNotMatch(publicRoleSection, /GRANT pg_read_all_data/);
