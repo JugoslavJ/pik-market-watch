@@ -49,6 +49,47 @@ if ($env:OLX_KNOWN_HOSTS_FILE) {
 $sshArgs = @('-i', $KeyPath, '-o', 'BatchMode=yes') + $knownHostArgs +
            @('-o', 'ServerAliveInterval=30')
 
+# Do not pipe Get-Content -AsByteStream into ssh. PowerShell emits each byte as
+# a separate pipeline object, which makes even a small dump take minutes to
+# upload. Connect the file stream directly to ssh's standard input instead.
+function Invoke-SshRestore([string]$dumpPath) {
+  $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+  $startInfo.FileName = 'ssh'
+  $startInfo.UseShellExecute = $false
+  $startInfo.RedirectStandardInput = $true
+  $startInfo.RedirectStandardOutput = $true
+  $startInfo.RedirectStandardError = $true
+  foreach ($arg in $sshArgs) { [void]$startInfo.ArgumentList.Add($arg) }
+  [void]$startInfo.ArgumentList.Add("$SshUser@$InstanceHost")
+  [void]$startInfo.ArgumentList.Add('./db/remote-restore.sh')
+
+  $ssh = [System.Diagnostics.Process]::new()
+  $ssh.StartInfo = $startInfo
+  $input = $null
+  try {
+    if (-not $ssh.Start()) { throw 'could not start ssh' }
+    # Drain both output streams concurrently so neither can fill its OS pipe
+    # and block the restore while the dump is being uploaded.
+    $stdoutTask = $ssh.StandardOutput.ReadToEndAsync()
+    $stderrTask = $ssh.StandardError.ReadToEndAsync()
+    $input = [System.IO.File]::OpenRead($dumpPath)
+    $input.CopyTo($ssh.StandardInput.BaseStream, 1MB)
+    $ssh.StandardInput.Close()
+    Log 'upload complete; waiting for remote validation and restore...'
+    $ssh.WaitForExit()
+    $stdout = $stdoutTask.GetAwaiter().GetResult()
+    $stderr = $stderrTask.GetAwaiter().GetResult()
+    $output = @($stdout, $stderr) -join "`n"
+    if ($ssh.ExitCode -ne 0) {
+      throw "remote restore failed (ssh exit $($ssh.ExitCode)): $($output.Trim())"
+    }
+    return $output -split "`r?`n" | Where-Object { $_ }
+  } finally {
+    if ($input) { $input.Dispose() }
+    $ssh.Dispose()
+  }
+}
+
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
@@ -126,8 +167,7 @@ $dump = Join-Path $root "backups/$dumpName"
 if ((Get-Item $dump).Length -lt 20000) { throw "dump suspiciously small - aborting" }
 
 Log ('streaming {0:N0} bytes to {1}@{2} and restoring...' -f (Get-Item $dump).Length, $SshUser, $InstanceHost)
-$out = Get-Content $dump -AsByteStream |
-  ssh @sshArgs "$SshUser@$InstanceHost" ./db/remote-restore.sh
+$out = Invoke-SshRestore $dump
 $out | ForEach-Object { Log "remote: $_" }
 
 if (($out -join "`n") -match 'RESTORE_OK') {
