@@ -37,7 +37,6 @@ jobs:
       - run: npm run format:check
       - run: npm run lint
       - run: npm run lint:syntax
-      - run: npm run test:dashboards
       - run: npm test
       - run: npm run test:integration
       # Build the same application image used by Compose, then scan its OS and

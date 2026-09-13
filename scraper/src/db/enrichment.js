@@ -183,6 +183,9 @@ module.exports = function installEnrichmentMethods(Db) {
         );
         for (const row of rows) {
           const attributes = {
+            ...(row.pricePresent !== false
+              ? { currency: row.priceCurrency ?? null }
+              : {}),
             latitude: row.latitude ?? null,
             longitude: row.longitude ?? null,
             publishedAt: row.publishedAt ?? null,
@@ -242,7 +245,17 @@ module.exports = function installEnrichmentMethods(Db) {
             dealType: row.dealType ?? (row.isRent ? "rent" : "sale"),
             source: "detail",
             isCurrent: true,
-            provenance: { observation: "detail_current" },
+            provenance: {
+              observation: "detail_current",
+              currency: row.priceCurrency ?? null,
+              dealType: Object.prototype.hasOwnProperty.call(row, "dealType")
+                ? row.dealType
+                : row.isRent == null
+                  ? null
+                  : row.isRent
+                    ? "rent"
+                    : "sale",
+            },
           });
           for (const history of row.apiPriceHistory || []) {
             events.push({
@@ -255,7 +268,10 @@ module.exports = function installEnrichmentMethods(Db) {
               dealType: row.dealType ?? (row.isRent ? "rent" : "sale"),
               source: "api_price_history",
               historical: true,
-              provenance: { observation: "listing_api_price_history" },
+              provenance: {
+                observation: "listing_api_price_history",
+                currency: history.currency ?? null,
+              },
             });
           }
         }

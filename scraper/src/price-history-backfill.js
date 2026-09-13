@@ -54,7 +54,11 @@ function legacyEvents(listing, legacyRows) {
       dealType,
       source: "legacy_api_price_history",
       historical: true,
-      provenance: { table: "listings", column: "api_price_history" },
+      provenance: {
+        table: "listings",
+        column: "api_price_history",
+        currency: event.currency ?? null,
+      },
     });
   }
   return { events, quarantined };

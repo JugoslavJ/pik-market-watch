@@ -88,6 +88,11 @@ FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
 WHERE n.nspname = 'reporting'
   AND c.relkind IN ('v','m')
   AND pg_get_userbyid(c.relowner) = :'admin_user' \gexec
+SELECT format('ALTER FUNCTION %I.%I(%s) OWNER TO %I', n.nspname, p.proname,
+              pg_get_function_identity_arguments(p.oid), :'app_user')
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'reporting'
+  AND pg_get_userbyid(p.proowner) = :'admin_user' \gexec
 
 -- Reader: read-only everywhere, including objects created later ---------------
 SELECT format('GRANT pg_read_all_data TO %I', :'reader_user') \gexec
@@ -145,6 +150,14 @@ SELECT format('GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO %I', :'reader_
 SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC',
               :'app_user') \gexec
 SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO %I',
+              :'app_user', :'reader_user') \gexec
+REVOKE ALL ON SCHEMA reporting FROM PUBLIC;
+SELECT format('REVOKE ALL ON SCHEMA reporting FROM %I', :'public_reader_user') \gexec
+REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA reporting FROM PUBLIC;
+SELECT format('GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA reporting TO %I', :'reader_user') \gexec
+SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA reporting REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC',
+              :'app_user') \gexec
+SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA reporting GRANT EXECUTE ON FUNCTIONS TO %I',
               :'app_user', :'reader_user') \gexec
 
 -- Connect must be granted explicitly: any role created LATER starts closed ---

@@ -8,8 +8,25 @@ CREATE SCHEMA IF NOT EXISTS reporting;
 CREATE OR REPLACE VIEW reporting.current_listings AS
 SELECT * FROM v_active_listings;
 
-CREATE OR REPLACE VIEW reporting.daily_listing_facts AS
-SELECT * FROM v_listing_daily;
+-- Migration 17 extends this view with historical eligibility and quality
+-- columns. Bootstrap init runs every SQL file once, while the migration
+-- runner may replay the files to adopt that initialized volume. Do not let
+-- this earlier compatibility view replace the extended 17-column contract
+-- during that replay (PostgreSQL cannot drop columns from a view in place).
+DO $migration13$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+      FROM information_schema.columns
+     WHERE table_schema = 'reporting'
+       AND table_name = 'daily_listing_facts'
+       AND column_name = 'asking_price'
+  ) THEN
+    CREATE OR REPLACE VIEW reporting.daily_listing_facts AS
+    SELECT * FROM v_listing_daily;
+  END IF;
+END
+$migration13$;
 
 CREATE OR REPLACE VIEW reporting.history_contract AS
 SELECT * FROM v_listing_history_contract;

@@ -1,0 +1,1738 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "description": "Find active sale homes, compare neighbourhood asking evidence and inspect the exact Local asking-price score cohort. Scores compare tracked asks and are not appraisals or confirmed sale values.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {
+      "targetBlank": false,
+      "title": "Buyer",
+      "url": "/d/olx-buyer"
+    },
+    {
+      "targetBlank": false,
+      "title": "Renter",
+      "url": "/d/olx-renter"
+    },
+    {
+      "targetBlank": false,
+      "title": "Agent",
+      "url": "/d/olx-agent"
+    },
+    {
+      "targetBlank": false,
+      "title": "Home",
+      "url": "/d/olx-home"
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "title": "Search summary",
+      "type": "row",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "id": 2,
+      "title": "Matching active listings",
+      "description": "Distinct current ads matching every result filter; current means open and seen within 14 days.",
+      "type": "stat",
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "—",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH validation AS MATERIALIZED (\n  SELECT reporting.within_bounds(NULL::numeric, ${min_price:sqlstring}, ${max_price:sqlstring}, 'asking price') AS min_price_ok,\n         reporting.within_bounds(NULL::numeric, ${min_rate:sqlstring}, ${max_rate:sqlstring}, 'asking price per m²') AS min_rate_ok,\n         reporting.within_bounds(NULL::numeric, ${min_area:sqlstring}, ${max_area:sqlstring}, 'area') AS min_area_ok,\n         reporting.within_bounds(NULL::numeric, ${min_score:sqlstring}, ${max_score:sqlstring}, 'score', 100) AS min_score_ok\n),\nmarket AS MATERIALIZED (\n  SELECT s.*\n    FROM reporting.current_listing_scores s\n    CROSS JOIN validation\n   WHERE s.deal = 'sale'\n    AND COALESCE(s.property_type, 'unknown') = ${property_type:sqlstring}\n    AND ((ARRAY[${neighborhood:sqlstring}] @> ARRAY['__mapped__'] AND s.neighborhood IS NOT NULL)\n         OR COALESCE(s.neighborhood, 'unknown') = ANY (ARRAY[${neighborhood:sqlstring}]))\n    AND (ARRAY[${rooms:sqlstring}] @> ARRAY['__any__']\n         OR COALESCE(s.room_bucket, 'unknown') = ANY (ARRAY[${rooms:sqlstring}]))\n    AND reporting.within_bounds(s.sqm, ${min_area:sqlstring}, ${max_area:sqlstring}, 'area')\n    AND (ARRAY[${condition:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.condition::text, 'unknown') = ANY (ARRAY[${condition:sqlstring}]))\n    AND (ARRAY[${parking:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.parking::text, 'unknown') = ANY (ARRAY[${parking:sqlstring}]))\n    AND (ARRAY[${garage:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.garage::text, 'unknown') = ANY (ARRAY[${garage:sqlstring}]))\n    AND (ARRAY[${elevator:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.elevator::text, 'unknown') = ANY (ARRAY[${elevator:sqlstring}]))\n    AND (ARRAY[${floor:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.floor_num::text, 'unknown') = ANY (ARRAY[${floor:sqlstring}]))\n    AND (ARRAY[${seller_type:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.seller_type::text, 'unknown') = ANY (ARRAY[${seller_type:sqlstring}]))\n),\nmatches AS MATERIALIZED (\n  SELECT s.* FROM market s\n   WHERE reporting.within_bounds(s.asking_price, ${min_price:sqlstring}, ${max_price:sqlstring}, 'asking price')\n    AND reporting.within_bounds(s.asking_rate, ${min_rate:sqlstring}, ${max_rate:sqlstring}, 'asking price per m²')\n    AND reporting.within_bounds(s.score, ${min_score:sqlstring}, ${max_score:sqlstring}, 'score', 100)\n    AND CASE ${listing_selection:sqlstring}\n          WHEN 'new' THEN s.first_seen >= now() - INTERVAL '7 days'\n          WHEN 'reduced' THEN s.latest_reduction_at >= now() - INTERVAL '30 days'\n          WHEN 'below' THEN s.deviation_pct < -5\n          ELSE TRUE\n        END\n    \n)\nSELECT count(DISTINCT article_id)::int AS matches FROM matches",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "id": 3,
+      "title": "Within stated budget",
+      "description": "Current market-context ads within both entered asking-price bounds. Shown as unset until either bound is entered.",
+      "type": "stat",
+      "gridPos": {
+        "x": 4,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "—",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH validation AS MATERIALIZED (\n  SELECT reporting.within_bounds(NULL::numeric, ${min_price:sqlstring}, ${max_price:sqlstring}, 'asking price') AS min_price_ok,\n         reporting.within_bounds(NULL::numeric, ${min_rate:sqlstring}, ${max_rate:sqlstring}, 'asking price per m²') AS min_rate_ok,\n         reporting.within_bounds(NULL::numeric, ${min_area:sqlstring}, ${max_area:sqlstring}, 'area') AS min_area_ok,\n         reporting.within_bounds(NULL::numeric, ${min_score:sqlstring}, ${max_score:sqlstring}, 'score', 100) AS min_score_ok\n),\nmarket AS MATERIALIZED (\n  SELECT s.*\n    FROM reporting.current_listing_scores s\n    CROSS JOIN validation\n   WHERE s.deal = 'sale'\n    AND COALESCE(s.property_type, 'unknown') = ${property_type:sqlstring}\n    AND ((ARRAY[${neighborhood:sqlstring}] @> ARRAY['__mapped__'] AND s.neighborhood IS NOT NULL)\n         OR COALESCE(s.neighborhood, 'unknown') = ANY (ARRAY[${neighborhood:sqlstring}]))\n    AND (ARRAY[${rooms:sqlstring}] @> ARRAY['__any__']\n         OR COALESCE(s.room_bucket, 'unknown') = ANY (ARRAY[${rooms:sqlstring}]))\n    AND reporting.within_bounds(s.sqm, ${min_area:sqlstring}, ${max_area:sqlstring}, 'area')\n    AND (ARRAY[${condition:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.condition::text, 'unknown') = ANY (ARRAY[${condition:sqlstring}]))\n    AND (ARRAY[${parking:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.parking::text, 'unknown') = ANY (ARRAY[${parking:sqlstring}]))\n    AND (ARRAY[${garage:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.garage::text, 'unknown') = ANY (ARRAY[${garage:sqlstring}]))\n    AND (ARRAY[${elevator:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.elevator::text, 'unknown') = ANY (ARRAY[${elevator:sqlstring}]))\n    AND (ARRAY[${floor:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.floor_num::text, 'unknown') = ANY (ARRAY[${floor:sqlstring}]))\n    AND (ARRAY[${seller_type:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.seller_type::text, 'unknown') = ANY (ARRAY[${seller_type:sqlstring}]))\n),\nmatches AS MATERIALIZED (\n  SELECT s.* FROM market s\n   WHERE reporting.within_bounds(s.asking_price, ${min_price:sqlstring}, ${max_price:sqlstring}, 'asking price')\n    AND reporting.within_bounds(s.asking_rate, ${min_rate:sqlstring}, ${max_rate:sqlstring}, 'asking price per m²')\n    AND reporting.within_bounds(s.score, ${min_score:sqlstring}, ${max_score:sqlstring}, 'score', 100)\n    AND CASE ${listing_selection:sqlstring}\n          WHEN 'new' THEN s.first_seen >= now() - INTERVAL '7 days'\n          WHEN 'reduced' THEN s.latest_reduction_at >= now() - INTERVAL '30 days'\n          WHEN 'below' THEN s.deviation_pct < -5\n          ELSE TRUE\n        END\n    \n)\nSELECT CASE WHEN reporting.numeric_bound(${min_price:sqlstring}, 'asking price') IS NULL AND reporting.numeric_bound(${max_price:sqlstring}, 'asking price') IS NULL THEN NULL ELSE count(DISTINCT article_id) FILTER (WHERE reporting.within_bounds(asking_price, ${min_price:sqlstring}, ${max_price:sqlstring}, 'asking price'))::int END AS within_budget FROM market",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "id": 4,
+      "title": "Below local benchmark",
+      "description": "Scored matching ads priced more than 5% below their exact local comparable asking benchmark.",
+      "type": "stat",
+      "gridPos": {
+        "x": 8,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "—",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH validation AS MATERIALIZED (\n  SELECT reporting.within_bounds(NULL::numeric, ${min_price:sqlstring}, ${max_price:sqlstring}, 'asking price') AS min_price_ok,\n         reporting.within_bounds(NULL::numeric, ${min_rate:sqlstring}, ${max_rate:sqlstring}, 'asking price per m²') AS min_rate_ok,\n         reporting.within_bounds(NULL::numeric, ${min_area:sqlstring}, ${max_area:sqlstring}, 'area') AS min_area_ok,\n         reporting.within_bounds(NULL::numeric, ${min_score:sqlstring}, ${max_score:sqlstring}, 'score', 100) AS min_score_ok\n),\nmarket AS MATERIALIZED (\n  SELECT s.*\n    FROM reporting.current_listing_scores s\n    CROSS JOIN validation\n   WHERE s.deal = 'sale'\n    AND COALESCE(s.property_type, 'unknown') = ${property_type:sqlstring}\n    AND ((ARRAY[${neighborhood:sqlstring}] @> ARRAY['__mapped__'] AND s.neighborhood IS NOT NULL)\n         OR COALESCE(s.neighborhood, 'unknown') = ANY (ARRAY[${neighborhood:sqlstring}]))\n    AND (ARRAY[${rooms:sqlstring}] @> ARRAY['__any__']\n         OR COALESCE(s.room_bucket, 'unknown') = ANY (ARRAY[${rooms:sqlstring}]))\n    AND reporting.within_bounds(s.sqm, ${min_area:sqlstring}, ${max_area:sqlstring}, 'area')\n    AND (ARRAY[${condition:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.condition::text, 'unknown') = ANY (ARRAY[${condition:sqlstring}]))\n    AND (ARRAY[${parking:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.parking::text, 'unknown') = ANY (ARRAY[${parking:sqlstring}]))\n    AND (ARRAY[${garage:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.garage::text, 'unknown') = ANY (ARRAY[${garage:sqlstring}]))\n    AND (ARRAY[${elevator:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.elevator::text, 'unknown') = ANY (ARRAY[${elevator:sqlstring}]))\n    AND (ARRAY[${floor:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.floor_num::text, 'unknown') = ANY (ARRAY[${floor:sqlstring}]))\n    AND (ARRAY[${seller_type:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.seller_type::text, 'unknown') = ANY (ARRAY[${seller_type:sqlstring}]))\n),\nmatches AS MATERIALIZED (\n  SELECT s.* FROM market s\n   WHERE reporting.within_bounds(s.asking_price, ${min_price:sqlstring}, ${max_price:sqlstring}, 'asking price')\n    AND reporting.within_bounds(s.asking_rate, ${min_rate:sqlstring}, ${max_rate:sqlstring}, 'asking price per m²')\n    AND reporting.within_bounds(s.score, ${min_score:sqlstring}, ${max_score:sqlstring}, 'score', 100)\n    AND CASE ${listing_selection:sqlstring}\n          WHEN 'new' THEN s.first_seen >= now() - INTERVAL '7 days'\n          WHEN 'reduced' THEN s.latest_reduction_at >= now() - INTERVAL '30 days'\n          WHEN 'below' THEN s.deviation_pct < -5\n          ELSE TRUE\n        END\n    \n)\nSELECT count(DISTINCT article_id) FILTER (WHERE deviation_pct < -5)::int AS below_benchmark FROM matches",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "id": 5,
+      "title": "Eligible priced / scored",
+      "description": "Current matching ads with eligible asking-price evidence and with a version 1 score, shown as priced / scored.",
+      "type": "stat",
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "—",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "string"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH validation AS MATERIALIZED (\n  SELECT reporting.within_bounds(NULL::numeric, ${min_price:sqlstring}, ${max_price:sqlstring}, 'asking price') AS min_price_ok,\n         reporting.within_bounds(NULL::numeric, ${min_rate:sqlstring}, ${max_rate:sqlstring}, 'asking price per m²') AS min_rate_ok,\n         reporting.within_bounds(NULL::numeric, ${min_area:sqlstring}, ${max_area:sqlstring}, 'area') AS min_area_ok,\n         reporting.within_bounds(NULL::numeric, ${min_score:sqlstring}, ${max_score:sqlstring}, 'score', 100) AS min_score_ok\n),\nmarket AS MATERIALIZED (\n  SELECT s.*\n    FROM reporting.current_listing_scores s\n    CROSS JOIN validation\n   WHERE s.deal = 'sale'\n    AND COALESCE(s.property_type, 'unknown') = ${property_type:sqlstring}\n    AND ((ARRAY[${neighborhood:sqlstring}] @> ARRAY['__mapped__'] AND s.neighborhood IS NOT NULL)\n         OR COALESCE(s.neighborhood, 'unknown') = ANY (ARRAY[${neighborhood:sqlstring}]))\n    AND (ARRAY[${rooms:sqlstring}] @> ARRAY['__any__']\n         OR COALESCE(s.room_bucket, 'unknown') = ANY (ARRAY[${rooms:sqlstring}]))\n    AND reporting.within_bounds(s.sqm, ${min_area:sqlstring}, ${max_area:sqlstring}, 'area')\n    AND (ARRAY[${condition:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.condition::text, 'unknown') = ANY (ARRAY[${condition:sqlstring}]))\n    AND (ARRAY[${parking:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.parking::text, 'unknown') = ANY (ARRAY[${parking:sqlstring}]))\n    AND (ARRAY[${garage:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.garage::text, 'unknown') = ANY (ARRAY[${garage:sqlstring}]))\n    AND (ARRAY[${elevator:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.elevator::text, 'unknown') = ANY (ARRAY[${elevator:sqlstring}]))\n    AND (ARRAY[${floor:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.floor_num::text, 'unknown') = ANY (ARRAY[${floor:sqlstring}]))\n    AND (ARRAY[${seller_type:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.seller_type::text, 'unknown') = ANY (ARRAY[${seller_type:sqlstring}]))\n),\nmatches AS MATERIALIZED (\n  SELECT s.* FROM market s\n   WHERE reporting.within_bounds(s.asking_price, ${min_price:sqlstring}, ${max_price:sqlstring}, 'asking price')\n    AND reporting.within_bounds(s.asking_rate, ${min_rate:sqlstring}, ${max_rate:sqlstring}, 'asking price per m²')\n    AND reporting.within_bounds(s.score, ${min_score:sqlstring}, ${max_score:sqlstring}, 'score', 100)\n    AND CASE ${listing_selection:sqlstring}\n          WHEN 'new' THEN s.first_seen >= now() - INTERVAL '7 days'\n          WHEN 'reduced' THEN s.latest_reduction_at >= now() - INTERVAL '30 days'\n          WHEN 'below' THEN s.deviation_pct < -5\n          ELSE TRUE\n        END\n    \n)\nSELECT concat(count(*) FILTER (WHERE asking_price IS NOT NULL), ' / ', count(*) FILTER (WHERE score IS NOT NULL)) AS \"priced / scored\" FROM matches",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "id": 6,
+      "title": "Search freshness",
+      "description": "Oldest latest complete search success for the selected property type; unknown when any configured search has never completed.",
+      "type": "stat",
+      "gridPos": {
+        "x": 16,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "—",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "dateTimeFromNow"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT CASE WHEN count(*) > 0 AND count(f.last_success_at) = count(*) THEN min(f.last_success_at) END AS freshness\nFROM dashboard_public.freshness f\nWHERE f.category = ${property_type:sqlstring}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "id": 7,
+      "title": "Filter validation",
+      "description": "Every numeric bound is an inclusive non-negative decimal; score is limited to 0–100 and minimum must not exceed maximum.",
+      "type": "stat",
+      "gridPos": {
+        "x": 20,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "—",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "string"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH validation AS MATERIALIZED (\n  SELECT reporting.within_bounds(NULL::numeric, ${min_price:sqlstring}, ${max_price:sqlstring}, 'asking price') AS min_price_ok,\n         reporting.within_bounds(NULL::numeric, ${min_rate:sqlstring}, ${max_rate:sqlstring}, 'asking price per m²') AS min_rate_ok,\n         reporting.within_bounds(NULL::numeric, ${min_area:sqlstring}, ${max_area:sqlstring}, 'area') AS min_area_ok,\n         reporting.within_bounds(NULL::numeric, ${min_score:sqlstring}, ${max_score:sqlstring}, 'score', 100) AS min_score_ok\n)\nSELECT 'Filters are valid' AS status\n  FROM validation\n",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Market context before price filters",
+      "type": "row",
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "id": 9,
+      "title": "Prices by neighbourhood — market context before price filters",
+      "description": "Current 14-day inventory after type, neighbourhood, rooms, area and supported feature selections. Price statistics are hidden below 10 separately eligible samples; price, recency and score filters do not change these medians.",
+      "type": "table",
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 14,
+        "h": 10
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "unit": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "median asking rate"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: KM/m²"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "median total asking price"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: KM"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "enablePagination": true,
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH validation AS MATERIALIZED (\n  SELECT reporting.within_bounds(NULL::numeric, ${min_price:sqlstring}, ${max_price:sqlstring}, 'asking price') AS min_price_ok,\n         reporting.within_bounds(NULL::numeric, ${min_rate:sqlstring}, ${max_rate:sqlstring}, 'asking price per m²') AS min_rate_ok,\n         reporting.within_bounds(NULL::numeric, ${min_area:sqlstring}, ${max_area:sqlstring}, 'area') AS min_area_ok,\n         reporting.within_bounds(NULL::numeric, ${min_score:sqlstring}, ${max_score:sqlstring}, 'score', 100) AS min_score_ok\n),\nmarket AS MATERIALIZED (\n  SELECT s.*\n    FROM reporting.current_listing_scores s\n    CROSS JOIN validation\n   WHERE s.deal = 'sale'\n    AND COALESCE(s.property_type, 'unknown') = ${property_type:sqlstring}\n    AND ((ARRAY[${neighborhood:sqlstring}] @> ARRAY['__mapped__'] AND s.neighborhood IS NOT NULL)\n         OR COALESCE(s.neighborhood, 'unknown') = ANY (ARRAY[${neighborhood:sqlstring}]))\n    AND (ARRAY[${rooms:sqlstring}] @> ARRAY['__any__']\n         OR COALESCE(s.room_bucket, 'unknown') = ANY (ARRAY[${rooms:sqlstring}]))\n    AND reporting.within_bounds(s.sqm, ${min_area:sqlstring}, ${max_area:sqlstring}, 'area')\n    AND (ARRAY[${condition:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.condition::text, 'unknown') = ANY (ARRAY[${condition:sqlstring}]))\n    AND (ARRAY[${parking:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.parking::text, 'unknown') = ANY (ARRAY[${parking:sqlstring}]))\n    AND (ARRAY[${garage:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.garage::text, 'unknown') = ANY (ARRAY[${garage:sqlstring}]))\n    AND (ARRAY[${elevator:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.elevator::text, 'unknown') = ANY (ARRAY[${elevator:sqlstring}]))\n    AND (ARRAY[${floor:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.floor_num::text, 'unknown') = ANY (ARRAY[${floor:sqlstring}]))\n    AND (ARRAY[${seller_type:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.seller_type::text, 'unknown') = ANY (ARRAY[${seller_type:sqlstring}]))\n),\nmatches AS MATERIALIZED (\n  SELECT s.* FROM market s\n   WHERE reporting.within_bounds(s.asking_price, ${min_price:sqlstring}, ${max_price:sqlstring}, 'asking price')\n    AND reporting.within_bounds(s.asking_rate, ${min_rate:sqlstring}, ${max_rate:sqlstring}, 'asking price per m²')\n    AND reporting.within_bounds(s.score, ${min_score:sqlstring}, ${max_score:sqlstring}, 'score', 100)\n    AND CASE ${listing_selection:sqlstring}\n          WHEN 'new' THEN s.first_seen >= now() - INTERVAL '7 days'\n          WHEN 'reduced' THEN s.latest_reduction_at >= now() - INTERVAL '30 days'\n          WHEN 'below' THEN s.deviation_pct < -5\n          ELSE TRUE\n        END\n    \n)\nSELECT COALESCE(neighborhood, 'unknown') AS neighbourhood,\n       count(DISTINCT article_id)::int AS \"active listings\",\n       count(DISTINCT article_id) FILTER (WHERE asking_price IS NOT NULL)::int AS \"eligible total-price sample\",\n       count(DISTINCT article_id) FILTER (WHERE asking_rate IS NOT NULL)::int AS \"eligible rate sample\",\n       CASE WHEN count(DISTINCT article_id) FILTER (WHERE asking_rate IS NOT NULL) >= 10\n            THEN round(percentile_cont(0.5) WITHIN GROUP (ORDER BY asking_rate) FILTER (WHERE asking_rate IS NOT NULL)) END AS \"median asking rate\",\n       CASE WHEN count(DISTINCT article_id) FILTER (WHERE asking_rate IS NOT NULL) >= 10\n            THEN round(percentile_cont(0.25) WITHIN GROUP (ORDER BY asking_rate) FILTER (WHERE asking_rate IS NOT NULL)) END AS \"p25 asking rate\",\n       CASE WHEN count(DISTINCT article_id) FILTER (WHERE asking_rate IS NOT NULL) >= 10\n            THEN round(percentile_cont(0.75) WITHIN GROUP (ORDER BY asking_rate) FILTER (WHERE asking_rate IS NOT NULL)) END AS \"p75 asking rate\",\n       CASE WHEN count(DISTINCT article_id) FILTER (WHERE asking_price IS NOT NULL) >= 10\n            THEN round(percentile_cont(0.5) WITHIN GROUP (ORDER BY asking_price) FILTER (WHERE asking_price IS NOT NULL)) END AS \"median total asking price\",\n       \n       count(DISTINCT article_id) FILTER (\n         WHERE asking_price IS NOT NULL\n           AND (reporting.numeric_bound(${min_price:sqlstring}, 'asking price') IS NULL OR asking_price >= reporting.numeric_bound(${min_price:sqlstring}, 'asking price'))\n           AND (reporting.numeric_bound(${max_price:sqlstring}, 'asking price') IS NULL OR asking_price <= reporting.numeric_bound(${max_price:sqlstring}, 'asking price'))\n       )::int AS \"within price range\",\n       count(DISTINCT article_id) FILTER (WHERE score IS NOT NULL)::int AS \"scorable count\"\n  FROM market\n GROUP BY neighborhood\n ORDER BY \"median asking rate\" DESC NULLS LAST, neighbourhood",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "id": 10,
+      "title": "Neighbourhood price map — market context before price filters",
+      "description": "Mapped neighbourhood centroids coloured by median asking rate, with the eligible sample and P25–P75 spread in the tooltip. Statistics are withheld below 10 rate-eligible ads. Click a marker to filter this dashboard.",
+      "type": "geomap",
+      "pluginVersion": "13.0.2",
+      "gridPos": {
+        "x": 14,
+        "y": 6,
+        "w": 10,
+        "h": 10
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "basemap": {
+          "label": "Road map",
+          "type": "default"
+        },
+        "controls": {
+          "mouseWheelZoom": true,
+          "showLegend": true,
+          "showScale": true,
+          "zoomDelta": 0.5
+        },
+        "layers": [
+          {
+            "config": {
+              "links": [
+                {
+                  "targetBlank": false,
+                  "title": "Filter to this neighbourhood",
+                  "url": "/d/olx-buyer?${__all_variables}&var-neighborhood=${__data.fields.neighborhood}"
+                }
+              ],
+              "showLegend": true,
+              "style": {
+                "color": {
+                  "field": "median asking rate"
+                },
+                "opacity": 0.72,
+                "size": {
+                  "field": "eligible sample",
+                  "min": 8,
+                  "max": 28
+                }
+              }
+            },
+            "location": {
+              "mode": "coords",
+              "latitude": "latitude",
+              "longitude": "longitude"
+            },
+            "name": "Neighbourhood prices",
+            "type": "markers"
+          }
+        ],
+        "tooltip": {
+          "mode": "details"
+        },
+        "view": {
+          "allLayers": true,
+          "id": "fit",
+          "lastOnly": false,
+          "lat": 44.77,
+          "lon": 17.2,
+          "zoom": 12
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH validation AS MATERIALIZED (\n  SELECT reporting.within_bounds(NULL::numeric, ${min_price:sqlstring}, ${max_price:sqlstring}, 'asking price') AS min_price_ok,\n         reporting.within_bounds(NULL::numeric, ${min_rate:sqlstring}, ${max_rate:sqlstring}, 'asking price per m²') AS min_rate_ok,\n         reporting.within_bounds(NULL::numeric, ${min_area:sqlstring}, ${max_area:sqlstring}, 'area') AS min_area_ok,\n         reporting.within_bounds(NULL::numeric, ${min_score:sqlstring}, ${max_score:sqlstring}, 'score', 100) AS min_score_ok\n),\nmarket AS MATERIALIZED (\n  SELECT s.*\n    FROM reporting.current_listing_scores s\n    CROSS JOIN validation\n   WHERE s.deal = 'sale'\n    AND COALESCE(s.property_type, 'unknown') = ${property_type:sqlstring}\n    AND ((ARRAY[${neighborhood:sqlstring}] @> ARRAY['__mapped__'] AND s.neighborhood IS NOT NULL)\n         OR COALESCE(s.neighborhood, 'unknown') = ANY (ARRAY[${neighborhood:sqlstring}]))\n    AND (ARRAY[${rooms:sqlstring}] @> ARRAY['__any__']\n         OR COALESCE(s.room_bucket, 'unknown') = ANY (ARRAY[${rooms:sqlstring}]))\n    AND reporting.within_bounds(s.sqm, ${min_area:sqlstring}, ${max_area:sqlstring}, 'area')\n    AND (ARRAY[${condition:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.condition::text, 'unknown') = ANY (ARRAY[${condition:sqlstring}]))\n    AND (ARRAY[${parking:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.parking::text, 'unknown') = ANY (ARRAY[${parking:sqlstring}]))\n    AND (ARRAY[${garage:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.garage::text, 'unknown') = ANY (ARRAY[${garage:sqlstring}]))\n    AND (ARRAY[${elevator:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.elevator::text, 'unknown') = ANY (ARRAY[${elevator:sqlstring}]))\n    AND (ARRAY[${floor:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.floor_num::text, 'unknown') = ANY (ARRAY[${floor:sqlstring}]))\n    AND (ARRAY[${seller_type:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.seller_type::text, 'unknown') = ANY (ARRAY[${seller_type:sqlstring}]))\n),\nmatches AS MATERIALIZED (\n  SELECT s.* FROM market s\n   WHERE reporting.within_bounds(s.asking_price, ${min_price:sqlstring}, ${max_price:sqlstring}, 'asking price')\n    AND reporting.within_bounds(s.asking_rate, ${min_rate:sqlstring}, ${max_rate:sqlstring}, 'asking price per m²')\n    AND reporting.within_bounds(s.score, ${min_score:sqlstring}, ${max_score:sqlstring}, 'score', 100)\n    AND CASE ${listing_selection:sqlstring}\n          WHEN 'new' THEN s.first_seen >= now() - INTERVAL '7 days'\n          WHEN 'reduced' THEN s.latest_reduction_at >= now() - INTERVAL '30 days'\n          WHEN 'below' THEN s.deviation_pct < -5\n          ELSE TRUE\n        END\n    \n)\nSELECT avg(latitude) AS latitude, avg(longitude) AS longitude,\n       neighborhood,\n       count(DISTINCT article_id)::int AS \"active listings\",\n       count(DISTINCT article_id) FILTER (WHERE asking_rate IS NOT NULL)::int AS \"eligible sample\",\n       CASE WHEN count(DISTINCT article_id) FILTER (WHERE asking_rate IS NOT NULL) >= 10\n            THEN round(percentile_cont(0.5) WITHIN GROUP (ORDER BY asking_rate) FILTER (WHERE asking_rate IS NOT NULL)) END AS \"median asking rate\",\n       CASE WHEN count(DISTINCT article_id) FILTER (WHERE asking_rate IS NOT NULL) >= 10\n            THEN round(percentile_cont(0.25) WITHIN GROUP (ORDER BY asking_rate) FILTER (WHERE asking_rate IS NOT NULL)) END AS \"p25 asking rate\",\n       CASE WHEN count(DISTINCT article_id) FILTER (WHERE asking_rate IS NOT NULL) >= 10\n            THEN round(percentile_cont(0.75) WITHIN GROUP (ORDER BY asking_rate) FILTER (WHERE asking_rate IS NOT NULL)) END AS \"p75 asking rate\"\n  FROM market\n WHERE neighborhood IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL\n GROUP BY neighborhood\n ORDER BY neighborhood",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Interesting listings",
+      "type": "row",
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "id": 12,
+      "title": "Interesting listings — 25 rows per page",
+      "description": "Current matching ads. Default order is scored ads from highest score, then newest first observation and article ID; unscored matches remain visible when no score bound is set.",
+      "type": "table",
+      "gridPos": {
+        "x": 0,
+        "y": 17,
+        "w": 24,
+        "h": 10
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "unit": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "url"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "article_id"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "targetBlank": false,
+                    "title": "Inspect in this dashboard",
+                    "url": "/d/olx-buyer?${__all_variables}&var-subject_id=${__value.raw}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "title"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 330
+              },
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "targetBlank": true,
+                    "title": "Open source ad on OLX",
+                    "url": "${__data.fields.url}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "score"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "deviation %"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "asking price KM"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: KM"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "asking rate KM/m²"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: KM/m²"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "local benchmark"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: KM/m²"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "enablePagination": true,
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH validation AS MATERIALIZED (\n  SELECT reporting.within_bounds(NULL::numeric, ${min_price:sqlstring}, ${max_price:sqlstring}, 'asking price') AS min_price_ok,\n         reporting.within_bounds(NULL::numeric, ${min_rate:sqlstring}, ${max_rate:sqlstring}, 'asking price per m²') AS min_rate_ok,\n         reporting.within_bounds(NULL::numeric, ${min_area:sqlstring}, ${max_area:sqlstring}, 'area') AS min_area_ok,\n         reporting.within_bounds(NULL::numeric, ${min_score:sqlstring}, ${max_score:sqlstring}, 'score', 100) AS min_score_ok\n),\nscoped AS MATERIALIZED (\n  SELECT s.*\n    FROM reporting.current_listing_scores s\n    CROSS JOIN validation\n   WHERE s.deal = 'sale'\n    AND COALESCE(s.property_type, 'unknown') = ${property_type:sqlstring}\n    AND ((ARRAY[${neighborhood:sqlstring}] @> ARRAY['__mapped__'] AND s.neighborhood IS NOT NULL)\n         OR COALESCE(s.neighborhood, 'unknown') = ANY (ARRAY[${neighborhood:sqlstring}]))\n    AND (ARRAY[${rooms:sqlstring}] @> ARRAY['__any__']\n         OR COALESCE(s.room_bucket, 'unknown') = ANY (ARRAY[${rooms:sqlstring}]))\n    AND reporting.within_bounds(s.sqm, ${min_area:sqlstring}, ${max_area:sqlstring}, 'area')\n    AND (ARRAY[${condition:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.condition::text, 'unknown') = ANY (ARRAY[${condition:sqlstring}]))\n    AND (ARRAY[${parking:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.parking::text, 'unknown') = ANY (ARRAY[${parking:sqlstring}]))\n    AND (ARRAY[${garage:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.garage::text, 'unknown') = ANY (ARRAY[${garage:sqlstring}]))\n    AND (ARRAY[${elevator:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.elevator::text, 'unknown') = ANY (ARRAY[${elevator:sqlstring}]))\n    AND (ARRAY[${floor:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.floor_num::text, 'unknown') = ANY (ARRAY[${floor:sqlstring}]))\n    AND (ARRAY[${seller_type:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.seller_type::text, 'unknown') = ANY (ARRAY[${seller_type:sqlstring}]))\n    AND reporting.within_bounds(s.asking_price, ${min_price:sqlstring}, ${max_price:sqlstring}, 'asking price')\n    AND reporting.within_bounds(s.asking_rate, ${min_rate:sqlstring}, ${max_rate:sqlstring}, 'asking price per m²')\n    AND reporting.within_bounds(s.score, ${min_score:sqlstring}, ${max_score:sqlstring}, 'score', 100)\n    AND CASE ${listing_selection:sqlstring}\n          WHEN 'new' THEN s.first_seen >= now() - INTERVAL '7 days'\n          WHEN 'reduced' THEN s.latest_reduction_at >= now() - INTERVAL '30 days'\n          WHEN 'below' THEN s.deviation_pct < -5\n          ELSE TRUE\n        END\n    \n)\nSELECT article_id, title, url, COALESCE(neighborhood, 'unknown') AS neighbourhood,\n       deal, property_type, asking_price AS \"asking price KM\", sqm AS \"area m²\",\n       asking_rate AS \"asking rate KM/m²\", room_bucket AS rooms,\n       benchmark_rate AS \"local benchmark\", round(deviation_pct, 1) AS \"deviation %\",\n       score, comparable_count AS comparables, confidence, seller_type,\n       first_seen, last_seen, current_cycle_age_days AS \"observed cycle days\",\n       reduction_km AS \"latest reduction KM\", round(reduction_pct, 1) AS \"reduction %\",\n       concat_ws(' · ',\n         CASE WHEN deviation_pct < -10 THEN concat(round(abs(deviation_pct)), '% below comparable local asks')\n              WHEN deviation_pct < -5 THEN 'Below comparable local asks' END,\n         CASE WHEN first_seen >= now() - INTERVAL '7 days' THEN concat('First observed ', greatest(0, floor(extract(epoch FROM (now() - first_seen)) / 86400))::int, ' days ago') END,\n         CASE WHEN latest_reduction_at >= now() - INTERVAL '30 days' THEN concat('Reduced ', trim(to_char(abs(reduction_km), 'FM999G999G999')), ' KM') END,\n         CASE WHEN reopened THEN 'Reopened' END,\n         CASE WHEN score IS NULL THEN unscored_reason END\n       ) AS reasons\n  FROM scoped\n ORDER BY CASE WHEN ${sort:sqlstring} = 'lowest_price' THEN asking_price END ASC NULLS LAST,\n       CASE WHEN ${sort:sqlstring} = 'lowest_rate' THEN asking_rate END ASC NULLS LAST,\n       CASE WHEN ${sort:sqlstring} = 'newest' THEN first_seen END DESC NULLS LAST,\n       CASE WHEN ${sort:sqlstring} = 'largest_reduction' THEN reduction_km END DESC NULLS LAST,\n       score DESC NULLS LAST, first_seen DESC NULLS LAST, article_id\n LIMIT 25\n OFFSET (greatest(reporting.numeric_bound(${page:sqlstring}, 'result page', 20)::int, 1) - 1) * 25",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "Price, space and history",
+      "type": "row",
+      "gridPos": {
+        "x": 0,
+        "y": 27,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "id": 14,
+      "title": "Price versus area",
+      "description": "Current matching sale listings: area versus asking price. Colour uses score; null scores retain a neutral no-value colour. Click a point to inspect it or open the OLX source.",
+      "type": "xychart",
+      "pluginVersion": "13.0.2",
+      "gridPos": {
+        "x": 0,
+        "y": 28,
+        "w": 12,
+        "h": 11
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "links": [
+            {
+              "targetBlank": false,
+              "title": "Inspect listing",
+              "url": "/d/olx-buyer?${__all_variables}&var-subject_id=${__data.fields.article_id}"
+            },
+            {
+              "targetBlank": true,
+              "title": "Open source ad on OLX",
+              "url": "${__data.fields.url}"
+            }
+          ]
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "area"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: m²"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "asking price KM"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: KM"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "mapping": "manual",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "series": [
+          {
+            "color": {
+              "matcher": {
+                "id": "byName",
+                "options": "score"
+              }
+            },
+            "frame": {
+              "matcher": {
+                "id": "byIndex",
+                "options": 0
+              }
+            },
+            "x": {
+              "matcher": {
+                "id": "byName",
+                "options": "area"
+              }
+            },
+            "y": {
+              "matcher": {
+                "id": "byName",
+                "options": "asking price KM"
+              }
+            }
+          }
+        ],
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH validation AS MATERIALIZED (\n  SELECT reporting.within_bounds(NULL::numeric, ${min_price:sqlstring}, ${max_price:sqlstring}, 'asking price') AS min_price_ok,\n         reporting.within_bounds(NULL::numeric, ${min_rate:sqlstring}, ${max_rate:sqlstring}, 'asking price per m²') AS min_rate_ok,\n         reporting.within_bounds(NULL::numeric, ${min_area:sqlstring}, ${max_area:sqlstring}, 'area') AS min_area_ok,\n         reporting.within_bounds(NULL::numeric, ${min_score:sqlstring}, ${max_score:sqlstring}, 'score', 100) AS min_score_ok\n),\nscoped AS MATERIALIZED (\n  SELECT s.*\n    FROM reporting.current_listing_scores s\n    CROSS JOIN validation\n   WHERE s.deal = 'sale'\n    AND COALESCE(s.property_type, 'unknown') = ${property_type:sqlstring}\n    AND ((ARRAY[${neighborhood:sqlstring}] @> ARRAY['__mapped__'] AND s.neighborhood IS NOT NULL)\n         OR COALESCE(s.neighborhood, 'unknown') = ANY (ARRAY[${neighborhood:sqlstring}]))\n    AND (ARRAY[${rooms:sqlstring}] @> ARRAY['__any__']\n         OR COALESCE(s.room_bucket, 'unknown') = ANY (ARRAY[${rooms:sqlstring}]))\n    AND reporting.within_bounds(s.sqm, ${min_area:sqlstring}, ${max_area:sqlstring}, 'area')\n    AND (ARRAY[${condition:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.condition::text, 'unknown') = ANY (ARRAY[${condition:sqlstring}]))\n    AND (ARRAY[${parking:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.parking::text, 'unknown') = ANY (ARRAY[${parking:sqlstring}]))\n    AND (ARRAY[${garage:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.garage::text, 'unknown') = ANY (ARRAY[${garage:sqlstring}]))\n    AND (ARRAY[${elevator:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.elevator::text, 'unknown') = ANY (ARRAY[${elevator:sqlstring}]))\n    AND (ARRAY[${floor:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.floor_num::text, 'unknown') = ANY (ARRAY[${floor:sqlstring}]))\n    AND (ARRAY[${seller_type:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.seller_type::text, 'unknown') = ANY (ARRAY[${seller_type:sqlstring}]))\n    AND reporting.within_bounds(s.asking_price, ${min_price:sqlstring}, ${max_price:sqlstring}, 'asking price')\n    AND reporting.within_bounds(s.asking_rate, ${min_rate:sqlstring}, ${max_rate:sqlstring}, 'asking price per m²')\n    AND reporting.within_bounds(s.score, ${min_score:sqlstring}, ${max_score:sqlstring}, 'score', 100)\n    AND CASE ${listing_selection:sqlstring}\n          WHEN 'new' THEN s.first_seen >= now() - INTERVAL '7 days'\n          WHEN 'reduced' THEN s.latest_reduction_at >= now() - INTERVAL '30 days'\n          WHEN 'below' THEN s.deviation_pct < -5\n          ELSE TRUE\n        END\n    \n)\nSELECT sqm AS \"area\",\n       asking_price AS \"asking price KM\",\n       \n       score, article_id, title, url, COALESCE(neighborhood, 'unknown') AS neighbourhood,\n       CASE WHEN score IS NULL THEN 'unscored' WHEN latest_reduction_at IS NOT NULL THEN 'reduced' ELSE 'scored' END AS evidence\n  FROM scoped\n WHERE sqm IS NOT NULL AND asking_price IS NOT NULL\n  ORDER BY article_id",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "id": 15,
+      "title": "Neighbourhood asking-price trend — market context before price filters",
+      "description": "Daily neighbourhood P25, median and P75 asking KM/m² from historical evidence, with eligible sample and provisional, inferred and stale quality fields.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 28,
+        "w": 12,
+        "h": 11
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "showPoints": "never",
+            "spanNulls": false
+          },
+          "unit": "suffix: KM/m²"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "WITH validation AS MATERIALIZED (\n  SELECT reporting.within_bounds(NULL::numeric, ${min_price:sqlstring}, ${max_price:sqlstring}, 'asking price') AS min_price_ok,\n         reporting.within_bounds(NULL::numeric, ${min_rate:sqlstring}, ${max_rate:sqlstring}, 'asking price per m²') AS min_rate_ok,\n         reporting.within_bounds(NULL::numeric, ${min_area:sqlstring}, ${max_area:sqlstring}, 'area') AS min_area_ok,\n         reporting.within_bounds(NULL::numeric, ${min_score:sqlstring}, ${max_score:sqlstring}, 'score', 100) AS min_score_ok\n)\nSELECT day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time,\n       CASE WHEN d.neighborhood IS NULL\n                 OR d.neighborhood IN ('(no pin)', '(unmapped)', 'unknown')\n              THEN 'unknown' ELSE d.neighborhood END AS neighbourhood,\n       \n       CASE WHEN count(*) FILTER (WHERE rate_eligible) >= 10\n            THEN percentile_cont(0.25) WITHIN GROUP (ORDER BY asking_rate) FILTER (WHERE rate_eligible) END AS \"p25 asking rate\",\n       CASE WHEN count(*) FILTER (WHERE rate_eligible) >= 10\n            THEN percentile_cont(0.5) WITHIN GROUP (ORDER BY asking_rate) FILTER (WHERE rate_eligible) END AS \"median asking rate\",\n       CASE WHEN count(*) FILTER (WHERE rate_eligible) >= 10\n            THEN percentile_cont(0.75) WITHIN GROUP (ORDER BY asking_rate) FILTER (WHERE rate_eligible) END AS \"p75 asking rate\",\n       count(*) FILTER (WHERE rate_eligible)::int AS \"rate sample\",\n       count(*) FILTER (WHERE membership_inferred OR attributes_inferred)::int AS inferred,\n       count(*) FILTER (WHERE stale_observation)::int AS stale,\n       bool_or(provisional_day) AS provisional\n  FROM reporting.daily_listing_facts d CROSS JOIN validation\n WHERE d.day >= (now() AT TIME ZONE 'Europe/Sarajevo')::date\n                    - reporting.numeric_bound(${history_days:sqlstring}, 'history window', 90)::int\n    AND d.day <= (now() AT TIME ZONE 'Europe/Sarajevo')::date\n    AND d.deal = 'sale'\n    AND COALESCE(d.property_type, 'unknown') = ${property_type:sqlstring}\n    AND ((ARRAY[${neighborhood:sqlstring}] @> ARRAY['__mapped__'] AND CASE WHEN d.neighborhood IS NULL\n                 OR d.neighborhood IN ('(no pin)', '(unmapped)', 'unknown')\n              THEN 'unknown' ELSE d.neighborhood END <> 'unknown')\n         OR CASE WHEN d.neighborhood IS NULL\n                 OR d.neighborhood IN ('(no pin)', '(unmapped)', 'unknown')\n              THEN 'unknown' ELSE d.neighborhood END = ANY (ARRAY[${neighborhood:sqlstring}]))\n    AND (ARRAY[${rooms:sqlstring}] @> ARRAY['__any__']\n         OR COALESCE(d.room_bucket, 'unknown') = ANY (ARRAY[${rooms:sqlstring}]))\n    AND reporting.within_bounds(d.sqm, ${min_area:sqlstring}, ${max_area:sqlstring}, 'area')\n    AND (ARRAY[${condition:sqlstring}] @> ARRAY['__any__']\n      OR COALESCE(d.historical_condition, 'unknown') = ANY (ARRAY[${condition:sqlstring}]))\n    AND (ARRAY[${parking:sqlstring}] @> ARRAY['__any__']\n      OR COALESCE(COALESCE(d.historical_attributes->>'parking', d.historical_attributes->'searchAttributes'->>'parking'), 'unknown') = ANY (ARRAY[${parking:sqlstring}]))\n    AND (ARRAY[${garage:sqlstring}] @> ARRAY['__any__']\n      OR COALESCE(COALESCE(d.historical_attributes->>'garage', d.historical_attributes->'searchAttributes'->>'garage'), 'unknown') = ANY (ARRAY[${garage:sqlstring}]))\n    AND (ARRAY[${elevator:sqlstring}] @> ARRAY['__any__']\n      OR COALESCE(COALESCE(d.historical_attributes->>'elevator', d.historical_attributes->'searchAttributes'->>'elevator'), 'unknown') = ANY (ARRAY[${elevator:sqlstring}]))\n    AND (ARRAY[${floor:sqlstring}] @> ARRAY['__any__']\n      OR COALESCE(COALESCE(d.historical_attributes->>'floorNum', d.historical_attributes->'searchAttributes'->>'floorNum'), 'unknown') = ANY (ARRAY[${floor:sqlstring}]))\n    AND (ARRAY[${seller_type:sqlstring}] @> ARRAY['__any__']\n      OR COALESCE(d.historical_seller_type, 'unknown') = ANY (ARRAY[${seller_type:sqlstring}]))\n GROUP BY day, CASE WHEN d.neighborhood IS NULL\n                 OR d.neighborhood IN ('(no pin)', '(unmapped)', 'unknown')\n              THEN 'unknown' ELSE d.neighborhood END\n ORDER BY day, neighbourhood",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "title": "Selected listing and exact comparable evidence",
+      "type": "row",
+      "gridPos": {
+        "x": 0,
+        "y": 39,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "id": 17,
+      "title": "Selected listing detail",
+      "description": "Current subject evidence and the shared Local asking-price score. Higher means cheaper relative to exact local comparable asking prices; this is not an appraisal. Select a table row by article ID or enter an article ID above.",
+      "type": "table",
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 24,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "unit": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "url"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "article_id"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "targetBlank": false,
+                    "title": "Inspect in this dashboard",
+                    "url": "/d/olx-buyer?${__all_variables}&var-subject_id=${__value.raw}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "title"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 330
+              },
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "targetBlank": true,
+                    "title": "Open source ad on OLX",
+                    "url": "${__data.fields.url}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "score"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "deviation %"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "asking price KM"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: KM"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "asking rate KM/m²"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: KM/m²"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "local benchmark"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: KM/m²"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "enablePagination": true,
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH validation AS MATERIALIZED (\n  SELECT reporting.within_bounds(NULL::numeric, ${min_price:sqlstring}, ${max_price:sqlstring}, 'asking price') AS min_price_ok,\n         reporting.within_bounds(NULL::numeric, ${min_rate:sqlstring}, ${max_rate:sqlstring}, 'asking price per m²') AS min_rate_ok,\n         reporting.within_bounds(NULL::numeric, ${min_area:sqlstring}, ${max_area:sqlstring}, 'area') AS min_area_ok,\n         reporting.within_bounds(NULL::numeric, ${min_score:sqlstring}, ${max_score:sqlstring}, 'score', 100) AS min_score_ok\n),\nscoped AS MATERIALIZED (\n  SELECT s.*\n    FROM reporting.current_listing_scores s\n    CROSS JOIN validation\n   WHERE s.deal = 'sale'\n    AND COALESCE(s.property_type, 'unknown') = ${property_type:sqlstring}\n    AND ((ARRAY[${neighborhood:sqlstring}] @> ARRAY['__mapped__'] AND s.neighborhood IS NOT NULL)\n         OR COALESCE(s.neighborhood, 'unknown') = ANY (ARRAY[${neighborhood:sqlstring}]))\n    AND (ARRAY[${rooms:sqlstring}] @> ARRAY['__any__']\n         OR COALESCE(s.room_bucket, 'unknown') = ANY (ARRAY[${rooms:sqlstring}]))\n    AND reporting.within_bounds(s.sqm, ${min_area:sqlstring}, ${max_area:sqlstring}, 'area')\n    AND (ARRAY[${condition:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.condition::text, 'unknown') = ANY (ARRAY[${condition:sqlstring}]))\n    AND (ARRAY[${parking:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.parking::text, 'unknown') = ANY (ARRAY[${parking:sqlstring}]))\n    AND (ARRAY[${garage:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.garage::text, 'unknown') = ANY (ARRAY[${garage:sqlstring}]))\n    AND (ARRAY[${elevator:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.elevator::text, 'unknown') = ANY (ARRAY[${elevator:sqlstring}]))\n    AND (ARRAY[${floor:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.floor_num::text, 'unknown') = ANY (ARRAY[${floor:sqlstring}]))\n    AND (ARRAY[${seller_type:sqlstring}] @> ARRAY['__any__']\n          OR COALESCE(s.seller_type::text, 'unknown') = ANY (ARRAY[${seller_type:sqlstring}]))\n)\nSELECT article_id, title, url, deal, property_type, COALESCE(neighborhood, 'unknown') AS neighbourhood,\n       asking_price AS \"asking price KM\", sqm AS \"area m²\", asking_rate AS \"asking rate KM/m²\",\n       room_bucket AS rooms, condition, furnished, heating, parking, garage, elevator,\n       floor_num AS floor, seller_type, plot_sqm AS \"plot m²\", year_built, bathrooms,\n       benchmark_rate AS \"local benchmark\", benchmark_p25 AS \"benchmark p25\", benchmark_p75 AS \"benchmark p75\",\n       round(deviation_pct, 1) AS \"deviation %\", score, position_label, comparable_count AS comparables,\n       confidence, unscored_reason, indicative_low, indicative_total, indicative_high,\n       asking_gap_km, benchmark_at, score_version,\n       first_seen, last_seen, cycle_opened_at, current_cycle_age_days, reopened,\n       latest_reduction_at, reduction_km, round(reduction_pct, 1) AS \"reduction %\",\n       CASE WHEN property_type IN ('houses', 'vacation_homes')\n            THEN 'Building-area comparison; land and condition not adjusted' END AS \"comparison limitation\"\n  FROM scoped\n WHERE article_id = reporting.numeric_bound(${subject_id:sqlstring}, 'subject article ID')\n LIMIT 1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "id": 18,
+      "title": "Exact scoring comparables",
+      "description": "Same-statement subject and exact cohort snapshot. The target is excluded. Cohort count, P25, median, P75, indicative totals, benchmark version and evaluation timestamp repeat for inspection; benchmark-derived values are withheld below 10 comparables.",
+      "type": "table",
+      "gridPos": {
+        "x": 0,
+        "y": 47,
+        "w": 16,
+        "h": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "unit": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "url"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "article_id"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "targetBlank": false,
+                    "title": "Inspect in this dashboard",
+                    "url": "/d/olx-buyer?${__all_variables}&var-subject_id=${__value.raw}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "title"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 330
+              },
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "targetBlank": true,
+                    "title": "Open source ad on OLX",
+                    "url": "${__data.fields.url}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "asking price KM"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: KM"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "asking rate KM/m²"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: KM/m²"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "enablePagination": true,
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH subject AS MATERIALIZED (\n  SELECT s.* FROM reporting.current_listing_scores s\n   WHERE s.article_id = reporting.numeric_bound(${subject_id:sqlstring}, 'subject article ID')\n     AND s.deal = 'sale'\n),\ncohort AS MATERIALIZED (\n  SELECT c.*\n    FROM subject s\n    CROSS JOIN LATERAL reporting.listing_comparables(s.article_id) c\n),\nbenchmark AS (\n  SELECT count(*)::int AS \"cohort count\",\n         percentile_cont(0.25) WITHIN GROUP (ORDER BY asking_rate) AS raw_p25,\n         percentile_cont(0.5) WITHIN GROUP (ORDER BY asking_rate) AS raw_median,\n         percentile_cont(0.75) WITHIN GROUP (ORDER BY asking_rate) AS raw_p75\n    FROM cohort\n)\nSELECT c.article_id, c.title, c.url, COALESCE(c.neighborhood, 'unknown') AS neighbourhood,\n       c.sqm AS \"area m²\", c.room_bucket AS rooms, c.asking_price AS \"asking price KM\",\n       c.asking_rate AS \"asking rate KM/m²\", c.last_seen,\n       CASE WHEN c.furnished IS TRUE THEN 'furnished' WHEN c.furnished IS FALSE THEN 'unfurnished' ELSE 'unknown' END AS furnishing,\n       b.\"cohort count\", CASE WHEN b.\"cohort count\" >= 10 THEN b.raw_p25 END AS \"cohort p25\",\n       CASE WHEN b.\"cohort count\" >= 10 THEN b.raw_median END AS \"cohort median\",\n       CASE WHEN b.\"cohort count\" >= 10 THEN b.raw_p75 END AS \"cohort p75\",\n       CASE WHEN b.\"cohort count\" >= 10 THEN b.raw_p25 * s.sqm END AS \"indicative low\",\n       CASE WHEN b.\"cohort count\" >= 10 THEN b.raw_median * s.sqm END AS \"indicative total\",\n       CASE WHEN b.\"cohort count\" >= 10 THEN b.raw_p75 * s.sqm END AS \"indicative high\",\n       CASE WHEN b.\"cohort count\" >= 10 THEN s.asking_price - b.raw_median * s.sqm END AS \"asking gap\",\n       s.benchmark_at AS \"evaluated at\", s.score_version AS version\n  FROM subject s CROSS JOIN benchmark b LEFT JOIN cohort c ON true\n ORDER BY c.asking_rate, c.article_id",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "id": 19,
+      "title": "Current-cycle asking-price history",
+      "description": "Valid same-currency, same-deal changes in the current observed cycle. Invalid boundaries, deal switches and reopenings prevent false continuity.",
+      "type": "table",
+      "gridPos": {
+        "x": 16,
+        "y": 47,
+        "w": 8,
+        "h": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "options": {
+        "cellHeight": "sm",
+        "enablePagination": true,
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT c.effective_at, c.prior_price AS \"prior asking price KM\",\n       c.price AS \"new asking price KM\", c.delta AS \"change KM\",\n       round(c.pct_change, 1) AS \"change %\"\n  FROM reporting.comparison_price_changes c\n  JOIN reporting.current_listing_scores s USING (article_id)\n WHERE c.article_id = reporting.numeric_bound(${subject_id:sqlstring}, 'subject article ID')\n   AND s.deal = 'sale'\n ORDER BY c.effective_at",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "refresh": "5m",
+  "schemaVersion": 41,
+  "tags": [
+    "olx",
+    "real-estate",
+    "private",
+    "persona"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": "apartments",
+          "value": "apartments"
+        },
+        "datasource": {
+          "type": "postgres",
+          "uid": "olx-postgres"
+        },
+        "definition": "SELECT COALESCE(property_type, 'unknown') AS __value, COALESCE(property_type, 'unknown') AS __text FROM reporting.current_listing_scores GROUP BY 1 ORDER BY 1",
+        "includeAll": false,
+        "label": "Property type",
+        "multi": false,
+        "name": "property_type",
+        "options": [],
+        "query": "SELECT COALESCE(property_type, 'unknown') AS __value, COALESCE(property_type, 'unknown') AS __text FROM reporting.current_listing_scores GROUP BY 1 ORDER BY 1",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "postgres",
+          "uid": "olx-postgres"
+        },
+        "definition": "SELECT COALESCE(neighborhood, 'unknown') AS __value, COALESCE(neighborhood, 'unknown') AS __text FROM reporting.current_listing_scores GROUP BY 1 ORDER BY 1",
+        "includeAll": true,
+        "label": "Neighbourhood",
+        "multi": true,
+        "name": "neighborhood",
+        "options": [],
+        "query": "SELECT COALESCE(neighborhood, 'unknown') AS __value, COALESCE(neighborhood, 'unknown') AS __text FROM reporting.current_listing_scores GROUP BY 1 ORDER BY 1",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query",
+        "allValue": "__mapped__"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "postgres",
+          "uid": "olx-postgres"
+        },
+        "definition": "SELECT COALESCE(room_bucket, 'unknown') AS __value, COALESCE(room_bucket, 'unknown') AS __text FROM reporting.current_listing_scores GROUP BY 1 ORDER BY 1",
+        "includeAll": true,
+        "label": "Rooms",
+        "multi": true,
+        "name": "rooms",
+        "options": [],
+        "query": "SELECT COALESCE(room_bucket, 'unknown') AS __value, COALESCE(room_bucket, 'unknown') AS __text FROM reporting.current_listing_scores GROUP BY 1 ORDER BY 1",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query",
+        "allValue": "__any__"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "",
+          "value": ""
+        },
+        "label": "Minimum asking price, KM",
+        "name": "min_price",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "",
+          "value": ""
+        },
+        "label": "Maximum asking price, KM",
+        "name": "max_price",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "",
+          "value": ""
+        },
+        "label": "Minimum asking price, KM/m²",
+        "name": "min_rate",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "",
+          "value": ""
+        },
+        "label": "Maximum asking price, KM/m²",
+        "name": "max_rate",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "",
+          "value": ""
+        },
+        "label": "Minimum area, m²",
+        "name": "min_area",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "",
+          "value": ""
+        },
+        "label": "Maximum area, m²",
+        "name": "max_area",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "postgres",
+          "uid": "olx-postgres"
+        },
+        "definition": "SELECT value AS __value, value AS __text FROM (SELECT DISTINCT COALESCE(condition::text, 'unknown') AS value FROM reporting.current_listing_scores) f ORDER BY 1",
+        "includeAll": true,
+        "label": "Condition",
+        "multi": true,
+        "name": "condition",
+        "options": [],
+        "query": "SELECT value AS __value, value AS __text FROM (SELECT DISTINCT COALESCE(condition::text, 'unknown') AS value FROM reporting.current_listing_scores) f ORDER BY 1",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query",
+        "allValue": "__any__"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "$__all",
+          "value": "$__all"
+        },
+        "includeAll": true,
+        "label": "Parking",
+        "multi": true,
+        "name": "parking",
+        "options": [],
+        "query": "true,false,unknown",
+        "skipUrlSync": false,
+        "type": "custom",
+        "allValue": "__any__"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "$__all",
+          "value": "$__all"
+        },
+        "includeAll": true,
+        "label": "Garage",
+        "multi": true,
+        "name": "garage",
+        "options": [],
+        "query": "true,false,unknown",
+        "skipUrlSync": false,
+        "type": "custom",
+        "allValue": "__any__"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "$__all",
+          "value": "$__all"
+        },
+        "includeAll": true,
+        "label": "Elevator",
+        "multi": true,
+        "name": "elevator",
+        "options": [],
+        "query": "true,false,unknown",
+        "skipUrlSync": false,
+        "type": "custom",
+        "allValue": "__any__"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "postgres",
+          "uid": "olx-postgres"
+        },
+        "definition": "SELECT value AS __value, value AS __text FROM (SELECT DISTINCT COALESCE(floor_num::text, 'unknown') AS value FROM reporting.current_listing_scores) f ORDER BY 1",
+        "includeAll": true,
+        "label": "Floor",
+        "multi": true,
+        "name": "floor",
+        "options": [],
+        "query": "SELECT value AS __value, value AS __text FROM (SELECT DISTINCT COALESCE(floor_num::text, 'unknown') AS value FROM reporting.current_listing_scores) f ORDER BY 1",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query",
+        "allValue": "__any__"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "postgres",
+          "uid": "olx-postgres"
+        },
+        "definition": "SELECT value AS __value, value AS __text FROM (SELECT DISTINCT COALESCE(seller_type::text, 'unknown') AS value FROM reporting.current_listing_scores) f ORDER BY 1",
+        "includeAll": true,
+        "label": "Seller type",
+        "multi": true,
+        "name": "seller_type",
+        "options": [],
+        "query": "SELECT value AS __value, value AS __text FROM (SELECT DISTINCT COALESCE(seller_type::text, 'unknown') AS value FROM reporting.current_listing_scores) f ORDER BY 1",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query",
+        "allValue": "__any__"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "all",
+          "value": "all"
+        },
+        "includeAll": false,
+        "label": "Listing selection",
+        "multi": false,
+        "name": "listing_selection",
+        "options": [],
+        "query": "all,new,reduced,below",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "",
+          "value": ""
+        },
+        "label": "Minimum score",
+        "name": "min_score",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "",
+          "value": ""
+        },
+        "label": "Maximum score",
+        "name": "max_score",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "30",
+          "value": "30"
+        },
+        "includeAll": false,
+        "label": "History window",
+        "multi": false,
+        "name": "history_days",
+        "options": [],
+        "query": "30,90",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "score",
+          "value": "score"
+        },
+        "includeAll": false,
+        "label": "Sort",
+        "multi": false,
+        "name": "sort",
+        "options": [],
+        "query": "score,lowest_price,lowest_rate,newest,largest_reduction",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "1",
+          "value": "1"
+        },
+        "includeAll": false,
+        "label": "Result page",
+        "multi": false,
+        "name": "page",
+        "options": [],
+        "query": "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "",
+          "value": ""
+        },
+        "label": "Selected article ID",
+        "name": "subject_id",
+        "skipUrlSync": false,
+        "type": "textbox"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "5m",
+      "15m",
+      "30m",
+      "1h"
+    ]
+  },
+  "timezone": "Europe/Sarajevo",
+  "title": "Find a home to buy",
+  "uid": "olx-buyer",
+  "version": 1,
+  "weekStart": "monday"
+}

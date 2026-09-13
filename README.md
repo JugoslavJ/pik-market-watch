@@ -56,7 +56,6 @@ cd scraper
 npm ci
 npm test
 npm run test:integration
-npm run test:dashboards
 npm run replay:response -- --id=123
 npm run lint
 npm run format:check
@@ -67,6 +66,8 @@ npm run lint:syntax
 
 ## Documentation
 
+- [Buyer, renter and agent dashboards](docs/PERSONA-DASHBOARDS.md)
+- [Shared listing comparison contract](docs/LISTING-COMPARISON-CONTRACT.md)
 - [Architecture and data model](docs/ARCHITECTURE.md)
 - [Operations](docs/OPERATIONS.md)
 - [Dashboard metric inventory](docs/METRIC-INVENTORY.md)

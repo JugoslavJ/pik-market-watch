@@ -12,7 +12,6 @@
     "test:integration": "node scripts/run-integration-tests.js",
     "check:docs": "node scripts/check-markdown-links.js",
     "benchmark:ingestion": "node scripts/benchmark-ingestion.js",
-    "test:dashboards": "node scripts/check-dashboards.js",
     "replay:response": "node src/replay-response.js",
     "maintenance": "node src/maintenance-only.js",
     "lint": "eslint .",

@@ -169,6 +169,7 @@ function eventKey(event) {
     event.effectiveAt.toISOString(),
     priceKey(event.price),
     event.priceState,
+    event.priceState === "valid" ? currencyKey(event.provenance) : "",
   ].join("|");
 }
 
@@ -182,6 +183,7 @@ function rowKey(row) {
     new Date(row.effective_at).toISOString(),
     priceKey(row.price),
     row.price_state,
+    row.price_state === "valid" ? currencyKey(row.provenance) : "",
   ].join("|");
 }
 
@@ -190,7 +192,14 @@ function priceKey(value) {
 }
 
 function signature(event) {
-  return `${priceKey(event.price)}|${event.priceState}`;
+  return `${priceKey(event.price)}|${event.priceState}|${currencyKey(event.provenance)}`;
+}
+
+function currencyKey(provenance) {
+  const currency = String(provenance?.currency || "")
+    .trim()
+    .toUpperCase();
+  return currency === "KM" ? "BAM" : currency;
 }
 
 function dayInBanjaLuka(date) {
@@ -288,7 +297,11 @@ async function recordPriceEvents(pool, events, options = {}) {
       const competing =
         rows.some(
           (row) =>
-            `${priceKey(row.price)}|${row.price_state}` !== signature(event),
+            signature({
+              price: row.price,
+              priceState: row.price_state,
+              provenance: row.provenance,
+            }) !== signature(event),
         ) ||
         pendingEvents.some(
           (candidate) => signature(candidate) !== signature(event),
@@ -296,14 +309,20 @@ async function recordPriceEvents(pool, events, options = {}) {
       if (competing) {
         result.conflicting++;
         const priorConflict = [...rows, ...pendingEvents].find(
-          (row) => row.price_state === "conflict",
+          (row) => (row.price_state ?? row.priceState) === "conflict",
         );
         const candidateSignatures = new Set(
           priorConflict?.provenance?.candidateSignatures || [],
         );
         candidateSignatures.add(signature(event));
         for (const row of rows) {
-          candidateSignatures.add(`${priceKey(row.price)}|${row.price_state}`);
+          candidateSignatures.add(
+            signature({
+              price: row.price,
+              priceState: row.price_state,
+              provenance: row.provenance,
+            }),
+          );
         }
         const conflict = {
           ...event,

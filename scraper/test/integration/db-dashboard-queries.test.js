@@ -55,6 +55,27 @@ function interpolate(sql, values) {
     .replace(/\$__timeFrom\(\)/g, "(now()-interval '90 days')")
     .replace(/\$__timeTo\(\)/g, "now()");
 }
+
+function dashboardValues(dashboard, selected, scenario) {
+  const defaults = Object.fromEntries(
+    (dashboard.templating?.list || []).map((variable) => {
+      let value = variable.current?.value ?? "";
+      if (
+        value === "$__all" ||
+        (Array.isArray(value) && value.includes("$__all"))
+      ) {
+        value = variable.allValue || "__any__";
+      }
+      return [variable.name, Array.isArray(value) ? value : [value]];
+    }),
+  );
+  const result = { ...defaults, ...selected };
+  if (["olx-buyer", "olx-renter", "olx-agent"].includes(dashboard.uid)) {
+    result.deal = [scenario === "rent" ? "rent" : "sale"];
+    result.property_type = [scenario === "no match" ? "missing" : "apartments"];
+  }
+  return result;
+}
 let db;
 test.before(async () => {
   db = await setupDb();
@@ -101,15 +122,22 @@ needsDb(
         selected.max_sqm = [""];
       }
       for (const { name, dashboard } of dashboards) {
+        const interpolatedValues = dashboardValues(
+          dashboard,
+          selected,
+          scenario,
+        );
         for (const v of dashboard.templating?.list || [])
-          if (v.type === "query") await db.pool.query(v.query);
+          if (v.type === "query")
+            await db.pool.query(interpolate(v.query, interpolatedValues));
         for (const a of dashboard.annotations?.list || [])
-          if (a.rawSql) await db.pool.query(interpolate(a.rawSql, selected));
+          if (a.rawSql)
+            await db.pool.query(interpolate(a.rawSql, interpolatedValues));
         for (const p of dashboard.panels) {
           const names = new Set();
           for (const t of p.targets || []) {
             const result = await db.pool
-              .query(interpolate(t.rawSql, selected))
+              .query(interpolate(t.rawSql, interpolatedValues))
               .catch((e) => {
                 e.message = `${name} panel ${p.id}/${t.refId} (${scenario}): ${e.message}`;
                 throw e;

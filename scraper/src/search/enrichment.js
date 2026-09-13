@@ -135,6 +135,10 @@ async function enrichSearchResults({
         if (!d) continue; // a failed call leaves search-level facts in place
         const row = rows.get(d.articleId);
         if (!row) continue;
+        // Null is meaningful evidence for the deal dimension. Retain it even
+        // though optional display/detail facts below use non-null merging.
+        if (Object.prototype.hasOwnProperty.call(d, "dealType"))
+          row.dealType = d.dealType;
         for (const [k, v] of Object.entries(d)) {
           if (k === "articleId" || v == null) continue;
           if (k === "characteristics" && !Object.keys(v).length) continue;

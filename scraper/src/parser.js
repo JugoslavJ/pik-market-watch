@@ -33,6 +33,7 @@ const {
   normalizeId,
   normalizePpm2,
   normalizePrice,
+  priceCurrencyOf,
 } = require("./normalization");
 
 function inBiH(lat, lon) {
@@ -227,6 +228,7 @@ function parseSearchItem(item) {
     rooms,
     price,
     priceText,
+    priceCurrency: priceCurrencyOf(item),
     ppm2,
     isRent,
     dealType,
@@ -333,6 +335,7 @@ function parseListingDetail(json, fallbackId) {
     publishedAt: dateFromUnixSeconds(json.created_at),
     renewedAt: dateFromUnixSeconds(json.date),
     price: priceQuality.price,
+    priceCurrency: priceCurrencyOf(json),
     priceText:
       displayPrice ||
       (priceQuality.state === "unpriced"
@@ -389,6 +392,12 @@ function parseListingDetail(json, fallbackId) {
 
     const handler = CHAR_CODE_HANDLERS[code];
     if (handler) handler(trimmed, detail);
+  }
+
+  // A partial/unknown furnishing description cannot become fully furnished
+  // merely because the payload also carries a coarse yes/no flag.
+  if (detail.characteristics.opremljenost != null) {
+    detail.furnished = furnishedFromText(detail.characteristics.opremljenost);
   }
 
   // kvadrata is stored raw above AND feeds the typed sqm column (same 5–500

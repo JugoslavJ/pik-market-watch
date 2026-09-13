@@ -11,6 +11,9 @@ function observationAttributes(card) {
     apiStatus: card.apiStatus ?? null,
     priceState: card.priceState ?? null,
     priceReason: card.priceReason ?? null,
+    ...(card.pricePresent !== false
+      ? { currency: card.priceCurrency ?? null }
+      : {}),
   };
 }
 
@@ -67,6 +70,10 @@ function buildSearchPriceEvents(cards, { observedAt = new Date() } = {}) {
       isCurrent: true,
       provenance: {
         observation: "search_card",
+        currency: card.priceCurrency ?? null,
+        dealType: Object.prototype.hasOwnProperty.call(card, "dealType")
+          ? card.dealType
+          : dealType,
         priceReason: card.priceReason ?? null,
       },
     };

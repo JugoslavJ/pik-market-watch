@@ -129,6 +129,38 @@ function normalizeDealType(value) {
   return null;
 }
 
+// Currency belongs to the individual assertion, never to the listing's latest
+// price or the dataset's rental period. Preserve foreign/conflicting evidence
+// so comparison projections cannot silently label it as BAM.
+function priceCurrencyOf(payload) {
+  if (!payload || typeof payload !== "object") return null;
+  const currencies = new Set();
+  const canonical = (value) => {
+    const code = String(value).trim().toUpperCase();
+    return code === "KM"
+      ? "BAM"
+      : code === "€"
+        ? "EUR"
+        : code === "$"
+          ? "USD"
+          : code;
+  };
+  for (const key of ["currency", "price_currency", "currency_code"]) {
+    if (payload[key] == null || payload[key] === "") continue;
+    if (typeof payload[key] !== "string") return "unknown";
+    const code = canonical(payload[key]);
+    if (!/^[A-Z]{3}$/.test(code)) return "unknown";
+    currencies.add(code);
+  }
+  for (const value of [payload.price, payload.display_price]) {
+    if (typeof value !== "string") continue;
+    for (const match of value.matchAll(/\b(?:KM|BAM|EUR|USD)\b|[€$]/gi)) {
+      currencies.add(canonical(match[0]));
+    }
+  }
+  return currencies.size > 1 ? "conflict" : [...currencies][0] || null;
+}
+
 function dealTypeOf(value) {
   return normalizeDealType(value) || DEAL_TYPES.SALE;
 }
@@ -241,14 +273,19 @@ function normalizePriceHistory(history, { dealType, now = Date.now() } = {}) {
     if (date === null || date > currentSeconds) continue;
     const quality = normalizePrice(entry.price, dealType);
     if (quality.state !== PRICE_STATES.VALID) continue;
-    events.push({ price: quality.price, date });
+    const currency = priceCurrencyOf(entry);
+    events.push({
+      price: quality.price,
+      date,
+      ...(currency ? { currency } : {}),
+    });
   }
 
   const seen = new Set();
   return events
     .sort((a, b) => a.date - b.date || a.price - b.price)
     .filter((event) => {
-      const key = `${event.date}:${event.price}`;
+      const key = `${event.date}:${event.price}:${event.currency || ""}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -279,13 +316,18 @@ function normalizeHistoryWithRejections(
       rejected.push({ entry, reason: quality.reason, state: quality.state });
       continue;
     }
-    events.push({ price: quality.price, date });
+    const currency = priceCurrencyOf(entry);
+    events.push({
+      price: quality.price,
+      date,
+      ...(currency ? { currency } : {}),
+    });
   }
   const seen = new Set();
   const deduped = events
     .sort((a, b) => a.date - b.date || a.price - b.price)
     .filter((event) => {
-      const key = `${event.date}:${event.price}`;
+      const key = `${event.date}:${event.price}:${event.currency || ""}`;
       if (seen.has(key)) {
         rejected.push({ entry: event, reason: "duplicate" });
         return false;
@@ -327,4 +369,5 @@ module.exports = {
   normalizePrice,
   normalizePriceHistory,
   normalizeUnixSeconds,
+  priceCurrencyOf,
 };
