@@ -47,21 +47,27 @@ function dashboard(persona) {
 }
 
 function interpolate(d, sql, overrides = {}) {
+  const rawValues = new Set();
   const values = Object.fromEntries(
     d.templating.list.map((v) => {
       let value = v.current?.value ?? "";
       if (
         value === "$__all" ||
         (Array.isArray(value) && value.includes("$__all"))
-      )
+      ) {
         value = v.allValue || "__any__";
+        rawValues.add(v.name);
+      }
       return [v.name, Array.isArray(value) ? value : [value]];
     }),
   );
-  for (const [name, value] of Object.entries(overrides))
+  for (const [name, value] of Object.entries(overrides)) {
     values[name] = Array.isArray(value) ? value : [value];
+    rawValues.delete(name);
+  }
   return sql.replace(/\$\{(\w+):sqlstring\}/g, (_, name) => {
     assert.ok(values[name], `Missing variable ${name}`);
+    if (rawValues.has(name)) return values[name].join(",");
     return values[name]
       .map((v) => `'${String(v).replaceAll("'", "''")}'`)
       .join(",");
