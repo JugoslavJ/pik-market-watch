@@ -35,19 +35,39 @@
   "id": null,
   "links": [
     {
+      "targetBlank": false,
       "title": "Home",
-      "url": "/d/olx-home",
-      "targetBlank": false
+      "url": "/d/olx-home"
     },
     {
-      "title": "Exits & Price Endings",
-      "url": "/d/olx-exits",
-      "targetBlank": false
+      "targetBlank": false,
+      "title": "Buyer",
+      "url": "/d/olx-buyer"
     },
     {
-      "title": "Scraper Health",
-      "url": "/d/olx-health",
-      "targetBlank": false
+      "targetBlank": false,
+      "title": "Renter",
+      "url": "/d/olx-renter"
+    },
+    {
+      "targetBlank": false,
+      "title": "Agent",
+      "url": "/d/olx-agent"
+    },
+    {
+      "targetBlank": false,
+      "title": "Market overview",
+      "url": "/d/olx-overview"
+    },
+    {
+      "targetBlank": false,
+      "title": "Observed exits",
+      "url": "/d/olx-exits"
+    },
+    {
+      "targetBlank": false,
+      "title": "Data health",
+      "url": "/d/olx-health"
     }
   ],
   "panels": [
@@ -76,10 +96,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 5,
         "x": 0,
-        "y": 0
+        "y": 0,
+        "w": 8,
+        "h": 4
       },
       "title": "Active listings",
       "description": "Seen by a scrape in the last 14 days and not closed. Respects every filter.",
@@ -91,7 +111,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -137,10 +159,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 5,
-        "x": 5,
-        "y": 0
+        "x": 8,
+        "y": 0,
+        "w": 8,
+        "h": 4
       },
       "title": "New · 7 d",
       "description": "Active listings first seen in the last week — fresh supply.",
@@ -152,7 +174,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -198,10 +222,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 10,
-        "y": 0
+        "x": 16,
+        "y": 0,
+        "w": 8,
+        "h": 4
       },
       "title": "Price drops · 7 d",
       "description": "Distinct listings with an observed price decrease in the last 7 days; includes listings that later closed.",
@@ -213,7 +237,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -259,10 +285,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 5,
-        "x": 14,
-        "y": 0
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 4
       },
       "title": "Median KM/m² · sales",
       "description": "Median asking price per m² across sale listings matching the filters (implausible parses excluded).",
@@ -274,7 +300,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -320,10 +348,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 5,
-        "x": 19,
-        "y": 0
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 4
       },
       "title": "Median rent · KM/mo",
       "description": "Median monthly asking rent among rental listings matching the filters.",
@@ -335,7 +363,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -360,10 +390,10 @@
       "type": "row",
       "title": "Price trend",
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 4
+        "y": 8,
+        "w": 24,
+        "h": 1
       },
       "panels": [],
       "id": 6
@@ -468,10 +498,10 @@
         ]
       },
       "gridPos": {
-        "h": 9,
-        "w": 16,
         "x": 0,
-        "y": 5
+        "y": 9,
+        "w": 24,
+        "h": 9
       },
       "title": "Median asking KM/m² — daily snapshots, with p25–p75 band",
       "description": "Pooled reconstructed daily inventory asking prices for the selected period. Percentiles are NULL when no eligible priced rows exist; sample, estimated, stale and provisional columns expose data quality.",
@@ -524,10 +554,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 9,
-        "w": 8,
-        "x": 16,
-        "y": 5
+        "x": 0,
+        "y": 18,
+        "w": 24,
+        "h": 9
       },
       "title": "Active sale listings by rooms",
       "description": "Sale side of the current filter selection.",
@@ -539,7 +569,9 @@
         "namePlacement": "auto",
         "orientation": "horizontal",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": true
         },
@@ -574,10 +606,10 @@
       "type": "row",
       "title": "Market flow",
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 14
+        "y": 27,
+        "w": 24,
+        "h": 1
       },
       "panels": [],
       "id": 9
@@ -682,10 +714,10 @@
         ]
       },
       "gridPos": {
-        "h": 9,
-        "w": 12,
         "x": 0,
-        "y": 15
+        "y": 28,
+        "w": 24,
+        "h": 9
       },
       "title": "Inventory flow — new vs closed per day · all categories",
       "description": "All categories and deals. New counts each article once on its first discovery date; repeated sightings and renewals are not additions. Closed and reopened count lifecycle events. Active inventory is reconstructed and may include inferred or stale observations; today is provisional.",
@@ -769,10 +801,10 @@
         ]
       },
       "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 15
+        "x": 0,
+        "y": 37,
+        "w": 24,
+        "h": 9
       },
       "title": "Stalest active listings — oldest creation day first",
       "description": "Age measured from the ad's creation day (olx publish date; falls back to our first sighting). renewed_day is the seller's last bump — NULL until the renewal backfill converges; an old renewed_day means the ad has stopped competing for attention.",
@@ -782,7 +814,9 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": ["sum"],
+          "reducer": [
+            "sum"
+          ],
           "show": false
         },
         "showHeader": true
@@ -805,10 +839,10 @@
       "type": "row",
       "title": "Map",
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 24
+        "y": 46,
+        "w": 24,
+        "h": 1
       },
       "panels": [],
       "id": 12
@@ -868,10 +902,10 @@
         ]
       },
       "gridPos": {
-        "h": 14,
-        "w": 16,
         "x": 0,
-        "y": 25
+        "y": 47,
+        "w": 24,
+        "h": 14
       },
       "title": "Listing map — click a pin to open the ad",
       "description": "Pins of active listings placed by their ad's map coordinates; respects every filter.",
@@ -1007,10 +1041,10 @@
         ]
       },
       "gridPos": {
-        "h": 14,
-        "w": 8,
-        "x": 16,
-        "y": 25
+        "x": 0,
+        "y": 61,
+        "w": 24,
+        "h": 14
       },
       "title": "Pinned listings on map — click title to open",
       "description": "The 100 most recently seen pinned listings — companion table to the map. Click a title to open the ad on olx.ba.",
@@ -1020,7 +1054,9 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": ["sum"],
+          "reducer": [
+            "sum"
+          ],
           "show": false
         },
         "showHeader": true
@@ -1043,10 +1079,10 @@
       "type": "row",
       "title": "Shopping list",
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 39
+        "y": 75,
+        "w": 24,
+        "h": 1
       },
       "panels": [],
       "id": 15
@@ -1117,10 +1153,10 @@
         ]
       },
       "gridPos": {
-        "h": 10,
-        "w": 12,
         "x": 0,
-        "y": 40
+        "y": 76,
+        "w": 24,
+        "h": 10
       },
       "title": "Best value — lowest KM/m² (sales)",
       "description": "Cheapest per m² among sale listings matching the filters.",
@@ -1130,7 +1166,9 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": ["sum"],
+          "reducer": [
+            "sum"
+          ],
           "show": false
         },
         "showHeader": true
@@ -1227,10 +1265,10 @@
         ]
       },
       "gridPos": {
-        "h": 10,
-        "w": 12,
-        "x": 12,
-        "y": 40
+        "x": 0,
+        "y": 86,
+        "w": 24,
+        "h": 10
       },
       "title": "Recent price drops — newest first",
       "description": "Observed price decreases in the last 30 days, filtered by event-time attributes.",
@@ -1240,7 +1278,9 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": ["sum"],
+          "reducer": [
+            "sum"
+          ],
           "show": false
         },
         "showHeader": true
@@ -1258,435 +1298,6 @@
         }
       ],
       "id": 17
-    },
-    {
-      "type": "row",
-      "title": "Segments & demand",
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 61
-      },
-      "panels": [],
-      "id": 18
-    },
-    {
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "blue",
-                "value": null
-              }
-            ]
-          },
-          "unit": "none",
-          "noValue": "0"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 5,
-        "x": 0,
-        "y": 62
-      },
-      "title": "Actives that cut their price",
-      "description": "Active listings whose history contains at least one observed decrease — negotiation leverage exists here.",
-      "type": "stat",
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "WITH cuts AS (\n  SELECT DISTINCT pc.article_id\n  FROM reporting.price_changes pc\n  WHERE pc.delta < 0 AND pc.deal = ANY (ARRAY(SELECT CASE WHEN selected = 'sell' THEN 'sale' ELSE selected END FROM unnest(ARRAY[${deal:sqlstring}]) AS t(selected)))\n)\nSELECT count(*) AS actives\nFROM cuts c\nJOIN listings_filtered(ARRAY[${category:sqlstring}], dashboard_numeric(${min_sqm:sqlstring}), dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}], true) l\n  ON l.article_id = c.article_id\nWHERE TRUE\n\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])",
-          "refId": "A"
-        }
-      ],
-      "id": 19
-    },
-    {
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "suffix:KM",
-          "noValue": "—"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 5,
-        "x": 5,
-        "y": 62
-      },
-      "title": "Median biggest cut · KM",
-      "description": "Median of the largest single cut per cutting listing.",
-      "type": "stat",
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "WITH cuts AS (\n  SELECT pc.article_id, max(-pc.delta) AS biggest\n  FROM reporting.price_changes pc\n  WHERE pc.delta < 0 AND pc.deal = ANY (ARRAY(SELECT CASE WHEN selected = 'sell' THEN 'sale' ELSE selected END FROM unnest(ARRAY[${deal:sqlstring}]) AS t(selected)))\n  GROUP BY pc.article_id\n)\nSELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY c.biggest)\nFROM cuts c\nJOIN listings_filtered(ARRAY[${category:sqlstring}], dashboard_numeric(${min_sqm:sqlstring}), dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}], true) l\n  ON l.article_id = c.article_id\nWHERE TRUE\n\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])",
-          "refId": "A"
-        }
-      ],
-      "id": 20
-    },
-    {
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "purple",
-                "value": null
-              }
-            ]
-          },
-          "unit": "suffix: KM/m²"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 7,
-        "x": 10,
-        "y": 62
-      },
-      "title": "Median KM/m² by rooms · sales",
-      "description": "Asking-price segmentation by size — watch the spread between buckets.",
-      "type": "bargauge",
-      "options": {
-        "displayMode": "gradient",
-        "minVizHeight": 10,
-        "minVizWidth": 0,
-        "namePlacement": "auto",
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": true
-        },
-        "showUnfilled": true,
-        "sizing": "auto",
-        "valueMode": "color"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT room_bucket(l.rooms) AS bucket,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)::int AS median_ppm2\nFROM listings_filtered(ARRAY[${category:sqlstring}], dashboard_numeric(${min_sqm:sqlstring}), dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]) l\nWHERE NOT l.is_rent AND l.ppm2 > 0 AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nGROUP BY 1 ORDER BY 1",
-          "refId": "A"
-        }
-      ],
-      "transformations": [
-        {
-          "id": "rowsToFields",
-          "options": {
-            "nameField": "bucket",
-            "valueField": "median_ppm2"
-          }
-        }
-      ],
-      "id": 21
-    },
-    {
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": false
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 7,
-        "x": 17,
-        "y": 62
-      },
-      "title": "Asking KM/m² by condition · sales",
-      "description": "Median sale asking KM/m² by condition, including unknown condition. Each group needs at least 5 listings with a positive price per m².",
-      "type": "table",
-      "options": {
-        "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": ["sum"],
-          "show": false
-        },
-        "showHeader": true
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT COALESCE(NULLIF(l.condition, ''), '(unknown)') AS bucket,\n       count(*) AS n,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)::int AS median_ppm2\nFROM listings_filtered(ARRAY[${category:sqlstring}], dashboard_numeric(${min_sqm:sqlstring}), dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]) l\nWHERE NOT l.is_rent AND l.ppm2 > 0 AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nGROUP BY 1 HAVING count(*) >= 5 ORDER BY 3 DESC NULLS LAST",
-          "refId": "A"
-        }
-      ],
-      "id": 22
-    },
-    {
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": false
-          },
-          "unit": "none"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "url"
-            },
-            "properties": [
-              {
-                "id": "custom.hidden",
-                "value": true
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "title"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 420
-              },
-              {
-                "id": "links",
-                "value": [
-                  {
-                    "targetBlank": true,
-                    "title": "open on olx.ba",
-                    "url": "${__data.fields.url}"
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "views"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "none"
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 91
-      },
-      "title": "Most viewed active listings",
-      "description": "Pregledi counter from ad pages — what everyone else is watching (where exposed).",
-      "type": "table",
-      "options": {
-        "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": ["sum"],
-          "show": false
-        },
-        "showHeader": true
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT l.title, l.url, l.views, l.sqm, l.rooms, l.price, l.ppm2\nFROM listings_filtered(ARRAY[${category:sqlstring}], dashboard_numeric(${min_sqm:sqlstring}), dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]) l\nWHERE l.views IS NOT NULL AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]) AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nORDER BY l.views DESC\nLIMIT 20",
-          "refId": "A"
-        }
-      ],
-      "id": 23
-    },
-    {
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": false
-          },
-          "unit": "none"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "neighborhood"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 160
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 0,
-        "y": 91
-      },
-      "id": 24,
-      "options": {
-        "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": ["sum"],
-          "show": false
-        },
-        "showHeader": true
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "refId": "A",
-          "rawSql": "SELECT CASE WHEN l.latitude IS NULL THEN '(no pin)'\n            ELSE COALESCE(NULLIF(l.location, ''), '(unmapped)') END AS neighborhood,\n       count(*) AS listings,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)::int AS \"median KM/m2\"\nFROM listings_filtered(ARRAY[${category:sqlstring}], dashboard_numeric(${min_sqm:sqlstring}), dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]) l\nWHERE room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nGROUP BY 1 ORDER BY 2 DESC"
-        }
-      ],
-      "title": "Neighborhood breakdown — actives",
-      "description": "Active listing counts and available asking KM/m² by recorded neighborhood. Missing pins and unmapped locations are shown separately.",
-      "type": "table"
-    },
-    {
-      "type": "row",
-      "title": "Investment view",
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 71
-      },
-      "panels": [],
-      "id": 25
     },
     {
       "datasource": {
@@ -1752,10 +1363,10 @@
         ]
       },
       "gridPos": {
-        "h": 11,
-        "w": 24,
         "x": 0,
-        "y": 50
+        "y": 96,
+        "w": 24,
+        "h": 11
       },
       "title": "Price vs m² — sales",
       "description": "Sale asking price against floor area for the selected listings, with a least-squares fit over the same population. Prices below the fit can reflect location, condition or data quality; they do not establish a bargain.",
@@ -1840,6 +1451,281 @@
       "id": 26
     },
     {
+      "type": "row",
+      "title": "Segments & demand",
+      "gridPos": {
+        "x": 0,
+        "y": 107,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [],
+      "id": 18
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none",
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 108,
+        "w": 12,
+        "h": 9
+      },
+      "title": "Actives that cut their price",
+      "description": "Active listings whose history contains at least one observed decrease — negotiation leverage exists here.",
+      "type": "stat",
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH cuts AS (\n  SELECT DISTINCT pc.article_id\n  FROM reporting.price_changes pc\n  WHERE pc.delta < 0 AND pc.deal = ANY (ARRAY(SELECT CASE WHEN selected = 'sell' THEN 'sale' ELSE selected END FROM unnest(ARRAY[${deal:sqlstring}]) AS t(selected)))\n)\nSELECT count(*) AS actives\nFROM cuts c\nJOIN listings_filtered(ARRAY[${category:sqlstring}], dashboard_numeric(${min_sqm:sqlstring}), dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}], true) l\n  ON l.article_id = c.article_id\nWHERE TRUE\n\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])",
+          "refId": "A"
+        }
+      ],
+      "id": 19
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "suffix:KM",
+          "noValue": "—"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 108,
+        "w": 12,
+        "h": 9
+      },
+      "title": "Median biggest cut · KM",
+      "description": "Median of the largest single cut per cutting listing.",
+      "type": "stat",
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH cuts AS (\n  SELECT pc.article_id, max(-pc.delta) AS biggest\n  FROM reporting.price_changes pc\n  WHERE pc.delta < 0 AND pc.deal = ANY (ARRAY(SELECT CASE WHEN selected = 'sell' THEN 'sale' ELSE selected END FROM unnest(ARRAY[${deal:sqlstring}]) AS t(selected)))\n  GROUP BY pc.article_id\n)\nSELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY c.biggest)\nFROM cuts c\nJOIN listings_filtered(ARRAY[${category:sqlstring}], dashboard_numeric(${min_sqm:sqlstring}), dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}], true) l\n  ON l.article_id = c.article_id\nWHERE TRUE\n\n  AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])",
+          "refId": "A"
+        }
+      ],
+      "id": 20
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "purple",
+                "value": null
+              }
+            ]
+          },
+          "unit": "suffix: KM/m²"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 117,
+        "w": 24,
+        "h": 9
+      },
+      "title": "Median KM/m² by rooms · sales",
+      "description": "Asking-price segmentation by size — watch the spread between buckets.",
+      "type": "bargauge",
+      "options": {
+        "displayMode": "gradient",
+        "minVizHeight": 10,
+        "minVizWidth": 0,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "color"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT room_bucket(l.rooms) AS bucket,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)::int AS median_ppm2\nFROM listings_filtered(ARRAY[${category:sqlstring}], dashboard_numeric(${min_sqm:sqlstring}), dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]) l\nWHERE NOT l.is_rent AND l.ppm2 > 0 AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nGROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "rowsToFields",
+          "options": {
+            "nameField": "bucket",
+            "valueField": "median_ppm2"
+          }
+        }
+      ],
+      "id": 21
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 126,
+        "w": 24,
+        "h": 9
+      },
+      "title": "Asking KM/m² by condition · sales",
+      "description": "Median sale asking KM/m² by condition, including unknown condition. Each group needs at least 5 listings with a positive price per m².",
+      "type": "table",
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT COALESCE(NULLIF(l.condition, ''), '(unknown)') AS bucket,\n       count(*) AS n,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)::int AS median_ppm2\nFROM listings_filtered(ARRAY[${category:sqlstring}], dashboard_numeric(${min_sqm:sqlstring}), dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]) l\nWHERE NOT l.is_rent AND l.ppm2 > 0 AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nGROUP BY 1 HAVING count(*) >= 5 ORDER BY 3 DESC NULLS LAST",
+          "refId": "A"
+        }
+      ],
+      "id": 22
+    },
+    {
+      "type": "row",
+      "title": "Investment view",
+      "gridPos": {
+        "x": 0,
+        "y": 135,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [],
+      "id": 25
+    },
+    {
       "datasource": {
         "type": "postgres",
         "uid": "olx-postgres"
@@ -1865,10 +1751,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 4,
         "x": 0,
-        "y": 72
+        "y": 136,
+        "w": 12,
+        "h": 8
       },
       "title": "Annualized asking rent / sale ratio",
       "description": "Annualized asking-rent / asking-sale-price ratio within the Category, Rooms, Area and Neighborhood filters; ignores Deal because both populations are needed. Assumes monthly rents and does not match individual properties or estimate net returns.",
@@ -1880,7 +1766,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -1955,10 +1843,10 @@
         ]
       },
       "gridPos": {
-        "h": 8,
-        "w": 5,
-        "x": 4,
-        "y": 72
+        "x": 12,
+        "y": 136,
+        "w": 12,
+        "h": 8
       },
       "title": "Median KM/m² · sales — this week vs last",
       "description": "Pooled eligible listing-day asking prices from reconstructed daily inventory, comparing this week with last week. Empty priced populations remain NULL; filters apply to historical category, deal, room, area and neighborhood state.",
@@ -2017,10 +1905,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 6,
-        "x": 9,
-        "y": 72
+        "x": 0,
+        "y": 144,
+        "w": 24,
+        "h": 8
       },
       "title": "Median KM/m² by floor position · sales",
       "description": "Median sale asking KM/m² by floor position, with the priced sample size in each label. Listings without floor information are excluded.",
@@ -2032,7 +1920,9 @@
         "namePlacement": "auto",
         "orientation": "horizontal",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": true
         },
@@ -2082,10 +1972,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 9,
-        "x": 15,
-        "y": 72
+        "x": 0,
+        "y": 152,
+        "w": 24,
+        "h": 8
       },
       "title": "Asking KM/m² by seller · sales",
       "description": "Private sellers vs agencies ('shop') vs ads where the type wasn't captured. Seller type rides along with every search result, so coverage here is high — one of the biggest price drivers, finally visible.",
@@ -2095,7 +1985,9 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": ["sum"],
+          "reducer": [
+            "sum"
+          ],
           "show": false
         },
         "showHeader": true
@@ -2118,10 +2010,10 @@
       "type": "row",
       "title": "Neighborhood economics",
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 80
+        "y": 160,
+        "w": 24,
+        "h": 1
       },
       "panels": [],
       "id": 31
@@ -2145,10 +2037,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 10,
-        "w": 24,
         "x": 0,
-        "y": 81
+        "y": 161,
+        "w": 24,
+        "h": 10
       },
       "title": "Districts ranked — median asking KM/m² · sales",
       "description": "Where is it expensive: every district with ≥8 sale listings, ranked by median asking price per m² with the p25–p75 spread. Deliberately ignores the Neighborhood filter (so all districts stay comparable); Category/Rooms/Deal still apply. Districts come from map pins (db/init/02-neighborhoods.sql).",
@@ -2158,7 +2050,9 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": ["sum"],
+          "reducer": [
+            "sum"
+          ],
           "show": false
         },
         "showHeader": true
@@ -2176,11 +2070,181 @@
         }
       ],
       "id": 32
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "unit": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "neighborhood"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 160
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 171,
+        "w": 24,
+        "h": 9
+      },
+      "id": 24,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "refId": "A",
+          "rawSql": "SELECT CASE WHEN l.latitude IS NULL THEN '(no pin)'\n            ELSE COALESCE(NULLIF(l.location, ''), '(unmapped)') END AS neighborhood,\n       count(*) AS listings,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)::int AS \"median KM/m2\"\nFROM listings_filtered(ARRAY[${category:sqlstring}], dashboard_numeric(${min_sqm:sqlstring}), dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]) l\nWHERE room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nGROUP BY 1 ORDER BY 2 DESC"
+        }
+      ],
+      "title": "Neighborhood breakdown — actives",
+      "description": "Active listing counts and available asking KM/m² by recorded neighborhood. Missing pins and unmapped locations are shown separately.",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "unit": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "url"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "title"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 420
+              },
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "targetBlank": true,
+                    "title": "open on olx.ba",
+                    "url": "${__data.fields.url}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "views"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 180,
+        "w": 24,
+        "h": 9
+      },
+      "title": "Most viewed active listings",
+      "description": "Pregledi counter from ad pages — what everyone else is watching (where exposed).",
+      "type": "table",
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT l.title, l.url, l.views, l.sqm, l.rooms, l.price, l.ppm2\nFROM listings_filtered(ARRAY[${category:sqlstring}], dashboard_numeric(${min_sqm:sqlstring}), dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]) l\nWHERE l.views IS NOT NULL AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]) AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\nORDER BY l.views DESC\nLIMIT 20",
+          "refId": "A"
+        }
+      ],
+      "id": 23
     }
   ],
   "refresh": "2h",
   "schemaVersion": 39,
-  "tags": ["olx", "real-estate"],
+  "tags": [
+    "olx",
+    "real-estate",
+    "responsive"
+  ],
   "templating": {
     "list": [
       {

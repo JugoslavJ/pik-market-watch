@@ -12,7 +12,7 @@ listings, then open the original OLX ad.
 
 Proposed dashboard title: **Find a home to buy**. Proposed UID: `olx-buyer`.
 This is an interactive private dashboard using the private reporting surface.
-Public publication is a separate future scope; existing public dashboards have
+Public publication is outside scope; retired public dashboards had
 fixed filters and do not publish listing-value claims.
 
 ## Filters and defaults

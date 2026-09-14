@@ -35,19 +35,39 @@
   "id": null,
   "links": [
     {
+      "targetBlank": false,
       "title": "Home",
-      "url": "/d/olx-home",
-      "targetBlank": false
+      "url": "/d/olx-home"
     },
     {
-      "title": "Market Overview",
-      "url": "/d/olx-overview",
-      "targetBlank": false
+      "targetBlank": false,
+      "title": "Buyer",
+      "url": "/d/olx-buyer"
     },
     {
-      "title": "Scraper Health",
-      "url": "/d/olx-health",
-      "targetBlank": false
+      "targetBlank": false,
+      "title": "Renter",
+      "url": "/d/olx-renter"
+    },
+    {
+      "targetBlank": false,
+      "title": "Agent",
+      "url": "/d/olx-agent"
+    },
+    {
+      "targetBlank": false,
+      "title": "Market overview",
+      "url": "/d/olx-overview"
+    },
+    {
+      "targetBlank": false,
+      "title": "Observed exits",
+      "url": "/d/olx-exits"
+    },
+    {
+      "targetBlank": false,
+      "title": "Data health",
+      "url": "/d/olx-health"
     }
   ],
   "panels": [
@@ -84,10 +104,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 6,
         "x": 0,
-        "y": 0
+        "y": 0,
+        "w": 12,
+        "h": 4
       },
       "title": "Closed listings · 30 d",
       "description": "Ads gone from every configured search in the last month.",
@@ -99,7 +119,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -145,10 +167,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 6,
-        "y": 0
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 4
       },
       "title": "Median exit KM/m² · closed 30 d",
       "description": "Last asking price per m² before removal — not a transaction price.",
@@ -160,7 +182,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -206,10 +230,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 12,
-        "y": 0
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 4
       },
       "title": "Observed exit ratio diagnostic · 30 d",
       "description": "Observed closed ads ÷ (closed + active) over the last month. This is a disappearance proxy, not a transaction sell-through rate.",
@@ -221,7 +245,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -236,7 +262,7 @@
           },
           "editorMode": "code",
           "format": "table",
-      "rawSql": "WITH c AS (\n  SELECT count(*)::float AS n FROM listings_closed_filtered(ARRAY[${category:sqlstring}], dashboard_numeric(${min_sqm:sqlstring}), dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]) l\n  WHERE l.closed_at > now() - INTERVAL '30 days' AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]) AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\n),\na AS (\n  SELECT count(*)::float AS n FROM listings_filtered(ARRAY[${category:sqlstring}], dashboard_numeric(${min_sqm:sqlstring}), dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]) l\n  WHERE room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]) AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\n)\nSELECT round(c.n / NULLIF(c.n + a.n, 0) * 100) FROM c, a",
+          "rawSql": "WITH c AS (\n  SELECT count(*)::float AS n FROM listings_closed_filtered(ARRAY[${category:sqlstring}], dashboard_numeric(${min_sqm:sqlstring}), dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]) l\n  WHERE l.closed_at > now() - INTERVAL '30 days' AND room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]) AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\n),\na AS (\n  SELECT count(*)::float AS n FROM listings_filtered(ARRAY[${category:sqlstring}], dashboard_numeric(${min_sqm:sqlstring}), dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]) l\n  WHERE room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]) AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}])\n)\nSELECT round(c.n / NULLIF(c.n + a.n, 0) * 100) FROM c, a",
           "refId": "A"
         }
       ],
@@ -267,10 +293,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 18,
-        "y": 0
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 4
       },
       "title": "Median days on market · closed 30 d",
       "description": "Duration from first observed search sighting (or stored first_seen) to closure, across the listing lifetime including reopenings.",
@@ -282,7 +308,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -307,10 +335,10 @@
       "type": "row",
       "title": "Exit prices vs market",
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 4
+        "y": 8,
+        "w": 24,
+        "h": 1
       },
       "panels": [],
       "id": 5
@@ -385,10 +413,10 @@
         ]
       },
       "gridPos": {
-        "h": 9,
-        "w": 16,
         "x": 0,
-        "y": 5
+        "y": 9,
+        "w": 24,
+        "h": 9
       },
       "title": "Exit KM/m² vs asking KM/m² — daily medians",
       "description": "Green line: exit askings of ads that closed. Blue: pooled reconstructed daily inventory asking median for the selected filters. Estimated, stale and provisional fields expose historical availability quality.",
@@ -451,10 +479,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 9,
-        "w": 8,
-        "x": 16,
-        "y": 5
+        "x": 0,
+        "y": 18,
+        "w": 24,
+        "h": 9
       },
       "title": "Days on market — closed listings",
       "description": "How long ads survived before disappearing, in the selected period.",
@@ -466,7 +494,9 @@
         "namePlacement": "auto",
         "orientation": "horizontal",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": true
         },
@@ -501,10 +531,10 @@
       "type": "row",
       "title": "Recently closed",
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 14
+        "y": 27,
+        "w": 24,
+        "h": 1
       },
       "panels": [],
       "id": 8
@@ -607,10 +637,10 @@
         ]
       },
       "gridPos": {
-        "h": 11,
-        "w": 16,
         "x": 0,
-        "y": 15
+        "y": 28,
+        "w": 24,
+        "h": 11
       },
       "title": "Recently closed — exit price vs original ask",
       "description": "change_pct compares the final asking price with the first one we observed. Negative (red) = exited below its original ask.",
@@ -620,7 +650,9 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": ["sum"],
+          "reducer": [
+            "sum"
+          ],
           "show": false
         },
         "showHeader": true
@@ -662,10 +694,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 11,
-        "w": 8,
-        "x": 16,
-        "y": 15
+        "x": 0,
+        "y": 39,
+        "w": 24,
+        "h": 11
       },
       "title": "Exits by room count",
       "description": "Which apartment sizes are actually leaving the market in the selected period.",
@@ -677,7 +709,9 @@
         "namePlacement": "auto",
         "orientation": "horizontal",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": true
         },
@@ -712,10 +746,10 @@
       "type": "row",
       "title": "Where ads disappear",
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 26
+        "y": 50,
+        "w": 24,
+        "h": 1
       },
       "panels": [],
       "id": 11
@@ -775,10 +809,10 @@
         ]
       },
       "gridPos": {
-        "h": 14,
-        "w": 16,
         "x": 0,
-        "y": 27
+        "y": 51,
+        "w": 24,
+        "h": 14
       },
       "title": "Exit map — click a pin to open the ad",
       "description": "Last known pin of ads that closed in the selected period.",
@@ -902,10 +936,10 @@
         ]
       },
       "gridPos": {
-        "h": 14,
-        "w": 8,
-        "x": 16,
-        "y": 27
+        "x": 0,
+        "y": 65,
+        "w": 24,
+        "h": 14
       },
       "title": "Closed & pinned — click title to open",
       "description": "Table form of the exit map: closed ads that had pins. Click a title to open the ad on olx.ba.",
@@ -915,7 +949,9 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": ["sum"],
+          "reducer": [
+            "sum"
+          ],
           "show": false
         },
         "showHeader": true
@@ -938,10 +974,10 @@
       "type": "row",
       "title": "Exit dynamics",
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 41
+        "y": 79,
+        "w": 24,
+        "h": 1
       },
       "panels": [],
       "id": 14
@@ -969,10 +1005,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 10,
-        "w": 8,
         "x": 0,
-        "y": 42
+        "y": 80,
+        "w": 24,
+        "h": 10
       },
       "title": "Exit discount vs original ask",
       "description": "How final asks compared to the first price we saw. Flat market → most ads exit at their opening ask.",
@@ -984,7 +1020,9 @@
         "namePlacement": "auto",
         "orientation": "horizontal",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": true
         },
@@ -1051,10 +1089,10 @@
         ]
       },
       "gridPos": {
-        "h": 10,
-        "w": 16,
-        "x": 8,
-        "y": 42
+        "x": 0,
+        "y": 90,
+        "w": 24,
+        "h": 10
       },
       "title": "Priced share — weekly",
       "description": "Weekly priced-share proxy from reconstructed listing-day inventory using the selected dashboard filters. It is not a transaction rate; inferred, stale and provisional rows are part of the historical availability model.",
@@ -1088,10 +1126,10 @@
       "type": "row",
       "title": "Liquidity deep dive",
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 52
+        "y": 100,
+        "w": 24,
+        "h": 1
       },
       "panels": [],
       "id": 17
@@ -1134,10 +1172,10 @@
         ]
       },
       "gridPos": {
-        "h": 11,
-        "w": 14,
         "x": 0,
-        "y": 53
+        "y": 101,
+        "w": 24,
+        "h": 11
       },
       "title": "Days on market vs exit discount",
       "description": "Each closed sale ad as a point: how long it sat (x) vs how its final asking price compared to the first one we saw (y). Points drifting downward to the right = stale ads exiting at bigger discounts. Days-on-market is a lower bound until published_at converges; exit prices are askings, not transactions.",
@@ -1215,10 +1253,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 11,
-        "w": 10,
-        "x": 14,
-        "y": 53
+        "x": 0,
+        "y": 112,
+        "w": 24,
+        "h": 11
       },
       "title": "Exit rate by KM/m² bracket · 30 d",
       "description": "Share of ads that exited per price bracket, brackets cut at the live quartiles of the combined active+closed pool. Cheap segments may be high-churn; expensive ones may just sit.",
@@ -1230,7 +1268,9 @@
         "namePlacement": "auto",
         "orientation": "horizontal",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": true
         },
@@ -1313,10 +1353,10 @@
         ]
       },
       "gridPos": {
-        "h": 10,
-        "w": 24,
         "x": 0,
-        "y": 64
+        "y": 123,
+        "w": 24,
+        "h": 10
       },
       "title": "Exit rate by neighborhood — 30 d",
       "description": "Observed closed ads / (closed + active) by district over the last 30 days. A disappearance proxy, not a transaction rate. Requires at least 10 combined listings; ignores Neighborhood while the other filters apply.",
@@ -1326,7 +1366,9 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": ["sum"],
+          "reducer": [
+            "sum"
+          ],
           "show": false
         },
         "showHeader": true
@@ -1348,7 +1390,11 @@
   ],
   "refresh": "2h",
   "schemaVersion": 39,
-  "tags": ["olx", "real-estate"],
+  "tags": [
+    "olx",
+    "real-estate",
+    "responsive"
+  ],
   "templating": {
     "list": [
       {

@@ -10,6 +10,11 @@
   "links": [
     {
       "targetBlank": false,
+      "title": "Home",
+      "url": "/d/olx-home"
+    },
+    {
+      "targetBlank": false,
       "title": "Buyer",
       "url": "/d/olx-buyer"
     },
@@ -25,8 +30,18 @@
     },
     {
       "targetBlank": false,
-      "title": "Home",
-      "url": "/d/olx-home"
+      "title": "Market overview",
+      "url": "/d/olx-overview"
+    },
+    {
+      "targetBlank": false,
+      "title": "Observed exits",
+      "url": "/d/olx-exits"
+    },
+    {
+      "targetBlank": false,
+      "title": "Data health",
+      "url": "/d/olx-health"
     }
   ],
   "panels": [
@@ -53,7 +68,7 @@
       "gridPos": {
         "x": 0,
         "y": 1,
-        "w": 4,
+        "w": 8,
         "h": 4
       },
       "fieldConfig": {
@@ -113,9 +128,9 @@
       "description": "Current market-context ads within both entered asking-price bounds. Shown as unset until either bound is entered.",
       "type": "stat",
       "gridPos": {
-        "x": 4,
+        "x": 8,
         "y": 1,
-        "w": 4,
+        "w": 8,
         "h": 4
       },
       "fieldConfig": {
@@ -175,9 +190,9 @@
       "description": "Scored matching ads priced more than 5% below their exact local comparable asking benchmark.",
       "type": "stat",
       "gridPos": {
-        "x": 8,
+        "x": 16,
         "y": 1,
-        "w": 4,
+        "w": 8,
         "h": 4
       },
       "fieldConfig": {
@@ -237,9 +252,9 @@
       "description": "Current matching ads with eligible asking-price evidence and with a version 1 score, shown as priced / scored.",
       "type": "stat",
       "gridPos": {
-        "x": 12,
-        "y": 1,
-        "w": 4,
+        "x": 0,
+        "y": 5,
+        "w": 8,
         "h": 4
       },
       "fieldConfig": {
@@ -299,9 +314,9 @@
       "description": "Oldest latest complete search success for the selected property type; unknown when any configured search has never completed.",
       "type": "stat",
       "gridPos": {
-        "x": 16,
-        "y": 1,
-        "w": 4,
+        "x": 8,
+        "y": 5,
+        "w": 8,
         "h": 4
       },
       "fieldConfig": {
@@ -361,9 +376,9 @@
       "description": "Every numeric bound is an inclusive non-negative decimal; score is limited to 0–100 and minimum must not exceed maximum.",
       "type": "stat",
       "gridPos": {
-        "x": 20,
-        "y": 1,
-        "w": 4,
+        "x": 16,
+        "y": 5,
+        "w": 8,
         "h": 4
       },
       "fieldConfig": {
@@ -419,7 +434,7 @@
       "type": "row",
       "gridPos": {
         "x": 0,
-        "y": 5,
+        "y": 9,
         "w": 24,
         "h": 1
       }
@@ -435,8 +450,8 @@
       "type": "table",
       "gridPos": {
         "x": 0,
-        "y": 6,
-        "w": 14,
+        "y": 10,
+        "w": 24,
         "h": 10
       },
       "fieldConfig": {
@@ -514,9 +529,9 @@
       "type": "geomap",
       "pluginVersion": "13.0.2",
       "gridPos": {
-        "x": 14,
-        "y": 6,
-        "w": 10,
+        "x": 0,
+        "y": 20,
+        "w": 24,
         "h": 10
       },
       "fieldConfig": {
@@ -597,7 +612,7 @@
       "type": "row",
       "gridPos": {
         "x": 0,
-        "y": 16,
+        "y": 30,
         "w": 24,
         "h": 1
       }
@@ -613,7 +628,7 @@
       "type": "table",
       "gridPos": {
         "x": 0,
-        "y": 17,
+        "y": 31,
         "w": 24,
         "h": 10
       },
@@ -795,7 +810,7 @@
       "type": "row",
       "gridPos": {
         "x": 0,
-        "y": 27,
+        "y": 41,
         "w": 24,
         "h": 1
       }
@@ -812,8 +827,8 @@
       "pluginVersion": "13.0.2",
       "gridPos": {
         "x": 0,
-        "y": 28,
-        "w": 12,
+        "y": 42,
+        "w": 24,
         "h": 11
       },
       "fieldConfig": {
@@ -922,9 +937,9 @@
       "description": "Daily neighbourhood P25, median and P75 asking KM/m² from historical evidence, with eligible sample and provisional, inferred and stale quality fields.",
       "type": "timeseries",
       "gridPos": {
-        "x": 12,
-        "y": 28,
-        "w": 12,
+        "x": 0,
+        "y": 53,
+        "w": 24,
         "h": 11
       },
       "fieldConfig": {
@@ -970,7 +985,7 @@
       "type": "row",
       "gridPos": {
         "x": 0,
-        "y": 39,
+        "y": 64,
         "w": 24,
         "h": 1
       }
@@ -986,7 +1001,7 @@
       "type": "table",
       "gridPos": {
         "x": 0,
-        "y": 40,
+        "y": 65,
         "w": 24,
         "h": 7
       },
@@ -1173,8 +1188,8 @@
       "type": "table",
       "gridPos": {
         "x": 0,
-        "y": 47,
-        "w": 16,
+        "y": 72,
+        "w": 24,
         "h": 9
       },
       "fieldConfig": {
@@ -1311,9 +1326,9 @@
       "description": "Valid same-currency, same-deal changes in the current observed cycle. Invalid boundaries, deal switches and reopenings prevent false continuity.",
       "type": "table",
       "gridPos": {
-        "x": 16,
-        "y": 47,
-        "w": 8,
+        "x": 0,
+        "y": 81,
+        "w": 24,
         "h": 9
       },
       "fieldConfig": {
@@ -1362,7 +1377,8 @@
     "olx",
     "real-estate",
     "private",
-    "persona"
+    "persona",
+    "responsive"
   ],
   "templating": {
     "list": [

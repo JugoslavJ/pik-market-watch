@@ -14,8 +14,10 @@ providers:
       path: /var/lib/grafana/dashboards
       foldersFromFilesStructure: false
   - name: olx-public-dashboards
+    # Retirement provider: keep this empty, deletion-enabled directory mounted
+    # until every deployment has removed the former public dashboards.
     orgId: 1
-    folder: Public
+    folder: Retired public dashboards
     type: file
     disableDeletion: false
     updateIntervalSeconds: 30

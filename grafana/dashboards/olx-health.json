@@ -22,19 +22,39 @@
   "id": null,
   "links": [
     {
+      "targetBlank": false,
       "title": "Home",
-      "url": "/d/olx-home",
-      "targetBlank": false
+      "url": "/d/olx-home"
     },
     {
-      "title": "Market Overview",
-      "url": "/d/olx-overview",
-      "targetBlank": false
+      "targetBlank": false,
+      "title": "Buyer",
+      "url": "/d/olx-buyer"
     },
     {
-      "title": "Exits & Price Endings",
-      "url": "/d/olx-exits",
-      "targetBlank": false
+      "targetBlank": false,
+      "title": "Renter",
+      "url": "/d/olx-renter"
+    },
+    {
+      "targetBlank": false,
+      "title": "Agent",
+      "url": "/d/olx-agent"
+    },
+    {
+      "targetBlank": false,
+      "title": "Market overview",
+      "url": "/d/olx-overview"
+    },
+    {
+      "targetBlank": false,
+      "title": "Observed exits",
+      "url": "/d/olx-exits"
+    },
+    {
+      "targetBlank": false,
+      "title": "Data health",
+      "url": "/d/olx-health"
     }
   ],
   "panels": [
@@ -63,10 +83,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 5,
         "x": 0,
-        "y": 0
+        "y": 0,
+        "w": 8,
+        "h": 4
       },
       "title": "Searches watched",
       "description": "Configured searches (saved_searches rows) the scraper cycles through.",
@@ -78,7 +98,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -132,10 +154,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 5,
-        "x": 5,
-        "y": 0
+        "x": 8,
+        "y": 0,
+        "w": 8,
+        "h": 4
       },
       "title": "Failed runs · 24 h",
       "description": "Scrape runs ending in status=error over the last day.",
@@ -147,7 +169,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -201,10 +225,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 5,
-        "x": 10,
-        "y": 0
+        "x": 16,
+        "y": 0,
+        "w": 8,
+        "h": 4
       },
       "title": "Success rate · 24 h",
       "description": "ok runs ÷ (ok + error) runs started in the last day; runs still marked running are excluded.",
@@ -216,7 +240,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -270,10 +296,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 5,
-        "x": 15,
-        "y": 0
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 4
       },
       "title": "Since last successful scrape",
       "description": "Age of the newest authoritative completed success across all searches. See per-search freshness below for stalled individual searches.",
@@ -285,7 +311,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -331,10 +359,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 20,
-        "y": 0
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 4
       },
       "title": "Cards scraped · 24 h",
       "description": "Sum of listing cards parsed by successful runs over the last day.",
@@ -346,7 +374,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -371,10 +401,10 @@
       "type": "row",
       "title": "Throughput",
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 4
+        "y": 8,
+        "w": 24,
+        "h": 1
       },
       "panels": [],
       "id": 6
@@ -398,10 +428,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 9,
-        "w": 13,
         "x": 0,
-        "y": 5
+        "y": 9,
+        "w": 24,
+        "h": 9
       },
       "title": "Runs per hour — ok vs error",
       "description": "Stacked bars per hour in the selected period; a red segment means failures.",
@@ -450,10 +480,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 9,
-        "w": 11,
-        "x": 13,
-        "y": 5
+        "x": 0,
+        "y": 18,
+        "w": 24,
+        "h": 9
       },
       "title": "Cards & pages per run — hourly averages",
       "description": "A sudden drop to near zero usually means olx.ba changed markup or pagination, not that the market emptied.",
@@ -487,10 +517,10 @@
       "type": "row",
       "title": "Saved searches",
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 14
+        "y": 27,
+        "w": 24,
+        "h": 1
       },
       "panels": [],
       "id": 9
@@ -589,10 +619,10 @@
         ]
       },
       "gridPos": {
-        "h": 10,
-        "w": 24,
         "x": 0,
-        "y": 15
+        "y": 28,
+        "w": 24,
+        "h": 10
       },
       "title": "Saved searches — stalest first",
       "description": "age_min = minutes since the last completed run. Red means the search has not been scraped for many hours.",
@@ -602,7 +632,9 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": ["sum"],
+          "reducer": [
+            "sum"
+          ],
           "show": false
         },
         "showHeader": true
@@ -625,10 +657,10 @@
       "type": "row",
       "title": "Scrape runs",
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 25
+        "y": 38,
+        "w": 24,
+        "h": 1
       },
       "panels": [],
       "id": 11
@@ -722,10 +754,10 @@
         ]
       },
       "gridPos": {
-        "h": 11,
-        "w": 24,
         "x": 0,
-        "y": 26
+        "y": 39,
+        "w": 24,
+        "h": 11
       },
       "title": "Recent scrape runs — newest 50",
       "description": "Full error text is in the last column; click a row and inspect to see it fully.",
@@ -735,7 +767,9 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": ["sum"],
+          "reducer": [
+            "sum"
+          ],
           "show": false
         },
         "showHeader": true
@@ -758,10 +792,10 @@
       "type": "row",
       "title": "Data quality & upstream",
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 37
+        "y": 50,
+        "w": 24,
+        "h": 1
       },
       "panels": [],
       "id": 13
@@ -799,10 +833,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 6,
         "x": 0,
-        "y": 38
+        "y": 51,
+        "w": 12,
+        "h": 4
       },
       "title": "Geo pins · actives",
       "description": "Share of active listings with map coordinates.",
@@ -814,7 +848,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -868,10 +904,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 6,
-        "y": 38
+        "x": 12,
+        "y": 51,
+        "w": 12,
+        "h": 4
       },
       "title": "Details fetched · actives",
       "description": "Active listings whose ad page was visited at least once (enrichment coverage).",
@@ -883,7 +919,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -937,10 +975,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 12,
-        "y": 38
+        "x": 0,
+        "y": 55,
+        "w": 12,
+        "h": 4
       },
       "title": "KM/m² known · actives",
       "description": "Actives with a plausible price-per-m² — panels relying on ppm2 see only these.",
@@ -952,7 +990,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -1002,10 +1042,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 18,
-        "y": 38
+        "x": 12,
+        "y": 55,
+        "w": 12,
+        "h": 4
       },
       "title": "OLX status known · actives",
       "description": "API-exposed lifecycle status present (drift telemetry coverage).",
@@ -1017,7 +1057,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -1057,10 +1099,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
         "x": 0,
-        "y": 42
+        "y": 59,
+        "w": 24,
+        "h": 8
       },
       "title": "OLX status vs closure state · recently seen",
       "description": "Drift detector: rows where olx says active but we marked closed (or vice versa) mean the absence-based closing logic needs attention.",
@@ -1070,7 +1112,9 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": ["sum"],
+          "reducer": [
+            "sum"
+          ],
           "show": false
         },
         "showHeader": true
@@ -1108,10 +1152,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 42
+        "x": 0,
+        "y": 67,
+        "w": 24,
+        "h": 8
       },
       "title": "Search duration — slowest first",
       "description": "Runtime per configured search in the selected period. Spikes here usually precede failures when OLX throttles.",
@@ -1121,7 +1165,9 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": ["sum"],
+          "reducer": [
+            "sum"
+          ],
           "show": false
         },
         "showHeader": true
@@ -1142,12 +1188,212 @@
     },
     {
       "type": "row",
+      "title": "Data quality",
+      "id": 23,
+      "gridPos": {
+        "x": 0,
+        "y": 75,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 24,
+      "title": "Incomplete searches · 24 h",
+      "type": "stat",
+      "description": "Search runs that completed with an incomplete or truncated result set. These observations must not be treated as authoritative inventory closures.",
+      "gridPos": {
+        "x": 0,
+        "y": 76,
+        "w": 12,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "—"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT count(*)::bigint AS incomplete\nFROM scrape_runs\nWHERE is_complete = FALSE AND status IN ('ok', 'error') AND finished_at IS NOT NULL\n  AND started_at > now() - INTERVAL '24 hours'",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "title": "Detail backlog · eligible actives",
+      "type": "stat",
+      "description": "Active listings eligible for a detail attempt: missing required fields, stale detail data or newer non-detail price evidence, subject to the retry cooldown.",
+      "gridPos": {
+        "x": 12,
+        "y": 76,
+        "w": 12,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "—"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT count(*)::bigint AS backlog\nFROM listings\nWHERE closed_at IS NULL\n  AND last_seen > now() - INTERVAL '14 days'\n  AND (latitude IS NULL\n       OR longitude IS NULL\n       OR (sqm IS NULL AND price IS NOT NULL AND NOT is_rent)\n       OR details_fetched_at IS NULL\n       OR details_fetched_at <= now() - INTERVAL '7 days'\n       OR EXISTS (SELECT 1 FROM listing_price_events pe\n                 WHERE pe.article_id = listings.article_id\n                   AND pe.source <> 'detail'\n                   AND pe.ingested_at > COALESCE(listings.details_fetched_at, '-infinity'::timestamptz)))\n  AND (details_fetched_at IS NOT NULL\n       OR last_enrichment_attempted_at IS NULL\n       OR last_enrichment_attempted_at <= now() - INTERVAL '720 minutes')",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 26,
+      "title": "Invalid or conflicting price evidence · 30 d",
+      "type": "stat",
+      "description": "Stored price assertions classified as invalid or conflicting during the last 30 days; these rows are retained evidence and excluded from the canonical priced state.",
+      "gridPos": {
+        "x": 0,
+        "y": 80,
+        "w": 12,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "—"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT count(*)::bigint AS rejected\nFROM listing_price_events\nWHERE price_state IN ('invalid', 'conflict')\n  AND ingested_at > now() - INTERVAL '30 days'",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 27,
+      "title": "Analytics refresh age",
+      "type": "stat",
+      "description": "Seconds since the last successful listing_daily rebuild. A growing value means pending historical analytics work or a failed refresh.",
+      "gridPos": {
+        "x": 12,
+        "y": 80,
+        "w": 12,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "—"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT CASE WHEN s.scope IS NULL OR s.last_successful_refresh_at IS NULL THEN NULL\n            ELSE EXTRACT(EPOCH FROM (now() - s.last_successful_refresh_at))::bigint END AS age_seconds\nFROM (VALUES ('listing_daily'::text)) expected(scope)\nLEFT JOIN analytics_refresh_state s ON s.scope = expected.scope",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "row",
       "title": "Errors & latency",
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 56
+        "y": 84,
+        "w": 24,
+        "h": 1
       },
       "panels": [],
       "id": 20
@@ -1196,10 +1442,10 @@
         ]
       },
       "gridPos": {
-        "h": 10,
-        "w": 24,
         "x": 0,
-        "y": 57
+        "y": 85,
+        "w": 24,
+        "h": 10
       },
       "title": "Errors grouped — last 7 d",
       "description": "scrape_runs error messages with digits masked to '#', so one recurring bug (markup change, timeout on one search) separates from many transient ones.",
@@ -1209,7 +1455,9 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": ["sum"],
+          "reducer": [
+            "sum"
+          ],
           "show": false
         },
         "showHeader": true
@@ -1263,10 +1511,10 @@
         ]
       },
       "gridPos": {
-        "h": 9,
-        "w": 24,
         "x": 0,
-        "y": 67
+        "y": 95,
+        "w": 24,
+        "h": 9
       },
       "title": "Run duration over time",
       "description": "Average (blue) and worst-case (orange) runtime per hour across all searches. A gradual creep is the leading indicator of OLX throttling before runs start failing.",
@@ -1297,207 +1545,15 @@
       "id": 22
     },
     {
-      "type": "row",
-      "title": "Data quality",
-      "id": 23,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 50
-      },
-      "panels": []
-    },
-    {
-      "id": 24,
-      "title": "Incomplete searches · 24 h",
-      "type": "stat",
-      "description": "Search runs that completed with an incomplete or truncated result set. These observations must not be treated as authoritative inventory closures.",
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 0,
-        "y": 51
-      },
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "noValue": "—"
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT count(*)::bigint AS incomplete\nFROM scrape_runs\nWHERE is_complete = FALSE AND status IN ('ok', 'error') AND finished_at IS NOT NULL\n  AND started_at > now() - INTERVAL '24 hours'",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "id": 25,
-      "title": "Detail backlog · eligible actives",
-      "type": "stat",
-      "description": "Active listings eligible for a detail attempt: missing required fields, stale detail data or newer non-detail price evidence, subject to the retry cooldown.",
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 6,
-        "y": 51
-      },
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "noValue": "—"
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT count(*)::bigint AS backlog\nFROM listings\nWHERE closed_at IS NULL\n  AND last_seen > now() - INTERVAL '14 days'\n  AND (latitude IS NULL\n       OR longitude IS NULL\n       OR (sqm IS NULL AND price IS NOT NULL AND NOT is_rent)\n       OR details_fetched_at IS NULL\n       OR details_fetched_at <= now() - INTERVAL '7 days'\n       OR EXISTS (SELECT 1 FROM listing_price_events pe\n                 WHERE pe.article_id = listings.article_id\n                   AND pe.source <> 'detail'\n                   AND pe.ingested_at > COALESCE(listings.details_fetched_at, '-infinity'::timestamptz)))\n  AND (details_fetched_at IS NOT NULL\n       OR last_enrichment_attempted_at IS NULL\n       OR last_enrichment_attempted_at <= now() - INTERVAL '720 minutes')",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "id": 26,
-      "title": "Invalid or conflicting price evidence · 30 d",
-      "type": "stat",
-      "description": "Stored price assertions classified as invalid or conflicting during the last 30 days; these rows are retained evidence and excluded from the canonical priced state.",
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 12,
-        "y": 51
-      },
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "noValue": "—"
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT count(*)::bigint AS rejected\nFROM listing_price_events\nWHERE price_state IN ('invalid', 'conflict')\n  AND ingested_at > now() - INTERVAL '30 days'",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "id": 27,
-      "title": "Analytics refresh age",
-      "type": "stat",
-      "description": "Seconds since the last successful listing_daily rebuild. A growing value means pending historical analytics work or a failed refresh.",
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 18,
-        "y": 51
-      },
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "noValue": "—"
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT CASE WHEN s.scope IS NULL OR s.last_successful_refresh_at IS NULL THEN NULL\n            ELSE EXTRACT(EPOCH FROM (now() - s.last_successful_refresh_at))::bigint END AS age_seconds\nFROM (VALUES ('listing_daily'::text)) expected(scope)\nLEFT JOIN analytics_refresh_state s ON s.scope = expected.scope",
-          "refId": "A"
-        }
-      ]
-    },
-    {
       "id": 28,
       "title": "Per-search freshness & phases",
       "type": "table",
       "description": "Each enabled saved search is evaluated independently. Freshness is based on the newest authoritative completed success; a failed or incomplete latest run remains visible beside the last success.",
       "gridPos": {
-        "h": 12,
-        "w": 24,
         "x": 0,
-        "y": 76
+        "y": 104,
+        "w": 24,
+        "h": 12
       },
       "datasource": {
         "type": "postgres",
@@ -1546,7 +1602,9 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": ["sum"],
+          "reducer": [
+            "sum"
+          ],
           "show": false
         },
         "showHeader": true
@@ -1570,10 +1628,10 @@
       "type": "table",
       "description": "A missing or never successful listing_daily refresh is shown explicitly as unknown. Pending age starts at the earliest invalidated Banja Luka day; an empty pending range means no queued rebuild is known.",
       "gridPos": {
-        "h": 8,
-        "w": 24,
         "x": 0,
-        "y": 88
+        "y": 116,
+        "w": 24,
+        "h": 8
       },
       "datasource": {
         "type": "postgres",
@@ -1622,7 +1680,9 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": ["sum"],
+          "reducer": [
+            "sum"
+          ],
           "show": false
         },
         "showHeader": true
@@ -1646,10 +1706,10 @@
       "type": "stat",
       "description": "Maximum mart or pending-partition age. Red means publication is stale, inconsistent, or its daily queue is delayed.",
       "gridPos": {
-        "h": 4,
-        "w": 24,
         "x": 0,
-        "y": 96
+        "y": 124,
+        "w": 24,
+        "h": 4
       },
       "datasource": {
         "type": "postgres",
@@ -1659,13 +1719,24 @@
         "defaults": {
           "unit": "s",
           "noValue": "Unknown",
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 3600 },
-              { "color": "red", "value": 7200 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 3600
+              },
+              {
+                "color": "red",
+                "value": 7200
+              }
             ]
           }
         },
@@ -1675,7 +1746,9 @@
         "colorMode": "value",
         "graphMode": "none",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -1697,7 +1770,12 @@
   ],
   "refresh": "2h",
   "schemaVersion": 39,
-  "tags": ["olx", "scraper", "ops"],
+  "tags": [
+    "olx",
+    "scraper",
+    "ops",
+    "responsive"
+  ],
   "templating": {
     "list": [
       {

@@ -6,44 +6,17 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { needsDb, reset, setupDb } = require("../helpers/db.js");
 const root = path.resolve(__dirname, "../../..");
-const dashboards = ["dashboards", "public-dashboards"].flatMap((dir) =>
-  fs
-    .readdirSync(path.join(root, "grafana", dir))
-    .filter((f) => f.endsWith(".json"))
-    .map((f) => ({
-      name: f,
-      dashboard: JSON.parse(
-        fs.readFileSync(path.join(root, "grafana", dir, f), "utf8"),
-      ),
-    })),
-);
+const dashboards = fs
+  .readdirSync(path.join(root, "grafana", "dashboards"))
+  .filter((f) => f.endsWith(".json"))
+  .map((f) => ({
+    name: f,
+    dashboard: JSON.parse(
+      fs.readFileSync(path.join(root, "grafana", "dashboards", f), "utf8"),
+    ),
+  }));
 const quote = (v) => `'${String(v).replaceAll("'", "''")}'`;
 
-needsDb(
-  "public history panels include legacy category-only evidence",
-  async () => {
-    await reset(db.pool);
-    await db.pool.query(`
-    INSERT INTO listings (article_id, url, title, first_seen, closed_at)
-    VALUES (3, 'https://olx.ba/artikal/3', 'legacy exit', now()-interval '3 days', now()-interval '1 day');
-    INSERT INTO listing_state_history (article_id, effective_at, source, event_type, category, is_rent, sqm, rooms)
-    VALUES (3, now()-interval '3 days', 'search', 'search_sighting', 'apartments', false, 50, '2'),
-           (3, now()-interval '1 day', 'search', 'closed', NULL, NULL, NULL, NULL);
-    INSERT INTO listing_price_events (article_id, effective_at, source, price_state, price)
-    VALUES (3, now()-interval '3 days', 'search', 'valid', 100000),
-           (3, now()-interval '2 days', 'search', 'valid', 90000);
-  `);
-    await db.pool.query("SELECT * FROM reporting.refresh_dashboard_olap()");
-    const sql = (file, id) =>
-      dashboards
-        .find((d) => d.name === file)
-        .dashboard.panels.find((p) => p.id === id).targets[0].rawSql;
-    const reductions = await db.pool.query(sql("olx-public-home.json", 6));
-    assert.equal(reductions.rowCount, 1);
-    const exits = await db.pool.query(sql("olx-public-exits.json", 1));
-    assert.equal(exits.rows[0].observed_exits, 1);
-  },
-);
 function interpolate(sql, values) {
   return sql
     .replace(/\$\{(\w+):sqlstring\}/g, (_, key) =>

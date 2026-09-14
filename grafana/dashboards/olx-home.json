@@ -22,19 +22,39 @@
   "id": null,
   "links": [
     {
-      "title": "Market Overview",
-      "url": "/d/olx-overview",
-      "targetBlank": false
+      "targetBlank": false,
+      "title": "Home",
+      "url": "/d/olx-home"
     },
     {
-      "title": "Exits & Price Endings",
-      "url": "/d/olx-exits",
-      "targetBlank": false
+      "targetBlank": false,
+      "title": "Buyer",
+      "url": "/d/olx-buyer"
     },
     {
-      "title": "Scraper Health",
-      "url": "/d/olx-health",
-      "targetBlank": false
+      "targetBlank": false,
+      "title": "Renter",
+      "url": "/d/olx-renter"
+    },
+    {
+      "targetBlank": false,
+      "title": "Agent",
+      "url": "/d/olx-agent"
+    },
+    {
+      "targetBlank": false,
+      "title": "Market overview",
+      "url": "/d/olx-overview"
+    },
+    {
+      "targetBlank": false,
+      "title": "Observed exits",
+      "url": "/d/olx-exits"
+    },
+    {
+      "targetBlank": false,
+      "title": "Data health",
+      "url": "/d/olx-health"
     }
   ],
   "panels": [
@@ -42,10 +62,10 @@
       "type": "row",
       "title": "Market snapshot",
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 0
+        "y": 0,
+        "w": 24,
+        "h": 1
       },
       "panels": [],
       "id": 1
@@ -75,10 +95,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 4,
         "x": 0,
-        "y": 1
+        "y": 1,
+        "w": 8,
+        "h": 4
       },
       "title": "Active listings",
       "description": "Seen by a scrape in the last 14 days and not closed — whole database, no filters.",
@@ -90,7 +110,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -136,10 +158,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 4,
-        "y": 1
+        "x": 8,
+        "y": 1,
+        "w": 8,
+        "h": 4
       },
       "title": "Median KM/m² · sales",
       "description": "Median asking price per m² across all active sale listings.",
@@ -151,7 +173,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -197,10 +221,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 8,
-        "y": 1
+        "x": 16,
+        "y": 1,
+        "w": 8,
+        "h": 4
       },
       "title": "Median rent · KM/mo",
       "description": "Median monthly asking rent across all active rental listings.",
@@ -212,7 +236,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -259,10 +285,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 12,
-        "y": 1
+        "x": 0,
+        "y": 5,
+        "w": 8,
+        "h": 4
       },
       "title": "Asking rent / sale · annualized",
       "description": "Median asking rent × 12 / median asking sale price across all active listings. Assumes monthly rents; the rental and sale populations are not matched properties, so this is not a property yield estimate.",
@@ -274,7 +300,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -321,10 +349,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 16,
-        "y": 1
+        "x": 8,
+        "y": 5,
+        "w": 8,
+        "h": 4
       },
       "title": "Observed exit ratio diagnostic · 30 d",
       "description": "Observed closed ads ÷ (closed + active) over the last month. This is a disappearance proxy; exit prices are last ASKING prices, not transaction prices.",
@@ -336,7 +364,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -387,10 +417,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 20,
-        "y": 1
+        "x": 16,
+        "y": 5,
+        "w": 8,
+        "h": 4
       },
       "title": "Median KM/m² · sales · Δ this wk",
       "description": "All categories, sales only: change in pooled reconstructed listing-day asking medians between this week and last week. No eligible priced population is shown as unknown.",
@@ -402,7 +432,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -427,10 +459,10 @@
       "type": "row",
       "title": "Pipeline health",
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 6
+        "y": 9,
+        "w": 24,
+        "h": 1
       },
       "panels": [],
       "id": 8
@@ -468,10 +500,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 8,
         "x": 0,
-        "y": 7
+        "y": 10,
+        "w": 8,
+        "h": 4
       },
       "title": "Since last successful scrape",
       "description": "Age of the newest successful run across all searches. Red means data collection is stalled (alert fires at 26 h).",
@@ -483,7 +515,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -537,10 +571,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 8,
         "x": 8,
-        "y": 7
+        "y": 10,
+        "w": 8,
+        "h": 4
       },
       "title": "Failed runs · 24 h",
       "description": "Scrape runs ending in status=error over the last day.",
@@ -552,7 +586,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -598,10 +634,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 8,
         "x": 16,
-        "y": 7
+        "y": 10,
+        "w": 8,
+        "h": 4
       },
       "title": "Cards scraped · 24 h",
       "description": "Sum of listing cards parsed by successful runs over the last day.",
@@ -613,7 +649,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -638,10 +676,10 @@
       "type": "row",
       "title": "Trends",
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 12
+        "y": 14,
+        "w": 24,
+        "h": 1
       },
       "panels": [],
       "id": 12
@@ -761,10 +799,10 @@
         ]
       },
       "gridPos": {
-        "h": 10,
-        "w": 14,
         "x": 0,
-        "y": 13
+        "y": 15,
+        "w": 24,
+        "h": 10
       },
       "title": "Inventory flow — new vs closed per day · all categories",
       "description": "All categories and deals. New counts each article once on its first discovery date; repeated sightings and renewals are not additions. Closed and reopened count lifecycle events. Active inventory is reconstructed and may include inferred or stale observations; today is provisional.",
@@ -813,10 +851,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 10,
-        "w": 10,
-        "x": 14,
-        "y": 13
+        "x": 0,
+        "y": 25,
+        "w": 24,
+        "h": 10
       },
       "title": "Closed / estimated active — daily · all categories",
       "description": "All categories and all deals. This is the same inventory-flow definition shown on Home, expressed as closed observations divided by estimated active inventory; it is not a transaction measure.",
@@ -849,7 +887,11 @@
   ],
   "refresh": "2h",
   "schemaVersion": 39,
-  "tags": ["olx", "home"],
+  "tags": [
+    "olx",
+    "home",
+    "responsive"
+  ],
   "templating": {
     "list": []
   },

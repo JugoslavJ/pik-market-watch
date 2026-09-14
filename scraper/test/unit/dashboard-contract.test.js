@@ -11,7 +11,6 @@ const path = require("node:path");
 
 const root = path.resolve(__dirname, "../../..");
 const dashboardDir = path.join(root, "grafana", "dashboards");
-const publicDashboardDir = path.join(root, "grafana", "public-dashboards");
 const initDir = path.join(root, "db", "init");
 const databaseBaseline = fs
   .readdirSync(initDir)
@@ -27,10 +26,6 @@ const roles = fs.readFileSync(
 const filterMigration = databaseBaseline;
 const alertProvisioning = fs.readFileSync(
   path.join(root, "grafana", "provisioning", "alerting", "olx-alerts.yml"),
-  "utf8",
-);
-const publicShareScript = fs.readFileSync(
-  path.join(root, "scripts", "publish-public-dashboards.sh"),
   "utf8",
 );
 
@@ -75,7 +70,7 @@ test("database filter migration defines shared filter and event-time helpers", (
 });
 
 test("dashboard panels do not overlap and mixed metrics retain correct units", () => {
-  for (const dir of [dashboardDir, publicDashboardDir]) {
+  for (const dir of [dashboardDir]) {
     for (const file of fs.readdirSync(dir).filter((f) => f.endsWith(".json"))) {
       const d = JSON.parse(fs.readFileSync(path.join(dir, file), "utf8"));
       for (let i = 0; i < d.panels.length; i++)
@@ -104,6 +99,69 @@ test("dashboard panels do not overlap and mixed metrics retain correct units", (
   assert.equal(exitTrend.fieldConfig.defaults.unit, "suffix: KM/m²");
   const yieldPanel = read("olx-overview.json").panels.find((p) => p.id === 27);
   assert.doesNotMatch(yieldPanel.targets[0].rawSql, /\$\{deal/);
+});
+
+test("dashboard layouts keep cards and dense panels usable at narrow widths", () => {
+  for (const dir of [dashboardDir]) {
+    for (const file of fs.readdirSync(dir).filter((f) => f.endsWith(".json"))) {
+      const dashboard = JSON.parse(
+        fs.readFileSync(path.join(dir, file), "utf8"),
+      );
+      assert.ok(dashboard.tags?.includes("responsive"), file);
+      for (const panel of dashboard.panels) {
+        if (panel.type === "row") {
+          assert.equal(panel.gridPos.w, 24, `${file}: row ${panel.id}`);
+        } else if (panel.type === "stat") {
+          assert.ok(
+            panel.gridPos.w >= 8,
+            `${file}: stat ${panel.id} is too narrow`,
+          );
+        } else {
+          assert.equal(
+            panel.gridPos.w,
+            24,
+            `${file}: dense panel ${panel.id} must use a full row`,
+          );
+        }
+      }
+    }
+  }
+});
+
+test("private dashboards expose consistent touch-friendly navigation", () => {
+  const expected = [
+    "/d/olx-home",
+    "/d/olx-buyer",
+    "/d/olx-renter",
+    "/d/olx-agent",
+    "/d/olx-overview",
+    "/d/olx-exits",
+    "/d/olx-health",
+  ];
+  for (const file of fs
+    .readdirSync(dashboardDir)
+    .filter((f) => f.endsWith(".json"))) {
+    const dashboard = JSON.parse(
+      fs.readFileSync(path.join(dashboardDir, file), "utf8"),
+    );
+    assert.deepEqual(
+      dashboard.links.map((link) => link.url),
+      expected,
+      file,
+    );
+  }
+});
+
+test("externally shared dashboards stay retired", () => {
+  const retiredDirectory = path.join(root, "grafana", "public-dashboards");
+  assert.deepEqual(
+    fs.readdirSync(retiredDirectory).filter((name) => name.endsWith(".json")),
+    [],
+  );
+  assert.equal(
+    fs.existsSync(path.join(root, "scripts", "publish-public-dashboards.sh")),
+    false,
+  );
 });
 
 test("dashboard metric labels match their query grain and evidence semantics", () => {
@@ -181,56 +239,6 @@ test("health dashboard exposes per-search and analytics freshness state", () => 
   assert.match(alertProvisioning, /daily_queue_healthy/);
   assert.match(alertProvisioning, /stale_searches/);
   assert.match(alertProvisioning, /pending_from_day/);
-});
-
-test("public dashboards are fixed-scope and use only the reporting contract", () => {
-  const expected = [
-    "olx-public-home.json",
-    "olx-public-apartments-sale.json",
-    "olx-public-apartments-rent.json",
-    "olx-public-exits.json",
-  ];
-  for (const name of expected) {
-    const dashboard = JSON.parse(
-      fs.readFileSync(path.join(publicDashboardDir, name), "utf8"),
-    );
-    assert.equal(dashboard.templating?.list?.length, 0, name);
-    assert.ok(
-      dashboard.panels.length >= 5,
-      `${name} should have useful public panels`,
-    );
-    const source = JSON.stringify(dashboard);
-    assert.match(source, /olx-public-postgres/);
-    assert.match(source, /dashboard_public\./);
-    assert.doesNotMatch(source, /currencyBAM/);
-    assert.doesNotMatch(source, /gross yield|guaranteed bargain/i);
-    for (const panel of dashboard.panels) {
-      for (const target of panel.targets || []) {
-        assert.doesNotMatch(
-          target.rawSql,
-          /\$\{[^}]+\}/,
-          `${name} panel ${panel.id}`,
-        );
-        if (panel.type === "table") {
-          // Aggregate public tables are bounded by their literal category or
-          // bucket dimensions; row-oriented tables carry the hard LIMIT 50.
-          assert.match(
-            target.rawSql,
-            /LIMIT (?:50|[1-4][0-9])|GROUP BY|WHERE category (?:IN \('apartments'|= 'apartments')/,
-          );
-        }
-      }
-    }
-  }
-});
-
-test("public share access tokens have a valid stable length", () => {
-  const entries = [...publicShareScript.matchAll(/"([^:"]+):([a-f0-9]+)"/g)];
-  assert.equal(entries.length, 4);
-  for (const [, uid, token] of entries) {
-    assert.match(uid, /^olx-public-/);
-    assert.match(token, /^[a-f0-9]{32}$/);
-  }
 });
 
 test("public reporting objects and role setup retain the confidentiality boundary", () => {
