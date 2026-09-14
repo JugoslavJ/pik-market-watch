@@ -16,7 +16,7 @@ checksummed migrations and public dashboard data contracts remain separate.
 | `reporting.resolved_price_evidence` | One canonical assertion per article and effective timestamp, including invalid, conflict and unpriced boundaries. Original event fields, `currency_normalized`, and historically resolved `evidence_is_rent`. Future assertions are excluded. |
 | `reporting.current_comparison_inputs` | One row per current article, resolved eligible total asking price/rate, quality reasons, type, rooms, neighbourhood, features and observed cycle age. |
 | `reporting.current_listing_scores_source` | Canonical OLTP-to-OLAP transformation. It is evaluated during refresh, never by dashboard panels. |
-| `reporting.current_listing_scores_olap` | Physical, indexed current-market OLAP snapshot. |
+| `olap.current_listing_scores` | Physical, indexed current-market OLAP snapshot. |
 | `reporting.current_listing_scores` | Stable Grafana view over the OLAP snapshot. It includes the shared benchmark, score, coverage, deviation, indicative spread and currently applicable reduction. |
 | `reporting.listing_comparables(article_id bigint)` | Exact eligible cohort read from the OLAP snapshot, sorted by article ID; excludes the subject. |
 | `reporting.comparison_price_changes` | Valid, same-segment, common-currency changes in the currently observed open cycle, including effective time, previous/current price, signed delta and percentage change. |

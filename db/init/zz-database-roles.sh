@@ -78,6 +78,13 @@ SELECT format('ALTER SCHEMA dashboard_public OWNER TO %I', :'app_user')
 WHERE to_regnamespace('dashboard_public') IS NOT NULL \gexec
 SELECT format('ALTER SCHEMA reporting OWNER TO %I', :'app_user')
 WHERE to_regnamespace('reporting') IS NOT NULL \gexec
+SELECT format('ALTER SCHEMA olap OWNER TO %I', :'app_user')
+WHERE to_regnamespace('olap') IS NOT NULL \gexec
+SELECT format('ALTER TABLE %I.%I OWNER TO %I', n.nspname, c.relname, :'app_user')
+FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'olap'
+  AND c.relkind IN ('r','p','v','m','f','S')
+  AND pg_get_userbyid(c.relowner) = :'admin_user' \gexec
 SELECT format('ALTER VIEW %I.%I OWNER TO %I', n.nspname, c.relname, :'app_user')
 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
 WHERE n.nspname = 'dashboard_public'
@@ -103,6 +110,8 @@ SELECT format('GRANT USAGE ON SCHEMA reporting TO %I', :'reader_user')
 WHERE to_regnamespace('reporting') IS NOT NULL \gexec
 SELECT format('GRANT SELECT ON ALL TABLES IN SCHEMA reporting TO %I', :'reader_user')
 WHERE to_regnamespace('reporting') IS NOT NULL \gexec
+-- Grafana consumes OLAP data through owner-checked reporting views. It gets no
+-- direct OLAP-schema grant, keeping physical storage behind the read contract.
 -- Defaults are attached to the APP role only: remote restores run as it, and
 -- they cannot replay cross-role defaults FOR the bootstrap user (that was the
 -- "permission denied to change default privileges" sync failure of 2026-08).

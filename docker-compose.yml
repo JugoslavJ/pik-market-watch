@@ -26,8 +26,8 @@ services:
     container_name: olx-db
     restart: unless-stopped
     security_opt:
-      - no-new-privileges:true   # nothing here may gain privileges
-    pids_limit: 100              # max_connections forks (40) + background workers
+      - no-new-privileges:true # nothing here may gain privileges
+    pids_limit: 100 # max_connections forks (40) + background workers
     # Right-size for the 768m cap (stock defaults assume a dedicated server):
     #   shared_buffers/effective_cache_size fit inside the limit; 40 conns cover
     #   the real client budget (scraper pool max 5 + Grafana maxOpenConns 20 +
@@ -68,14 +68,14 @@ services:
       POSTGRES_PUBLIC_READER_PASSWORD: ${POSTGRES_PUBLIC_READER_PASSWORD:?set POSTGRES_PUBLIC_READER_PASSWORD in .env}
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./db/init:/docker-entrypoint-initdb.d:ro   # runs on FIRST start only
-      - ./backups:/backups                          # host-visible dump target
+      - ./db/init:/docker-entrypoint-initdb.d:ro # runs on FIRST start only
+      - ./backups:/backups # host-visible dump target
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 3s
       retries: 12
-    mem_limit: 768m     # plenty for a personal-scale tracker; raise if needed
+    mem_limit: 768m # plenty for a personal-scale tracker; raise if needed
     memswap_limit: 768m # hit OOM decisively instead of swapping into latency spikes
     cpus: 0.50
     logging: *logging
@@ -84,7 +84,7 @@ services:
     networks:
       - backend
     ports:
-      - "127.0.0.1:5432:5432"   # host access for psql/GUIs; delete line to keep internal
+      - "127.0.0.1:5432:5432" # host access for psql/GUIs; delete line to keep internal
 
   # Schema changes run as a completed, one-shot job. Keeping this separate
   # makes deploy order explicit and prevents a normal scraper restart from
@@ -108,6 +108,7 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://${POSTGRES_APP_USER:-olx_app}:${POSTGRES_APP_PASSWORD}@db:5432/${POSTGRES_DB:-olx}
+      OLAP_RECONCILE_TIMEOUT_MS: ${OLAP_RECONCILE_TIMEOUT_MS:-900000}
     volumes:
       - ./db/init:/db/init:ro
     entrypoint: ["node", "src/migrate-only.js"]
@@ -144,19 +145,44 @@ services:
     networks:
       - backend
 
+  olap-reconcile:
+    build: ./scraper
+    profiles: ["maintenance"]
+    restart: "no"
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs:
+      - /tmp
+    pids_limit: 32
+    depends_on:
+      db:
+        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_APP_USER:-olx_app}:${POSTGRES_APP_PASSWORD}@db:5432/${POSTGRES_DB:-olx}
+    volumes:
+      - ./db/init:/db/init:ro
+    entrypoint: ["node", "src/olap-reconcile.js"]
+    networks:
+      - backend
+
   scraper:
     build: ./scraper
     container_name: olx-scraper
-    profiles: ["scrape"]         # opt-in: runs where you point COMPOSE_PROFILES at it
+    profiles: ["scrape"] # opt-in: runs where you point COMPOSE_PROFILES at it
     restart: unless-stopped
-    init: true                   # proper signal handling (cheap insurance)
+    init: true # proper signal handling (cheap insurance)
     security_opt:
       - no-new-privileges:true
-    cap_drop: [ALL]              # pure JSON client — needs no kernel capabilities
-    read_only: true              # writes live in Postgres; rootfs stays immutable
+    cap_drop: [ALL] # pure JSON client — needs no kernel capabilities
+    read_only: true # writes live in Postgres; rootfs stays immutable
     tmpfs:
       - /tmp
-    pids_limit: 64               # one node process + libuv threadpool
+    pids_limit: 64 # one node process + libuv threadpool
     depends_on:
       db:
         condition: service_healthy
@@ -179,23 +205,29 @@ services:
       # (= endless scrape loop). For one-off runs use:
       #   docker compose run --rm scraper node src/index.js --once
     volumes:
-      - ./config:/config:ro      # scraper reads /config/searches.json
-      - ./db/init:/db/init:ro    # fallback migrations for standalone scraper runs
+      - ./config:/config:ro # scraper reads /config/searches.json
+      - ./db/init:/db/init:ro # fallback migrations for standalone scraper runs
     ports:
-      - "127.0.0.1:9100:9100"   # health/status JSON endpoint
+      - "127.0.0.1:9100:9100" # health/status JSON endpoint
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:9100/').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:9100/').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
       interval: 60s
       timeout: 10s
       retries: 3
-      start_period: 60s         # DB warm-up + first scrape cycle before counting failures
-    mem_limit: 512m             # plain HTTP JSON client
-    memswap_limit: 512m         # hit OOM decisively instead of swapping into latency spikes
+      start_period: 60s # DB warm-up + first scrape cycle before counting failures
+    mem_limit: 512m # plain HTTP JSON client
+    memswap_limit: 512m # hit OOM decisively instead of swapping into latency spikes
     cpus: 0.50
     logging: *logging
     networks:
-      - default                 # egress to olx.ba
-      - backend                 # reach db
+      - default # egress to olx.ba
+      - backend # reach db
 
   grafana:
     # Digest pin alongside the version tag (Dependabot keeps both current).
@@ -204,18 +236,18 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
-    cap_drop: [ALL]              # uid 472 on an unprivileged port needs none
-    pids_limit: 128              # server + plugins (goroutines aren't PIDs)
+    cap_drop: [ALL] # uid 472 on an unprivileged port needs none
+    pids_limit: 128 # server + plugins (goroutines aren't PIDs)
     depends_on:
       db:
         condition: service_healthy
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
-      GF_ANALYTICS_REPORTUSAGE_ENABLED: "false"   # no usage telemetry
-      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"     # no outbound version-check pings either
-      GF_SERVER_ENABLE_GZIP: "true"               # compress dashboard JSON over WAN links
-      GF_LOG_LEVEL: "warn"                        # trim log IO; flip back to info when debugging
+      GF_ANALYTICS_REPORTUSAGE_ENABLED: "false" # no usage telemetry
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false" # no outbound version-check pings either
+      GF_SERVER_ENABLE_GZIP: "true" # compress dashboard JSON over WAN links
+      GF_LOG_LEVEL: "warn" # trim log IO; flip back to info when debugging
       # Cloudflare Tunnel publishes public HTTPS; Grafana stays HTTP-only on
       # the host-loopback published port.
       GF_SERVER_PROTOCOL: http
@@ -270,12 +302,12 @@ services:
         protocol: tcp
         mode: host
     mem_limit: 768m
-    memswap_limit: 768m         # hit OOM decisively instead of swapping into latency spikes
+    memswap_limit: 768m # hit OOM decisively instead of swapping into latency spikes
     cpus: 1.0
     logging: *logging
     networks:
-      - default                 # SMTP egress (optional alert mail delivery)
-      - backend                 # reach db
+      - default # SMTP egress (optional alert mail delivery)
+      - backend # reach db
     healthcheck:
       # Grafana is HTTP-only; Cloudflare handles public TLS outside the host.
       test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/health || exit 1"]
@@ -285,14 +317,15 @@ services:
       start_period: 30s
 
   db-backup:
-    image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
-                                         # same image as db → pg_dump always version-matched
+    image:
+      postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+      # same image as db → pg_dump always version-matched
     container_name: olx-db-backup
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
-    cap_drop: [ALL]              # sh / pg_dump / tar need no capabilities
-    read_only: true              # dumps land on the /backups mount only
+    cap_drop: [ALL] # sh / pg_dump / tar need no capabilities
+    read_only: true # dumps land on the /backups mount only
     tmpfs:
       - /tmp
     pids_limit: 50
@@ -301,17 +334,17 @@ services:
         condition: service_healthy
     environment:
       PGHOST: db
-      PGUSER: ${POSTGRES_READER_USER:-olx_reader}   # read-only is enough for pg_dump
+      PGUSER: ${POSTGRES_READER_USER:-olx_reader} # read-only is enough for pg_dump
       PGPASSWORD: ${POSTGRES_READER_PASSWORD}
       PGDATABASE: ${POSTGRES_DB:-olx}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
     volumes:
       - ./backups:/backups
       - ./db/backup.sh:/usr/local/bin/backup.sh:ro
-      - grafana:/grafana-data:ro          # nightly tar of Grafana state (users/prefs/UI edits)
+      - grafana:/grafana-data:ro # nightly tar of Grafana state (users/prefs/UI edits)
     entrypoint: ["sh", "/usr/local/bin/backup.sh"]
     mem_limit: 256m
-    memswap_limit: 256m         # hit OOM decisively instead of swapping into latency spikes
+    memswap_limit: 256m # hit OOM decisively instead of swapping into latency spikes
     logging: *logging
     networks:
       - backend
@@ -320,7 +353,11 @@ services:
       # The loop dumps right after start, so this settles within minutes; a hung
       # loop or silently failing pg_dump flips the sidecar unhealthy instead of
       # dying invisibly.
-      test: ["CMD-SHELL", "find /backups -name 'olx-*.dump' -mmin -1560 -print -quit | grep -q ."]
+      test:
+        [
+          "CMD-SHELL",
+          "find /backups -name 'olx-*.dump' -mmin -1560 -print -quit | grep -q .",
+        ]
       interval: 10m
       timeout: 10s
       retries: 3

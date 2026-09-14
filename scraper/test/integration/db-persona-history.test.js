@@ -109,6 +109,7 @@ needsDb(
     await db.pool.query(
       "SELECT * FROM rebuild_listing_daily('2026-01-10', '2026-01-10')",
     );
+    await db.pool.query("SELECT * FROM reporting.refresh_dashboard_olap()");
     const rows = await db.pool.query(
       `SELECT article_id, category_memberships, deal, property_type, sqm, rooms,
               neighborhood, historical_seller_type, historical_furnished,
@@ -196,6 +197,7 @@ needsDb(
     await db.pool.query(
       "SELECT * FROM rebuild_listing_daily('2026-01-10', '2026-01-12')",
     );
+    await db.pool.query("SELECT * FROM reporting.refresh_dashboard_olap()");
     const boundary = await db.pool.query(
       `SELECT price_quality_reason, rate_quality_reason, price_eligible,
               rate_eligible, asking_price, asking_rate
@@ -280,6 +282,8 @@ needsDb(
       isRent: false,
     });
     await state(17006, "2026-01-13T09:00:00Z", { event: "closed" });
+
+    await db.pool.query("SELECT * FROM reporting.refresh_dashboard_olap()");
 
     const rows = await db.pool.query(
       `SELECT article_id, cycle_no, closing_category, closing_sqm, closing_rooms,

@@ -1639,6 +1639,60 @@
           "refId": "A"
         }
       ]
+    },
+    {
+      "id": 30,
+      "title": "Dashboard OLAP generation",
+      "type": "stat",
+      "description": "Maximum mart or pending-partition age. Red means publication is stale, inconsistent, or its daily queue is delayed.",
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 96
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "Unknown",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 3600 },
+              { "color": "red", "value": 7200 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT CASE WHEN generation_consistent AND refresh_is_fresh AND daily_queue_healthy THEN greatest(maximum_age_seconds, oldest_pending_seconds) ELSE 7200 END AS olap_age_seconds\nFROM reporting.olap_health CROSS JOIN reporting.olap_queue_health",
+          "refId": "A"
+        }
+      ]
     }
   ],
   "refresh": "5m",

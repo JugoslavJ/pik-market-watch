@@ -12,6 +12,8 @@
     "test:integration": "node scripts/run-integration-tests.js",
     "check:docs": "node scripts/check-markdown-links.js",
     "benchmark:ingestion": "node scripts/benchmark-ingestion.js",
+    "benchmark:olap": "node scripts/benchmark-olap.js",
+    "reconcile:olap": "node src/olap-reconcile.js",
     "replay:response": "node src/replay-response.js",
     "maintenance": "node src/maintenance-only.js",
     "lint": "eslint .",

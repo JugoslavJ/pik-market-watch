@@ -29,9 +29,24 @@ async function reset(pool) {
                             search_results, scrape_runs, raw_api_responses,
                             scrape_run_pages,
                             listing_state_history, listing_price_events,
-                            listing_daily, analytics_daily_coverage
+                            listing_daily, analytics_daily_coverage,
+                            analytics_daily_olap_dirty
                             RESTART IDENTITY CASCADE`);
-  await pool.query("DELETE FROM reporting.current_listing_scores_olap");
+  await pool.query(`TRUNCATE olap.current_listing_scores,
+    olap.daily_listing_facts,
+    olap.lifecycle_cycles,
+    olap.lifecycle_movements,
+    olap.comparison_price_changes,
+    olap.listings,
+    olap.listing_categories,
+    olap.market_daily,
+    olap.listing_price_changes,
+    olap.listing_exit_economics,
+    olap.public_current_listings,
+    olap.public_daily_market,
+    olap.public_price_reductions,
+    olap.public_exit_cycles,
+    olap.public_freshness`);
   await pool.query(`UPDATE analytics_refresh_state
                        SET pending_from_day = NULL, pending_through_day = NULL,
                            completed_through_day = NULL,

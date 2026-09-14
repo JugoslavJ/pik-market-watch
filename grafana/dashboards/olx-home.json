@@ -105,7 +105,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT count(*) FROM v_active_listings",
+          "rawSql": "SELECT count(*) FROM reporting.dashboard_listings",
           "refId": "A"
         }
       ],
@@ -166,7 +166,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)::int\nFROM v_active_listings\nWHERE NOT is_rent AND ppm2 > 0",
+          "rawSql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)::int\nFROM reporting.dashboard_listings\nWHERE NOT is_rent AND ppm2 > 0",
           "refId": "A"
         }
       ],
@@ -227,7 +227,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY price)::int\nFROM v_active_listings\nWHERE is_rent AND price > 0",
+          "rawSql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY price)::int\nFROM reporting.dashboard_listings\nWHERE is_rent AND price > 0",
           "refId": "A"
         }
       ],
@@ -289,7 +289,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH s AS (\n  SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY price) AS p\n  FROM v_active_listings WHERE NOT is_rent AND price > 0\n),\nr AS (\n  SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY price) AS p\n  FROM v_active_listings WHERE is_rent AND price > 0\n)\nSELECT round((r.p * 12 / s.p * 100)::numeric, 1)::double precision AS gross_yield_pct\nFROM s, r",
+          "rawSql": "WITH s AS (\n  SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY price) AS p\n  FROM reporting.dashboard_listings WHERE NOT is_rent AND price > 0\n),\nr AS (\n  SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY price) AS p\n  FROM reporting.dashboard_listings WHERE is_rent AND price > 0\n)\nSELECT round((r.p * 12 / s.p * 100)::numeric, 1)::double precision AS gross_yield_pct\nFROM s, r",
           "refId": "A"
         }
       ],
@@ -351,7 +351,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH c AS (\n  SELECT count(*)::float AS n FROM listings WHERE closed_at > now() - INTERVAL '30 days'\n),\na AS (\n  SELECT count(*)::float AS n FROM v_active_listings\n)\nSELECT round(c.n / NULLIF(c.n + a.n, 0) * 100) FROM c, a",
+          "rawSql": "WITH c AS (\n  SELECT count(*)::float AS n FROM reporting.dashboard_listings WHERE closed_at > now() - INTERVAL '30 days'\n),\na AS (\n  SELECT count(*)::float AS n FROM reporting.dashboard_listings\n)\nSELECT round(c.n / NULLIF(c.n + a.n, 0) * 100) FROM c, a",
           "refId": "A"
         }
       ],
@@ -417,7 +417,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH pooled AS (\n  SELECT d.day, d.ppm2\n  FROM listing_daily d\n  WHERE d.price_state = 'valid' AND d.ppm2 IS NOT NULL AND NOT d.is_rent\n    AND d.day >= date_trunc('week', now() AT TIME ZONE 'Europe/Sarajevo')::date - 7\n    AND d.day < date_trunc('week', now() AT TIME ZONE 'Europe/Sarajevo')::date + 7\n), weeks AS (\n  SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)\n           FILTER (WHERE day >= date_trunc('week', now() AT TIME ZONE 'Europe/Sarajevo')::date) AS \"this wk\",\n         percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)\n           FILTER (WHERE day >= date_trunc('week', now() AT TIME ZONE 'Europe/Sarajevo')::date - 7\n                   AND day < date_trunc('week', now() AT TIME ZONE 'Europe/Sarajevo')::date) AS \"last wk\"\n  FROM pooled\n)\nSELECT round((100.0 * (\"this wk\" - \"last wk\") / NULLIF(\"last wk\", 0))::numeric, 1)::double precision AS \"Δ %\"\nFROM weeks",
+          "rawSql": "WITH pooled AS (\n  SELECT d.day, d.ppm2\n  FROM reporting.daily_listing_facts d\n  WHERE d.price_state = 'valid' AND d.ppm2 IS NOT NULL AND NOT d.is_rent\n    AND d.day >= date_trunc('week', now() AT TIME ZONE 'Europe/Sarajevo')::date - 7\n    AND d.day < date_trunc('week', now() AT TIME ZONE 'Europe/Sarajevo')::date + 7\n), weeks AS (\n  SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)\n           FILTER (WHERE day >= date_trunc('week', now() AT TIME ZONE 'Europe/Sarajevo')::date) AS \"this wk\",\n         percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)\n           FILTER (WHERE day >= date_trunc('week', now() AT TIME ZONE 'Europe/Sarajevo')::date - 7\n                   AND day < date_trunc('week', now() AT TIME ZONE 'Europe/Sarajevo')::date) AS \"last wk\"\n  FROM pooled\n)\nSELECT round((100.0 * (\"this wk\" - \"last wk\") / NULLIF(\"last wk\", 0))::numeric, 1)::double precision AS \"Δ %\"\nFROM weeks",
           "refId": "A"
         }
       ],
@@ -788,7 +788,7 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time, new_n, closed_n, reopened_n, active_est, stale_n, provisional_day\nFROM v_market_daily\nWHERE day BETWEEN date($__timeFrom() AT TIME ZONE 'Europe/Sarajevo')\n              AND date($__timeTo() AT TIME ZONE 'Europe/Sarajevo')\nORDER BY day",
+          "rawSql": "SELECT day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time, new_n, closed_n, reopened_n, active_est, stale_n, provisional_day\nFROM reporting.market_daily\nWHERE day BETWEEN date($__timeFrom() AT TIME ZONE 'Europe/Sarajevo')\n              AND date($__timeTo() AT TIME ZONE 'Europe/Sarajevo')\nORDER BY day",
           "refId": "A"
         }
       ],
@@ -840,7 +840,7 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time,\n       round(100.0 * closed_n / NULLIF(active_est, 0), 2) AS \"closed / estimated active %\"\nFROM v_market_daily\nWHERE day BETWEEN date($__timeFrom() AT TIME ZONE 'Europe/Sarajevo')\n              AND date($__timeTo() AT TIME ZONE 'Europe/Sarajevo')\nORDER BY day",
+          "rawSql": "SELECT day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time,\n       round(100.0 * closed_n / NULLIF(active_est, 0), 2) AS \"closed / estimated active %\"\nFROM reporting.market_daily\nWHERE day BETWEEN date($__timeFrom() AT TIME ZONE 'Europe/Sarajevo')\n              AND date($__timeTo() AT TIME ZONE 'Europe/Sarajevo')\nORDER BY day",
           "refId": "A"
         }
       ],

@@ -188,3 +188,52 @@ groups:
                   type: threshold
               expression: B
               type: threshold
+      - uid: olx-dashboard-olap-stale
+        title: Dashboard OLAP stale or inconsistent
+        condition: C
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: >-
+            Dashboard marts are stale/inconsistent or a daily partition has
+            waited more than two hours. Check OLX Health → Dashboard OLAP generation,
+            analytics_daily_olap_dirty, and the maintenance currentMarket outcome.
+          runbook_url: https://github.com/JugoslavJ/pik-market-watch/blob/main/docs/OPERATIONS.md
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: olx-postgres
+            model:
+              rawSql: |
+                SELECT CASE
+                         WHEN generation_consistent AND refresh_is_fresh
+                              AND daily_queue_healthy THEN 0
+                         ELSE 1
+                       END::int AS unhealthy
+                  FROM reporting.olap_health
+                 CROSS JOIN reporting.olap_queue_health;
+              format: table
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions: []
+              expression: A
+              reducer: last
+              type: reduce
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: gte
+                  operator:
+                    type: and
+                  query:
+                    params: [C]
+                  type: threshold
+              expression: B
+              type: threshold

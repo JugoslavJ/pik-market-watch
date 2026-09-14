@@ -326,7 +326,7 @@ needsDb(
 
     const cols =
       await pool.query(`SELECT count(*)::int AS n FROM information_schema.columns
-    WHERE table_name = 'listings' AND column_name IN (
+    WHERE table_schema = 'public' AND table_name = 'listings' AND column_name IN (
       'closing_category','published_at','renewed_at','seller_type','rooms_detail','bathrooms',
       'floor_num','floors_total','unit_levels','heating','furnished','condition',
       'parking','garage','elevator','year_built','plot_sqm','orientation','views',

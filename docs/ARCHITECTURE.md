@@ -35,7 +35,7 @@ Detail enrichment is a separate, bounded part of a successful search. The queue 
 | `listing_state_history` | Immutable search sightings, detail updates, closures, and reopenings. `effective_at` is evidence time; `ingested_at` is when this database learned it. |
 | `listing_price_events` | Canonical price boundaries with a value state (`valid`, `unpriced`, `invalid`, or `conflict`), observation/renewal timestamps, effective-time basis, and provenance. |
 | `listing_daily` | OLAP article/day facts used for historical analytics. |
-| `reporting.current_listing_scores_olap` | Physical OLAP snapshot used by current-market Grafana panels. |
+| `olap.current_listing_scores` | Physical OLAP snapshot used by current-market Grafana panels. |
 | `reporting.current_market_refresh_state` | Current snapshot generation time, row count, duration, and source watermark. |
 | `analytics_refresh_state` | Pending and successful daily-rebuild coverage. |
 | `neighborhoods` | Generated Banja Luka MZ polygons used to resolve listing pins. |

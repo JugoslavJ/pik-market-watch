@@ -14,32 +14,32 @@ docker compose up -d --build
 
 `.env.example` intentionally leaves `POSTGRES_PASSWORD`, `POSTGRES_APP_PASSWORD`, `POSTGRES_READER_PASSWORD`, `POSTGRES_PUBLIC_READER_PASSWORD`, `GRAFANA_ADMIN_PASSWORD`, and `GRAFANA_SECRET_KEY` blank. Set all six before starting or deploying; the deployment preflight rejects blank and legacy `change-me*` values. Application and reader passwords are embedded in a PostgreSQL URL, so use URL-safe values such as `openssl rand -hex 24`.
 
-| Setting                                             |                Default | Consumer                                                                                                                         |
-| --------------------------------------------------- | ---------------------: | -------------------------------------------------------------------------------------------------------------------------------- |
-| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | `olx`, required, `olx` | PostgreSQL bootstrap database.                                                                                                   |
-| `POSTGRES_APP_USER`, `POSTGRES_APP_PASSWORD`        |    `olx_app`, required | Scraper and restore owner role.                                                                                                  |
-| `POSTGRES_READER_USER`, `POSTGRES_READER_PASSWORD`  | `olx_reader`, required | Grafana and backup read-only role.                                                                                               |
-| `POSTGRES_PUBLIC_READER_USER`, `POSTGRES_PUBLIC_READER_PASSWORD` | `olx_public_reader`, required | Public Grafana datasource; SELECT is limited to `dashboard_public` views. |
-| `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD`      |      `admin`, required | Grafana login.                                                                                                                   |
-| `GRAFANA_SECRET_KEY`                                |               required | Grafana encryption for stored datasource secrets.                                                                                |
-| `GRAFANA_DOMAIN`                                    |             `localhost` | Grafana's externally visible hostname; production must use the Cloudflare hostname.                                             |
-| `GRAFANA_ROOT_URL`                                  | `http://localhost:3000/` | Grafana's externally visible URL; production must be HTTPS and end in `/`.                                                       |
-| `GRAFANA_ENFORCE_DOMAIN`                            |               `false` | Reject unexpected Host headers; set `true` in production.                                                                        |
-| `GRAFANA_COOKIE_SECURE`                              |               `false` | Secure Grafana auth cookies; set `true` in production HTTPS.                                                                     |
-| `GRAFANA_CARTO_API_KEY`                             |                  unset | CARTO basemap key for Grafana geomaps; create one at [carto.com/basemaps/apikey](https://carto.com/basemaps/apikey).             |
-| `GRAFANA_CARTO_VECTOR_STYLE`                        |          `dark-matter` | Authenticated CARTO MapLibre vector style: `dark-matter`, `positron`, or `voyager`; recreate Grafana after changing it.          |
-| `GRAFANA_BIND`                                      |          `127.0.0.1` | Host interface for Grafana port 3000. Keep this at `127.0.0.1`; cloudflared is the public entry point.                            |
-| `HEALTH_BIND`                                       |          `127.0.0.1` bare-metal / `0.0.0.0` Compose | Health listener bind address. Compose needs all-interface binding inside the container; the published host port remains loopback-only. |
-| `SCRAPE_INTERVAL_MINUTES`                           |                  `720` | Scheduled scraper cadence when the `scrape` profile is enabled.                                                                  |
-| `DETAIL_REFRESH_DAYS`                               |                    `7` | Age at which successful detail evidence becomes eligible for refresh.                                                            |
-| `DETAIL_JOB_LEASE_MINUTES`                          |                   `30` | Database lease duration for an in-flight durable detail job (maximum 24 hours).                                                  |
-| `RAW_RESPONSE_RETENTION_DAYS`                       |                    `3` | Live search/detail response retention in days (a rolling 72 hours from `fetched_at`). Existing rows are capped by maintenance.        |
-| `ANALYTICS_REBUILD_MAX_DAYS`                        |                   `31` | Maximum Banja Luka days rebuilt per maintenance transaction.                                                                      |
-| `ABANDONED_RUN_AFTER_MINUTES`                       |                  `180` | Age after which startup marks an unfinished `running` scrape as abandoned.                                                       |
-| `RATE_LIMIT_COOLDOWN_MS`                            |                `65000` | Fallback pause when the upstream rate-limit window is low and no reset is advertised.                                            |
-| `BACKUP_RETENTION_DAYS`                             |                   `14` | Days of database and Grafana archives retained by `db-backup`; `0` disables pruning.                                             |
-| `ALERT_EMAIL_TO`                                    |                  unset | Recipient for provisioned alerting. Mail also requires enabling and configuring the `GF_SMTP_*` entries in `docker-compose.yml`. |
-| `SCRAPE_STALE_AFTER_HOURS`                          | `26` | Per-search freshness alert and public freshness label; choose a value that covers the actual scrape cadence. |
+| Setting                                                          |                                    Default | Consumer                                                                                                                               |
+| ---------------------------------------------------------------- | -----------------------------------------: | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`              |                     `olx`, required, `olx` | PostgreSQL bootstrap database.                                                                                                         |
+| `POSTGRES_APP_USER`, `POSTGRES_APP_PASSWORD`                     |                        `olx_app`, required | Scraper and restore owner role.                                                                                                        |
+| `POSTGRES_READER_USER`, `POSTGRES_READER_PASSWORD`               |                     `olx_reader`, required | Grafana and backup read-only role.                                                                                                     |
+| `POSTGRES_PUBLIC_READER_USER`, `POSTGRES_PUBLIC_READER_PASSWORD` |              `olx_public_reader`, required | Public Grafana datasource; SELECT is limited to `dashboard_public` views.                                                              |
+| `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD`                   |                          `admin`, required | Grafana login.                                                                                                                         |
+| `GRAFANA_SECRET_KEY`                                             |                                   required | Grafana encryption for stored datasource secrets.                                                                                      |
+| `GRAFANA_DOMAIN`                                                 |                                `localhost` | Grafana's externally visible hostname; production must use the Cloudflare hostname.                                                    |
+| `GRAFANA_ROOT_URL`                                               |                   `http://localhost:3000/` | Grafana's externally visible URL; production must be HTTPS and end in `/`.                                                             |
+| `GRAFANA_ENFORCE_DOMAIN`                                         |                                    `false` | Reject unexpected Host headers; set `true` in production.                                                                              |
+| `GRAFANA_COOKIE_SECURE`                                          |                                    `false` | Secure Grafana auth cookies; set `true` in production HTTPS.                                                                           |
+| `GRAFANA_CARTO_API_KEY`                                          |                                      unset | CARTO basemap key for Grafana geomaps; create one at [carto.com/basemaps/apikey](https://carto.com/basemaps/apikey).                   |
+| `GRAFANA_CARTO_VECTOR_STYLE`                                     |                              `dark-matter` | Authenticated CARTO MapLibre vector style: `dark-matter`, `positron`, or `voyager`; recreate Grafana after changing it.                |
+| `GRAFANA_BIND`                                                   |                                `127.0.0.1` | Host interface for Grafana port 3000. Keep this at `127.0.0.1`; cloudflared is the public entry point.                                 |
+| `HEALTH_BIND`                                                    | `127.0.0.1` bare-metal / `0.0.0.0` Compose | Health listener bind address. Compose needs all-interface binding inside the container; the published host port remains loopback-only. |
+| `SCRAPE_INTERVAL_MINUTES`                                        |                                      `720` | Scheduled scraper cadence when the `scrape` profile is enabled.                                                                        |
+| `DETAIL_REFRESH_DAYS`                                            |                                        `7` | Age at which successful detail evidence becomes eligible for refresh.                                                                  |
+| `DETAIL_JOB_LEASE_MINUTES`                                       |                                       `30` | Database lease duration for an in-flight durable detail job (maximum 24 hours).                                                        |
+| `RAW_RESPONSE_RETENTION_DAYS`                                    |                                        `3` | Live search/detail response retention in days (a rolling 72 hours from `fetched_at`). Existing rows are capped by maintenance.         |
+| `ANALYTICS_REBUILD_MAX_DAYS`                                     |                                       `31` | Maximum Banja Luka days rebuilt per maintenance transaction.                                                                           |
+| `ABANDONED_RUN_AFTER_MINUTES`                                    |                                      `180` | Age after which startup marks an unfinished `running` scrape as abandoned.                                                             |
+| `RATE_LIMIT_COOLDOWN_MS`                                         |                                    `65000` | Fallback pause when the upstream rate-limit window is low and no reset is advertised.                                                  |
+| `BACKUP_RETENTION_DAYS`                                          |                                       `14` | Days of database and Grafana archives retained by `db-backup`; `0` disables pruning.                                                   |
+| `ALERT_EMAIL_TO`                                                 |                                      unset | Recipient for provisioned alerting. Mail also requires enabling and configuring the `GF_SMTP_*` entries in `docker-compose.yml`.       |
+| `SCRAPE_STALE_AFTER_HOURS`                                       |                                       `26` | Per-search freshness alert and public freshness label; choose a value that covers the actual scrape cadence.                           |
 
 Search configuration is read from `config/searches.json`; `SEARCH_URLS` is an environment override for a bare scraper process or an explicit `docker compose run -e SEARCH_URLS=...` invocation. The scraper also accepts `SCRAPE_USER_AGENT`, `HEALTH_PORT`, and pacing/health variables (`MAX_PAGES`, `CONCURRENCY`, `PAGE_DELAY_MS`, `API_PER_PAGE`, `API_TIMEOUT_MS`, `MAX_GEO_FETCHES`, `GEO_CONCURRENCY`, `GEO_DELAY_MS`, `SCRAPE_MIN_GAP_MINUTES`, `ABANDONED_RUN_AFTER_MINUTES`, `DETAIL_JOB_LEASE_MINUTES`, and `HEALTH_FAILURE_THRESHOLD`). Compose injects `ABANDONED_RUN_AFTER_MINUTES`, `DETAIL_JOB_LEASE_MINUTES`, and `ANALYTICS_REBUILD_MAX_DAYS`; pass the other tuning variables explicitly with `docker compose run -e NAME=value` or set them in a supported deployment change.
 
@@ -237,6 +237,85 @@ bounded metadata without a successful body. Legacy rows replay through the
 `source_payload`/`payload` fallback until expiry. Existing backups retain their
 separate backup policy.
 
+### Dashboard OLAP benchmark and health
+
+The health dashboard shows the maximum physical-mart age and treats a mixed
+generation as unhealthy. The provisioned `olx-dashboard-olap-stale` alert fires
+after 15 minutes when the generation is inconsistent or older than two hours.
+Inspect the underlying contract with:
+
+```sql
+SELECT * FROM reporting.olap_health;
+SELECT * FROM olap.refresh_state ORDER BY mart;
+```
+
+Benchmark source transformations and complete atomic publication only against
+a disposable or explicitly approved database:
+
+```bash
+cd scraper
+DATABASE_URL=postgres://... OLAP_BENCHMARK_REPETITIONS=3 npm run benchmark:olap
+```
+
+The JSON output separates source evaluation time from end-to-end publication
+time and includes rows, buffer activity, physical mart sizes, and final health.
+Set `OLAP_BENCHMARK_FORCE_FULL=1` to exercise the recovery/full-parity path;
+the default measures routine dirty-day and changed-article publication.
+Set `OLAP_BENCHMARK_VALIDATE=1` for the slower exact multiset comparison, or
+run `SELECT * FROM reporting.validate_dashboard_olap()` independently.
+Set `OLAP_BENCHMARK_PROFILE_SOURCES=0` when only end-to-end refresh latency is
+needed; source profiling is enabled by default.
+Set `OLAP_BENCHMARK_MAX_REFRESH_MS` to make the command fail when any measured
+publication exceeds an explicit environment-specific budget. CI also exercises
+an empty incremental refresh and representative dashboard query with generous
+throwaway-database budgets; production capacity decisions must use a restored
+production-sized database.
+
+Daily reconstruction publishes through `analytics_daily_olap_dirty`. Each
+entry carries a generation token, so an OLAP refresh only acknowledges the
+exact version it copied. A rebuild that commits concurrently leaves a newer
+entry for the next refresh. After a healthy idle refresh the queue should be
+empty:
+
+```sql
+SELECT count(*) AS pending_daily_partitions
+FROM analytics_daily_olap_dirty;
+```
+
+If parity fails, preserve the queue and run
+`SELECT * FROM reporting.refresh_dashboard_olap(true)`. A full refresh clears
+only queue entries visible to its transaction; concurrently committed work
+remains pending. Then rerun `reporting.validate_dashboard_olap()` and inspect
+`reporting.olap_health` before treating the alert as resolved.
+
+Schedule a weekly forced reconciliation outside the normal scrape window:
+
+```text
+docker compose --profile maintenance run --build --rm olap-reconcile
+```
+
+Example crontab entry for a checkout at `/opt/pik-market-watch`:
+
+```cron
+17 3 * * 0 cd /opt/pik-market-watch && docker compose --profile maintenance run --rm olap-reconcile >> logs/olap-reconcile.log 2>&1
+```
+
+The command acquires the scraper and analytics-maintenance leases, then performs
+a full atomic publication, exact parity validation, and health check, returning
+nonzero on any mismatch. Other writers wait for this quiescent window. Do not
+overlap it deliberately with backup windows; locking cannot make competing I/O
+free. `OLAP_RECONCILE_TIMEOUT_MS` defaults to 15 minutes and bounds lock waits,
+refresh, and validation statements.
+
+OLAP facts are reproducible and currently retained for the same historical
+horizon as their OLTP sources; do not delete mart history independently. After
+a large full refresh or restore, run `ANALYZE` on the `olap` tables. Normal
+autovacuum handles incremental replacements; investigate dead tuples and index
+growth monthly with `pg_stat_user_tables` and `pg_total_relation_size`. Use
+`VACUUM (ANALYZE)`, never routine `VACUUM FULL`, while dashboards are online.
+Backups must include both OLTP and OLAP schemas, although OLAP can be rebuilt
+from the canonical sources after recovery.
+
 ```bash
 docker compose --profile scrape run --rm scraper node src/backfill-price-history.js --dry-run
 docker compose --profile scrape run --rm scraper node src/backfill-price-history.js --checkpoint=/tmp/price-history.checkpoint
@@ -385,7 +464,7 @@ tunnel path.
   `journalctl -u cloudflared -n 100 --no-pager`. Datasource failures usually
   indicate missing reader credentials or reader grants; re-run the roles script
   after a restore. If the public datasource reports `password authentication
-  failed`, make the database role and Grafana container consume the same current
+failed`, make the database role and Grafana container consume the same current
   `.env` value (a plain `restart` does not refresh container environment):
 
   ```bash
@@ -396,6 +475,7 @@ tunnel path.
 
   Use a URL-safe password such as `openssl rand -hex 24`; never print it in
   logs or commit it.
+
 - **Backup is unhealthy:** inspect `docker compose logs db-backup`, confirm a recent `backups/olx-*.dump`, and run `pg_restore -l` on it. The included Grafana alert tracks scrape freshness, not backup freshness.
 - **Sync fails:** retain the local dump and read the remote `RESTORE_ERROR` lines in `logs/sync.log`. Ownership failures must be corrected on the source database before retrying; a restore failure after the schema swap triggers the remote rollback procedure.
 

@@ -37,6 +37,7 @@ needsDb(
            ('sale', 'ok', true, '2026-08-03'),
            ('rent', 'ok', false, '2026-08-04');
   `);
+    await db.pool.query("SELECT * FROM reporting.refresh_dashboard_olap()");
     const unknown = await db.pool.query(
       "SELECT * FROM dashboard_public.freshness",
     );
@@ -46,6 +47,7 @@ needsDb(
     await db.pool
       .query(`INSERT INTO scrape_runs (search_key, status, is_complete, finished_at)
     VALUES ('rent', 'ok', true, '2026-08-02')`);
+    await db.pool.query("SELECT * FROM reporting.refresh_dashboard_olap()");
     const known = await db.pool.query(
       "SELECT * FROM dashboard_public.freshness",
     );
@@ -72,6 +74,7 @@ needsDb(
       `INSERT INTO search_results (search_key, article_id)
        VALUES ('apartments', 9101), ('houses', 9101), ('apartments', 9102)`,
     );
+    await db.pool.query("SELECT * FROM reporting.refresh_dashboard_olap()");
 
     const rows = await db.pool.query(
       `SELECT article_id, category_memberships, deal
@@ -126,6 +129,7 @@ needsDb(
        VALUES (9201, $1, 100000, 'valid', 'search', $1, 'observed')`,
       [opened],
     );
+    await db.pool.query("SELECT * FROM reporting.refresh_dashboard_olap()");
 
     const rows = await db.pool.query(
       `SELECT article_id, cycle_no, deal, category_memberships,

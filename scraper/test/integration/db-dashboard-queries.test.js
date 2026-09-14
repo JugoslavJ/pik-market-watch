@@ -33,6 +33,7 @@ needsDb(
     VALUES (3, now()-interval '3 days', 'search', 'valid', 100000),
            (3, now()-interval '2 days', 'search', 'valid', 90000);
   `);
+    await db.pool.query("SELECT * FROM reporting.refresh_dashboard_olap()");
     const sql = (file, id) =>
       dashboards
         .find((d) => d.name === file)
@@ -85,6 +86,120 @@ test.after(async () => {
 });
 
 needsDb(
+  "daily OLAP queue retains a reconstruction that commits during publication",
+  async () => {
+    await reset(db.pool);
+    await db.pool.query(`INSERT INTO analytics_daily_coverage(day, provisional)
+                         VALUES ('2026-01-10', false)`);
+    await db.pool.query("SELECT * FROM reporting.refresh_dashboard_olap()");
+    assert.equal(
+      Number(
+        (
+          await db.pool.query(
+            "SELECT count(*) AS n FROM analytics_daily_olap_dirty",
+          )
+        ).rows[0].n,
+      ),
+      0,
+    );
+
+    const rebuilding = await db.pool.connect();
+    try {
+      await rebuilding.query("BEGIN");
+      await rebuilding.query(`UPDATE analytics_daily_coverage
+                                  SET rebuilt_at = now()
+                                WHERE day = '2026-01-10'`);
+      await db.pool.query("SELECT * FROM reporting.refresh_dashboard_olap()");
+      await rebuilding.query("COMMIT");
+    } catch (error) {
+      await rebuilding.query("ROLLBACK");
+      throw error;
+    } finally {
+      rebuilding.release();
+    }
+
+    const pending = await db.pool.query(
+      "SELECT day::text AS day FROM analytics_daily_olap_dirty",
+    );
+    assert.deepEqual(
+      pending.rows.map((row) => row.day),
+      ["2026-01-10"],
+    );
+    await db.pool.query("SELECT * FROM reporting.refresh_dashboard_olap()");
+    assert.equal(
+      Number(
+        (
+          await db.pool.query(
+            "SELECT count(*) AS n FROM analytics_daily_olap_dirty",
+          )
+        ).rows[0].n,
+      ),
+      0,
+    );
+  },
+);
+
+needsDb("failed OLAP publication preserves the prior generation", async () => {
+  await reset(db.pool);
+  await db.pool.query(`INSERT INTO listings(article_id, url, title)
+                       VALUES (9001, 'https://olx.ba/artikal/9001', 'rollback sentinel')`);
+  await db.pool.query("SELECT * FROM reporting.refresh_dashboard_olap()");
+  const before = await db.pool.query(
+    "SELECT refresh_id, row_count FROM olap.refresh_state WHERE mart='listings'",
+  );
+  await db.pool.query(`
+    CREATE FUNCTION public.test_fail_olap_insert() RETURNS trigger
+    LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'injected OLAP failure'; END $$;
+    CREATE TRIGGER test_fail_olap_insert BEFORE INSERT ON olap.listings
+    FOR EACH STATEMENT EXECUTE FUNCTION public.test_fail_olap_insert();
+  `);
+  try {
+    await assert.rejects(
+      db.pool.query("SELECT * FROM reporting.refresh_dashboard_olap()"),
+      /injected OLAP failure/,
+    );
+  } finally {
+    await db.pool.query("DROP TRIGGER test_fail_olap_insert ON olap.listings");
+    await db.pool.query("DROP FUNCTION public.test_fail_olap_insert()");
+  }
+  const after = await db.pool.query(
+    "SELECT refresh_id, row_count FROM olap.refresh_state WHERE mart='listings'",
+  );
+  assert.deepEqual(after.rows, before.rows);
+  assert.equal(
+    Number(
+      (await db.pool.query("SELECT count(*) AS n FROM olap.listings")).rows[0]
+        .n,
+    ),
+    1,
+  );
+});
+
+needsDb(
+  "empty OLAP refresh and dashboard query stay within CI budgets",
+  async () => {
+    await reset(db.pool);
+    await db.pool.query("SELECT * FROM reporting.refresh_dashboard_olap()");
+    let started = process.hrtime.bigint();
+    await db.pool.query("SELECT * FROM reporting.refresh_dashboard_olap()");
+    const refreshMs = Number(process.hrtime.bigint() - started) / 1e6;
+    started = process.hrtime.bigint();
+    await db.pool.query(
+      "SELECT count(*), max(article_id) FROM reporting.current_listing_scores",
+    );
+    const queryMs = Number(process.hrtime.bigint() - started) / 1e6;
+    assert.ok(
+      refreshMs < 5000,
+      `empty incremental refresh took ${refreshMs.toFixed(1)}ms`,
+    );
+    assert.ok(
+      queryMs < 1000,
+      `representative dashboard query took ${queryMs.toFixed(1)}ms`,
+    );
+  },
+);
+
+needsDb(
   "every dashboard query executes for empty data and selected sale/rent filters",
   async () => {
     await reset(db.pool);
@@ -107,6 +222,7 @@ needsDb(
         INSERT INTO search_results (search_key, article_id) VALUES ('sale', 1), ('sale', 2);
       `);
       }
+      await db.pool.query("SELECT * FROM reporting.refresh_dashboard_olap()");
       const selected = {
         ...values,
         deal:
