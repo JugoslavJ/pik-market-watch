@@ -144,6 +144,11 @@ unscored reason. No citywide fallback is labelled a neighbourhood score.
 
 ## Data readiness and implementation boundaries
 
+Current-listing panels use `reporting.buyer_listing_scope(...)` as their shared
+filter contract. It centralizes the market and optional-feature scope and can
+optionally apply price, rate, score and listing-selection filters. Historical
+and exact-comparable panels retain their distinct event-time and cohort rules.
+
 - `reporting.current_listings` supplies active listing attributes; it does not
   expose a resolved current `price_state`. A future reporting projection must
   resolve current price evidence using the canonical event precedence rules,

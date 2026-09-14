@@ -20,7 +20,7 @@ it does not assume access to an agent's portfolio, CRM or completed transactions
 |---|---|
 | Deal | Single select sale or rent; default sale. All price panels and units switch together. |
 | Property type | Single select; default apartments. Never pool apartment, house and vacation-home price benchmarks. |
-| Neighbourhood | Multi-select; default all mapped neighbourhoods. Unknown location is a separate browsable group. |
+| Neighbourhood | Multi-select; default all neighbourhoods, including unknown. Unknown location is also a separately browsable group. |
 | Asking-price bounds | Optional minimum/maximum KM for sale; KM/month for rent. All rental prices are monthly under the confirmed dataset rule. |
 | Price-per-m² bounds | Optional KM/m² for sale or KM/m²/month for rent. |
 | Area and rooms | Optional independent area bounds and room buckets. |
@@ -64,7 +64,7 @@ valid reduction and reason badges. Show 25 rows per page and these selectable vi
 
 | View | Selection and default order |
 |---|---|
-| Below local asks | Deviation below −5%, highest score first. |
+| Below local asks | Deviation below −5%, largest negative deviation first. |
 | Above local asks | Deviation above +5%, largest positive deviation first. |
 | Long-observed and above local asks | Current observed cycle at least 60 days old and deviation above +5%; greatest age first. This is a review signal, not proof that a home cannot sell. |
 | Recent reductions | Currently applicable, same-segment valid reductions in the selected window; largest percentage reduction first. |
@@ -123,6 +123,11 @@ seller motivation, agent ownership or conversion estimates without supporting
 data. These are outside this dashboard's comparison task.
 
 ## Data readiness and implementation boundaries
+
+The dashboard's repeated current-market and matching-result predicates are
+centralized in `reporting.agent_listing_scope`. Panels choose whether to apply
+result-only price, score, workflow, position and signal filters while sharing
+one implementation of validation and market/attribute scoping.
 
 | Requirement | Current support and future work |
 |---|---|

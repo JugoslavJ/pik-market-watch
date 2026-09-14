@@ -110,6 +110,11 @@ not confirmation that a home is ready to occupy.
 
 ## Data readiness and implementation boundaries
 
+Current-listing panels use `reporting.renter_listing_scope(...)` as their shared
+filter contract. It centralizes the market and rental-feature scope and can
+optionally apply rent, rate, score and listing-selection filters. Historical
+and exact-comparable panels retain their distinct event-time and cohort rules.
+
 | Requirement | Current support and future work |
 |---|---|
 | Active rentals and details | `reporting.current_listings` provides `is_rent`, price, area, rooms and nullable features. Resolve current valid price evidence as described in the buyer spec. |
