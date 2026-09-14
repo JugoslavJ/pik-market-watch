@@ -116,19 +116,23 @@ needsDb(
 );
 
 needsDb(
-  "9/10/20 exact distinct comparables; budget never changes the benchmark",
+  "4/5/10/20 exact distinct comparables; budget never changes the benchmark",
   async () => {
-    await seed(Array.from({ length: 10 }, (_, id) => ({ id: id + 1 })));
+    await seed(Array.from({ length: 5 }, (_, id) => ({ id: id + 1 })));
     let subject = await scores(1);
-    assert.equal(subject.comparable_count, 9);
+    assert.equal(subject.comparable_count, 4);
     assert.equal(subject.score, null);
     assert.equal(subject.benchmark_rate, null);
     assert.equal(subject.indicative_low, null);
     assert.equal(subject.unscored_reason, "Insufficient comparables");
-    await seed([{ id: 11 }]);
+    await seed([{ id: 6 }]);
+    subject = await scores(1);
+    assert.equal(subject.comparable_count, 5);
+    assert.equal(subject.score, 50);
+    assert.equal(subject.confidence, "Higher variance sample");
+    await seed(Array.from({ length: 5 }, (_, id) => ({ id: id + 7 })));
     subject = await scores(1);
     assert.equal(subject.comparable_count, 10);
-    assert.equal(subject.score, 50);
     assert.equal(subject.confidence, "Limited sample");
     await db.pool.query(
       "INSERT INTO search_results SELECT 'duplicate',article_id FROM listings",
@@ -149,6 +153,41 @@ needsDb(
       AND reporting.within_bounds(score,'50','50','Score',100)`);
     assert.equal(filtered.rows[0].score, subject.score);
     assert.equal(filtered.rows[0].benchmark_rate, subject.benchmark_rate);
+  },
+);
+
+needsDb(
+  "sparse local cohorts use three nearest neighbourhoods and expose their scope",
+  async () => {
+    await seed([
+      { id: 1, neighborhood: "Centar 1", price: 125000 },
+      { id: 2, neighborhood: "Centar 2", price: 100000 },
+      { id: 3, neighborhood: "Centar 2", price: 110000 },
+      { id: 4, neighborhood: "Borik 1", price: 120000 },
+      { id: 5, neighborhood: "Borik 1", price: 130000 },
+      { id: 6, neighborhood: "Borik 2", price: 140000 },
+      { id: 7, neighborhood: "Bulevar", price: 500000 },
+    ]);
+
+    const subject = await scores(1);
+    assert.equal(subject.local_comparable_count, 0);
+    assert.equal(subject.comparable_count, 5);
+    assert.equal(subject.benchmark_scope, "nearest_3_neighborhoods");
+    assert.equal(subject.confidence, "Nearby-area fallback · Higher variance");
+    assert.deepEqual(subject.benchmark_neighborhoods, [
+      "Borik 1",
+      "Borik 2",
+      "Centar 2",
+    ]);
+    assert.equal(Number(subject.benchmark_rate), 2400);
+
+    const comparables = await db.pool.query(
+      "SELECT article_id FROM reporting.listing_comparables(1)",
+    );
+    assert.deepEqual(
+      comparables.rows.map((row) => Number(row.article_id)),
+      [2, 3, 4, 5, 6],
+    );
   },
 );
 

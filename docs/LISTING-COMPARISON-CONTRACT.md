@@ -11,21 +11,21 @@ checksummed migrations and public dashboard data contracts remain separate.
 
 ## Reporting interfaces
 
-| Interface | Contract |
-| --- | --- |
-| `reporting.resolved_price_evidence` | One canonical assertion per article and effective timestamp, including invalid, conflict and unpriced boundaries. Original event fields, `currency_normalized`, and historically resolved `evidence_is_rent`. Future assertions are excluded. |
-| `reporting.current_comparison_inputs` | One row per current article, resolved eligible total asking price/rate, quality reasons, type, rooms, neighbourhood, features and observed cycle age. |
-| `reporting.current_listing_scores_source` | Canonical OLTP-to-OLAP transformation. It is evaluated during refresh, never by dashboard panels. |
-| `olap.current_listing_scores` | Physical, indexed current-market OLAP snapshot. |
-| `reporting.current_listing_scores` | Stable Grafana view over the OLAP snapshot. It includes the shared benchmark, score, coverage, deviation, indicative spread and currently applicable reduction. |
-| `reporting.listing_comparables(article_id bigint)` | Exact eligible cohort read from the OLAP snapshot, sorted by article ID; excludes the subject. |
-| `reporting.comparison_price_changes` | Valid, same-segment, common-currency changes in the currently observed open cycle, including effective time, previous/current price, signed delta and percentage change. |
-| `reporting.comparison_property_type(text[])` | A single known canonical type or null. |
-| `reporting.comparison_currency(text)` | KM/BAM, ignoring case and surrounding whitespace, normalize to BAM. All other/absent evidence returns null; no currency conversion. |
-| `reporting.comparison_price_reason(price,state,currency,is_rent)` | Null if total asking price is eligible; otherwise a readable reason. Independent of area. |
-| `reporting.comparison_quality_reason(price,state,currency,sqm,is_rent)` | Null if the asking rate is eligible; otherwise a readable price or area reason. |
-| `reporting.numeric_bound(text,label,maximum default null)` | Blank means unset; parses non-negative decimal notation and raises a readable error for malformed values or an exceeded maximum. |
-| `reporting.within_bounds(value,min_text,max_text,label,maximum default null)` | Inclusive independent bounds; rejects reversed ranges. Missing values fail an active bound and pass when both bounds are unset. |
+| Interface                                                                     | Contract                                                                                                                                                                                                                                      |
+| ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `reporting.resolved_price_evidence`                                           | One canonical assertion per article and effective timestamp, including invalid, conflict and unpriced boundaries. Original event fields, `currency_normalized`, and historically resolved `evidence_is_rent`. Future assertions are excluded. |
+| `reporting.current_comparison_inputs`                                         | One row per current article, resolved eligible total asking price/rate, quality reasons, type, rooms, neighbourhood, features and observed cycle age.                                                                                         |
+| `reporting.current_listing_scores_source`                                     | Canonical OLTP-to-OLAP transformation. It is evaluated during refresh, never by dashboard panels.                                                                                                                                             |
+| `olap.current_listing_scores`                                                 | Physical, indexed current-market OLAP snapshot.                                                                                                                                                                                               |
+| `reporting.current_listing_scores`                                            | Stable Grafana view over the OLAP snapshot. It includes the shared benchmark, score, coverage, deviation, indicative spread and currently applicable reduction.                                                                               |
+| `reporting.listing_comparables(article_id bigint)`                            | Exact eligible cohort read from the OLAP snapshot, sorted by article ID; excludes the subject.                                                                                                                                                |
+| `reporting.comparison_price_changes`                                          | Valid, same-segment, common-currency changes in the currently observed open cycle, including effective time, previous/current price, signed delta and percentage change.                                                                      |
+| `reporting.comparison_property_type(text[])`                                  | A single known canonical type or null.                                                                                                                                                                                                        |
+| `reporting.comparison_currency(text)`                                         | KM/BAM, ignoring case and surrounding whitespace, normalize to BAM. All other/absent evidence returns null; no currency conversion.                                                                                                           |
+| `reporting.comparison_price_reason(price,state,currency,is_rent)`             | Null if total asking price is eligible; otherwise a readable reason. Independent of area.                                                                                                                                                     |
+| `reporting.comparison_quality_reason(price,state,currency,sqm,is_rent)`       | Null if the asking rate is eligible; otherwise a readable price or area reason.                                                                                                                                                               |
+| `reporting.numeric_bound(text,label,maximum default null)`                    | Blank means unset; parses non-negative decimal notation and raises a readable error for malformed values or an exceeded maximum.                                                                                                              |
+| `reporting.within_bounds(value,min_text,max_text,label,maximum default null)` | Inclusive independent bounds; rejects reversed ranges. Missing values fail an active bound and pass when both bounds are unset.                                                                                                               |
 
 Price columns are `resolved_price` (the current canonical assertion's numeric
 value, including rejected evidence), `asking_price` (eligible total asking price)
@@ -111,21 +111,27 @@ filled with zero.
 
 ## Cohort, formula and boundaries
 
-Other eligible current articles must match the target's neighbourhood, property
-type, sale/rent segment and room bucket, and have area within 80–120% of the
-target's area, inclusive. Rentals also match known furnishing status. There is no
-fallback to a wider location or a different room/type cohort. Conditions, floor,
+Other eligible current articles must match the target's property type, sale/rent
+segment and room bucket, and have area within 80–120% of the target's area,
+inclusive. Rentals also match known furnishing status. The local neighbourhood
+is used first. If it supplies fewer than five comparables, the cohort may include
+the three nearest mapped neighbourhood polygons. There is no fallback to a
+different room/type cohort. Conditions, floor,
 parking, land and renovation costs are not score adjustments. Houses and vacation
 homes require the visible explanation “Building-area comparison; land and
 condition not adjusted” and separate ranking from apartments.
 
-Ten eligible comparables are required after subject exclusion. With 10–19,
-coverage is “Limited sample”; with 20 or more it is “Larger sample”. These are
-coverage labels, not statistical confidence guarantees. Below ten, benchmark,
-derived indicative amounts and score remain null; the comparable count and
-available rows remain visible. Missing facts have specific reasons, including
+Five eligible comparables are required after subject exclusion. With 5–9,
+coverage is “Higher variance sample”; with 10–19 it is “Limited sample”; with
+20 or more it is “Larger sample”. These are coverage labels, not statistical
+confidence guarantees. Below five, benchmark, derived indicative amounts and
+score remain null; the comparable count and available rows remain visible.
+Missing facts have specific reasons, including
 missing area, unmapped neighbourhood, unknown type/rooms/furnishing, invalid
 price, conflicting evidence, currency uncertainty and insufficient comparables.
+Fallback results expose `local_comparable_count`, `benchmark_scope` and
+`benchmark_neighborhoods`, and use the coverage label “Nearby-area fallback ·
+Higher variance”.
 
 ```text
 benchmark_rate = median(comparable asking_price / sqm)
@@ -139,13 +145,13 @@ The P25/P75 rates multiplied by subject area give the indicative spread of
 comparable asks. This is not a prediction interval. An unscored article has null
 score; zero is reserved for a valid score clamped at the lower end.
 
-| Deviation | Position label |
-| --- | --- |
-| `< -10` | Well below local asking benchmark |
-| `>= -10` and `< -5` | Below local asking benchmark |
-| `>= -5` and `<= 5` | Near local asking benchmark |
-| `> 5` and `<= 10` | Above local asking benchmark |
-| `> 10` | Well above local asking benchmark |
+| Deviation           | Position label                    |
+| ------------------- | --------------------------------- |
+| `< -10`             | Well below local asking benchmark |
+| `>= -10` and `< -5` | Below local asking benchmark      |
+| `>= -5` and `<= 5`  | Near local asking benchmark       |
+| `> 5` and `<= 10`   | Above local asking benchmark      |
+| `> 10`              | Well above local asking benchmark |
 
 ## Observation age and reductions
 

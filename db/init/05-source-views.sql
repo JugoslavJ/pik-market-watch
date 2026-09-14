@@ -1394,15 +1394,15 @@ CREATE VIEW reporting.current_listing_scores_source AS
             t.score_input_reason,
             a.comparable_count,
                 CASE
-                    WHEN (a.comparable_count >= 10) THEN a.median
+                    WHEN (a.comparable_count >= 5) THEN a.median
                     ELSE NULL::numeric
                 END AS benchmark_rate,
                 CASE
-                    WHEN (a.comparable_count >= 10) THEN a.p25
+                    WHEN (a.comparable_count >= 5) THEN a.p25
                     ELSE NULL::numeric
                 END AS benchmark_p25,
                 CASE
-                    WHEN (a.comparable_count >= 10) THEN a.p75
+                    WHEN (a.comparable_count >= 5) THEN a.p75
                     ELSE NULL::numeric
                 END AS benchmark_p75
            FROM (inputs t
@@ -1461,12 +1461,13 @@ CREATE VIEW reporting.current_listing_scores_source AS
             ((100)::numeric * ((c.asking_rate / c.benchmark_rate) - (1)::numeric)) AS deviation_pct,
             COALESCE(c.score_input_reason,
                 CASE
-                    WHEN (c.comparable_count < 10) THEN 'Insufficient comparables'::text
+                    WHEN (c.comparable_count < 5) THEN 'Insufficient comparables'::text
                     ELSE NULL::text
                 END) AS unscored_reason,
                 CASE
                     WHEN (c.comparable_count >= 20) THEN 'Larger sample'::text
                     WHEN (c.comparable_count >= 10) THEN 'Limited sample'::text
+                    WHEN (c.comparable_count >= 5) THEN 'Higher variance sample'::text
                     ELSE 'Insufficient comparables'::text
                 END AS confidence
            FROM cohorts c
@@ -1561,7 +1562,130 @@ CREATE VIEW reporting.current_listing_scores_source AS
 -- Name: VIEW current_listing_scores_source; Type: COMMENT; Schema: reporting; Owner: -
 --
 
-COMMENT ON VIEW reporting.current_listing_scores_source IS 'Canonical OLTP-to-OLAP transformation; refresh_current_market is its production consumer.';
+COMMENT ON VIEW reporting.current_listing_scores_source IS 'Canonical exact-local OLTP-to-OLAP transformation used as the input to the sparse-cohort fallback.';
+
+CREATE FUNCTION reporting.nearest_neighborhoods(p_name text, p_limit integer DEFAULT 3)
+RETURNS TABLE(neighborhood text, neighbor_rank integer)
+LANGUAGE sql STABLE STRICT
+AS $$
+  WITH subject AS (
+    SELECT avg(n.poly[i]) AS longitude, avg(n.poly[i + 1]) AS latitude
+      FROM public.neighborhoods n
+      CROSS JOIN LATERAL generate_series(1, array_length(n.poly, 1), 2) i
+     WHERE n.name = p_name
+  )
+  SELECT n.name,
+         row_number() OVER (
+           ORDER BY public.polygon_distance_m(s.latitude, s.longitude, n.poly), n.name
+         )::integer
+    FROM subject s
+    CROSS JOIN public.neighborhoods n
+   WHERE n.name <> p_name AND p_limit > 0
+   ORDER BY public.polygon_distance_m(s.latitude, s.longitude, n.poly), n.name
+   LIMIT p_limit
+$$;
+
+ALTER VIEW reporting.current_listing_scores_source
+  RENAME TO current_listing_scores_local_source;
+
+CREATE VIEW reporting.current_listing_scores_source AS
+WITH local AS MATERIALIZED (
+  SELECT * FROM reporting.current_listing_scores_local_source
+), nearest AS MATERIALIZED (
+  SELECT x.name AS subject_neighborhood, n.neighborhood
+    FROM public.neighborhoods x
+    CROSS JOIN LATERAL reporting.nearest_neighborhoods(x.name, 3) n
+), fallback AS MATERIALIZED (
+  SELECT t.article_id,
+         count(c.article_id)::integer AS comparable_count,
+         percentile_cont(0.5) WITHIN GROUP (ORDER BY c.asking_rate)::numeric AS median,
+         percentile_cont(0.25) WITHIN GROUP (ORDER BY c.asking_rate)::numeric AS p25,
+         percentile_cont(0.75) WITHIN GROUP (ORDER BY c.asking_rate)::numeric AS p75,
+         array_agg(DISTINCT c.neighborhood ORDER BY c.neighborhood)
+           FILTER (WHERE c.neighborhood <> t.neighborhood) AS neighborhoods
+    FROM local t
+    JOIN local c
+      ON c.score_input_reason IS NULL
+     AND c.article_id <> t.article_id
+     AND c.property_type = t.property_type
+     AND c.is_rent = t.is_rent
+     AND c.room_bucket = t.room_bucket
+     AND c.sqm BETWEEN t.sqm * 0.8 AND t.sqm * 1.2
+     AND (NOT t.is_rent OR c.furnished = t.furnished)
+     AND (
+       c.neighborhood = t.neighborhood
+       OR EXISTS (
+         SELECT 1 FROM nearest n
+          WHERE n.subject_neighborhood = t.neighborhood
+            AND n.neighborhood = c.neighborhood
+       )
+     )
+   WHERE t.score_input_reason IS NULL AND t.comparable_count < 5
+   GROUP BY t.article_id
+), effective AS (
+  SELECT t.*,
+         COALESCE(f.comparable_count, t.comparable_count) AS effective_count,
+         CASE WHEN f.comparable_count >= 5 THEN f.median ELSE t.benchmark_rate END AS effective_median,
+         CASE WHEN f.comparable_count >= 5 THEN f.p25 ELSE t.benchmark_p25 END AS effective_p25,
+         CASE WHEN f.comparable_count >= 5 THEN f.p75 ELSE t.benchmark_p75 END AS effective_p75,
+         COALESCE(f.comparable_count >= 5, false) AS uses_fallback,
+         f.neighborhoods AS fallback_neighborhoods
+    FROM local t
+    LEFT JOIN fallback f USING (article_id)
+), derived AS (
+  SELECT e.*,
+         CASE WHEN e.effective_median IS NOT NULL
+              THEN 100 * (e.asking_rate / e.effective_median - 1) END AS effective_deviation
+    FROM effective e
+)
+SELECT expanded.*
+FROM derived d
+CROSS JOIN LATERAL jsonb_populate_record(
+  NULL::olap.current_listing_scores,
+  to_jsonb(d) || jsonb_build_object(
+    'comparable_count', d.effective_count,
+    'benchmark_rate', d.effective_median,
+    'benchmark_p25', d.effective_p25,
+    'benchmark_p75', d.effective_p75,
+    'deviation_pct', d.effective_deviation,
+    'unscored_reason', COALESCE(
+      d.score_input_reason,
+      CASE WHEN d.effective_count < 5 THEN 'Insufficient comparables' END
+    ),
+    'confidence', CASE
+      WHEN d.uses_fallback THEN 'Nearby-area fallback · Higher variance'
+      WHEN d.effective_count >= 20 THEN 'Larger sample'
+      WHEN d.effective_count >= 10 THEN 'Limited sample'
+      WHEN d.effective_count >= 5 THEN 'Higher variance sample'
+      ELSE 'Insufficient comparables'
+    END,
+    'score', CASE WHEN d.effective_deviation IS NOT NULL THEN
+      round(greatest(0, least(100, 50 - d.effective_deviation)))::integer END,
+    'position_label', CASE
+      WHEN d.effective_deviation < -10 THEN 'Well below local asking benchmark'
+      WHEN d.effective_deviation < -5 THEN 'Below local asking benchmark'
+      WHEN d.effective_deviation <= 5 THEN 'Near local asking benchmark'
+      WHEN d.effective_deviation <= 10 THEN 'Above local asking benchmark'
+      WHEN d.effective_deviation > 10 THEN 'Well above local asking benchmark'
+    END,
+    'indicative_total', d.effective_median * d.sqm,
+    'indicative_low', d.effective_p25 * d.sqm,
+    'indicative_high', d.effective_p75 * d.sqm,
+    'asking_gap_km', d.asking_price - d.effective_median * d.sqm,
+    'local_comparable_count', d.comparable_count,
+    'benchmark_scope', CASE
+      WHEN d.score_input_reason IS NOT NULL THEN NULL
+      WHEN d.uses_fallback THEN 'nearest_3_neighborhoods'
+      WHEN d.effective_count >= 5 THEN 'local'
+    END,
+    'benchmark_neighborhoods', CASE
+      WHEN d.uses_fallback THEN d.fallback_neighborhoods
+      WHEN d.effective_count >= 5 THEN ARRAY[d.neighborhood]
+    END
+  )
+) expanded;
+
+COMMENT ON VIEW reporting.current_listing_scores_source IS 'Canonical current score source. Exact local inputs and the neighbourhood proximity map are materialized once; cohorts below five comparables may expand to the three nearest neighbourhood polygons.';
 
 --
 -- Name: daily_listing_facts_source; Type: VIEW; Schema: reporting; Owner: -

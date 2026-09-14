@@ -222,7 +222,10 @@ CREATE VIEW reporting.current_listing_scores AS
     asking_gap_km,
     latest_reduction_at,
     reduction_km,
-    reduction_pct
+    reduction_pct,
+    local_comparable_count,
+    benchmark_scope,
+    benchmark_neighborhoods
    FROM olap.current_listing_scores;
 
 --

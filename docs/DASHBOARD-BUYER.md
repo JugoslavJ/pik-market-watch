@@ -17,19 +17,19 @@ fixed filters and do not publish listing-value claims.
 
 ## Filters and defaults
 
-| Filter | Behaviour |
-|---|---|
-| Property type | Single select; default apartments. Houses and vacation homes are separate populations. Configured search categories need a reliable property-type mapping before scoring. |
-| Deal | Fixed to sale. |
-| Neighbourhood | Multi-select; default all mapped neighbourhoods. Offer unknown-location listings separately. |
-| Asking price, KM | Independently optional minimum and maximum; no default budget. |
-| Asking price per m², KM/m² | Independently optional minimum and maximum. |
-| Area, m² | Independently optional minimum and maximum. |
-| Rooms | Multi-select using the existing room buckets. |
-| Features | Optional condition, parking, garage, elevator, floor and seller type, where populated. Unknown is distinct from no. |
-| Listing selection | All matches, first observed in the last 7 days, reduced in the last 30 days, or below local asking benchmark. |
-| Minimum score | Optional 0–100 threshold; default unset. Unscored listings remain visible when unset. |
-| History window | Default 30 days; optional 90 days. Controls historical panels and reduction badges, not current availability or benchmark membership. |
+| Filter                     | Behaviour                                                                                                                                                                 |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Property type              | Single select; default apartments. Houses and vacation homes are separate populations. Configured search categories need a reliable property-type mapping before scoring. |
+| Deal                       | Fixed to sale.                                                                                                                                                            |
+| Neighbourhood              | Multi-select; default all mapped neighbourhoods. Offer unknown-location listings separately.                                                                              |
+| Asking price, KM           | Independently optional minimum and maximum; no default budget.                                                                                                            |
+| Asking price per m², KM/m² | Independently optional minimum and maximum.                                                                                                                               |
+| Area, m²                   | Independently optional minimum and maximum.                                                                                                                               |
+| Rooms                      | Multi-select using the existing room buckets.                                                                                                                             |
+| Features                   | Optional condition, parking, garage, elevator, floor and seller type, where populated. Unknown is distinct from no.                                                       |
+| Listing selection          | All matches, first observed in the last 7 days, reduced in the last 30 days, or below local asking benchmark.                                                             |
+| Minimum score              | Optional 0–100 threshold; default unset. Unscored listings remain visible when unset.                                                                                     |
+| History window             | Default 30 days; optional 90 days. Controls historical panels and reduction badges, not current availability or benchmark membership.                                     |
 
 Numeric bounds are inclusive. Blank means unrestricted; malformed or negative
 values and minimum greater than maximum produce a clear validation message.
@@ -39,15 +39,15 @@ stricter than the existing area-filter helper, which retains missing area.
 
 ## Layout
 
-| Row | Panel | What the buyer sees |
-|---|---|---|
-| 1 | Search summary | Matching active listings, listings within the stated budget, scored matches below benchmark, and latest complete search freshness. Omit the budget count until a budget is set. |
-| 2 | Prices by neighbourhood | Sortable table: neighbourhood, current listing count, eligible priced count, median asking KM/m², P25–P75 asking KM/m², median total asking price, within-budget count and scorable count. Total-price and per-m² samples are counted separately. |
-| 2 | Neighbourhood price map | Neighbourhoods coloured by median asking KM/m², with sample size in tooltips. Selecting a neighbourhood narrows the listing results. A table provides the same information. |
-| 3 | Interesting listings | Main ranked table with explicit reasons such as “12% below comparable local asks”, “first observed 2 days ago”, or “price reduced by 10,000 KM”. |
-| 4 | Price versus area | Scatter plot of matching listings; area on x, asking price on y, colour by score, neutral colour for unscored rows. Each point opens its listing detail. |
-| 4 | Neighbourhood asking-price trend | Daily median and P25–P75 KM/m² with sample counts, default last 30 days. Mark provisional and inferred history. |
-| 5 | Listing detail | Selected ad, asking price, area, features, local benchmark, score explanation, comparable listings and valid price-change history. Link to OLX. |
+| Row | Panel                            | What the buyer sees                                                                                                                                                                                                                               |
+| --- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Search summary                   | Matching active listings, listings within the stated budget, scored matches below benchmark, and latest complete search freshness. Omit the budget count until a budget is set.                                                                   |
+| 2   | Prices by neighbourhood          | Sortable table: neighbourhood, current listing count, eligible priced count, median asking KM/m², P25–P75 asking KM/m², median total asking price, within-budget count and scorable count. Total-price and per-m² samples are counted separately. |
+| 2   | Neighbourhood price map          | Neighbourhoods coloured by median asking KM/m², with sample size in tooltips. Selecting a neighbourhood narrows the listing results. A table provides the same information.                                                                       |
+| 3   | Interesting listings             | Main ranked table with explicit reasons such as “12% below comparable local asks”, “first observed 2 days ago”, or “price reduced by 10,000 KM”.                                                                                                  |
+| 4   | Price versus area                | Scatter plot of matching listings; area on x, asking price on y, colour by score, neutral colour for unscored rows. Each point opens its listing detail.                                                                                          |
+| 4   | Neighbourhood asking-price trend | Daily median and P25–P75 KM/m² with sample counts, default last 30 days. Mark provisional and inferred history.                                                                                                                                   |
+| 5   | Listing detail                   | Selected ad, asking price, area, features, local benchmark, score explanation, comparable listings and valid price-change history. Link to OLX.                                                                                                   |
 
 Neighbourhood price statistics and trends use property type, rooms, area and
 supported feature selections, before budget, per-m² price, recency and score
@@ -85,10 +85,11 @@ All thresholds here are proposed product defaults, not measured valuation accura
    target. Exclude the target article itself. Missing room bucket or ambiguous
    property type means unscored. Do not broaden to another neighbourhood, property
    type or room bucket to obtain a score.
-4. Use at least 10 eligible comparables after excluding the target. With 10–19,
-   show “Limited sample”; with 20 or more, show “Larger sample”. These are coverage
-   labels, not statistical confidence guarantees. Below 10, show “Insufficient
-   comparables” and no numeric score.
+4. Use at least 5 eligible comparables after excluding the target. With 5–9,
+   show “Higher variance sample”; with 10–19, show “Limited sample”; with 20 or
+   more, show “Larger sample”. These are coverage labels, not statistical
+   confidence guarantees. Below 5, show “Insufficient comparables” and no
+   numeric score.
 5. Compute the benchmark before applying the user's budget, price-per-m² bounds,
    minimum score, recency or optional feature filters. Selecting which ads to see
    must not change the score of the same ad at the same observation time. Each
@@ -118,13 +119,13 @@ asking benchmark; negative means below. A score of 50 is at the benchmark, 70
 means 20% below, and 30 means 20% above. Scores saturate at 0 and 100; always show
 the actual deviation next to them. An unscored listing has a null score, never 0.
 
-| Deviation | Label |
-|---|---|
-| Below −10% | Well below local asking benchmark |
-| −10% to below −5% | Below local asking benchmark |
-| −5% through +5% | Near local asking benchmark |
-| Above +5% through +10% | Above local asking benchmark |
-| Above +10% | Well above local asking benchmark |
+| Deviation              | Label                             |
+| ---------------------- | --------------------------------- |
+| Below −10%             | Well below local asking benchmark |
+| −10% to below −5%      | Below local asking benchmark      |
+| −5% through +5%        | Near local asking benchmark       |
+| Above +5% through +10% | Above local asking benchmark      |
+| Above +10%             | Well above local asking benchmark |
 
 Example: a 60 m² home asking 180,000 KM has a rate of 3,000 KM/m². If its
 comparables have a median of 3,600 KM/m², deviation is −16.7%, score is 67, and

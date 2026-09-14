@@ -176,7 +176,10 @@ CREATE TABLE olap.current_listing_scores (
     asking_gap_km numeric,
     latest_reduction_at timestamp with time zone,
     reduction_km numeric,
-    reduction_pct numeric
+    reduction_pct numeric,
+    local_comparable_count integer,
+    benchmark_scope text,
+    benchmark_neighborhoods text[]
 );
 
 --

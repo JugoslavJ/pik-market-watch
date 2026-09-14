@@ -29,12 +29,18 @@ CREATE FUNCTION reporting.listing_comparables(p_article_id bigint) RETURNS SETOF
     FROM olap.current_listing_scores t
     JOIN olap.current_listing_scores c
       ON c.article_id <> t.article_id
-     AND c.neighborhood = t.neighborhood
      AND c.property_type = t.property_type
      AND c.is_rent = t.is_rent
      AND c.room_bucket = t.room_bucket
      AND c.sqm BETWEEN t.sqm * 0.8 AND t.sqm * 1.2
      AND (NOT t.is_rent OR c.furnished = t.furnished)
+     AND (
+       c.neighborhood = t.neighborhood
+       OR (
+         t.benchmark_scope = 'nearest_3_neighborhoods'
+         AND c.neighborhood = ANY(t.benchmark_neighborhoods)
+       )
+     )
     CROSS JOIN LATERAL jsonb_populate_record(
       NULL::reporting.current_comparison_inputs,
       to_jsonb(c)
