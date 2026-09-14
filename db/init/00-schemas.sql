@@ -33,4 +33,4 @@ CREATE SCHEMA reporting;
 -- Name: SCHEMA reporting; Type: COMMENT; Schema: -; Owner: -
 --
 
-COMMENT ON SCHEMA reporting IS 'Private stable reporting surface; dashboard_public is retained for legacy compatibility.';
+COMMENT ON SCHEMA reporting IS 'Private stable reporting surface; public dashboards use dashboard_public instead.';

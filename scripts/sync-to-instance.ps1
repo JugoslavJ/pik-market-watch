@@ -152,6 +152,12 @@ Log 'building scraper and migrator images from current source...'
 docker compose --profile scrape build scraper migrator
 if ($LASTEXITCODE -ne 0) { throw "scraper/migrator image build failed (exit $LASTEXITCODE)" }
 
+Log 'starting database and ensuring migration ownership...'
+docker compose up -d --wait db
+if ($LASTEXITCODE -ne 0) { throw "database failed to become healthy (exit $LASTEXITCODE)" }
+docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
+if ($LASTEXITCODE -ne 0) { throw "database ownership repair failed (exit $LASTEXITCODE)" }
+
 Log 'scraping (full cycle, all searches)...'
 docker compose --profile scrape run --rm scraper node src/index.js --once
 if ($LASTEXITCODE -ne 0) { throw "scrape failed (exit $LASTEXITCODE) - instance left untouched; retry later" }
