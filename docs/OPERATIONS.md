@@ -395,11 +395,17 @@ Use the configured database and reader names if they differ from the defaults. V
 docker compose exec -T db pg_restore -l /backups/manual.dump
 ```
 
-A restore overwrites database objects and should be performed during a maintenance window. First retain a current backup, stop the writer if it is running, restore as the application owner, reapply reader privileges, and restart clients:
+A restore overwrites database objects and should be performed during a
+maintenance window. Use `db/remote-restore.sh` for normal synchronized
+recovery: it validates ownership, resets all application schemas, filters
+schema-level TOC entries, restores transactionally, and retries the preserved
+snapshot after a failure. Do not run `pg_restore --clean` directly now that
+objects cross `public`, `reporting`, `olap`, and `dashboard_public`; archive
+drop order cannot safely represent those dependencies. After a restore,
+reapply reader privileges and restart clients:
 
 ```bash
 docker compose stop scraper
-docker compose exec -T db sh -c 'pg_restore -U "$POSTGRES_APP_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner /backups/<archive>.dump'
 docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
 docker compose up -d --force-recreate grafana db-backup
 docker compose start scraper

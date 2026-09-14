@@ -8,16 +8,17 @@
 #   Get-Content dump -AsByteStream | ssh -i key <host>   (forced command runs)
 #
 # Pipeline: receive -> size check -> integrity check -> ownership audit ->
-# rollback snapshot -> stop scraper (only if running) -> replace the public
-# schema -> restore (atomic) -> on failure roll back to the previous snapshot
+# rollback snapshot -> stop scraper (only if running) -> replace application
+# schemas -> restore (atomic) -> on failure roll back to the previous snapshot
 # -> restart scraper.
 #
-# Why the schema is dropped instead of pg_restore --clean: the instance never
+# Why schemas are dropped instead of relying on pg_restore --clean: the instance never
 # runs migrations (no scraper), so home and instance schemas can drift (e.g. a
 # migration renamed a function's signature). Stale instance-side functions
 # that depend on a dumped table make --clean's plain DROP TABLE fail without
 # CASCADE, and the dump cannot drop what it does not contain. Dropping the
-# whole schema removes any drift; the dump recreates everything.
+# application schemas removes any drift. OLAP introduced cross-schema
+# dependencies, so pg_restore's archive order cannot safely clean schemas.
 #
 # No client-controlled input is ever evaluated: the dump path is fixed and
 # the archive must pass pg_restore -l and contain the listings data.
@@ -173,7 +174,9 @@ build_toc() {
      # schema-level entries carry the source schema's owner (ALTER ... OWNER
      # TO <bootstrap admin>) and cannot be replayed by $app_user; the reset
      # block already created the schema with the right owner and grants
-     grep -ve 'SCHEMA - public' -e 'COMMENT - SCHEMA' -e 'ACL - SCHEMA' '$2' > '$2.f' || :
+     grep -ve 'SCHEMA - public' -e 'SCHEMA - reporting' -e 'SCHEMA - olap' \
+          -e 'SCHEMA - dashboard_public' -e 'COMMENT - SCHEMA' -e 'ACL - SCHEMA' \
+          '$2' > '$2.f' || :
      mv '$2.f' '$2'
      test -s '$2' && grep -q 'TABLE DATA public listings' '$2'
   "
@@ -183,17 +186,22 @@ if ! build_toc /backups/olx-sync-incoming.dump /tmp/toc.use; then
   echo "RESTORE_ERROR: could not build a usable filtered restore list" >&2
   exit 1
 fi
-# Replace the whole public schema (see header). Runs as the bootstrap
-# superuser: it owns the schema itself, which $app_user does not. Ownership is
-# transferred to $app_user afterwards - the dump carries schema-level entries
-# (COMMENT ON SCHEMA, schema ACLs) that only the owner may execute.
-if ! docker compose exec -T db psql -U "$boot_user" -d "$db_name" -q -c "
-       DROP SCHEMA public CASCADE;
-       CREATE SCHEMA public;
-       ALTER SCHEMA public OWNER TO \"$app_user\";
-       GRANT ALL ON SCHEMA public TO \"$app_user\";
-       GRANT USAGE ON SCHEMA public TO \"$reader_user\";"; then
-  echo "RESTORE_ERROR: could not reset the public schema - database unchanged" >&2
+reset_schemas() {
+  docker compose exec -T db psql -U "$boot_user" -d "$db_name" -q -c "
+    DROP SCHEMA IF EXISTS dashboard_public CASCADE;
+    DROP SCHEMA IF EXISTS reporting CASCADE;
+    DROP SCHEMA IF EXISTS olap CASCADE;
+    DROP SCHEMA IF EXISTS public CASCADE;
+    CREATE SCHEMA public AUTHORIZATION \"$app_user\";
+    CREATE SCHEMA reporting AUTHORIZATION \"$app_user\";
+    CREATE SCHEMA olap AUTHORIZATION \"$app_user\";
+    CREATE SCHEMA dashboard_public AUTHORIZATION \"$app_user\";
+    GRANT ALL ON SCHEMA public TO \"$app_user\";
+    GRANT USAGE ON SCHEMA public TO \"$reader_user\";"
+}
+
+if ! reset_schemas; then
+  echo "RESTORE_ERROR: could not reset application schemas - database unchanged" >&2
   exit 1
 fi
 
@@ -204,7 +212,7 @@ restore_failed=0
 # --no-owner: belt-and-braces behind the audit above — a no-op while every
 # entry targets $app_user; if anything ever slips through it degrades to
 # "object owned by the restoring role" instead of failing the whole sync.
-if ! docker compose exec -T db pg_restore -U "$app_user" -d "$db_name" --clean --if-exists --no-owner \
+if ! docker compose exec -T db pg_restore -U "$app_user" -d "$db_name" --no-owner \
        --single-transaction --use-list=/tmp/toc.use /backups/olx-sync-incoming.dump; then
   restore_failed=1
 fi
@@ -212,8 +220,8 @@ fi
 if [ "$restore_failed" = "1" ]; then
   if [ -n "$prev" ] && build_toc "/backups/$(basename "$prev")" /tmp/toc.prev; then
     echo "RESTORE_ERROR: pg_restore failed - rolling back to previous snapshot $(basename "$prev")" >&2
-    if docker compose exec -T db pg_restore -U "$app_user" -d "$db_name" --clean --if-exists --no-owner \
-           --single-transaction --use-list=/tmp/toc.prev "/backups/$(basename "$prev")"; then
+    if reset_schemas && docker compose exec -T db pg_restore -U "$app_user" -d "$db_name" --no-owner \
+         --single-transaction --use-list=/tmp/toc.prev "/backups/$(basename "$prev")"; then
       echo "RESTORE_ERROR: rollback finished - instance is serving the previous snapshot" >&2
     else
       echo "RESTORE_ERROR: rollback FAILED - database is empty; restore $prev manually (see docs/OPERATIONS.md)" >&2

@@ -98,4 +98,8 @@ test("restore input and identifiers are bounded and cleaned up", () => {
   assert.match(restore, /rm -f "\$incoming" "\$incoming_partial"/);
   assert.match(restore, /trap on_exit EXIT/);
   assert.match(restore, /LOCK=\/tmp\/olx-restore\.lock/);
+  assert.match(restore, /DROP SCHEMA IF EXISTS reporting CASCADE/);
+  assert.match(restore, /DROP SCHEMA IF EXISTS olap CASCADE/);
+  assert.match(restore, /reset_schemas && docker compose exec/);
+  assert.doesNotMatch(restore, /pg_restore -U[^\n]*--clean/);
 });
