@@ -1230,7 +1230,7 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": false
         },
         "series": [
           {
@@ -1304,13 +1304,30 @@
           },
           "unit": "none"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/^(p25 asking rate|p75 asking rate|rate sample|inferred|stale|provisional)( .*)?$/"
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "legend": true,
+                  "tooltip": false,
+                  "viz": true
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": false
         },
         "tooltip": {
           "mode": "multi",
@@ -1342,8 +1359,8 @@
       "gridPos": {
         "x": 0,
         "y": 58,
-        "w": 12,
-        "h": 11
+        "w": 24,
+        "h": 9
       },
       "fieldConfig": {
         "defaults": {
@@ -1356,13 +1373,30 @@
           },
           "unit": "short"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/^inferred( .*)?$/"
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "legend": true,
+                  "tooltip": false,
+                  "viz": true
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": false
         },
         "tooltip": {
           "mode": "multi",
@@ -1392,10 +1426,10 @@
       "description": "Closed observation cycles in the selected analysis window, with separate duration and eligible final asking-price samples. Final observed asking price is not a transaction price.",
       "type": "table",
       "gridPos": {
-        "x": 12,
-        "y": 58,
-        "w": 12,
-        "h": 11
+        "x": 0,
+        "y": 67,
+        "w": 24,
+        "h": 9
       },
       "fieldConfig": {
         "defaults": {
