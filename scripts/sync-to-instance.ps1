@@ -148,9 +148,9 @@ function Remove-StaleComposeContainer([string]$service) {
 Remove-StaleComposeContainer 'db'
 Remove-StaleComposeContainer 'migrator'
 
-Log 'building scraper image from current source...'
-docker compose --profile scrape build scraper
-if ($LASTEXITCODE -ne 0) { throw "scraper image build failed (exit $LASTEXITCODE)" }
+Log 'building scraper and migrator images from current source...'
+docker compose --profile scrape build scraper migrator
+if ($LASTEXITCODE -ne 0) { throw "scraper/migrator image build failed (exit $LASTEXITCODE)" }
 
 Log 'scraping (full cycle, all searches)...'
 docker compose --profile scrape run --rm scraper node src/index.js --once

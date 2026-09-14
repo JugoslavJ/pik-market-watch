@@ -53,9 +53,10 @@ test("home sync repairs stopped dependencies with stale network endpoints", () =
   assert.match(sync, /docker rm -f \$id/);
   assert.match(sync, /Remove-StaleComposeContainer 'db'/);
   assert.match(sync, /Remove-StaleComposeContainer 'migrator'/);
+  assert.match(sync, /build scraper migrator/);
   assert.ok(
     sync.indexOf("Remove-StaleComposeContainer 'migrator'") <
-      sync.indexOf("Log 'building scraper image"),
+      sync.indexOf("Log 'building scraper and migrator images"),
     "stale dependency repair must run before the scrape pipeline",
   );
 });
