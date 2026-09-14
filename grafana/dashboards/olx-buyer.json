@@ -1356,7 +1356,7 @@
       ]
     }
   ],
-  "refresh": "5m",
+  "refresh": "2h",
   "schemaVersion": 41,
   "tags": [
     "olx",

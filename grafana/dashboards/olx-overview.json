@@ -2178,7 +2178,7 @@
       "id": 32
     }
   ],
-  "refresh": "5m",
+  "refresh": "2h",
   "schemaVersion": 39,
   "tags": ["olx", "real-estate"],
   "templating": {

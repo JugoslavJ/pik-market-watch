@@ -216,6 +216,7 @@
       ]
     }
   ],
+  "refresh": "2h",
   "schemaVersion": 41,
   "templating": { "list": [] },
   "time": { "from": "now-30d", "to": "now" },

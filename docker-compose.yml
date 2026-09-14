@@ -248,6 +248,7 @@ services:
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false" # no outbound version-check pings either
       GF_SERVER_ENABLE_GZIP: "true" # compress dashboard JSON over WAN links
       GF_LOG_LEVEL: "warn" # trim log IO; flip back to info when debugging
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/olx-overview.json
       # Cloudflare Tunnel publishes public HTTPS; Grafana stays HTTP-only on
       # the host-loopback published port.
       GF_SERVER_PROTOCOL: http
