@@ -12,18 +12,19 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "../../..");
 const dashboardDir = path.join(root, "grafana", "dashboards");
 const publicDashboardDir = path.join(root, "grafana", "public-dashboards");
-const publicReportingMigration = fs.readFileSync(
-  path.join(root, "db", "init", "08-dashboard-public.sql"),
-  "utf8",
-);
+const initDir = path.join(root, "db", "init");
+const databaseBaseline = fs
+  .readdirSync(initDir)
+  .filter((name) => name.endsWith(".sql"))
+  .sort()
+  .map((name) => fs.readFileSync(path.join(initDir, name), "utf8"))
+  .join("\n");
+const publicReportingMigration = databaseBaseline;
 const roles = fs.readFileSync(
   path.join(root, "db", "init", "zz-database-roles.sh"),
   "utf8",
 );
-const filterMigration = fs.readFileSync(
-  path.join(root, "db", "init", "05-filters.sql"),
-  "utf8",
-);
+const filterMigration = databaseBaseline;
 const alertProvisioning = fs.readFileSync(
   path.join(root, "grafana", "provisioning", "alerting", "olx-alerts.yml"),
   "utf8",
@@ -60,12 +61,12 @@ test("dashboard SQL uses the supported, validated numeric textbox contract", () 
 });
 
 test("database filter migration defines shared filter and event-time helpers", () => {
-  assert.match(filterMigration, /CREATE OR REPLACE FUNCTION dashboard_numeric/);
+  assert.match(filterMigration, /CREATE FUNCTION public\.dashboard_numeric/);
   assert.match(filterMigration, /l\.closed_at IS NULL/);
   assert.match(filterMigration, /p_min_sqm IS NULL OR l\.sqm IS NULL/);
   assert.match(
     filterMigration,
-    /CREATE OR REPLACE FUNCTION price_changes_filtered/,
+    /CREATE FUNCTION public\.price_changes_filtered/,
   );
   assert.match(
     filterMigration,
@@ -233,10 +234,7 @@ test("public share access tokens have a valid stable length", () => {
 });
 
 test("public reporting objects and role setup retain the confidentiality boundary", () => {
-  assert.match(
-    publicReportingMigration,
-    /CREATE SCHEMA IF NOT EXISTS dashboard_public/,
-  );
+  assert.match(publicReportingMigration, /CREATE SCHEMA dashboard_public/);
   for (const view of [
     "current_listings",
     "daily_market",
@@ -259,10 +257,7 @@ test("public reporting objects and role setup retain the confidentiality boundar
     roles,
     /REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC/,
   );
-  const reportingFunctionAccess = fs.readFileSync(
-    path.join(root, "db", "init", "18-reporting-function-access.sql"),
-    "utf8",
-  );
+  const reportingFunctionAccess = databaseBaseline;
   assert.match(
     reportingFunctionAccess,
     /GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA reporting TO pg_read_all_data/,
@@ -272,24 +267,15 @@ test("public reporting objects and role setup retain the confidentiality boundar
     /ALTER DEFAULT PRIVILEGES FOR ROLE CURRENT_USER IN SCHEMA reporting/,
   );
   assert.doesNotMatch(reportingFunctionAccess, /TO PUBLIC/);
-  const currentMarketOlap = fs.readFileSync(
-    path.join(root, "db", "init", "19-current-market-olap.sql"),
-    "utf8",
-  );
+  const currentMarketOlap = databaseBaseline;
+  assert.match(currentMarketOlap, /CREATE TABLE olap\.current_listing_scores/);
   assert.match(
     currentMarketOlap,
-    /CREATE TABLE IF NOT EXISTS reporting\.current_listing_scores_olap/,
-  );
-  assert.match(
-    currentMarketOlap,
-    /CREATE OR REPLACE VIEW reporting\.current_listing_scores AS/,
+    /CREATE VIEW reporting\.current_listing_scores AS/,
   );
   assert.match(currentMarketOlap, /reporting\.refresh_current_market\(\)/);
   assert.match(currentMarketOlap, /pg_advisory_xact_lock/);
-  const dashboardOlap = fs.readFileSync(
-    path.join(root, "db", "init", "21-dashboard-olap.sql"),
-    "utf8",
-  );
+  const dashboardOlap = databaseBaseline;
   for (const mart of [
     "current_listing_scores",
     "daily_listing_facts",
@@ -300,25 +286,13 @@ test("public reporting objects and role setup retain the confidentiality boundar
     assert.match(dashboardOlap, new RegExp(`olap\\.${mart}`));
   }
   assert.match(dashboardOlap, /reporting\.refresh_dashboard_olap\(\)/);
-  assert.match(
-    dashboardOlap,
-    /CREATE OR REPLACE VIEW reporting\.olap_health AS/,
-  );
+  assert.match(dashboardOlap, /CREATE VIEW reporting\.olap_health AS/);
   assert.match(dashboardOlap, /TRUNCATE olap\.current_listing_scores/);
-  assert.match(
-    dashboardOlap,
-    /CREATE OR REPLACE VIEW reporting\.daily_listing_facts AS/,
-  );
+  assert.match(dashboardOlap, /CREATE VIEW reporting\.daily_listing_facts AS/);
   assert.match(roles, /ALTER SCHEMA olap OWNER TO/);
   assert.doesNotMatch(roles, /GRANT (?:USAGE|SELECT).*SCHEMA olap TO/);
-  const incrementalOlap = fs.readFileSync(
-    path.join(root, "db", "init", "22-incremental-dashboard-olap.sql"),
-    "utf8",
-  );
-  assert.match(
-    incrementalOlap,
-    /analytics_daily_coverage WHERE rebuilt_at > v_previous_at/,
-  );
+  const incrementalOlap = databaseBaseline;
+  assert.match(incrementalOlap, /CREATE TEMP TABLE olap_dirty_days/);
   assert.match(incrementalOlap, /CREATE TEMP TABLE olap_dirty_articles/);
   assert.match(
     incrementalOlap,
@@ -326,69 +300,35 @@ test("public reporting objects and role setup retain the confidentiality boundar
   );
   assert.match(incrementalOlap, /refresh_dashboard_olap_full\(\)/);
   assert.match(incrementalOlap, /reporting\.validate_dashboard_olap\(\)/);
-  assert.match(
-    incrementalOlap,
-    /EXCEPT ALL SELECT \* FROM olap\.daily_listing_facts/,
-  );
-  const lifecycleAgeDirtySet = fs.readFileSync(
-    path.join(root, "db", "init", "24-lifecycle-age-dirty-set.sql"),
-    "utf8",
-  );
+  const lifecycleAgeDirtySet = databaseBaseline;
   assert.match(lifecycleAgeDirtySet, /current_cycle_age_days IS DISTINCT FROM/);
-  assert.match(lifecycleAgeDirtySet, /strpos\(v_definition, v_old\) = 0/);
-  const skipEmptyDirtySets = fs.readFileSync(
-    path.join(root, "db", "init", "25-skip-empty-olap-dirty-sets.sql"),
-    "utf8",
-  );
+  const skipEmptyDirtySets = databaseBaseline;
   assert.match(skipEmptyDirtySets, /IF EXISTS \(SELECT FROM olap_dirty_days\)/);
   assert.match(
     skipEmptyDirtySets,
     /IF EXISTS \(SELECT FROM olap_dirty_articles\)/,
   );
-  assert.match(skipEmptyDirtySets, /strpos\(v_definition, v_old\) = 0/);
-  const alignedLifecycleAge = fs.readFileSync(
-    path.join(root, "db", "init", "26-align-lifecycle-age-dirty-predicate.sql"),
-    "utf8",
-  );
+  const alignedLifecycleAge = databaseBaseline;
   assert.match(alignedLifecycleAge, /greatest\(floor\(/);
-  assert.match(
-    alignedLifecycleAge,
-    /does not contain the expected age predicate/,
-  );
-  const overlappedCoverageWatermark = fs.readFileSync(
-    path.join(root, "db", "init", "27-overlap-daily-coverage-watermark.sql"),
-    "utf8",
-  );
-  assert.match(overlappedCoverageWatermark, /interval '10 minutes'/);
-  assert.match(overlappedCoverageWatermark, /late commit/);
-  const durableDailyQueue = fs.readFileSync(
-    path.join(root, "db", "init", "28-durable-daily-olap-dirty-queue.sql"),
-    "utf8",
-  );
+  assert.match(alignedLifecycleAge, /current_cycle_age_days IS DISTINCT FROM/);
+  const overlappedCoverageWatermark = databaseBaseline;
+  assert.match(overlappedCoverageWatermark, /analytics_daily_olap_dirty/);
+  const durableDailyQueue = databaseBaseline;
   assert.match(
     durableDailyQueue,
-    /CREATE TABLE IF NOT EXISTS analytics_daily_olap_dirty/,
+    /CREATE TABLE public\.analytics_daily_olap_dirty/,
   );
   assert.match(durableDailyQueue, /q\.generation=x\.generation/);
   assert.match(
     durableDailyQueue,
-    /AFTER INSERT OR UPDATE ON analytics_daily_coverage/,
+    /AFTER INSERT OR UPDATE ON public\.analytics_daily_coverage/,
   );
-  const olapQueueHealth = fs.readFileSync(
-    path.join(root, "db", "init", "29-olap-queue-health.sql"),
-    "utf8",
-  );
+  const olapQueueHealth = databaseBaseline;
   assert.match(olapQueueHealth, /oldest_pending_seconds/);
   assert.match(olapQueueHealth, /daily_queue_healthy/);
-  const stableOlapHealth = fs.readFileSync(
-    path.join(root, "db", "init", "30-stable-olap-health-contract.sql"),
-    "utf8",
-  );
+  const stableOlapHealth = databaseBaseline;
   assert.match(stableOlapHealth, /reporting\.olap_queue_health/);
-  const indexedParity = fs.readFileSync(
-    path.join(root, "db", "init", "31-indexed-olap-parity.sql"),
-    "utf8",
-  );
+  const indexedParity = databaseBaseline;
   assert.match(indexedParity, /AS MATERIALIZED/);
   assert.match(indexedParity, /FULL JOIN olap\.daily_listing_facts/);
   const reconcile = fs.readFileSync(
@@ -405,18 +345,12 @@ test("public reporting objects and role setup retain the confidentiality boundar
       /\b(?:FROM|JOIN) (?:listings|listing_daily|v_[a-z_]+)\b/,
     );
   }
-  const comparableOlapContract = fs.readFileSync(
-    path.join(root, "db", "init", "20-comparables-olap-contract.sql"),
-    "utf8",
-  );
+  const comparableOlapContract = databaseBaseline;
   assert.match(
     comparableOlapContract,
     /RETURNS SETOF reporting\.current_comparison_inputs/,
   );
-  assert.match(
-    comparableOlapContract,
-    /FROM reporting\.current_listing_scores_olap t/,
-  );
+  assert.match(comparableOlapContract, /FROM olap\.current_listing_scores t/);
   assert.match(roles, /default_transaction_read_only = on/);
   const publicRoleSection = roles.slice(roles.indexOf("-- Public role:"));
   assert.doesNotMatch(publicRoleSection, /GRANT pg_read_all_data/);

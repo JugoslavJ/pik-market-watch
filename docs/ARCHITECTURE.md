@@ -69,4 +69,4 @@ Dashboard formulas are query-specific: comparable-looking ratios can use differe
 
 ## Geography
 
-`geo/banja-luka-mz-final.geojson` is the final source for the generated `db/init/02-neighborhoods.sql`. `neighborhood_of(lat, lon)` uses polygon containment, deterministic priority on shared borders, then a nearest-polygon fallback within 5 km. A missing pin is reported as `(no pin)`; a pin outside the supported coverage is `(unmapped)`. See [geo/README.md](../geo/README.md) and [DATA.md](../DATA.md) for the reproducible chain and attribution.
+`geo/banja-luka-mz-final.geojson` is the final source for the generated `db/init/11-neighborhood-data.sql`. `neighborhood_of(lat, lon)` uses polygon containment, deterministic priority on shared borders, then a nearest-polygon fallback within 5 km. A missing pin is reported as `(no pin)`; a pin outside the supported coverage is `(unmapped)`. See [geo/README.md](../geo/README.md) and [DATA.md](../DATA.md) for the reproducible chain and attribution.

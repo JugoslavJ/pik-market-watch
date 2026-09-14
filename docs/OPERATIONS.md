@@ -163,7 +163,7 @@ changing a public dashboard's data boundary. Provisioning files do not create
 or re-enable shares, so a revoked share stays revoked across deployments.
 
 Rollout order is: start PostgreSQL, run `zz-database-roles.sh` for ownership
-and role credentials, run the migrator for `08-dashboard-public.sql`, run the
+and role credentials, run the migrator through `13-reporting-access.sql`, run the
 role helper again to apply the view allowlist, then restart Grafana and inspect
 the private and public providers. Additive reporting views may remain during a
 rollback; revoke/pause shares and restore the previous provisioning/dashboard
@@ -323,7 +323,7 @@ docker compose --profile scrape run --rm scraper node src/backfill-price-history
 
 ## Applying the daily rebuild performance fix
 
-The current `06-rebuild.sql` definition removes repeated geography and sparse
+The current `04-functions.sql` definition removes repeated geography and sparse
 history work from the daily INSERT path. The local restored-backup benchmark
 completed a 31-day rebuild in a workload-specific benchmark. Use the checked-in
 [daily rebuild profiling query](../db/diagnostics/profile-daily-rebuild.sql) to
@@ -371,7 +371,7 @@ docker compose --profile maintenance run --build --rm --no-deps maintenance
 ```
 
 The migrator must finish successfully, applying the baseline through
-`07-triggers.sql` or verifying that its files are already recorded. Use the migrator's application owner;
+`10-triggers.sql` or verifying that its files are already recorded. Use the migrator's application owner;
 do not apply the SQL manually as the bootstrap user. Maintenance logs each
 completed batch's date range and reports total rows in its final JSON result.
 It processes the pending range;

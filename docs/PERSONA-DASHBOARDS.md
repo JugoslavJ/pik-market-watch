@@ -33,8 +33,8 @@ persona contract changes. CI validates their structure and query contracts with
 the `npm test` suite from `scraper`.
 
 The private reporting objects are supplied by additive migrations
-[`16-listing-comparison.sql`](../db/init/16-listing-comparison.sql) and
-[`17-persona-history.sql`](../db/init/17-persona-history.sql). On a
+[`05-source-views.sql`](../db/init/05-source-views.sql) and
+[`07-views.sql`](../db/init/07-views.sql). On a
 dashboard-only host, apply them with:
 
 ```bash

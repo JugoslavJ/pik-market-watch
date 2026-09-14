@@ -19,7 +19,7 @@ from silently retaining an obsolete metric label.
 | Public Apartments for Rent | Literal `apartments` + `rent` scope | Current 14-day observations and event time | `dashboard_public.current_listings` and `price_reductions` | Asking price as listed; no monthly period is assumed | Publish only as an asking-price view until rental period is verified |
 | Public Exits | Literal `apartments` + `sale` closure cycles | Closure-cycle time | `dashboard_public.exit_cycles` | Last valid asking price at closure, never a transaction price | Reopened cycles remain separate; invalid boundary price is NULL |
 
-Shared filter semantics are implemented in [05-filters.sql](../db/init/05-filters.sql): empty multi-selects mean no
+Shared filter semantics are implemented in [06-reporting-functions.sql](../db/init/06-reporting-functions.sql): empty multi-selects mean no
 restriction, numeric bounds are independently optional, and the canonical deal
 values are `sale` and `rent` (`sell` is accepted only as a compatibility input).
 Queries that measure current inventory, event-time changes, daily projections,

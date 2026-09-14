@@ -6,7 +6,7 @@ prices. It compares tracked asking prices; it is not an appraisal, confirmed
 transaction price, or a prediction that a property is a bargain.
 
 The implementation is additive in
-[`16-listing-comparison.sql`](../db/init/16-listing-comparison.sql). Existing
+[`05-source-views.sql`](../db/init/05-source-views.sql) and [`06-reporting-functions.sql`](../db/init/06-reporting-functions.sql). Existing
 checksummed migrations and public dashboard data contracts remain separate.
 
 ## Reporting interfaces

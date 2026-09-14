@@ -1,5 +1,5 @@
 'use strict';
-// gen-sql.js — regenerate db/init/02-neighborhoods.sql from
+// gen-sql.js — regenerate db/init/11-neighborhood-data.sql from
 // geo/banja-luka-mz-final.geojson (56 official MZ polygons: 19 hand-drawn core
 // + 37 traced rural). DB names are ASCII (existing seed convention); display
 // names keep diacritics in the GeoJSON.
@@ -171,6 +171,9 @@ ON CONFLICT (name) DO UPDATE SET priority = EXCLUDED.priority, poly = EXCLUDED.p
 
 `;
 
-const out = path.join(ROOT, 'db', 'init', '02-neighborhoods.sql');
-fs.writeFileSync(out, sql);
+// Table and routine definitions live in the canonical tables/functions files;
+// this generated artifact owns polygon data only.
+const dataSql = sql.slice(sql.indexOf('-- Official Banja Luka MZ polygons'));
+const out = path.join(ROOT, 'db', 'init', '11-neighborhood-data.sql');
+fs.writeFileSync(out, dataSql);
 console.log(`wrote ${out}: ${rows.length} MZ polygons`);

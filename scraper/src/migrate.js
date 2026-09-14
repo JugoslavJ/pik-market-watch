@@ -49,6 +49,75 @@ async function applyMigrations(pool, dir, log = () => {}) {
       "ALTER TABLE schema_migrations ADD COLUMN IF NOT EXISTS checksum TEXT",
     );
 
+    // A canonical-baseline squash replaces filenames, not the live schema.
+    // Docker initializes a fresh volume before this runner sees it, and
+    // supported pre-squash volumes already have the same final objects. Adopt
+    // the complete baseline atomically instead of replaying non-idempotent
+    // CREATE statements over either database. A partial/older schema does not
+    // satisfy this fingerprint and follows the normal migration path, where
+    // the baseline's explicit CREATE statements fail with useful context.
+    const currentRows = await client.query(
+      "SELECT count(*)::int AS count FROM schema_migrations WHERE filename = ANY($1::text[])",
+      [files],
+    );
+    if (currentRows.rows[0].count === 0 && files.length > 0) {
+      const advancedSchema = await client.query(`
+        SELECT to_regclass('olap.refresh_state') IS NOT NULL
+           AND to_regclass('public.listing_daily') IS NOT NULL
+           AND to_regclass('public.analytics_daily_olap_dirty') IS NOT NULL AS present`);
+      if (advancedSchema.rows[0].present) {
+        await client.query(`
+          ALTER TABLE listing_daily ADD COLUMN IF NOT EXISTS
+            resolved_state_version smallint NOT NULL DEFAULT 0;
+          DROP TRIGGER IF EXISTS listing_daily_resolve_sparse_state ON listing_daily;
+          DROP TRIGGER IF EXISTS listing_daily_normalize_flags ON listing_daily;
+          DROP TRIGGER IF EXISTS listing_daily_10_resolve_sparse_state ON listing_daily;
+          DROP TRIGGER IF EXISTS listing_daily_20_normalize_flags_insert ON listing_daily;
+          DROP TRIGGER IF EXISTS listing_daily_normalize_flags_update ON listing_daily;
+          CREATE TRIGGER listing_daily_10_resolve_sparse_state
+            BEFORE INSERT ON listing_daily FOR EACH ROW
+            WHEN (NEW.resolved_state_version = 0)
+            EXECUTE FUNCTION resolve_listing_daily_sparse_state();
+          CREATE TRIGGER listing_daily_20_normalize_flags_insert
+            BEFORE INSERT ON listing_daily FOR EACH ROW
+            WHEN (NEW.resolved_state_version = 0)
+            EXECUTE FUNCTION normalize_listing_daily_flags();
+          CREATE TRIGGER listing_daily_normalize_flags_update
+            BEFORE UPDATE ON listing_daily FOR EACH ROW
+            EXECUTE FUNCTION normalize_listing_daily_flags()`);
+      }
+      const fingerprint = await client.query(`
+        SELECT to_regclass('olap.refresh_state') IS NOT NULL
+           AND to_regclass('public.analytics_daily_olap_dirty') IS NOT NULL
+           AND to_regprocedure('reporting.refresh_dashboard_olap(boolean)') IS NOT NULL
+           AND EXISTS (
+             SELECT 1 FROM information_schema.columns
+              WHERE table_schema = 'public'
+                AND table_name = 'analytics_daily_olap_dirty'
+                AND column_name = 'marked_at'
+           ) AS complete`);
+      if (fingerprint.rows[0].complete) {
+        for (const file of files) {
+          const sql = fs.readFileSync(path.join(dir, file), "utf8");
+          const checksum = migrationChecksum(sql);
+          await client.query(
+            "INSERT INTO schema_migrations (filename, checksum) VALUES ($1, $2)",
+            [file, checksum],
+          );
+          applied.push(`${file} (canonical baseline)`);
+        }
+      } else {
+        const legacy = await client.query(
+          "SELECT to_regclass('public.listings') IS NOT NULL AS present",
+        );
+        if (legacy.rows[0].present) {
+          throw new Error(
+            "Database predates the current baseline; upgrade with the pre-squash release before deploying this version",
+          );
+        }
+      }
+    }
+
     for (const file of files) {
       const sql = fs.readFileSync(path.join(dir, file), "utf8");
       const checksum = migrationChecksum(sql);
