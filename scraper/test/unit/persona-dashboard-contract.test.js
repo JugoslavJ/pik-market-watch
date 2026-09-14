@@ -83,7 +83,10 @@ test("SQL keeps context, scoring, history, freshness, and pagination boundaries 
     );
     assert.match(rawSql, /reporting\.within_bounds/);
     assert.match(rawSql, /ARRAY\['__any__'\]/);
-    assert.match(rawSql, /ARRAY\['__mapped__'\].*neighborhood IS NOT NULL/s);
+    assert.match(
+      rawSql,
+      /ARRAY\['__mapped__'\].*(?:neighborhood IS NOT NULL|<> 'unknown')/s,
+    );
     assert.match(rawSql, /dashboard_public\.freshness/);
     assert.match(rawSql, /count\(f\.last_success_at\) = count\(\*\)/);
     assert.match(rawSql, /reporting\.listing_comparables/);
@@ -150,8 +153,9 @@ test("agent review controls and rental units remain independently visible", () =
   const reviewSql = panels(agent).find((panel) =>
     /Listings to review/.test(panel.title),
   ).targets[0].rawSql;
-  assert.match(reviewSql, /CASE \$\{view:sqlstring\}/);
-  assert.match(reviewSql, /CASE \$\{pricing_position:sqlstring\}/);
+  assert.match(reviewSql, /reporting\.agent_listing_scope\(/);
+  assert.match(reviewSql, /\$\{view:sqlstring\}/);
+  assert.match(reviewSql, /\$\{pricing_position:sqlstring\}/);
   assert.match(reviewSql, /ARRAY\[\$\{review_signals:sqlstring\}\]/);
   assert.match(reviewSql, /CASE deal WHEN 'rent' THEN 'KM\/month'/);
   assert.match(agent.description, /rent units throughout/);

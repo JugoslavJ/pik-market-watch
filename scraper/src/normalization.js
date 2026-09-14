@@ -354,8 +354,6 @@ function parseJsonArray(value) {
 const normalizeLegacyPriceHistory = normalizePriceHistory;
 
 module.exports = {
-  DEAL_TYPES,
-  PRICE_POLICY,
   PRICE_STATES,
   dateFromUnixSeconds,
   dealTypeOf,
@@ -368,6 +366,5 @@ module.exports = {
   normalizePpm2,
   normalizePrice,
   normalizePriceHistory,
-  normalizeUnixSeconds,
   priceCurrencyOf,
 };

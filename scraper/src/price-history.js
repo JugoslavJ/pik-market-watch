@@ -422,7 +422,6 @@ async function recordPriceEvents(pool, events, options = {}) {
 }
 
 module.exports = {
-  dayInBanjaLuka,
   normalizeEvent,
   recordPriceEvents,
 };

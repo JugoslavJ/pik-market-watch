@@ -127,7 +127,7 @@ CREATE FUNCTION reporting.agent_listing_scope(
     CROSS JOIN validation v
    WHERE s.deal = p_deal
      AND COALESCE(s.property_type, 'unknown') = p_property_type
-     AND ('__any__' = ANY (p_neighborhoods)
+     AND (('__mapped__' = ANY (p_neighborhoods) AND s.neighborhood IS NOT NULL)
           OR COALESCE(s.neighborhood, 'unknown') = ANY (p_neighborhoods))
      AND ('__any__' = ANY (p_rooms)
           OR COALESCE(s.room_bucket, 'unknown') = ANY (p_rooms))
