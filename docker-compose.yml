@@ -23,7 +23,7 @@ services:
   db:
     # PostGIS-enabled PostgreSQL 16 image. Digest pin = exactly this build
     # everywhere (refresh tag+digest together when upgrading PostGIS).
-    image: postgis/postgis:16-3.5-alpine@sha256:1f11e615bb0113d1a394db81104cda0a8824111a1debac8adf628a0bcee87bb4
+    image: ghcr.io/baosystems/postgis:16-3.5@sha256:0f1c5c0f70f03d4d19ad1d7308d86e6162dff5429c491002298a7b5e46d2f2e8
     container_name: olx-db
     restart: unless-stopped
     security_opt:
@@ -91,7 +91,7 @@ services:
   # idempotent one-shot dependency so existing volumes are bootstrapped before
   # the least-privileged migrator applies the staged boundary migration.
   postgis-bootstrap:
-    image: postgis/postgis:16-3.5-alpine@sha256:1f11e615bb0113d1a394db81104cda0a8824111a1debac8adf628a0bcee87bb4
+    image: ghcr.io/baosystems/postgis:16-3.5@sha256:0f1c5c0f70f03d4d19ad1d7308d86e6162dff5429c491002298a7b5e46d2f2e8
     profiles: ["migrate", "scrape", "maintenance"]
     restart: "no"
     security_opt:

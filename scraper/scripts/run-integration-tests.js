@@ -18,7 +18,7 @@ const NAME = "olx-pg-test";
 const PORT = process.env.TEST_DB_PORT || "55432";
 const IMAGE =
   process.env.TEST_POSTGRES_IMAGE ||
-  "postgis/postgis:16-3.5-alpine@sha256:1f11e615bb0113d1a394db81104cda0a8824111a1debac8adf628a0bcee87bb4";
+  "ghcr.io/baosystems/postgis:16-3.5@sha256:0f1c5c0f70f03d4d19ad1d7308d86e6162dff5429c491002298a7b5e46d2f2e8";
 const DB_URL = `postgres://olx:olx@localhost:${PORT}/olx`;
 
 const docker = (args, opts = {}) =>
