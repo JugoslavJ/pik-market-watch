@@ -167,6 +167,7 @@ needsDb(
       { id: 5, neighborhood: "Borik 1", price: 130000 },
       { id: 6, neighborhood: "Borik 2", price: 140000 },
       { id: 7, neighborhood: "Bulevar", price: 500000 },
+      { id: 8, neighborhood: "Bulevar", price: 150000 },
     ]);
 
     const subject = await scores(1);
@@ -177,16 +178,16 @@ needsDb(
     assert.deepEqual(subject.benchmark_neighborhoods, [
       "Borik 1",
       "Borik 2",
-      "Centar 2",
+      "Bulevar",
     ]);
-    assert.equal(Number(subject.benchmark_rate), 2400);
+    assert.equal(Number(subject.benchmark_rate), 2800);
 
     const comparables = await db.pool.query(
       "SELECT article_id FROM reporting.listing_comparables(1)",
     );
     assert.deepEqual(
       comparables.rows.map((row) => Number(row.article_id)),
-      [2, 3, 4, 5, 6],
+      [4, 5, 6, 7, 8],
     );
   },
 );

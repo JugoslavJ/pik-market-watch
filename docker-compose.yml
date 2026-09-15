@@ -21,8 +21,9 @@ x-logging: &logging
 
 services:
   db:
-    # Digest pin = exactly this build everywhere (Dependabot updates tag+digest).
-    image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+    # PostGIS-enabled PostgreSQL 16 image. Digest pin = exactly this build
+    # everywhere (refresh tag+digest together when upgrading PostGIS).
+    image: postgis/postgis:16-3.5-alpine@sha256:1f11e615bb0113d1a394db81104cda0a8824111a1debac8adf628a0bcee87bb4
     container_name: olx-db
     restart: unless-stopped
     security_opt:
@@ -86,6 +87,34 @@ services:
     ports:
       - "127.0.0.1:5432:5432" # host access for psql/GUIs; delete line to keep internal
 
+  # CREATE EXTENSION is an administrator operation. Keep it as a short,
+  # idempotent one-shot dependency so existing volumes are bootstrapped before
+  # the least-privileged migrator applies the staged boundary migration.
+  postgis-bootstrap:
+    image: postgis/postgis:16-3.5-alpine@sha256:1f11e615bb0113d1a394db81104cda0a8824111a1debac8adf628a0bcee87bb4
+    profiles: ["migrate", "scrape", "maintenance"]
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs:
+      - /tmp
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER:-olx}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      PGDATABASE: ${POSTGRES_DB:-olx}
+    entrypoint: ["sh", "-ec"]
+    command: >-
+      psql -v ON_ERROR_STOP=1
+      -c 'CREATE EXTENSION IF NOT EXISTS postgis;'
+    networks:
+      - backend
+
   # Schema changes run as a completed, one-shot job. Keeping this separate
   # makes deploy order explicit and prevents a normal scraper restart from
   # becoming the migration control plane.
@@ -106,6 +135,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      postgis-bootstrap:
+        condition: service_completed_successfully
     environment:
       DATABASE_URL: postgres://${POSTGRES_APP_USER:-olx_app}:${POSTGRES_APP_PASSWORD}@db:5432/${POSTGRES_DB:-olx}
       OLAP_RECONCILE_TIMEOUT_MS: ${OLAP_RECONCILE_TIMEOUT_MS:-900000}

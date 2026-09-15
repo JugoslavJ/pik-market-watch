@@ -21,6 +21,7 @@ entrypoint and the application migration runner:
 | `11-neighborhood-data.sql`   | Generated neighborhood polygon rows                            |
 | `12-seed-state.sql`          | Initial singleton and maintenance-control rows                 |
 | `13-reporting-access.sql`    | Stable reporting function grants                               |
+| `15-postgis-neighborhood-boundaries.sql` | PostGIS neighbourhood boundary rollout and spatial index       |
 | `zz-database-roles.sh`       | Application ownership and reader permissions                   |
 
 Fresh volumes execute these files in order. The migrator subsequently records

@@ -6,6 +6,13 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 
+// Canonical filename changes whose SQL is byte-for-byte unchanged. Existing
+// volumes can move the ledger entry without replaying the migration; databases
+// that never applied the old name still execute the new file normally.
+const migrationRenames = new Map([
+  ["32-persona-listing-scopes.sql", "14-persona-listing-scopes.sql"],
+]);
+
 function migrationChecksum(sql) {
   // Git checkouts may use LF or CRLF depending on the host. Hash the logical
   // SQL text so a migration applied on Windows does not falsely drift on a
@@ -48,6 +55,36 @@ async function applyMigrations(pool, dir, log = () => {}) {
     await client.query(
       "ALTER TABLE schema_migrations ADD COLUMN IF NOT EXISTS checksum TEXT",
     );
+
+    for (const [oldFilename, newFilename] of migrationRenames) {
+      if (!files.includes(newFilename)) continue;
+
+      const renamed = await client.query(
+        `SELECT filename, checksum
+           FROM schema_migrations
+          WHERE filename = ANY($1::text[])
+          ORDER BY filename`,
+        [[oldFilename, newFilename]],
+      );
+      const oldRow = renamed.rows.find((row) => row.filename === oldFilename);
+      const newRow = renamed.rows.find((row) => row.filename === newFilename);
+      if (!oldRow || newRow) continue;
+
+      const sql = fs.readFileSync(path.join(dir, newFilename), "utf8");
+      const checksum = migrationChecksum(sql);
+      if (oldRow.checksum != null && oldRow.checksum !== checksum) {
+        throw new Error(
+          `renamed migration ${oldFilename} does not match ${newFilename}`,
+        );
+      }
+      await client.query(
+        `UPDATE schema_migrations
+            SET filename = $2, checksum = $3
+          WHERE filename = $1`,
+        [oldFilename, newFilename, checksum],
+      );
+      applied.push(`${newFilename} (renamed from ${oldFilename})`);
+    }
 
     // A canonical-baseline squash replaces filenames, not the live schema.
     // Docker initializes a fresh volume before this runner sees it, and

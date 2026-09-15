@@ -4,7 +4,8 @@
 // container. Requires Docker. Usage: npm run test:integration
 //
 //   1. removes any stale olx-pg-test container
-//   2. starts postgres:16-alpine on TEST_DB_PORT (default 55432)
+//   2. starts the pinned PostGIS/PostgreSQL 16 image on TEST_DB_PORT
+//      (default 55432)
 //   3. waits until it accepts connections
 //   4. runs each `node --test test/integration/<file>` child with TEST_DATABASE_URL set
 //   5. always removes the container again
@@ -15,6 +16,9 @@ const path = require("node:path");
 
 const NAME = "olx-pg-test";
 const PORT = process.env.TEST_DB_PORT || "55432";
+const IMAGE =
+  process.env.TEST_POSTGRES_IMAGE ||
+  "postgis/postgis:16-3.5-alpine@sha256:1f11e615bb0113d1a394db81104cda0a8824111a1debac8adf628a0bcee87bb4";
 const DB_URL = `postgres://olx:olx@localhost:${PORT}/olx`;
 
 const docker = (args, opts = {}) =>
@@ -46,7 +50,7 @@ const up = docker([
   "POSTGRES_DB=olx",
   "-p",
   `${PORT}:5432`,
-  "postgres:16-alpine",
+  IMAGE,
 ]);
 if (up.status !== 0) {
   console.error(up.stderr);
