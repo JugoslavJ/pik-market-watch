@@ -125,10 +125,14 @@ fi
 # migration re-applied by hand as "-U olx" shipped two superuser-owned objects;
 # the failure only surfaced here, after the schema had already been dropped).
 # DEFAULT ACL entries are excluded: build_toc filters those separately and
-# their trailing token is a grantee, not the owner.
+# their trailing token is a grantee, not the owner. PostGIS extension entries
+# are also excluded: pg_restore lists `EXTENSION - postgis` without an owner,
+# and the extension must be installed by the bootstrap administrator rather
+# than replayed by the app role.
 drifted=$(docker compose exec -T db sh -c "
     pg_restore -l '/backups/olx-sync-incoming.dump' |
     grep -v '^;' | grep -v 'DEFAULT ACL' |
+    grep -v ' EXTENSION - ' | grep -v ' COMMENT - EXTENSION ' |
     awk '\$NF != \"$app_user\" {print \$NF}' | sort -u")
 if [ -n "$drifted" ]; then
   echo "RESTORE_ERROR: archive contains objects not owned by $app_user:" >&2
@@ -171,6 +175,11 @@ build_toc() {
        # everything) - skip the filter when there is nothing to exclude
        cp /tmp/toc.all '$2'
      fi
+     # Extension metadata is installed by the bootstrap administrator in
+     # reset_schemas; the app role must not try to CREATE EXTENSION.
+     grep -ve ' EXTENSION - ' -e ' COMMENT - EXTENSION ' \
+          '$2' > '$2'.extensions || :
+     mv '$2'.extensions '$2'
      # schema-level entries carry the source schema's owner (ALTER ... OWNER
      # TO <bootstrap admin>) and cannot be replayed by $app_user; the reset
      # block already created the schema with the right owner and grants
@@ -187,7 +196,11 @@ if ! build_toc /backups/olx-sync-incoming.dump /tmp/toc.use; then
   exit 1
 fi
 reset_schemas() {
-  docker compose exec -T db psql -U "$boot_user" -d "$db_name" -q -c "
+  docker compose exec -T db psql -v ON_ERROR_STOP=1 -U "$boot_user" -d "$db_name" -q -c "
+    -- PostGIS lives in public and is extension-owned by the bootstrap role.
+    -- Recreate it after the application schemas are reset; it is deliberately
+    -- absent from the app-role pg_restore TOC.
+    DROP EXTENSION IF EXISTS postgis CASCADE;
     DROP SCHEMA IF EXISTS dashboard_public CASCADE;
     DROP SCHEMA IF EXISTS reporting CASCADE;
     DROP SCHEMA IF EXISTS olap CASCADE;
@@ -196,6 +209,7 @@ reset_schemas() {
     CREATE SCHEMA reporting AUTHORIZATION \"$app_user\";
     CREATE SCHEMA olap AUTHORIZATION \"$app_user\";
     CREATE SCHEMA dashboard_public AUTHORIZATION \"$app_user\";
+    CREATE EXTENSION IF NOT EXISTS postgis;
     GRANT ALL ON SCHEMA public TO \"$app_user\";
     GRANT USAGE ON SCHEMA public TO \"$reader_user\";"
 }
