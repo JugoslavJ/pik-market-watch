@@ -6,7 +6,7 @@ entrypoint and the application migration runner:
 
 | File                         | Responsibility                                                 |
 | ---------------------------- | -------------------------------------------------------------- |
-| `00-schemas.sql`             | OLAP, reporting, and public-dashboard namespaces               |
+| `00-schemas.sql`             | OLAP and reporting namespaces                                  |
 | `01-oltp-tables.sql`         | Operational tables, sequences, defaults, and documentation     |
 | `02-olap-tables.sql`         | Physical dashboard marts and OLAP refresh state                |
 | `02-reporting-state.sql`     | Private reporting refresh-control state                        |
@@ -25,6 +25,8 @@ entrypoint and the application migration runner:
 | `16-rebuild-postgis-neighborhood-index.sql` | Repair the PostGIS boundary GiST operator family after upgrades/restores |
 | `17-olap-refresh-performance.sql` | Materialized OLAP intermediates and covering evidence indexes |
 | `18-olap-targeted-refresh.sql` | Dirty-day/article source functions and single-pass cycle publication |
+| `19-remove-dashboard-public.sql` | Remove the retired public dashboard schema and move sources private |
+| `20-align-olap-health-after-public-schema-removal.sql` | Keep OLAP health consistent with retained internal compatibility marts |
 | `zz-database-roles.sh`       | Application ownership and reader permissions                   |
 
 Fresh volumes execute these files in order. The migrator subsequently records

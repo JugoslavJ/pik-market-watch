@@ -241,26 +241,14 @@ test("health dashboard exposes per-search and analytics freshness state", () => 
   assert.match(alertProvisioning, /pending_from_day/);
 });
 
-test("public reporting objects and role setup retain the confidentiality boundary", () => {
-  assert.match(publicReportingMigration, /CREATE SCHEMA dashboard_public/);
-  for (const view of [
-    "current_listings",
-    "daily_market",
-    "price_reductions",
-    "exit_cycles",
-    "freshness",
-  ]) {
-    assert.match(
-      publicReportingMigration,
-      new RegExp(`dashboard_public\\.${view}`),
-    );
-  }
-  assert.match(roles, /public_reader_user/);
-  assert.match(roles, /NOINHERIT/);
+test("retired public reporting boundary is removed", () => {
   assert.match(
-    roles,
-    /GRANT SELECT ON TABLE dashboard_public\.current_listings/,
+    publicReportingMigration,
+    /DROP SCHEMA IF EXISTS dashboard_public CASCADE/,
   );
+  assert.match(publicReportingMigration, /reporting\.freshness/);
+  assert.doesNotMatch(roles, /dashboard_public/);
+  assert.match(roles, /DROP ROLE %I.*olx_public_reader/);
   assert.match(
     roles,
     /REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC/,
@@ -359,12 +347,5 @@ test("public reporting objects and role setup retain the confidentiality boundar
     /RETURNS SETOF reporting\.current_comparison_inputs/,
   );
   assert.match(comparableOlapContract, /FROM olap\.current_listing_scores t/);
-  assert.match(roles, /default_transaction_read_only = on/);
-  const publicRoleSection = roles.slice(roles.indexOf("-- Public role:"));
-  assert.doesNotMatch(publicRoleSection, /GRANT pg_read_all_data/);
-  assert.doesNotMatch(publicRoleSection, /GRANT USAGE ON ALL SEQUENCES/);
-  assert.match(
-    publicRoleSection,
-    /WHERE to_regnamespace\('dashboard_public'\) IS NOT NULL \\gexec/,
-  );
+  assert.match(roles, /DROP ROLE %I/);
 });

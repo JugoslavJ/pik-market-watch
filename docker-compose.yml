@@ -65,8 +65,6 @@ services:
       POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:?set POSTGRES_APP_PASSWORD in .env}
       POSTGRES_READER_USER: ${POSTGRES_READER_USER:-olx_reader}
       POSTGRES_READER_PASSWORD: ${POSTGRES_READER_PASSWORD:?set POSTGRES_READER_PASSWORD in .env}
-      POSTGRES_PUBLIC_READER_USER: ${POSTGRES_PUBLIC_READER_USER:-olx_public_reader}
-      POSTGRES_PUBLIC_READER_PASSWORD: ${POSTGRES_PUBLIC_READER_PASSWORD:?set POSTGRES_PUBLIC_READER_PASSWORD in .env}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./db/init:/docker-entrypoint-initdb.d:ro # runs on FIRST start only
@@ -303,8 +301,6 @@ services:
       # (read-only role — Grafana never needs write access)
       POSTGRES_READER_USER: ${POSTGRES_READER_USER:-olx_reader}
       POSTGRES_READER_PASSWORD: ${POSTGRES_READER_PASSWORD}
-      POSTGRES_PUBLIC_READER_USER: ${POSTGRES_PUBLIC_READER_USER:-olx_public_reader}
-      POSTGRES_PUBLIC_READER_PASSWORD: ${POSTGRES_PUBLIC_READER_PASSWORD:?set POSTGRES_PUBLIC_READER_PASSWORD in .env}
       POSTGRES_DB: ${POSTGRES_DB:-olx}
       SCRAPE_STALE_AFTER_HOURS: ${SCRAPE_STALE_AFTER_HOURS:-26}
       # Consumed by provisioning/alerting/olx-alerts.yml (alert mail recipient).

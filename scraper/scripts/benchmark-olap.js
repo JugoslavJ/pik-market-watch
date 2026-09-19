@@ -32,11 +32,11 @@ const sources = {
   market_daily: "v_market_daily_source",
   listing_price_changes: "v_listing_price_changes_source",
   listing_exit_economics: "v_listing_exit_economics_source",
-  public_current_listings: "dashboard_public.current_listings_source",
-  public_daily_market: "dashboard_public.daily_market_source",
-  public_price_reductions: "dashboard_public.price_reductions_source",
-  public_exit_cycles: "dashboard_public.exit_cycles_source",
-  public_freshness: "dashboard_public.freshness_source",
+  current_listings_source: "reporting.current_listings_source",
+  daily_market_source: "reporting.daily_market_source",
+  price_reductions_source: "reporting.price_reductions_source",
+  exit_cycles_source: "reporting.exit_cycles_source",
+  freshness_source: "reporting.freshness_source",
 };
 
 async function measuredSource(pool, [mart, relation]) {

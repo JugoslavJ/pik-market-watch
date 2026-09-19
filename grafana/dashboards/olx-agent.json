@@ -361,7 +361,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT CASE WHEN count(*) > 0 AND count(f.last_success_at) = count(*) THEN min(f.last_success_at) END AS freshness\nFROM dashboard_public.freshness f\nWHERE f.category = ${property_type:sqlstring}",
+          "rawSql": "SELECT CASE WHEN count(*) > 0 AND count(f.last_success_at) = count(*) THEN min(f.last_success_at) END AS freshness\nFROM reporting.freshness f\nWHERE f.category = ${property_type:sqlstring}",
           "refId": "A"
         }
       ]

@@ -87,7 +87,7 @@ test("SQL keeps context, scoring, history, freshness, and pagination boundaries 
       rawSql,
       /ARRAY\['__mapped__'\].*(?:neighborhood IS NOT NULL|<> 'unknown')/s,
     );
-    assert.match(rawSql, /dashboard_public\.freshness/);
+    assert.match(rawSql, /reporting\.freshness/);
     assert.match(rawSql, /count\(f\.last_success_at\) = count\(\*\)/);
     assert.match(rawSql, /reporting\.listing_comparables/);
     assert.match(rawSql, /benchmark_at AS "evaluated at"/);

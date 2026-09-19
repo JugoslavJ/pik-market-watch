@@ -186,7 +186,7 @@ build_toc() {
      # TO <bootstrap admin>) and cannot be replayed by $app_user; the reset
      # block already created the schema with the right owner and grants
      grep -ve 'SCHEMA - public' -e 'SCHEMA - reporting' -e 'SCHEMA - olap' \
-          -e 'SCHEMA - dashboard_public' -e 'COMMENT - SCHEMA' -e 'ACL - SCHEMA' \
+          -e 'COMMENT - SCHEMA' -e 'ACL - SCHEMA' \
           '$2' > '$2.f' || :
      mv '$2.f' '$2'
      test -s '$2' && grep -q 'TABLE DATA public listings' '$2'
@@ -203,14 +203,12 @@ reset_schemas() {
     -- Recreate it after the application schemas are reset; it is deliberately
     -- absent from the app-role pg_restore TOC.
     DROP EXTENSION IF EXISTS postgis CASCADE;
-    DROP SCHEMA IF EXISTS dashboard_public CASCADE;
     DROP SCHEMA IF EXISTS reporting CASCADE;
     DROP SCHEMA IF EXISTS olap CASCADE;
     DROP SCHEMA IF EXISTS public CASCADE;
     CREATE SCHEMA public AUTHORIZATION \"$app_user\";
     CREATE SCHEMA reporting AUTHORIZATION \"$app_user\";
     CREATE SCHEMA olap AUTHORIZATION \"$app_user\";
-    CREATE SCHEMA dashboard_public AUTHORIZATION \"$app_user\";
     CREATE EXTENSION IF NOT EXISTS postgis;
     GRANT ALL ON SCHEMA public TO \"$app_user\";
     GRANT USAGE ON SCHEMA public TO \"$reader_user\";"

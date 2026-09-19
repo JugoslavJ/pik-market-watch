@@ -135,7 +135,7 @@ one implementation of validation and market/attribute scoping.
 | Comparable cohorts | Future reusable reporting logic implementing the same formula, exclusions and sample thresholds across all three dashboards. Keep the comparable list consistent with the displayed aggregate at one evaluation time. |
 | Reductions | `price_changes_filtered` and canonical events; current review lists also enforce present availability and that the reduction still applies. |
 | Daily neighbourhood trends | `reporting.daily_listing_facts`; preserve quality flags and historical attributes. Rental prices use the confirmed monthly basis; feature-filtered history requires historical feature evidence as described in the renter document. |
-| Lifecycle and exits | `v_listing_lifecycle_cycles` and existing closure-time reporting such as `dashboard_public.exit_cycles`; use one row per cycle and frozen closure-time facts. |
+| Lifecycle and exits | `v_listing_lifecycle_cycles` and `reporting.lifecycle_cycles`; use one row per cycle and frozen closure-time facts. |
 | Freshness | Latest complete-search watermark for the selected scope and per-listing observation time. |
 | Agent's own portfolio | No reliable ownership relationship is defined. A future portfolio view requires explicit mapping, rather than inferring ownership from seller type. |
 

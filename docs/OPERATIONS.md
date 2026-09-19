@@ -12,14 +12,13 @@ cp config/searches.example.json config/searches.json
 docker compose up -d --build
 ```
 
-`.env.example` intentionally leaves `POSTGRES_PASSWORD`, `POSTGRES_APP_PASSWORD`, `POSTGRES_READER_PASSWORD`, `POSTGRES_PUBLIC_READER_PASSWORD`, `GRAFANA_ADMIN_PASSWORD`, and `GRAFANA_SECRET_KEY` blank. Set all six before starting or deploying; the deployment preflight rejects blank and legacy `change-me*` values. Application and reader passwords are embedded in a PostgreSQL URL, so use URL-safe values such as `openssl rand -hex 24`.
+`.env.example` intentionally leaves `POSTGRES_PASSWORD`, `POSTGRES_APP_PASSWORD`, `POSTGRES_READER_PASSWORD`, `GRAFANA_ADMIN_PASSWORD`, and `GRAFANA_SECRET_KEY` blank. Set all five before starting or deploying; the deployment preflight rejects blank and legacy `change-me*` values. Application and reader passwords are embedded in a PostgreSQL URL, so use URL-safe values such as `openssl rand -hex 24`.
 
 | Setting                                                          |                                    Default | Consumer                                                                                                                               |
 | ---------------------------------------------------------------- | -----------------------------------------: | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`              |                     `olx`, required, `olx` | PostgreSQL bootstrap database.                                                                                                         |
 | `POSTGRES_APP_USER`, `POSTGRES_APP_PASSWORD`                     |                        `olx_app`, required | Scraper and restore owner role.                                                                                                        |
 | `POSTGRES_READER_USER`, `POSTGRES_READER_PASSWORD`               |                     `olx_reader`, required | Grafana and backup read-only role.                                                                                                     |
-| `POSTGRES_PUBLIC_READER_USER`, `POSTGRES_PUBLIC_READER_PASSWORD` |              `olx_public_reader`, required | Public Grafana datasource; SELECT is limited to `dashboard_public` views.                                                              |
 | `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD`                   |                          `admin`, required | Grafana login.                                                                                                                         |
 | `GRAFANA_SECRET_KEY`                                             |                                   required | Grafana encryption for stored datasource secrets.                                                                                      |
 | `GRAFANA_DOMAIN`                                                 |                                `localhost` | Grafana's externally visible hostname; production must use the Cloudflare hostname.                                                    |
@@ -344,7 +343,7 @@ maintenance window. Use `db/remote-restore.sh` for normal synchronized
 recovery: it validates ownership, resets all application schemas, filters
 schema-level TOC entries, restores transactionally, and retries the preserved
 snapshot after a failure. Do not run `pg_restore --clean` directly now that
-objects cross `public`, `reporting`, `olap`, and `dashboard_public`; archive
+objects cross `public`, `reporting`, and `olap`; archive
 drop order cannot safely represent those dependencies. After a restore,
 reapply reader privileges and restart clients:
 

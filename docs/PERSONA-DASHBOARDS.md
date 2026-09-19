@@ -46,8 +46,7 @@ docker compose restart grafana
 The normal deployment path runs the role helper after migrations and restarts
 Grafana as part of deployment. The explicit helper invocation is required when
 applying migrations manually because private views and functions need the
-reader grants. The legacy `dashboard_public` database surface remains an
-internal compatibility detail; no externally shared dashboards are provisioned.
+reader grants. No externally shared dashboards are provisioned.
 
 ## Acceptance mapping and current limits
 

@@ -161,7 +161,7 @@ and exact-comparable panels retain their distinct event-time and cohort rules.
   Recompute aggregates from each day's eligible population; do not apply today's
   scores to historical rows. Use `Europe/Sarajevo` calendar days.
 - The latest per-category complete-search watermark can come from
-  `dashboard_public.freshness`; unknown remains unknown. Display the oldest
+  `reporting.freshness`; unknown remains unknown. Display the oldest
   relevant search success and each ad's last seen time.
 - Approximate pin-based neighbourhood assignment, sparse detail coverage and
   multiple ads for one home constrain comparisons. Missing map pins never remove

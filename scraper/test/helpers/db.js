@@ -41,12 +41,7 @@ async function reset(pool) {
     olap.listing_categories,
     olap.market_daily,
     olap.listing_price_changes,
-    olap.listing_exit_economics,
-    olap.public_current_listings,
-    olap.public_daily_market,
-    olap.public_price_reductions,
-    olap.public_exit_cycles,
-    olap.public_freshness`);
+    olap.listing_exit_economics`);
   await pool.query(`UPDATE analytics_refresh_state
                        SET pending_from_day = NULL, pending_through_day = NULL,
                            completed_through_day = NULL,
