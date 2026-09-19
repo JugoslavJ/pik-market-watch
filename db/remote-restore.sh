@@ -176,8 +176,10 @@ build_toc() {
        cp /tmp/toc.all '$2'
      fi
      # Extension metadata is installed by the bootstrap administrator in
-     # reset_schemas; the app role must not try to CREATE EXTENSION.
+     # reset_schemas; the app role must not try to CREATE EXTENSION or replay
+     # its extension-owned spatial_ref_sys table/data.
      grep -ve ' EXTENSION - ' -e ' COMMENT - EXTENSION ' \
+          -e 'spatial_ref_sys' \
           '$2' > '$2'.extensions || :
      mv '$2'.extensions '$2'
      # schema-level entries carry the source schema's owner (ALTER ... OWNER
