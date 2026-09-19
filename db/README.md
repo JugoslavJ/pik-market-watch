@@ -22,6 +22,9 @@ entrypoint and the application migration runner:
 | `12-seed-state.sql`          | Initial singleton and maintenance-control rows                 |
 | `13-reporting-access.sql`    | Stable reporting function grants                               |
 | `15-postgis-neighborhood-boundaries.sql` | PostGIS neighbourhood boundary rollout and spatial index       |
+| `16-rebuild-postgis-neighborhood-index.sql` | Repair the PostGIS boundary GiST operator family after upgrades/restores |
+| `17-olap-refresh-performance.sql` | Materialized OLAP intermediates and covering evidence indexes |
+| `18-olap-targeted-refresh.sql` | Dirty-day/article source functions and single-pass cycle publication |
 | `zz-database-roles.sh`       | Application ownership and reader permissions                   |
 
 Fresh volumes execute these files in order. The migrator subsequently records
