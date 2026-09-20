@@ -121,6 +121,45 @@ needsDb(
 );
 
 needsDb(
+  "article-scoped evidence and comparison sources preserve canonical parity",
+  async () => {
+    await seed([
+      { id: 1, price: 80000 },
+      { id: 2, price: 90000 },
+      { id: 3, price: 100000 },
+    ]);
+    const ids = [1, 2];
+    for (const [canonical, scoped] of [
+      [
+        "reporting.resolved_price_evidence",
+        "reporting.resolved_price_evidence_for_articles($1)",
+      ],
+      [
+        "reporting.comparison_price_changes_source",
+        "reporting.comparison_price_changes_source_for_articles($1)",
+      ],
+    ]) {
+      const missing = await db.pool.query(
+        `SELECT * FROM ${canonical} WHERE article_id=ANY($1)
+         EXCEPT ALL SELECT * FROM ${scoped}`,
+        [ids],
+      );
+      const unexpected = await db.pool.query(
+        `SELECT * FROM ${scoped}
+         EXCEPT ALL SELECT * FROM ${canonical} WHERE article_id=ANY($1)`,
+        [ids],
+      );
+      assert.equal(missing.rowCount, 0, `${canonical}: scoped rows missing`);
+      assert.equal(
+        unexpected.rowCount,
+        0,
+        `${canonical}: scoped rows unexpected`,
+      );
+    }
+  },
+);
+
+needsDb(
   "4/5/10/20 exact distinct comparables; budget never changes the benchmark",
   async () => {
     await seed(Array.from({ length: 5 }, (_, id) => ({ id: id + 1 })));

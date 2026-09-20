@@ -35,36 +35,33 @@ const currentMigrations = fs
   .filter((file) => file.endsWith(".sql"))
   .sort();
 
-needsDb(
-  "baseline adoption still applies the reporting access migration",
-  async () => {
-    const pool = new Pool({
-      connectionString: await recreateDb("mig_reporting"),
-    });
-    try {
-      for (const file of currentMigrations.filter((name) => name < "33-")) {
-        await pool.query(fs.readFileSync(path.join(FULL_DIR, file), "utf8"));
-      }
-      assert.equal(
-        (
-          await pool.query(
-            "SELECT to_regprocedure('reporting.room_bucket(text)') AS helper",
-          )
-        ).rows[0].helper,
-        null,
-      );
-      await applyMigrations(pool, FULL_DIR, log);
-      assert.equal(
-        (await pool.query("SELECT reporting.room_bucket('2') AS bucket"))
-          .rows[0].bucket,
-        "2",
-      );
-      assert.deepEqual(await recorded(pool), currentMigrations);
-    } finally {
-      await pool.end();
+needsDb("baseline adoption still applies the current-state files", async () => {
+  const pool = new Pool({
+    connectionString: await recreateDb("mig_reporting"),
+  });
+  try {
+    for (const file of currentMigrations.filter((name) => name < "17-")) {
+      await pool.query(fs.readFileSync(path.join(FULL_DIR, file), "utf8"));
     }
-  },
-);
+    assert.equal(
+      (
+        await pool.query(
+          "SELECT to_regprocedure('reporting.room_bucket(text)') AS helper",
+        )
+      ).rows[0].helper,
+      "reporting.room_bucket(text)",
+    );
+    await applyMigrations(pool, FULL_DIR, log);
+    assert.equal(
+      (await pool.query("SELECT reporting.room_bucket('2') AS bucket")).rows[0]
+        .bucket,
+      "2",
+    );
+    assert.deepEqual(await recorded(pool), currentMigrations);
+  } finally {
+    await pool.end();
+  }
+});
 
 needsDb(
   "baseline: Docker-style initialization can be adopted by the runner",

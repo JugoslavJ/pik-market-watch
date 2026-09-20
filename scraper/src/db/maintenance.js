@@ -242,8 +242,11 @@ module.exports = function installMaintenanceMethods(Db) {
       const result = { ok: true, errors: {} };
       const run = async (name, operation) => {
         const started = new Date();
+        const startedAt = process.hrtime.bigint();
+        log(`starting ${name}`);
         try {
           const value = await operation();
+          const elapsedMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
           result[name] = value;
           await this.recordMaintenanceOutcome(name, started, {
             rowsAffected:
@@ -253,16 +256,23 @@ module.exports = function installMaintenanceMethods(Db) {
                   value?.rows_written ??
                   value?.rows?.[0]?.rows_written,
               ) || 0,
-            details: value,
+            details: { ...value, elapsed_ms: Math.round(elapsedMs) },
           });
+          log(`${name} completed in ${(elapsedMs / 1000).toFixed(2)}s`);
           return value;
         } catch (error) {
+          const elapsedMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
           result.ok = false;
           result.errors[name] = String(error?.message || error);
-          log(`${name} failed: ${error?.message || error}`);
+          log(
+            `${name} failed after ${(elapsedMs / 1000).toFixed(2)}s: ${error?.message || error}`,
+          );
           await this.recordMaintenanceOutcome(name, started, {
             outcome: "error",
-            details: { message: String(error?.message || error) },
+            details: {
+              message: String(error?.message || error),
+              elapsed_ms: Math.round(elapsedMs),
+            },
           });
           return null;
         }
@@ -279,24 +289,43 @@ module.exports = function installMaintenanceMethods(Db) {
       // of both upstream success and the rebuild result.
       await run("purged", () => this.purgeRawResponses());
       await run("rebuilt", () => this.rebuildDailyInventory({ maxDays, log }));
-      await run("currentMarket", () => this.refreshCurrentMarket());
+      await run("currentMarket", () => this.refreshCurrentMarket(log));
       return result;
     },
 
     /** Atomically publish the current OLTP state as a Grafana OLAP snapshot. */
-    async refreshCurrentMarket() {
-      const result = await this.pool.query(
-        "SELECT * FROM reporting.refresh_current_market()",
+    async refreshCurrentMarket(log = () => {}) {
+      const timed = async (name, operation) => {
+        const started = process.hrtime.bigint();
+        log(`starting ${name}`);
+        try {
+          const value = await operation();
+          const elapsedMs = Number(process.hrtime.bigint() - started) / 1e6;
+          log(`${name} completed in ${(elapsedMs / 1000).toFixed(2)}s`);
+          return value;
+        } catch (error) {
+          const elapsedMs = Number(process.hrtime.bigint() - started) / 1e6;
+          log(
+            `${name} failed after ${(elapsedMs / 1000).toFixed(2)}s: ${error?.message || error}`,
+          );
+          throw error;
+        }
+      };
+      const result = await timed("currentMarket/olapRefresh", () =>
+        this.pool.query("SELECT * FROM reporting.refresh_current_market()"),
       );
       // OLAP publication is a contract boundary: provision the next date
       // partitions, run operational cleanup, and fail the refresh if a source
       // produced a duplicate or malformed grain.
-      await this.pool.query("SELECT public.ensure_analytics_partitions()");
-      await this.pool.query(
-        "SELECT public.apply_operational_cleanup($1)",
-        [5000],
+      await timed("currentMarket/ensureAnalyticsPartitions", () =>
+        this.pool.query("SELECT public.ensure_analytics_partitions()"),
       );
-      await this.pool.query("SELECT reporting.validate_olap_contracts()");
+      await timed("currentMarket/operationalCleanup", () =>
+        this.pool.query("SELECT public.apply_operational_cleanup($1)", [5000]),
+      );
+      await timed("currentMarket/validateContracts", () =>
+        this.pool.query("SELECT reporting.validate_olap_contracts()"),
+      );
       return result.rows[0] || { rows_written: 0, refreshed_at: null };
     },
 

@@ -173,7 +173,7 @@ if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($runningScraper))
 }
 
 try {
-  Log 'scraping (full cycle, all searches)...'
+  Log 'scraping and publishing local analytics snapshot (full cycle, all searches)...'
   docker compose --profile scrape run --rm scraper node src/index.js --once
   if ($LASTEXITCODE -ne 0) { throw "scrape failed (exit $LASTEXITCODE) - instance left untouched; retry later" }
 

@@ -201,11 +201,20 @@ Set `OLAP_BENCHMARK_VALIDATE=1` for the slower exact multiset comparison, or
 run `SELECT * FROM reporting.validate_dashboard_olap()` independently.
 Set `OLAP_BENCHMARK_PROFILE_SOURCES=0` when only end-to-end refresh latency is
 needed; source profiling is enabled by default.
+Set `OLAP_BENCHMARK_SOURCE` to one source name (for example
+`resolved_price_evidence` or `current_listing_scores`) to profile only that
+source while iterating on a query plan. The output also reports dirty article
+and day counts, retained evidence row counts, active listings, and temp blocks.
 Set `OLAP_BENCHMARK_MAX_REFRESH_MS` to make the command fail when any measured
 publication exceeds an explicit environment-specific budget. CI also exercises
 an empty incremental refresh and representative dashboard query with generous
 throwaway-database budgets; production capacity decisions must use a restored
 production-sized database.
+
+One-shot scrape logs identify each maintenance stage and the four current-market
+substeps (`olapRefresh`, partition provisioning, operational cleanup, and
+contract validation). The database dump starts only after those messages show
+successful completion.
 
 Daily reconstruction publishes through `analytics_daily_olap_dirty`. Each
 entry carries a generation token, so an OLAP refresh only acknowledges the
@@ -367,7 +376,7 @@ tunnel path.
   older dashboard queries accessed private tables/functions after the Grafana
   login moved to `olx_reporting`. Failed category/room queries then produced
   untyped empty arrays in panels. Deploy the updated dashboards and migration
-  `33-dashboard-reporting-access.sql` together. The migration exposes the
+  `17-upgrade-to-current.sql` together. The migration exposes the
   required read-only reporting contract; dashboard arrays use explicit
   `text[]` casts. From the instance checkout containing these changes, run:
 
