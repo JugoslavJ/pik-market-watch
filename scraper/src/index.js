@@ -154,7 +154,9 @@ async function runAll(db) {
   const lease = await db.tryAcquireCycleLease?.();
   if (db.tryAcquireCycleLease && !lease) {
     if (config.runOnce) {
-      log("✖ one-shot scrape could not acquire the cycle lease — another scraper is running");
+      log(
+        "✖ one-shot scrape could not acquire the cycle lease — another scraper is running",
+      );
       return {
         okRuns: 0,
         failedRuns: 1,

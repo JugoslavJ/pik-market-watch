@@ -72,7 +72,8 @@ test("home sync pauses a persistent scraper around the snapshot", () => {
   assert.match(sync, /finally \{/);
   assert.match(sync, /start scraper/);
   assert.ok(
-    sync.indexOf("stop scraper") < sync.indexOf("run --rm scraper node src/index.js --once"),
+    sync.indexOf("stop scraper") <
+      sync.indexOf("run --rm scraper node src/index.js --once"),
     "persistent scraper must be stopped before the one-shot scrape",
   );
   assert.ok(
