@@ -114,3 +114,16 @@ test("restore input and identifiers are bounded and cleaned up", () => {
   assert.match(restore, /reset_schemas && docker compose exec/);
   assert.doesNotMatch(restore, /pg_restore -U[^\n]*--clean/);
 });
+
+test("remote restore repairs roles before ownership and schema reset", () => {
+  const restore = read("db/remote-restore.sh");
+  const roleRepair = restore.indexOf("zz-database-roles.sh");
+  const ownershipAudit = restore.indexOf("Ownership audit");
+  const schemaReset = restore.indexOf("reset_schemas() {");
+
+  assert.ok(roleRepair >= 0, "restore must invoke the canonical role repair");
+  assert.ok(ownershipAudit >= 0, "restore must retain the ownership audit");
+  assert.ok(schemaReset >= 0, "restore must retain the schema reset");
+  assert.ok(roleRepair < ownershipAudit);
+  assert.ok(roleRepair < schemaReset);
+});

@@ -120,6 +120,18 @@ if ! docker compose exec -T db sh -c 'pg_restore -l /backups/olx-sync-incoming.d
   exit 1
 fi
 
+# Existing instance volumes may predate the least-privilege role bootstrap (or
+# may have been upgraded without the deploy script's ownership step).  Repair
+# roles before the ownership audit and schema reset: reset_schemas creates
+# schemas AUTHORIZATION "$migrator_user", which must already exist.  The
+# helper is idempotent and uses the instance's .env credentials; invalid or
+# incomplete archives have already been rejected above, so this is the first
+# database mutation on the accepted restore path.
+if ! docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh; then
+  echo "RESTORE_ERROR: could not ensure database roles and ownership" >&2
+  exit 1
+fi
+
 # ─── Ownership audit (before anything destructive) ───────────────────────────
 # pg_restore replays every entry's ALTER ... OWNER TO <source-owner>, and the
 # least-privileged restore role cannot SET ROLE to any other role — so every
