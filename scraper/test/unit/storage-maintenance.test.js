@@ -84,7 +84,7 @@ test("maintenance excludes synchronous current-market publication", async () => 
   db.rebuildDailyInventory = async () => ({ rows: [{ rows_written: 1 }] });
   db.recordMaintenanceOutcome = async () => {};
 
-  const result = await db.runMaintenanceCycle();
+  await db.runMaintenanceCycle();
   assert.deepEqual(calls, []);
 });
 
