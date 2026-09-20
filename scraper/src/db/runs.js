@@ -76,12 +76,14 @@ module.exports = function installRunMethods(Db) {
       );
     },
 
-    /** True when a successful run started within the requested time window. */
+    /** True when a complete successful run finished within the requested window. */
     async hasRecentFinishedRun(minutes, searchKey = null) {
       const result = await this.pool.query(
         `SELECT 1 FROM scrape_runs
           WHERE status = 'ok'
-            AND started_at > now() - make_interval(mins => $1::int)
+            AND is_complete = TRUE
+            AND finished_at IS NOT NULL
+            AND finished_at > now() - make_interval(mins => $1::int)
             AND ($2::text IS NULL OR search_key = $2)
           LIMIT 1`,
         [Math.max(0, Math.round(minutes || 0)), searchKey],

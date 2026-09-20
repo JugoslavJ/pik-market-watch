@@ -117,6 +117,23 @@ test("recoverAbandonedRuns closes only stale running runs with structured failur
   assert.match(calls[0][0], /started_at < now\(\)/);
 });
 
+test("hasRecentFinishedRun uses completed time and complete runs only", async () => {
+  const db = new Db("postgres://unused");
+  const calls = [];
+  db.pool = {
+    query: async (...args) => {
+      calls.push(args);
+      return { rowCount: 0, rows: [] };
+    },
+  };
+
+  await db.hasRecentFinishedRun(45, "/search");
+  assert.match(calls[0][0], /is_complete = TRUE/);
+  assert.match(calls[0][0], /finished_at IS NOT NULL/);
+  assert.match(calls[0][0], /finished_at > now\(\)/);
+  assert.doesNotMatch(calls[0][0], /started_at > now\(\)/);
+});
+
 test("cycle lease keeps a session advisory lock until explicit release", async () => {
   const db = new Db("postgres://unused");
   const calls = [];

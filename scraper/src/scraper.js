@@ -24,7 +24,7 @@ const { enrichSearchResults } = require("./search/enrichment");
  * @param {object} cfg — config.js-shaped knobs
  * @param {(…args:any[])=>void} log
  * @param {{fetchSearchPage?:Function, fetchDetailsInBatches?:Function,
- *          pace?(ms:number):Promise<void>}} [deps]
+ *          pace?(ms:number):Promise<void>, rateBudget?:RateBudget}} [deps]
  */
 async function scrapeSearch(
   db,
@@ -35,6 +35,7 @@ async function scrapeSearch(
     fetchSearchPage = api.fetchSearchPage,
     fetchDetailsInBatches = api.fetchDetailsInBatches,
     pace = sleep,
+    rateBudget: suppliedRateBudget = null,
   } = {},
 ) {
   // Canonical page-1 API URL for this search (pagination stripped, per_page set).
@@ -47,14 +48,16 @@ async function scrapeSearch(
     );
   }
 
-  const rateBudget = new api.RateBudget({
-    cooldownMs: cfg.rateLimitCooldownMs ?? 65000,
-    wait: pace,
-    onLow: (remaining, limit) =>
-      log(
-        `⚠ rate budget low (${remaining}/${limit ?? "?"} left) — throttling this cycle`,
-      ),
-  });
+  const rateBudget =
+    suppliedRateBudget ||
+    new api.RateBudget({
+      cooldownMs: cfg.rateLimitCooldownMs ?? 65000,
+      wait: pace,
+      onLow: (remaining, limit) =>
+        log(
+          `⚠ rate budget low (${remaining}/${limit ?? "?"} left) — throttling this cycle`,
+        ),
+    });
 
   let runId = null;
   let runFinalized = false;

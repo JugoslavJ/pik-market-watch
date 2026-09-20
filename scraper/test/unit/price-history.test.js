@@ -52,6 +52,27 @@ test("current evidence stores observation and renewal metadata separately", () =
   assert.equal(result.event.effectiveAtBasis, "observed");
 });
 
+test("normalized currency is carried as an indexed event identity field", () => {
+  const bam = normalizeEvent({
+    articleId: 44,
+    effectiveAt: "2026-09-05T12:00:00Z",
+    price: 100000,
+    source: "search",
+    isCurrent: true,
+    provenance: { currency: "KM" },
+  });
+  const eur = normalizeEvent({
+    articleId: 44,
+    effectiveAt: "2026-09-05T12:00:00Z",
+    price: 100000,
+    source: "detail",
+    isCurrent: true,
+    provenance: { currency: "EUR" },
+  });
+  assert.equal(bam.event.currency, "BAM");
+  assert.equal(eur.event.currency, "EUR");
+});
+
 test("current unpriced observations become null boundaries, historical invalid prices are quarantined", () => {
   const current = normalizeEvent({
     articleId: 7,

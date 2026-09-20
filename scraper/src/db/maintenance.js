@@ -144,6 +144,7 @@ module.exports = function installMaintenanceMethods(Db) {
       let recoverable = 0;
       let inserted = 0;
       let conflicting = 0;
+      const evidence = [];
       for (const row of rows.rows) {
         const body =
           row.archive_format === "canonical-v2"
@@ -152,28 +153,40 @@ module.exports = function installMaintenanceMethods(Db) {
         const parsed = parseListingDetail(body, Number(row.article_id));
         if (!parsed?.publishedAt) continue;
         recoverable += 1;
+        evidence.push({
+          article_id: Number(row.article_id),
+          published_at: parsed.publishedAt,
+          observed_at: row.fetched_at,
+        });
+      }
+      if (evidence.length) {
+        const encoded = JSON.stringify(evidence);
         const result = await this.pool.query(
           `INSERT INTO listing_publication_evidence
              (article_id, published_at, observed_at, source, evidence_kind)
-           SELECT $1, $2::timestamptz, $3::timestamptz,
+           SELECT e.article_id, e.published_at, e.observed_at,
                   'raw_detail_backfill', 'upstream_created_at'
+             FROM jsonb_to_recordset($1::jsonb) AS e(
+               article_id bigint, published_at timestamptz, observed_at timestamptz)
             WHERE NOT EXISTS (
-              SELECT 1 FROM listing_publication_evidence
-               WHERE article_id = $1 AND published_at = $2::timestamptz
-            )
+              SELECT 1 FROM listing_publication_evidence existing
+               WHERE existing.article_id = e.article_id
+                 AND existing.published_at = e.published_at)
            ON CONFLICT (article_id, published_at, source) DO NOTHING`,
-          [Number(row.article_id), parsed.publishedAt, row.fetched_at],
+          [encoded],
         );
-        if (result.rowCount) inserted += result.rowCount;
+        inserted = result.rowCount;
         const conflict = await this.pool.query(
-          `SELECT EXISTS (
-             SELECT 1 FROM listing_publication_evidence
-              WHERE article_id = $1
-                AND published_at <> $2::timestamptz
-           ) AS has_conflict`,
-          [Number(row.article_id), parsed.publishedAt],
+          `SELECT count(*)::int AS conflicting
+             FROM jsonb_to_recordset($1::jsonb) AS e(
+               article_id bigint, published_at timestamptz, observed_at timestamptz)
+            WHERE EXISTS (
+              SELECT 1 FROM listing_publication_evidence existing
+               WHERE existing.article_id = e.article_id
+                 AND existing.published_at <> e.published_at)`,
+          [encoded],
         );
-        if (conflict.rows[0]?.has_conflict) conflicting += 1;
+        conflicting = Number(conflict.rows[0]?.conflicting || 0);
       }
       if (rows.rowCount) {
         await this.pool.query(

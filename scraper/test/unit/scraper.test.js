@@ -7,7 +7,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { scrapeSearch, pagesInWave } = require("../../src/scraper");
-const { RATE_RESERVE } = require("../../src/api");
+const { RATE_RESERVE, RateBudget } = require("../../src/api");
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
 
@@ -267,6 +267,37 @@ test("low rate budget pauses once (65 s), latch prevents repeat backoffs", async
   const backoffs = pace.delays.filter((ms) => ms >= 60000);
   assert.equal(backoffs.length, 1);
   assert.ok(backoffs[0] >= 64999 && backoffs[0] <= 65000);
+});
+
+test("a supplied rate budget can be shared across searches", async () => {
+  const waits = [];
+  const shared = new RateBudget({
+    cooldownMs: 100,
+    wait: async (ms) => waits.push(ms),
+  });
+  const fetchPage = async () => ({
+    items: [rawCard(700)],
+    remaining: RATE_RESERVE - 1,
+    limit: 60,
+    meta: meta(1, 1, 1),
+  });
+
+  await scrapeSearch(
+    fakeDb(),
+    SEARCH,
+    baseCfg({ rateLimitCooldownMs: 100 }),
+    () => {},
+    { fetchSearchPage: fetchPage, rateBudget: shared },
+  );
+  await scrapeSearch(
+    fakeDb(),
+    { ...SEARCH, searchKey: `${SEARCH.searchKey}&second=1` },
+    baseCfg({ rateLimitCooldownMs: 100 }),
+    () => {},
+    { fetchSearchPage: fetchPage, rateBudget: shared },
+  );
+
+  assert.deepEqual(waits, [100]);
 });
 
 // ── guards & error paths ─────────────────────────────────────────────────────

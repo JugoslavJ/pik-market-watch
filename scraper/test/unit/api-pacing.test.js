@@ -3,7 +3,7 @@
 const fs = require("node:fs");
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { fetchDetailsInBatches } = require("../../src/api");
+const { fetchDetailsInBatches, RateBudget } = require("../../src/api");
 
 const fixture = JSON.parse(
   fs.readFileSync(
@@ -47,4 +47,22 @@ test("detail batches start immediately and wait only between batches", async () 
   } finally {
     global.fetch = originalFetch;
   }
+});
+
+test("rate budget can pause again after an upstream window reset", async () => {
+  const waits = [];
+  const budget = new RateBudget({
+    reserve: 10,
+    cooldownMs: 1000,
+    wait: async (ms) => waits.push(ms),
+    now: () => 0,
+  });
+
+  budget.observeValues(9, 60);
+  await budget.waitIfBlocked();
+  budget.observeValues(60, 60);
+  budget.observeValues(9, 60);
+  await budget.waitIfBlocked();
+
+  assert.deepEqual(waits, [1000, 1000]);
 });

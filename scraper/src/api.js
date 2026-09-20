@@ -133,6 +133,10 @@ class RateBudget {
   observeValues(remaining, limit = null) {
     if (remaining != null) this.remaining = remaining;
     if (limit != null) this.limit = limit;
+    // A raised counter indicates that the upstream window has reset. Allow a
+    // later low-water mark to pause again, especially when one budget is shared
+    // across several searches in the same cycle.
+    if (remaining != null && remaining >= this.reserve) this.lowHandled = false;
     if (remaining != null && remaining < this.reserve && !this.lowHandled) {
       this.lowHandled = true;
       this.blockedUntil = Math.max(
@@ -209,7 +213,12 @@ function toApiSearchUrl(searchUrl, perPage) {
  * crossed, so hostile/broken upstreams fail fast instead of eating RAM.
  */
 async function readBodyCapped(res, maxBytes) {
-  if (!res.body) return res.text(); // no stream (mocks/tests) — uncapped fallback
+  if (!res.body) {
+    const text = await res.text();
+    if (Buffer.byteLength(text, "utf8") > maxBytes)
+      throw new ApiError(`response body exceeds ${maxBytes} bytes`);
+    return text;
+  }
   const reader = res.body.getReader();
   const chunks = [];
   let total = 0;

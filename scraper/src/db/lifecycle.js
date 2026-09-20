@@ -47,48 +47,57 @@ module.exports = function installLifecycleMethods(Db) {
           [activeKeys],
         );
 
+        // Keep the closure update and its immutable evidence set-based. A
+        // deconfigured search can strand thousands of listings; issuing one
+        // INSERT per row needlessly extends the lifecycle lock and transaction.
         const closed = await client.query(
           `UPDATE listings l
-            SET closed_at = $1::timestamptz,
-                closing_price = COALESCE(l.closing_price, l.price),
-                closing_ppm2 = COALESCE(l.closing_ppm2, l.ppm2)
-          WHERE l.closed_at IS NULL
-            AND NOT EXISTS (SELECT 1 FROM search_results sr
-                             WHERE sr.article_id = l.article_id)
-          RETURNING l.article_id, l.closing_category AS category,
-                    l.is_rent, l.sqm, l.rooms,
-                    l.closing_price AS price, l.closing_ppm2 AS ppm2,
-                    l.last_seen`,
+              SET closed_at = $1::timestamptz,
+                  closing_price = COALESCE(l.closing_price, l.price),
+                  closing_ppm2 = COALESCE(l.closing_ppm2, l.ppm2)
+            WHERE l.closed_at IS NULL
+              AND NOT EXISTS (SELECT 1 FROM search_results sr
+                               WHERE sr.article_id = l.article_id)
+            RETURNING l.article_id, l.closing_category AS category,
+                      l.is_rent, l.sqm, l.rooms,
+                      l.closing_price AS price, l.closing_ppm2 AS ppm2,
+                      l.last_seen`,
           [closedAt],
         );
-
-        // A lifecycle sweep can run without a scrape run id.  Still retain a
-        // complete closure observation so daily reconstruction and lifecycle
-        // views have immutable evidence for this transition.
-        for (const row of closed.rows) {
+        const closedCount = closed.rowCount;
+        if (closedCount) {
           await client.query(
             `INSERT INTO listing_state_history
-             (article_id, effective_at, ingested_at, source, event_type,
-              category, category_membership, is_rent, sqm, rooms, price, ppm2,
-              filter_attributes, last_seen_at, closed_at, is_closed)
-           VALUES ($1, $2, $2, 'lifecycle', 'closed', $3, $4, $5, $6, $7,
-                   $8, $9, '{}'::jsonb, $10, $2, true)`,
+               (article_id, effective_at, ingested_at, source, event_type,
+                category, category_membership, is_rent, sqm, rooms, price, ppm2,
+                filter_attributes, last_seen_at, closed_at, is_closed)
+             SELECT article_id, $2, $2, 'lifecycle', 'closed', category,
+                    CASE WHEN category IS NULL THEN '{}'::text[] ELSE ARRAY[category] END,
+                    is_rent, sqm, rooms, price, ppm2, '{}'::jsonb, last_seen,
+                    $2, true
+               FROM jsonb_to_recordset($1::jsonb) AS c(
+                 article_id bigint, category text, is_rent boolean,
+                 sqm numeric, rooms text, price numeric, ppm2 integer,
+                 last_seen timestamptz)`,
             [
-              Number(row.article_id),
+              JSON.stringify(
+                closed.rows.map((row) => ({
+                  article_id: Number(row.article_id),
+                  category: row.category ?? null,
+                  is_rent: row.is_rent ?? null,
+                  sqm: row.sqm ?? null,
+                  rooms: row.rooms ?? null,
+                  price: row.price ?? null,
+                  ppm2: row.ppm2 ?? null,
+                  last_seen: row.last_seen ?? null,
+                })),
+              ),
               closedAt,
-              row.category ?? null,
-              row.category ? [row.category] : [],
-              row.is_rent ?? null,
-              row.sqm ?? null,
-              row.rooms ?? null,
-              row.price ?? null,
-              row.ppm2 ?? null,
-              row.last_seen ?? null,
             ],
           );
         }
 
-        if (closed.rowCount) {
+        if (closedCount) {
           // The closure changed current inventory for this local Banja Luka day.
           // Mark the day dirty in the same transaction as the state transition.
           await client.query(
@@ -113,7 +122,7 @@ module.exports = function installLifecycleMethods(Db) {
         }
 
         await client.query("COMMIT");
-        return closed.rowCount;
+        return closedCount;
       } catch (error) {
         await client.query("ROLLBACK").catch(() => {});
         throw error;

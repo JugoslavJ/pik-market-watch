@@ -51,6 +51,14 @@ test("readBodyCapped: missing stream falls back to res.text()", async () => {
   assert.equal(await readBodyCapped(res, 1024), "fallback");
 });
 
+test("readBodyCapped: text fallback still enforces the byte cap", async () => {
+  const res = { body: null, text: () => Promise.resolve("x".repeat(20)) };
+  await assert.rejects(
+    () => readBodyCapped(res, 10),
+    (err) => err.name === "ApiError" && /exceeds 10 bytes/.test(err.message),
+  );
+});
+
 test("MAX_BODY_BYTES keeps its sane 5 MiB ceiling", () => {
   assert.equal(MAX_BODY_BYTES, 5 * 1024 * 1024);
 });

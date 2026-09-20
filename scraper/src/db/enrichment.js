@@ -102,6 +102,7 @@ module.exports = function installEnrichmentMethods(Db) {
         await client.query("BEGIN");
         const detailObservedAt = new Date();
         const input = renderUnnest(ENRICH_COLS, rows);
+        const observedParam = input.params.length + 1;
         await client.query(
           `WITH input AS (
          SELECT article_id, price, price_text, ppm2_current, is_rent_current,
@@ -155,11 +156,11 @@ module.exports = function installEnrichmentMethods(Db) {
           api_status          = COALESCE(l.api_status, i.api_status),
           api_price_history   = COALESCE(l.api_price_history, i.api_price_history),
           renewed_at          = GREATEST(l.renewed_at, i.renewed_at),
-          details_fetched_at           = now(),
-          last_enrichment_attempted_at = now()
+          details_fetched_at           = $${observedParam}::timestamptz,
+          last_enrichment_attempted_at = $${observedParam}::timestamptz
        FROM input i
        WHERE l.article_id = i.article_id`,
-          input.params,
+          [...input.params, detailObservedAt],
         );
 
         await client.query(
@@ -181,54 +182,62 @@ module.exports = function installEnrichmentMethods(Db) {
             detailObservedAt,
           ],
         );
-        for (const row of rows) {
-          const attributes = {
-            ...(row.pricePresent !== false
-              ? { currency: row.priceCurrency ?? null }
-              : {}),
-            latitude: row.latitude ?? null,
-            longitude: row.longitude ?? null,
-            publishedAt: row.publishedAt ?? null,
-            renewedAt: row.renewedAt ?? null,
-            sellerType: row.sellerType ?? null,
-            roomsDetail: row.roomsDetail ?? null,
-            bathrooms: row.bathrooms ?? null,
-            floorNum: row.floorNum ?? null,
-            floorsTotal: row.floorsTotal ?? null,
-            unitLevels: row.unitLevels ?? null,
-            heating: row.heating ?? null,
-            furnished: row.furnished ?? null,
-            condition: row.condition ?? null,
-            parking: row.parking ?? null,
-            garage: row.garage ?? null,
-            elevator: row.elevator ?? null,
-            yearBuilt: row.yearBuilt ?? null,
-            plotSqm: row.plotSqm ?? null,
-            orientation: row.orientation ?? null,
-            views: row.views ?? null,
-            favorites: row.favorites ?? null,
-            characteristics: row.characteristics ?? {},
-            apiStatus: row.apiStatus ?? null,
-          };
-          await client.query(
-            `INSERT INTO listing_state_history
+        // Preserve one detail observation per listing, but insert the batch in
+        // one statement so enrichment latency does not grow linearly with the
+        // number of detail responses.
+        await client.query(
+          `INSERT INTO listing_state_history
              (article_id, effective_at, ingested_at, source, event_type,
               is_rent, sqm, price, ppm2, filter_attributes,
               membership_inferred, attributes_inferred)
-           SELECT $1, $2, $2, 'detail', 'detail_update', $3, $4, $5, $6,
-                  $7::jsonb, false, false
-             WHERE EXISTS (SELECT 1 FROM listings WHERE article_id = $1)`,
-            [
-              Number(row.articleId),
-              detailObservedAt,
-              row.isRent ?? null,
-              row.sqm ?? null,
-              row.price ?? null,
-              row.ppm2 ?? null,
-              JSON.stringify(attributes),
-            ],
-          );
-        }
+           SELECT d.article_id, $2, $2, 'detail', 'detail_update', d.is_rent,
+                  d.sqm, d.price, d.ppm2, d.attributes, false, false
+             FROM jsonb_to_recordset($1::jsonb) AS d(
+               article_id bigint, is_rent boolean, sqm numeric, price numeric,
+               ppm2 integer, attributes jsonb)
+            WHERE EXISTS (
+              SELECT 1 FROM listings l WHERE l.article_id = d.article_id)`,
+          [
+            JSON.stringify(
+              rows.map((row) => ({
+                article_id: Number(row.articleId),
+                is_rent: row.isRent ?? null,
+                sqm: row.sqm ?? null,
+                price: row.price ?? null,
+                ppm2: row.ppm2 ?? null,
+                attributes: {
+                  ...(row.pricePresent !== false
+                    ? { currency: row.priceCurrency ?? null }
+                    : {}),
+                  latitude: row.latitude ?? null,
+                  longitude: row.longitude ?? null,
+                  publishedAt: row.publishedAt ?? null,
+                  renewedAt: row.renewedAt ?? null,
+                  sellerType: row.sellerType ?? null,
+                  roomsDetail: row.roomsDetail ?? null,
+                  bathrooms: row.bathrooms ?? null,
+                  floorNum: row.floorNum ?? null,
+                  floorsTotal: row.floorsTotal ?? null,
+                  unitLevels: row.unitLevels ?? null,
+                  heating: row.heating ?? null,
+                  furnished: row.furnished ?? null,
+                  condition: row.condition ?? null,
+                  parking: row.parking ?? null,
+                  garage: row.garage ?? null,
+                  elevator: row.elevator ?? null,
+                  yearBuilt: row.yearBuilt ?? null,
+                  plotSqm: row.plotSqm ?? null,
+                  orientation: row.orientation ?? null,
+                  views: row.views ?? null,
+                  favorites: row.favorites ?? null,
+                  characteristics: row.characteristics ?? {},
+                  apiStatus: row.apiStatus ?? null,
+                },
+              })),
+            ),
+            detailObservedAt,
+          ],
+        );
 
         const events = [];
         for (const row of rows) {
@@ -526,10 +535,17 @@ module.exports = function installEnrichmentMethods(Db) {
       ];
       if (!ids.length) return;
       await this.pool.query(
-        "UPDATE listings SET last_enrichment_attempted_at = now() WHERE article_id = ANY($1::bigint[])",
+        `WITH touched AS (
+           UPDATE listings
+              SET last_enrichment_attempted_at = now()
+            WHERE article_id = ANY($1::bigint[])
+            RETURNING article_id, closed_at
+         )
+         INSERT INTO detail_jobs (article_id)
+         SELECT article_id FROM touched WHERE closed_at IS NULL
+         ON CONFLICT (article_id) DO NOTHING`,
         [ids],
       );
-      await this.enqueueDetailJobs(ids);
     },
   });
 };

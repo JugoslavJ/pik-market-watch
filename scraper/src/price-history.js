@@ -156,6 +156,7 @@ function normalizeEvent(event, { now = new Date() } = {}) {
       ingestedAt: ingestedDate,
       price: priceState === PRICE_STATES.VALID ? price : null,
       priceState,
+      currency: currencyValue(provenance),
       source,
       provenance,
       current,
@@ -200,6 +201,10 @@ function currencyKey(provenance) {
     .trim()
     .toUpperCase();
   return currency === "KM" ? "BAM" : currency;
+}
+
+function currencyValue(provenance) {
+  return currencyKey(provenance) || null;
 }
 
 function dayInBanjaLuka(date) {
@@ -358,10 +363,10 @@ async function recordPriceEvents(pool, events, options = {}) {
       const inserted = await client.query(
         `INSERT INTO listing_price_events
            (article_id, effective_at, observed_at, renewed_at, effective_at_basis,
-            ingested_at, price, price_state, source, provenance)
+            ingested_at, price, price_state, currency, source, provenance)
          SELECT article_id, effective_at, observed_at, renewed_at, effective_at_basis,
                 GREATEST(COALESCE(ingested_at, now()), effective_at),
-                price, price_state, source, provenance
+                price, price_state, currency, source, provenance
            FROM jsonb_to_recordset($1::jsonb) AS e(
              article_id bigint,
              effective_at timestamptz,
@@ -371,9 +376,10 @@ async function recordPriceEvents(pool, events, options = {}) {
              ingested_at timestamptz,
              price numeric,
              price_state text,
+             currency text,
              source text,
              provenance jsonb)
-         ON CONFLICT (article_id, effective_at, price, price_state) DO NOTHING`,
+         ON CONFLICT (article_id, effective_at, price, price_state, currency) DO NOTHING`,
         [
           JSON.stringify(
             insertedEvents.map((event) => ({
@@ -385,6 +391,7 @@ async function recordPriceEvents(pool, events, options = {}) {
               ingested_at: event.ingestedAt,
               price: event.price,
               price_state: event.priceState,
+              currency: event.currency,
               source: event.source,
               provenance: event.provenance,
             })),

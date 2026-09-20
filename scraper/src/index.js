@@ -6,9 +6,10 @@
 const http = require("http");
 const config = require("./config");
 const Db = require("./db");
+const api = require("./api");
 const applyMigrations = require("./migrate");
 const { scrapeSearch } = require("./scraper");
-const { makeLogger, healthStatus, healthPayload } = require("./util");
+const { makeLogger, healthStatus, healthPayload, sleep } = require("./util");
 
 const log = makeLogger("scraper");
 
@@ -43,24 +44,36 @@ async function runAllUnlocked(db) {
   let failedRuns = 0;
   let totalCards = 0;
   let skipped = 0;
+  // OLX rate limits apply across all search and detail endpoints. Share one
+  // budget across the complete cycle instead of resetting it per search.
+  const cycleRateBudget = new api.RateBudget({
+    cooldownMs: config.rateLimitCooldownMs,
+    wait: sleep,
+    onLow: (remaining, limit) =>
+      log(
+        `⚠ rate budget low (${remaining}/${limit ?? "?"} left) — throttling this cycle`,
+      ),
+  });
   for (const search of config.searches) {
     // Deploy-restart protection, PER SEARCH: every container recreation boots
     // a full scrape cycle (~dozens of API pages + detail calls), and several
     // deploys in one evening are enough to trip olx.ba's rate limiter. Keyed
     // on search_key so a newly added search still scrapes immediately instead
     // of waiting out the gap. (RUN_ONCE is exempt — explicit intent.)
-    if (
-      !config.runOnce &&
-      (await db.hasRecentFinishedRun(config.minRunGapMinutes, search.searchKey))
-    ) {
-      log(
-        `↷ "${search.name}" had an ok run < ${config.minRunGapMinutes} min ago — skipping`,
-      );
-      skipped += 1;
-      continue;
-    }
     try {
-      const res = await scrapeSearch(db, search, config, log);
+      if (
+        !config.runOnce &&
+        (await db.hasRecentFinishedRun(config.minRunGapMinutes, search.searchKey))
+      ) {
+        log(
+          `↷ "${search.name}" had an ok run < ${config.minRunGapMinutes} min ago — skipping`,
+        );
+        skipped += 1;
+        continue;
+      }
+      const res = await scrapeSearch(db, search, config, log, {
+        rateBudget: cycleRateBudget,
+      });
       totalCards += res.cards;
       okRuns += 1;
       state.totalRuns += 1;
@@ -91,11 +104,12 @@ async function runAllUnlocked(db) {
   // leave their previous result links in place, so an outage never closes
   // anything.
   //
-  // Extra guard: a cycle that returned ZERO listings everywhere is almost
-  // certainly throttling/blocking, not a vanished market. Closing then would
-  // freeze every listing in the database with bogus exit prices — skip the
-  // closing pass instead.
-  if (totalCards === 0) {
+  // A zero-card cycle is safe to close only when every configured search
+  // completed successfully. This distinguishes an authoritative empty market
+  // from a blocked/failed/ skipped search whose old membership must remain.
+  const allSearchesAuthoritative =
+    okRuns === config.searches.length && failedRuns === 0 && skipped === 0;
+  if (totalCards === 0 && !allSearchesAuthoritative) {
     log(
       `⚠ cycle yielded 0 listings across all ${config.searches.length} search(es) — ` +
         `likely throttled or blocked; SKIPPING the closing pass`,
@@ -151,6 +165,15 @@ async function runAll(db) {
       ?.release()
       .catch((err) => log(`cycle lease release failed: ${err.message || err}`));
   }
+}
+
+function cycleFailureResult(error) {
+  state.failedRuns += 1;
+  state.consecutiveFailures += 1;
+  state.lastStatus = "error";
+  state.lastRunAt = new Date().toISOString();
+  log(`✖ scraper cycle failed: ${error?.message || error}`);
+  return { okRuns: 0, failedRuns: 1, skipped: 0, totalCards: 0 };
 }
 
 function startHealthServer() {
@@ -232,7 +255,7 @@ async function main() {
   // the initial scrape is still running.
   healthServer = startHealthServer();
 
-  activeCycle = runAll(db);
+  activeCycle = runAll(db).catch(cycleFailureResult);
   const initialResult = await activeCycle;
   activeCycle = null;
 
@@ -258,7 +281,7 @@ async function main() {
     }
     running = true;
     activeCycle = runAll(db)
-      .catch((err) => log("scheduled run failed:", err.message || err))
+      .catch(cycleFailureResult)
       .finally(() => {
         running = false;
         activeCycle = null;
