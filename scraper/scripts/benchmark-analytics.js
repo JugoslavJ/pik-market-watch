@@ -12,9 +12,7 @@ if (!databaseUrl) throw new Error("DATABASE_URL is required");
 const baseArticleId = Number(
   process.env.ANALYTICS_BENCHMARK_BASE_ARTICLE_ID || 900000000,
 );
-const listingCount = Number(
-  process.env.ANALYTICS_BENCHMARK_LISTINGS || 3000,
-);
+const listingCount = Number(process.env.ANALYTICS_BENCHMARK_LISTINGS || 3000);
 const days = Number(process.env.ANALYTICS_BENCHMARK_DAYS || 50);
 if (!Number.isSafeInteger(baseArticleId) || baseArticleId <= 0)
   throw new Error("ANALYTICS_BENCHMARK_BASE_ARTICLE_ID must be positive");
@@ -166,7 +164,9 @@ async function main() {
              FROM generate_series(1, 100) g
          ) points(lat, lon)`,
     );
-    console.log(JSON.stringify({ lookup, rebuild, refresh, geography }, null, 2));
+    console.log(
+      JSON.stringify({ lookup, rebuild, refresh, geography }, null, 2),
+    );
   } finally {
     await pool.end();
   }

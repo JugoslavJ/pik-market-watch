@@ -104,16 +104,21 @@ async function main() {
       refresh = {
         status: "ok",
         ...(
-          await client.query("SELECT * FROM reporting.refresh_dashboard_olap($1)", [
-            forceFull,
-          ])
+          await client.query(
+            "SELECT * FROM reporting.refresh_dashboard_olap($1)",
+            [forceFull],
+          )
         ).rows[0],
-        wallMs: Math.round(Number(process.hrtime.bigint() - refreshStarted) / 1e6),
+        wallMs: Math.round(
+          Number(process.hrtime.bigint() - refreshStarted) / 1e6,
+        ),
       };
     } catch (error) {
       refresh = {
         status: "error",
-        wallMs: Math.round(Number(process.hrtime.bigint() - refreshStarted) / 1e6),
+        wallMs: Math.round(
+          Number(process.hrtime.bigint() - refreshStarted) / 1e6,
+        ),
         error: error.message,
       };
     }
@@ -143,7 +148,9 @@ async function main() {
           health: health.rows[0],
           databaseActivity: {
             walBytes: wal.rows[0].bytes,
-            tempBytes: String(BigInt(after.temp_bytes) - BigInt(before.temp_bytes)),
+            tempBytes: String(
+              BigInt(after.temp_bytes) - BigInt(before.temp_bytes),
+            ),
             databaseBytesBefore: before.database_bytes,
             databaseBytesAfter: after.database_bytes,
           },
