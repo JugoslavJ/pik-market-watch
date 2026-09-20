@@ -175,9 +175,9 @@ async function applyMigrations(pool, dir, log = () => {}) {
         } else if (recordedChecksum !== checksum) {
           const transition = baselineTransitions[file];
           if (
-            bridgePending &&
             transition?.current === checksum &&
-            transition.previous.includes(recordedChecksum)
+            transition.previous.includes(recordedChecksum) &&
+            (bridgePending || transition.allowAfterApply === true)
           ) {
             await client.query(
               "UPDATE schema_migrations SET checksum = $2 WHERE filename = $1",

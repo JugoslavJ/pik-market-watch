@@ -142,6 +142,35 @@ needsDb(
 );
 
 needsDb(
+  "migrations: a post-apply correction advances its known checksum",
+  async () => {
+    const pool = new Pool({ connectionString: await recreateDb("mig_fix") });
+    try {
+      await applyMigrations(pool, FULL_DIR, log);
+      await pool.query(
+        "UPDATE schema_migrations SET checksum = $2 WHERE filename = $1",
+        [
+          "18-performance-maintenance.sql",
+          baselineTransitions["18-performance-maintenance.sql"].previous[0],
+        ],
+      );
+      await applyMigrations(pool, FULL_DIR, log);
+      assert.equal(
+        (
+          await pool.query(
+            "SELECT checksum FROM schema_migrations WHERE filename = $1",
+            ["18-performance-maintenance.sql"],
+          )
+        ).rows[0].checksum,
+        baselineTransitions["18-performance-maintenance.sql"].current,
+      );
+    } finally {
+      await pool.end();
+    }
+  },
+);
+
+needsDb(
   "migrations: pending bridge rejects unknown drift and changed targets",
   async () => {
     const pool = new Pool({

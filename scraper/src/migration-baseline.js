@@ -1,9 +1,20 @@
 "use strict";
 
 // The September 2026 squash changed these already-deployed baseline files.
-// Accept only the known old -> final checksums, and only while the matching
-// compatibility bridge is pending. Its SQL and ledger updates commit together.
+// Accept only the known old -> final checksums. Baseline transitions require
+// the matching compatibility bridge; an explicitly marked post-apply fix may
+// advance an already-recorded migration without replaying its SQL.
 module.exports = {
+  // Migration 18 was corrected to be safe when Docker initialization and the
+  // application migrator both execute it. Existing volumes may already carry
+  // the pre-correction checksum; accept that exact transition once.
+  "18-performance-maintenance.sql": {
+    previous: [
+      "38afafc246a7b1e7dc03c650b2971c1d6931cde038269eb20cf251296026fb8b",
+    ],
+    current: "61fcf6ed8b20d077cdab9b89291d6388becc67f354c7fec7e8ccb1e20ac6c109",
+    allowAfterApply: true,
+  },
   "04-source-views.sql": {
     previous: [
       "2e651714943ef45b0868bf9eb7c749ecfab2dc57ec6b4f6cebafb9d050f73647",
