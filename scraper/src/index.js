@@ -63,7 +63,10 @@ async function runAllUnlocked(db) {
     try {
       if (
         !config.runOnce &&
-        (await db.hasRecentFinishedRun(config.minRunGapMinutes, search.searchKey))
+        (await db.hasRecentFinishedRun(
+          config.minRunGapMinutes,
+          search.searchKey,
+        ))
       ) {
         log(
           `↷ "${search.name}" had an ok run < ${config.minRunGapMinutes} min ago — skipping`,
