@@ -41,10 +41,12 @@ if [ "$MAX_BYTES" -le 0 ]; then
 fi
 # Restore as the least-privileged OWNING role (db/init/zz-database-roles.sh):
 # it must own the restored objects. Names come from .env.
+migrator_user="$(sed -n 's/^POSTGRES_MIGRATOR_USER=//p' "$REPO_DIR/.env" 2>/dev/null | tr -d '\r')"
+migrator_user="${migrator_user:-olx_migrator}"
 app_user="$(sed -n 's/^POSTGRES_APP_USER=//p' "$REPO_DIR/.env" 2>/dev/null | tr -d '\r')"
 app_user="${app_user:-olx_app}"
-reader_user="$(sed -n 's/^POSTGRES_READER_USER=//p' "$REPO_DIR/.env" 2>/dev/null | tr -d '\r')"
-reader_user="${reader_user:-olx_reader}"
+reporting_user="$(sed -n 's/^POSTGRES_REPORTING_USER=//p' "$REPO_DIR/.env" 2>/dev/null | tr -d '\r')"
+reporting_user="${reporting_user:-olx_reporting}"
 # Bootstrap superuser (POSTGRES_USER) - owns the public schema itself, which
 # $app_user does not, so the schema reset below runs as this role.
 boot_user="$(sed -n 's/^POSTGRES_USER=//p' "$REPO_DIR/.env" 2>/dev/null | tr -d '\r')"
@@ -66,8 +68,9 @@ validate_identifier() {
     exit 1
   fi
 }
+validate_identifier POSTGRES_MIGRATOR_USER "$migrator_user"
 validate_identifier POSTGRES_APP_USER "$app_user"
-validate_identifier POSTGRES_READER_USER "$reader_user"
+validate_identifier POSTGRES_REPORTING_USER "$reporting_user"
 validate_identifier POSTGRES_USER "$boot_user"
 validate_identifier POSTGRES_DB "$db_name"
 
@@ -120,7 +123,7 @@ fi
 # ─── Ownership audit (before anything destructive) ───────────────────────────
 # pg_restore replays every entry's ALTER ... OWNER TO <source-owner>, and the
 # least-privileged restore role cannot SET ROLE to any other role — so every
-# archived object must ALREADY be owned by $app_user. Drift happens when the
+# archived object must ALREADY be owned by $migrator_user. Drift happens when the
 # SOURCE machine creates objects as its bootstrap superuser (2026-08-24: a
 # migration re-applied by hand as "-U olx" shipped two superuser-owned objects;
 # the failure only surfaced here, after the schema had already been dropped).
@@ -133,9 +136,9 @@ drifted=$(docker compose exec -T db sh -c "
     pg_restore -l '/backups/olx-sync-incoming.dump' |
     grep -v '^;' | grep -v 'DEFAULT ACL' |
     grep -v ' EXTENSION - ' | grep -v ' COMMENT - EXTENSION ' |
-    awk '\$NF != \"$app_user\" {print \$NF}' | sort -u")
+    awk '\$NF != \"$migrator_user\" {print \$NF}' | sort -u")
 if [ -n "$drifted" ]; then
-  echo "RESTORE_ERROR: archive contains objects not owned by $app_user:" >&2
+  echo "RESTORE_ERROR: archive contains objects not owned by $migrator_user:" >&2
   printf '%s\n' "$drifted" | sed 's/^/RESTORE_ERROR:   /' >&2
   echo "RESTORE_ERROR: fix the source machine, then re-run the sync:" >&2
   echo "RESTORE_ERROR:   docker compose exec db bash /docker-entrypoint-initdb.d/zz-database-roles.sh" >&2
@@ -160,14 +163,14 @@ fi
 # build_toc <container-archive-path> <output-list>: filter the TOC to entries
 # this restore may execute. The source machine's zz-database-roles.sh
 # (pre-2026-08 versions) also set default privileges FOR ROLE <bootstrap
-# admin>. Restoring runs as $app_user, which may not alter ANOTHER role's
+# admin>. Restoring runs as $migrator_user, which may not alter ANOTHER role's
 # defaults - those archive entries would fail, and any pg_restore error aborts
 # the whole sync. Keep every entry EXCEPT DEFAULT ACL items whose trailing
-# role is not $app_user; the dump's own app-role defaults restore normally.
+# role is not $migrator_user; the dump's own migration-role defaults restore normally.
 build_toc() {
   docker compose exec -T db sh -c "
      pg_restore -l '$1' > /tmp/toc.all || exit 1
-     grep 'DEFAULT ACL' /tmp/toc.all | grep -Ev \" ${app_user}\\$\" > /tmp/toc.drop || :
+    grep 'DEFAULT ACL' /tmp/toc.all | grep -Ev \" ${migrator_user}\\$\" > /tmp/toc.drop || :
      if [ -s /tmp/toc.drop ]; then
        grep -vxFf /tmp/toc.drop /tmp/toc.all > '$2' || :
      else
@@ -206,12 +209,12 @@ reset_schemas() {
     DROP SCHEMA IF EXISTS reporting CASCADE;
     DROP SCHEMA IF EXISTS olap CASCADE;
     DROP SCHEMA IF EXISTS public CASCADE;
-    CREATE SCHEMA public AUTHORIZATION \"$app_user\";
-    CREATE SCHEMA reporting AUTHORIZATION \"$app_user\";
-    CREATE SCHEMA olap AUTHORIZATION \"$app_user\";
+    CREATE SCHEMA public AUTHORIZATION \"$migrator_user\";
+    CREATE SCHEMA reporting AUTHORIZATION \"$migrator_user\";
+    CREATE SCHEMA olap AUTHORIZATION \"$migrator_user\";
     CREATE EXTENSION IF NOT EXISTS postgis;
     GRANT ALL ON SCHEMA public TO \"$app_user\";
-    GRANT USAGE ON SCHEMA public TO \"$reader_user\";"
+      GRANT USAGE ON SCHEMA reporting TO \"$reporting_user\";"
 }
 
 if ! reset_schemas; then
@@ -224,9 +227,9 @@ fi
 # previous snapshot.
 restore_failed=0
 # --no-owner: belt-and-braces behind the audit above — a no-op while every
-# entry targets $app_user; if anything ever slips through it degrades to
+# entry targets $migrator_user; if anything ever slips through it degrades to
 # "object owned by the restoring role" instead of failing the whole sync.
-if ! docker compose exec -T db pg_restore -U "$app_user" -d "$db_name" --no-owner \
+if ! docker compose exec -T db pg_restore -U "$migrator_user" -d "$db_name" --no-owner \
        --single-transaction --use-list=/tmp/toc.use /backups/olx-sync-incoming.dump; then
   restore_failed=1
 fi
@@ -234,7 +237,7 @@ fi
 if [ "$restore_failed" = "1" ]; then
   if [ -n "$prev" ] && build_toc "/backups/$(basename "$prev")" /tmp/toc.prev; then
     echo "RESTORE_ERROR: pg_restore failed - rolling back to previous snapshot $(basename "$prev")" >&2
-    if reset_schemas && docker compose exec -T db pg_restore -U "$app_user" -d "$db_name" --no-owner \
+    if reset_schemas && docker compose exec -T db pg_restore -U "$migrator_user" -d "$db_name" --no-owner \
          --single-transaction --use-list=/tmp/toc.prev "/backups/$(basename "$prev")"; then
       echo "RESTORE_ERROR: rollback finished - instance is serving the previous snapshot" >&2
     else
@@ -249,10 +252,14 @@ restore_ok=1
 
 # Belt & braces: FUTURE tables created by migrations must stay readable by
 # Grafana even if some future dump ever lacks the app-role defaults.
-docker compose exec -T db psql -U "$app_user" -d "$db_name" -q \
-  -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO \"$reader_user\";
-      ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON SEQUENCES TO \"$reader_user\";" \
-  || echo "RESTORE_WARN: could not re-assert default privileges for the reader (non-fatal)" >&2
+docker compose exec -T db psql -U "$migrator_user" -d "$db_name" -q \
+  -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO \"$app_user\";
+      ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO \"$app_user\";" \
+  || echo "RESTORE_WARN: could not re-assert writer default privileges (non-fatal)" >&2
+
+# Schema replacement removes object grants. Re-run the canonical role repair so
+# the writer and reporting contracts are restored before the scraper restarts.
+docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
 
 if [ "$was_running" = "1" ]; then
   docker compose start scraper

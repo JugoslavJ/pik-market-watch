@@ -26,8 +26,10 @@ test("example secrets and Compose listeners fail closed", () => {
   const compose = read("docker-compose.yml");
   for (const name of [
     "POSTGRES_PASSWORD",
+    "POSTGRES_MIGRATOR_PASSWORD",
     "POSTGRES_APP_PASSWORD",
-    "POSTGRES_READER_PASSWORD",
+    "POSTGRES_REPORTING_PASSWORD",
+    "POSTGRES_BACKUP_PASSWORD",
     "GRAFANA_ADMIN_PASSWORD",
     "GRAFANA_SECRET_KEY",
   ])
@@ -84,6 +86,15 @@ test("backup publication is verified before atomic rename", () => {
   assert.match(backup, /mv -f "\$partial" "\$out"/);
   assert.match(backup, /tar -tzf "\$gpartial"/);
   assert.match(backup, /mv -f "\$gpartial" "\$gtar"/);
+});
+
+test("database roles separate reporting and backup access", () => {
+  const roles = read("db/init/zz-database-roles.sh");
+  assert.match(roles, /GRANT pg_read_all_data TO %I.*backup_user/);
+  assert.match(roles, /REVOKE pg_read_all_data FROM %I.*reporting_user/);
+  assert.match(roles, /relkind IN \('v','m'\).*reporting_user/s);
+  assert.doesNotMatch(roles, /GRANT pg_read_all_data TO %I.*reporting_user/);
+  assert.match(roles, /DROP ROLE %I.*olx_reader/);
 });
 
 test("restore input and identifiers are bounded and cleaned up", () => {

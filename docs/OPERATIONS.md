@@ -12,13 +12,15 @@ cp config/searches.example.json config/searches.json
 docker compose up -d --build
 ```
 
-`.env.example` intentionally leaves `POSTGRES_PASSWORD`, `POSTGRES_APP_PASSWORD`, `POSTGRES_READER_PASSWORD`, `GRAFANA_ADMIN_PASSWORD`, and `GRAFANA_SECRET_KEY` blank. Set all five before starting or deploying; the deployment preflight rejects blank and legacy `change-me*` values. Application and reader passwords are embedded in a PostgreSQL URL, so use URL-safe values such as `openssl rand -hex 24`.
+`.env.example` intentionally leaves `POSTGRES_PASSWORD`, `POSTGRES_MIGRATOR_PASSWORD`, `POSTGRES_APP_PASSWORD`, `POSTGRES_REPORTING_PASSWORD`, `POSTGRES_BACKUP_PASSWORD`, `GRAFANA_ADMIN_PASSWORD`, and `GRAFANA_SECRET_KEY` blank. Set all seven before starting or deploying; the deployment preflight rejects blank and legacy `change-me*` values. Database passwords are embedded in connection settings, so use URL-safe values such as `openssl rand -hex 24`.
 
 | Setting                                                          |                                    Default | Consumer                                                                                                                               |
 | ---------------------------------------------------------------- | -----------------------------------------: | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`              |                     `olx`, required, `olx` | PostgreSQL bootstrap database.                                                                                                         |
-| `POSTGRES_APP_USER`, `POSTGRES_APP_PASSWORD`                     |                        `olx_app`, required | Scraper and restore owner role.                                                                                                        |
-| `POSTGRES_READER_USER`, `POSTGRES_READER_PASSWORD`               |                     `olx_reader`, required | Grafana and backup read-only role.                                                                                                     |
+| `POSTGRES_MIGRATOR_USER`, `POSTGRES_MIGRATOR_PASSWORD`           |                    `olx_migrator`, required | Migration and restore owner role; not used by normal runtime services.                                                                 |
+| `POSTGRES_APP_USER`, `POSTGRES_APP_PASSWORD`                     |                        `olx_app`, required | Scraper and maintenance runtime writer; owns no database objects.                                                                      |
+| `POSTGRES_REPORTING_USER`, `POSTGRES_REPORTING_PASSWORD`          |                 `olx_reporting`, required | Grafana role with SELECT on reporting views and EXECUTE on stable reporting functions only.                                           |
+| `POSTGRES_BACKUP_USER`, `POSTGRES_BACKUP_PASSWORD`                |                    `olx_backup`, required | Dedicated broad-read role used only by `pg_dump`; it is not a Grafana credential.                                                      |
 | `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD`                   |                          `admin`, required | Grafana login.                                                                                                                         |
 | `GRAFANA_SECRET_KEY`                                             |                                   required | Grafana encryption for stored datasource secrets.                                                                                      |
 | `GRAFANA_DOMAIN`                                                 |                                `localhost` | Grafana's externally visible hostname; production must use the Cloudflare hostname.                                                    |
@@ -39,6 +41,18 @@ docker compose up -d --build
 | `BACKUP_RETENTION_DAYS`                                          |                                       `14` | Days of database and Grafana archives retained by `db-backup`; `0` disables pruning.                                                   |
 | `ALERT_EMAIL_TO`                                                 |                                      unset | Recipient for provisioned alerting. Mail also requires enabling and configuring the `GF_SMTP_*` entries in `docker-compose.yml`.       |
 | `SCRAPE_STALE_AFTER_HOURS`                                       |                                       `26` | Per-search freshness alert and public freshness label; choose a value that covers the actual scrape cadence.                           |
+
+For an existing volume, add the four role credentials to `.env`, recreate the
+database service, and apply the role migration once:
+
+```bash
+docker compose up -d db
+docker compose exec db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
+```
+
+This transfers object ownership to `olx_migrator`, retires the old
+`olx_reader` login, and refreshes writer/reporting grants. Do this before
+starting Grafana or the scraper with the new credentials.
 
 Search configuration is read from `config/searches.json`; `SEARCH_URLS` is an environment override for a bare scraper process or an explicit `docker compose run -e SEARCH_URLS=...` invocation. The scraper also accepts `SCRAPE_USER_AGENT`, `HEALTH_PORT`, and pacing/health variables (`MAX_PAGES`, `CONCURRENCY`, `PAGE_DELAY_MS`, `API_PER_PAGE`, `API_TIMEOUT_MS`, `MAX_GEO_FETCHES`, `GEO_CONCURRENCY`, `GEO_DELAY_MS`, `SCRAPE_MIN_GAP_MINUTES`, `ABANDONED_RUN_AFTER_MINUTES`, `DETAIL_JOB_LEASE_MINUTES`, and `HEALTH_FAILURE_THRESHOLD`). Compose injects `ABANDONED_RUN_AFTER_MINUTES`, `DETAIL_JOB_LEASE_MINUTES`, and `ANALYTICS_REBUILD_MAX_DAYS`; pass the other tuning variables explicitly with `docker compose run -e NAME=value` or set them in a supported deployment change.
 

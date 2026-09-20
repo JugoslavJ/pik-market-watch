@@ -25,7 +25,8 @@ done
 
 # Least-privilege DB roles live only on the machines (git-ignored): fail fast
 # with fix instructions.
-for v in POSTGRES_PASSWORD POSTGRES_APP_PASSWORD POSTGRES_READER_PASSWORD \
+for v in POSTGRES_PASSWORD POSTGRES_MIGRATOR_PASSWORD POSTGRES_APP_PASSWORD \
+         POSTGRES_REPORTING_PASSWORD POSTGRES_BACKUP_PASSWORD \
          GRAFANA_ADMIN_PASSWORD GRAFANA_SECRET_KEY; do
   line=$(grep -E "^${v}=" .env | tail -n 1 || true)
   value=${line#*=}

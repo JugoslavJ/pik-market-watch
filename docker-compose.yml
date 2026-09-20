@@ -59,12 +59,18 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: ${POSTGRES_DB:-olx}
       # Runtime least-privilege roles (db/init/zz-database-roles.sh):
-      #   *APP*    owns schema/objects — scraper + remote restores connect as it
-      #   *READER* read-only — Grafana datasource + pg_dump backups
+      #   *MIGRATOR* owns schema/objects — migrations and restores only
+      #   *APP*      runtime writer — scraper and maintenance
+      #   *REPORTING* reporting views/functions only — Grafana
+      #   *BACKUP*   broad read-only — pg_dump only
+      POSTGRES_MIGRATOR_USER: ${POSTGRES_MIGRATOR_USER:-olx_migrator}
+      POSTGRES_MIGRATOR_PASSWORD: ${POSTGRES_MIGRATOR_PASSWORD:?set POSTGRES_MIGRATOR_PASSWORD in .env}
       POSTGRES_APP_USER: ${POSTGRES_APP_USER:-olx_app}
       POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:?set POSTGRES_APP_PASSWORD in .env}
-      POSTGRES_READER_USER: ${POSTGRES_READER_USER:-olx_reader}
-      POSTGRES_READER_PASSWORD: ${POSTGRES_READER_PASSWORD:?set POSTGRES_READER_PASSWORD in .env}
+      POSTGRES_REPORTING_USER: ${POSTGRES_REPORTING_USER:-olx_reporting}
+      POSTGRES_REPORTING_PASSWORD: ${POSTGRES_REPORTING_PASSWORD:?set POSTGRES_REPORTING_PASSWORD in .env}
+      POSTGRES_BACKUP_USER: ${POSTGRES_BACKUP_USER:-olx_backup}
+      POSTGRES_BACKUP_PASSWORD: ${POSTGRES_BACKUP_PASSWORD:?set POSTGRES_BACKUP_PASSWORD in .env}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./db/init:/docker-entrypoint-initdb.d:ro # runs on FIRST start only
@@ -136,7 +142,7 @@ services:
       postgis-bootstrap:
         condition: service_completed_successfully
     environment:
-      DATABASE_URL: postgres://${POSTGRES_APP_USER:-olx_app}:${POSTGRES_APP_PASSWORD}@db:5432/${POSTGRES_DB:-olx}
+      DATABASE_URL: postgres://${POSTGRES_MIGRATOR_USER:-olx_migrator}:${POSTGRES_MIGRATOR_PASSWORD}@db:5432/${POSTGRES_DB:-olx}
       OLAP_RECONCILE_TIMEOUT_MS: ${OLAP_RECONCILE_TIMEOUT_MS:-900000}
     volumes:
       - ./db/init:/db/init:ro
@@ -299,8 +305,8 @@ services:
         {"type":"maplibre","config":{"url":"https://basemaps.cartocdn.com/gl/${GRAFANA_CARTO_VECTOR_STYLE:-dark-matter}-gl-style/style.json?key=${GRAFANA_CARTO_API_KEY:-}"}}
       # Consumed by env interpolation in grafana/provisioning/datasources/postgres.yml
       # (read-only role — Grafana never needs write access)
-      POSTGRES_READER_USER: ${POSTGRES_READER_USER:-olx_reader}
-      POSTGRES_READER_PASSWORD: ${POSTGRES_READER_PASSWORD}
+      POSTGRES_REPORTING_USER: ${POSTGRES_REPORTING_USER:-olx_reporting}
+      POSTGRES_REPORTING_PASSWORD: ${POSTGRES_REPORTING_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-olx}
       SCRAPE_STALE_AFTER_HOURS: ${SCRAPE_STALE_AFTER_HOURS:-26}
       # Consumed by provisioning/alerting/olx-alerts.yml (alert mail recipient).
@@ -362,8 +368,8 @@ services:
         condition: service_healthy
     environment:
       PGHOST: db
-      PGUSER: ${POSTGRES_READER_USER:-olx_reader} # read-only is enough for pg_dump
-      PGPASSWORD: ${POSTGRES_READER_PASSWORD}
+      PGUSER: ${POSTGRES_BACKUP_USER:-olx_backup} # dedicated broad-read backup role
+      PGPASSWORD: ${POSTGRES_BACKUP_PASSWORD}
       PGDATABASE: ${POSTGRES_DB:-olx}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
     volumes:
