@@ -4,7 +4,12 @@
 // 17-temporal-analytics-semantics.sql.
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { needsDb, reset, setupDb } = require("../helpers/db.js");
+const {
+  needsDb,
+  reset,
+  setupDb,
+  withHistoryMaintenance,
+} = require("../helpers/db.js");
 
 let db;
 
@@ -127,10 +132,12 @@ needsDb(
       ["effective_at_basis", "observed_at", "renewed_at"],
     );
     await insertEvidence(8803, "2026-08-01T10:00:00Z");
-    await db.pool.query(
-      `UPDATE listing_price_events
-          SET renewed_at = '2026-08-15T10:00:00Z'
-        WHERE article_id = 8803`,
+    await withHistoryMaintenance(db.pool, (client) =>
+      client.query(
+        `UPDATE listing_price_events
+            SET renewed_at = '2026-08-15T10:00:00Z'
+          WHERE article_id = 8803`,
+      ),
     );
     const row = await db.pool.query(
       `SELECT effective_at, observed_at, renewed_at, effective_at_basis

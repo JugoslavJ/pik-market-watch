@@ -2,7 +2,12 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { needsDb, reset, setupDb } = require("../helpers/db.js");
+const {
+  needsDb,
+  reset,
+  setupDb,
+  withHistoryMaintenance,
+} = require("../helpers/db.js");
 
 let db;
 test.before(async () => {
@@ -220,9 +225,11 @@ needsDb(
       [1.11, 39, "Well above"],
       [3, 0, "Well above"],
     ]) {
-      await db.pool.query(
-        "UPDATE listing_price_events SET price=$1 WHERE article_id=1",
-        [216000 * factor],
+      await withHistoryMaintenance(db.pool, (client) =>
+        client.query(
+          "UPDATE listing_price_events SET price=$1 WHERE article_id=1",
+          [216000 * factor],
+        ),
       );
       const current = await scores(1);
       assert.equal(current.score, score, String(factor));
@@ -428,7 +435,9 @@ needsDb(
     assert.equal(reopened.reopened, true);
     assert.equal(reopened.current_cycle_age_days, 0);
     assert.equal(good.current_cycle_age_days, 70);
-    await db.pool.query("DELETE FROM listing_state_history WHERE article_id=1");
+    await withHistoryMaintenance(db.pool, (client) =>
+      client.query("DELETE FROM listing_state_history WHERE article_id=1"),
+    );
     assert.equal((await scores(1)).current_cycle_age_days, null);
   },
 );

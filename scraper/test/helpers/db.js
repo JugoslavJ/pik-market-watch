@@ -56,4 +56,28 @@ async function setupDb() {
   return db;
 }
 
-module.exports = { needsDb, ensureSchema, reset, setupDb };
+/** Run intentional fixture rewrites through the append-only maintenance gate. */
+async function withHistoryMaintenance(pool, callback) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      "SELECT set_config('app.history_maintenance', 'migration', true)",
+    );
+    await callback(client);
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+module.exports = {
+  needsDb,
+  ensureSchema,
+  reset,
+  setupDb,
+  withHistoryMaintenance,
+};
