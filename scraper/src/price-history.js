@@ -360,7 +360,8 @@ async function recordPriceEvents(pool, events, options = {}) {
            (article_id, effective_at, observed_at, renewed_at, effective_at_basis,
             ingested_at, price, price_state, source, provenance)
          SELECT article_id, effective_at, observed_at, renewed_at, effective_at_basis,
-                COALESCE(ingested_at, now()), price, price_state, source, provenance
+                GREATEST(COALESCE(ingested_at, now()), effective_at),
+                price, price_state, source, provenance
            FROM jsonb_to_recordset($1::jsonb) AS e(
              article_id bigint,
              effective_at timestamptz,
