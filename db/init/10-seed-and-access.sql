@@ -1,6 +1,6 @@
--- Canonical seed and access baseline.
+-- Seed rows and reporting access.
 
--- Initial singleton/control rows.
+-- Initial singleton and maintenance-control rows.
 
 INSERT INTO public.analytics_refresh_state (scope) VALUES ('listing_daily') ON CONFLICT DO NOTHING;
 INSERT INTO public.raw_retention_transition (id, horizon_days) VALUES (1, 3) ON CONFLICT DO NOTHING;

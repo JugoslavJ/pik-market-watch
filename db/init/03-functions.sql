@@ -1,6 +1,6 @@
--- Canonical functions baseline.
-
--- Canonical functions baseline.
+-- Database functions.
+--
+-- Ingestion helpers, analytics, geography, and trigger functions.
 --
 -- Name: analytics_daily_rebuild_window(date); Type: FUNCTION; Schema: public; Owner: -
 --

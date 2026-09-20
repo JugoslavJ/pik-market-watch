@@ -1,6 +1,6 @@
--- Canonical source views baseline.
-
--- Canonical source views baseline.
+-- Canonical source views.
+--
+-- OLTP-to-OLAP transformations used by reporting and refresh routines.
 --
 -- Name: v_listing_price_changes_source; Type: VIEW; Schema: public; Owner: -
 --

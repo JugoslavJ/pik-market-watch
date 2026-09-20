@@ -1,6 +1,6 @@
--- Canonical schemas baseline.
-
--- Canonical schemas baseline.
+-- Database schemas.
+--
+-- OLAP and reporting namespaces used by the application.
 --
 -- Name: dashboard_public; Type: SCHEMA; Schema: -; Owner: -
 --

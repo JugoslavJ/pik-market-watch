@@ -1,6 +1,6 @@
--- Canonical reporting views baseline.
-
--- Canonical views baseline.
+-- Reporting views.
+--
+-- Stable views exposed to Grafana and other read-only clients.
 --
 -- Name: daily_market; Type: VIEW; Schema: dashboard_public; Owner: -
 --

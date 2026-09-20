@@ -1,6 +1,6 @@
--- Canonical persona scopes baseline.
-
--- Private persona scope functions included in the canonical baseline.
+-- Persona dashboard listing scopes.
+--
+-- Shared filtering functions for the private buyer, renter, and agent views.
 --
 CREATE OR REPLACE FUNCTION reporting.agent_listing_scope(
   p_deal text,

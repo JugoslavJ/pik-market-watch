@@ -1,10 +1,7 @@
--- Canonical reporting surface baseline.
-
--- Remove the retired dashboard_public reporting boundary.
+-- Private reporting surface.
 --
--- Source views are retained privately under reporting because the OLAP refresh
--- functions still use them; the externally intended dashboard_public views
--- and schema are removed from the final baseline.
+-- Source views and dashboard contracts live under reporting. The former
+-- dashboard_public compatibility surface is removed below.
 
 CREATE OR REPLACE VIEW reporting.freshness AS
  SELECT category,
@@ -35,8 +32,8 @@ DROP VIEW IF EXISTS dashboard_public.current_listings,
                    dashboard_public.freshness,
                    dashboard_public.price_reductions;
 
--- Refresh functions were created by earlier migrations with qualified source
--- names. Recreate their definitions after the source views move.
+-- Refresh functions still contain qualified source names from the former
+-- reporting boundary. Recreate them after moving the source views.
 DO $$
 DECLARE
   item record;
@@ -64,10 +61,7 @@ DROP SCHEMA IF EXISTS dashboard_public CASCADE;
 DELETE FROM olap.refresh_state
  WHERE mart = 'public_dashboard_contracts';
 
--- The retired dashboard_public schema is gone, but the existing refresh
--- function still records its internal compatibility marts as one grouped
--- OLAP generation. Keep that derived state consistent until those physical
--- compatibility tables are retired in a separate storage migration.
+-- Keep OLAP health aligned with the compatibility marts retained in storage.
 
 CREATE OR REPLACE VIEW reporting.olap_health AS
  SELECT max(refreshed_at) AS refreshed_at,

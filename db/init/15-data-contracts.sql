@@ -1,10 +1,10 @@
--- Canonical data contracts baseline.
+-- Data contracts, retention, and validation.
 
--- Allow the evidence repair section below to update append-only evidence.
+-- Permit the evidence normalization below to update append-only evidence.
 -- The setting is local to the migrator transaction and is cleared on commit.
 SELECT set_config('app.history_maintenance', 'migration', true);
 
--- Repair legacy evidence before the strict data contracts are installed.
+-- Normalize older evidence before strict data contracts are installed.
 
 -- Older writers defaulted missing ingestion timestamps to now(), which can be
 -- earlier than an upstream event's effective_at when source clocks are ahead.
@@ -17,8 +17,7 @@ UPDATE public.listing_state_history
  WHERE event_type <> 'closed'
    AND ingested_at < effective_at;
 
--- The final evidence source domains include importer and fixture rows that may
--- already exist in a volume before the strict contract migration runs.
+-- The final evidence source domains include importer and fixture provenance.
 ALTER TABLE public.listing_state_history
   DROP CONSTRAINT IF EXISTS history_source_ck;
 ALTER TABLE public.listing_state_history
@@ -580,7 +579,7 @@ BEGIN
               (v_cursor + interval '1 month')::timestamp AT TIME ZONE 'UTC')
       ON CONFLICT (parent_schema, child_table) DO NOTHING;
       -- Move only rows still stored in the parent. Child rows are never copied
-      -- twice when a migration is retried.
+      -- twice when partition setup is retried.
       EXECUTE format('INSERT INTO %I.%I SELECT * FROM ONLY %I.%I WHERE %I >= %s AND %I < %s',
         p.parent_schema, v_child, p.parent_schema, p.parent_table,
         p.partition_column, v_lower, p.partition_column, v_upper);
@@ -704,8 +703,8 @@ EXCEPTION WHEN OTHERS THEN
 END
 $$;
 
--- Migration 22: keep evidence source domains controlled while accepting the
--- supported importer, benchmark, and fixture provenance labels.
+-- Keep evidence source domains controlled while accepting supported provenance
+-- labels from importers, benchmarks, and fixtures.
 
 ALTER TABLE public.listing_state_history
   DROP CONSTRAINT IF EXISTS history_source_ck;
@@ -730,7 +729,7 @@ ALTER TABLE public.listing_price_events
     'fixture'
   ));
 
--- Migration 23: unresolved deal evidence is a valid, explicit OLAP state.
+-- Unresolved deal evidence is a valid, explicit OLAP state.
 
 DO $$
 DECLARE t text;

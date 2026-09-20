@@ -1,6 +1,6 @@
--- Canonical constraints baseline.
-
--- Canonical table constraints baseline.
+-- Table constraints.
+--
+-- Primary keys, uniqueness rules, foreign keys, and value contracts.
 --
 -- Name: refresh_state refresh_state_pkey; Type: CONSTRAINT; Schema: olap; Owner: -
 --

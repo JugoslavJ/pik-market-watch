@@ -1,14 +1,11 @@
--- Canonical postgis baseline.
-
--- PostGIS neighbourhood-boundary rollout.
+-- PostGIS neighborhood boundaries and spatial index.
 --
--- Prerequisite for existing volumes: enable this extension with the database
--- administrator before the application-role migrator runs.  Fresh volumes run
--- this file through Docker's initdb entrypoint as the bootstrap administrator.
+-- Polygon data is loaded by 09-neighborhood-data.sql before the boundary
+-- geometry is built.
 CREATE EXTENSION IF NOT EXISTS postgis;
 
--- Keep `poly` for one release: it permits assignment-result comparisons and a
--- straightforward rollback while callers migrate to `boundary`.
+-- Keep the original `poly` representation alongside the canonical PostGIS
+-- boundary for assignment-result comparisons and rollback support.
 ALTER TABLE public.neighborhoods
   ADD COLUMN IF NOT EXISTS boundary geometry(MultiPolygon, 4326);
 

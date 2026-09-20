@@ -1,5 +1,5 @@
--- Canonical evidence integrity baseline.
-
+-- Evidence identity and operational indexes.
+--
 -- Preserve currency as part of price-event identity.
 --
 -- The original identity treated equal numeric prices at the same timestamp as

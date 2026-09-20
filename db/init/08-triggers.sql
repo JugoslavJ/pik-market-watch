@@ -1,6 +1,6 @@
--- Canonical triggers baseline.
-
--- Canonical triggers baseline.
+-- Database triggers.
+--
+-- Evidence normalization and analytics invalidation.
 --
 -- Name: analytics_daily_coverage analytics_daily_coverage_mark_olap_dirty; Type: TRIGGER; Schema: public; Owner: -
 --

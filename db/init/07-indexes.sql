@@ -1,6 +1,6 @@
--- Canonical indexes baseline.
-
--- Canonical oltp indexes baseline.
+-- Database indexes.
+--
+-- Operational and dashboard access paths.
 --
 -- Name: analytics_daily_coverage_rebuilt_idx; Type: INDEX; Schema: public; Owner: -
 --
@@ -235,7 +235,7 @@ CREATE INDEX scrape_runs_started_idx ON public.scrape_runs USING btree (started_
 
 CREATE INDEX search_results_article_idx ON public.search_results USING btree (article_id);
 
--- Canonical olap indexes baseline.
+-- OLAP indexes.
 --
 -- Name: comparison_price_changes_article_time_idx; Type: INDEX; Schema: olap; Owner: -
 --

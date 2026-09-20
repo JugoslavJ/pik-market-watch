@@ -1,6 +1,7 @@
--- Canonical tables baseline.
-
--- Canonical oltp tables baseline.
+-- Database tables and reporting state.
+--
+-- Operational tables are followed by the physical OLAP marts and reporting
+-- refresh state.
 --
 -- Name: listings; Type: TABLE; Schema: public; Owner: -
 --
@@ -600,7 +601,7 @@ ALTER TABLE public.scrape_runs ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY 
     CACHE 1
 );
 
--- Canonical olap tables baseline.
+-- OLAP tables.
 --
 -- Name: public_current_listings; Type: TABLE; Schema: olap; Owner: -
 --
@@ -1059,7 +1060,7 @@ CREATE TABLE olap.refresh_state (
     CONSTRAINT refresh_state_row_count_check CHECK ((row_count >= 0))
 );
 
--- Canonical reporting state baseline.
+-- Reporting state.
 --
 -- Name: current_market_refresh_state; Type: TABLE; Schema: reporting; Owner: -
 --

@@ -1,14 +1,10 @@
--- Canonical olap refresh baseline.
-
--- OLAP refresh performance follow-up.
+-- OLAP refresh definitions.
 --
--- The canonical source views remain the correctness contract. These final
--- definitions make repeated intermediate relations explicit and add covering
--- access paths for the append-only evidence tables.
+-- Source views remain the correctness contract; these routines publish full
+-- and targeted dashboard refreshes.
 
--- 1/5 and 2/5: comparison changes are consumed by current scores as well as
--- their own mart.  Without a materialized current-input relation PostgreSQL
--- can re-expand current_comparison_inputs for each price-evidence group.
+-- Materialize the comparison input once so both its mart and current scores
+-- can reuse it without re-expanding it for every price-evidence group.
 CREATE OR REPLACE VIEW reporting.comparison_price_changes_source AS
 WITH evidence AS MATERIALIZED (
   SELECT e.id,
@@ -82,8 +78,7 @@ SELECT e.article_id,
             AND h.is_rent <> e.evidence_is_rent
        );
 
--- 3/5: the movement source needs the cycle source for both opening and
--- closure rows.  Materializing cycles prevents a second full reconstruction.
+-- Materialize lifecycle cycles so movement rows do not reconstruct them twice.
 CREATE OR REPLACE VIEW reporting.lifecycle_movements_source AS
 WITH cycles AS MATERIALIZED (
   SELECT * FROM reporting.lifecycle_cycles_source
@@ -194,9 +189,8 @@ SELECT movement_type,
        END AS historical_floor_num
   FROM movement_rows;
 
--- 4/5 and 5/5: cycle and daily-fact reconstruction repeatedly reads the
--- append-only evidence payload.  INCLUDE keeps those probes index-only after
--- vacuum while preserving the existing article/time ordering.
+-- Cover repeated evidence probes so cycle and daily-fact reconstruction can
+-- use index-only access while preserving article/time ordering.
 CREATE INDEX IF NOT EXISTS listing_state_history_temporal_cover_idx
   ON public.listing_state_history (article_id, effective_at DESC, id DESC)
   INCLUDE (event_type, category, category_membership, is_rent, sqm, rooms,
