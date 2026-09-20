@@ -69,6 +69,7 @@ try {
     .filter((file) => file.endsWith(".test.js"))
     .sort();
   exit = 0;
+  let schemaReady = false;
   for (const file of files) {
     const r = spawnSync(
       process.execPath,
@@ -77,12 +78,20 @@ try {
         "--test-concurrency=1",
         path.join("test", "integration", file),
       ],
-      { stdio: "inherit", env: { ...process.env, TEST_DATABASE_URL: DB_URL } },
+      {
+        stdio: "inherit",
+        env: {
+          ...process.env,
+          TEST_DATABASE_URL: DB_URL,
+          ...(schemaReady ? { TEST_DATABASE_SCHEMA_READY: "1" } : {}),
+        },
+      },
     );
     if ((r.status ?? 1) !== 0) {
       exit = r.status ?? 1;
       break;
     }
+    schemaReady = true;
   }
 } finally {
   docker(["rm", "-f", NAME]);

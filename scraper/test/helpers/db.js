@@ -20,6 +20,11 @@ const MIGRATIONS_DIR = path.resolve(__dirname, "..", "..", "..", "db", "init");
  * migration runner. Idempotent — safe to call from every suite.
  */
 function ensureSchema(pool) {
+  // The integration runner uses one disposable database for sequential child
+  // processes. The first child owns schema creation; later children can skip
+  // the redundant migration ledger scan. Direct test runs leave this unset so
+  // they retain the self-bootstrapping behavior.
+  if (process.env.TEST_DATABASE_SCHEMA_READY === "1") return Promise.resolve();
   return applyMigrations(pool, MIGRATIONS_DIR, () => {});
 }
 
