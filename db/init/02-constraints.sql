@@ -1,3 +1,5 @@
+-- Canonical constraints baseline.
+
 -- Canonical table constraints baseline.
 --
 -- Name: refresh_state refresh_state_pkey; Type: CONSTRAINT; Schema: olap; Owner: -

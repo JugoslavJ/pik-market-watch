@@ -1,4 +1,6 @@
 -- Canonical functions baseline.
+
+-- Canonical functions baseline.
 --
 -- Name: analytics_daily_rebuild_window(date); Type: FUNCTION; Schema: public; Owner: -
 --

@@ -2,7 +2,7 @@
 // Integration tests for the startup migration runner:
 //   A. fresh database — applies everything, second pass is a clean no-op
 //   B. pre-squash volume — schema_migrations records retired filenames while
-//      the current migration set is a clean no-op
+//      the canonical baseline is adopted without replaying SQL
 //   C. unsupported legacy databases fail without mutating their data
 const fs = require("node:fs");
 const path = require("node:path");
@@ -210,50 +210,17 @@ needsDb(
 );
 
 needsDb(
-  "migrations: adopts the sequential name for the persona-scope migration",
-  async () => {
-    const pool = new Pool({
-      connectionString: await recreateDb("mig_persona_rename"),
-    });
-    try {
-      await applyMigrations(pool, FULL_DIR, log);
-      const filename = "14-persona-listing-scopes.sql";
-      const checksum = applyMigrations.migrationChecksum(
-        fs.readFileSync(path.join(FULL_DIR, filename), "utf8"),
-      );
-      await pool.query(
-        "UPDATE schema_migrations SET filename = $1 WHERE filename = $2",
-        ["32-persona-listing-scopes.sql", filename],
-      );
-
-      await applyMigrations(pool, FULL_DIR, log);
-      assert.deepEqual(
-        (
-          await pool.query(
-            "SELECT filename, checksum FROM schema_migrations WHERE filename = ANY($1::text[]) ORDER BY filename",
-            [[filename, "32-persona-listing-scopes.sql"]],
-          )
-        ).rows,
-        [{ filename, checksum }],
-      );
-    } finally {
-      await pool.end();
-    }
-  },
-);
-
-needsDb(
-  "migrations: pre-squash volume (retired filenames recorded) sees a no-op",
+  "migrations: pre-squash volume adopts the canonical baseline",
   async () => {
     const pool = new Pool({
       connectionString: await recreateDb("mig_presquash"),
     });
     await applyMigrations(pool, FULL_DIR, log);
 
-    // Mimic a volume migrated by the retired 01…12 chain: same live schema,
-    // but schema_migrations records the old filenames alongside the two that
-    // still exist on disk.
+    // Mimic a volume migrated by the retired chain: same live schema, but
+    // schema_migrations records the old filenames instead of the baseline.
     const retiredNames = [
+      "00-schemas.sql",
       "02-add-geolocation.sql",
       "03-listing-filters.sql",
       "04-close-listings.sql",
@@ -265,6 +232,7 @@ needsDb(
       "10-listing-dates.sql",
       "12-neighborhood-filter.sql",
     ];
+    await pool.query("DELETE FROM schema_migrations");
     for (const name of retiredNames) {
       await pool.query("INSERT INTO schema_migrations (filename) VALUES ($1)", [
         name,

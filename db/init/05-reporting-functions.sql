@@ -1,4 +1,6 @@
 -- Canonical reporting functions baseline.
+
+-- Canonical reporting functions baseline.
 --
 -- Name: price_changes_filtered(timestamp with time zone, timestamp with time zone, text[], numeric, numeric, text[], text[], text[]); Type: FUNCTION; Schema: public; Owner: -
 --

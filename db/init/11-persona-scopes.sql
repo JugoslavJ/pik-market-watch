@@ -1,5 +1,6 @@
--- Additive home for the private persona scope functions. These definitions
--- must not be folded into an applied baseline migration.
+-- Canonical persona scopes baseline.
+
+-- Private persona scope functions included in the canonical baseline.
 --
 CREATE OR REPLACE FUNCTION reporting.agent_listing_scope(
   p_deal text,

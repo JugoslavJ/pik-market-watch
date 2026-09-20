@@ -6,7 +6,7 @@ prices. It compares tracked asking prices; it is not an appraisal, confirmed
 transaction price, or a prediction that a property is a bargain.
 
 The implementation is defined by
-[`05-source-views.sql`](../db/init/05-source-views.sql) and [`06-reporting-functions.sql`](../db/init/06-reporting-functions.sql).
+[`04-source-views.sql`](../db/init/04-source-views.sql) and [`05-reporting-functions.sql`](../db/init/05-reporting-functions.sql).
 
 ## Reporting interfaces
 

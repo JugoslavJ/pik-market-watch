@@ -1,3 +1,5 @@
+-- Canonical reporting views baseline.
+
 -- Canonical views baseline.
 --
 -- Name: daily_market; Type: VIEW; Schema: dashboard_public; Owner: -

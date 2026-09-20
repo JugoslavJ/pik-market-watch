@@ -1,36 +1,38 @@
 # Database schema
 
-`init/` is the current schema definition. Numeric prefixes express dependency
-order for the PostgreSQL entrypoint and the application migrator.
+`init/` is the current schema definition. The canonical baseline is split into
+ordered, responsibility-oriented SQL files for both the PostgreSQL entrypoint
+and the application migrator; the role bootstrap remains a separate shell
+script because it needs environment-provided credentials.
 
 | File | Responsibility |
 |---|---|
-| `00-schemas.sql` | Reporting and OLAP schemas |
-| `01-oltp-tables.sql` | Current listings, search state, evidence, raw responses, and job state |
-| `02-olap-tables.sql` / `02-reporting-state.sql` | Dashboard marts and refresh state |
-| `03-table-constraints.sql` | Keys, foreign keys, and table constraints |
-| `04-functions.sql` | Ingestion helpers, analytics, geography, and triggers |
-| `05-source-views.sql` | Canonical OLTP-to-OLAP source transformations |
-| `06-reporting-functions.sql` | Refresh, filtering, comparison, and validation functions |
-| `07-views.sql` | Stable reporting views used by Grafana |
-| `08-oltp-indexes.sql` / `09-olap-indexes.sql` | Operational and dashboard indexes |
-| `10-triggers.sql` | Evidence normalization and analytics invalidation |
-| `11-neighborhood-data.sql` | Generated neighborhood seed data |
-| `12-seed-state.sql` / `13-reporting-access.sql` | Initial state and reporting grants |
-| `14-persona-listing-scopes.sql` | Buyer, renter, and agent filter scopes |
-| `15-postgis-neighborhood-boundaries.sql` / `16-rebuild-postgis-neighborhood-index.sql` | PostGIS boundaries, assignment, and spatial index |
-| `17-olap-refresh-performance.sql` / `18-olap-targeted-refresh.sql` | Refresh source optimization and dirty-grain publication |
-| `19-remove-dashboard-public.sql` / `20-align-olap-health-after-public-schema-removal.sql` | Reporting surface and OLAP health definitions |
-| `20-y-data-contract-maintenance-context.sql` | Grants the migration transaction its audited evidence-repair context |
-| `20-z-data-contract-preflight.sql` | Repairs legacy evidence before strict data-contract constraints |
-| `21-data-contracts-retention.sql` | Mart grains, evidence rules, partitions, retention, and validation |
-| `22-widen-evidence-source-domains.sql` through `26-scrape-run-success-index.sql` | Evidence, enrichment, and run-state constraints and indexes |
+| `00-core-schemas.sql` | Reporting and OLAP schemas |
+| `01-tables.sql` | OLTP tables, OLAP marts, and reporting state |
+| `02-constraints.sql` | Keys, foreign keys, and table constraints |
+| `03-functions.sql` | Ingestion, analytics, geography, and trigger helpers |
+| `04-source-views.sql` | Canonical OLTP-to-OLAP source transformations |
+| `05-reporting-functions.sql` | Dashboard refresh, filtering, comparison, and validation functions |
+| `06-reporting-views.sql` | Stable reporting views used by Grafana |
+| `07-indexes.sql` | Operational and dashboard indexes |
+| `08-triggers.sql` | Evidence normalization and analytics invalidation |
+| `09-neighborhood-data.sql` | Generated neighborhood seed data |
+| `10-seed-and-access.sql` | Initial state and reporting grants |
+| `11-persona-scopes.sql` | Buyer, renter, and agent filter scopes |
+| `12-postgis.sql` | PostGIS boundaries and spatial indexes |
+| `13-olap-refresh.sql` | OLAP refresh source optimization and targeted publication |
+| `14-reporting-surface.sql` | Final private reporting surface and OLAP health |
+| `15-data-contracts.sql` | Evidence contracts, mart constraints, partitions, retention, and validation |
+| `16-evidence-integrity.sql` | Currency identity and operational evidence indexes |
 | `zz-database-roles.sh` | Runtime ownership and reader permissions |
 
-Fresh volumes execute these files in order. The migrator records filenames and
-checksums in `schema_migrations`, applies each migration transactionally, and
-uses an advisory lock. Do not edit an applied SQL file; add a new migration for
-changes that must reach existing databases.
+Fresh volumes execute these files in order. The migrator records each filename
+and checksum in `schema_migrations`, applies each file transactionally, and
+uses an advisory lock. Existing volumes from the former migration chain are
+adopted after a complete-schema fingerprint check; their SQL is not replayed.
+For future changes, add a normal forward migration; periodically repeat this
+squash process when the chain grows, updating the complete-schema adoption
+check if the final schema fingerprint changes.
 
 ## OLTP and OLAP boundary
 

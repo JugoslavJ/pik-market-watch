@@ -1,4 +1,6 @@
 -- Canonical source views baseline.
+
+-- Canonical source views baseline.
 --
 -- Name: v_listing_price_changes_source; Type: VIEW; Schema: public; Owner: -
 --

@@ -1,4 +1,6 @@
 -- Canonical schemas baseline.
+
+-- Canonical schemas baseline.
 --
 -- Name: dashboard_public; Type: SCHEMA; Schema: -; Owner: -
 --

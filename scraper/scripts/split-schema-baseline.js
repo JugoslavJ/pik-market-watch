@@ -29,18 +29,15 @@ const blocks = matches.map((match, index) => ({
 }));
 
 const files = new Map([
-  ["00-schemas.sql", []],
-  ["01-oltp-tables.sql", []],
-  ["02-olap-tables.sql", []],
-  ["02-reporting-state.sql", []],
-  ["03-table-constraints.sql", []],
-  ["04-functions.sql", []],
-  ["05-source-views.sql", []],
-  ["06-reporting-functions.sql", []],
-  ["07-views.sql", []],
-  ["08-oltp-indexes.sql", []],
-  ["09-olap-indexes.sql", []],
-  ["10-triggers.sql", []],
+  ["00-core-schemas.sql", []],
+  ["01-tables.sql", []],
+  ["02-constraints.sql", []],
+  ["03-functions.sql", []],
+  ["04-source-views.sql", []],
+  ["05-reporting-functions.sql", []],
+  ["06-reporting-views.sql", []],
+  ["07-indexes.sql", []],
+  ["08-triggers.sql", []],
 ]);
 
 const sourceViews = new Set([
@@ -74,52 +71,40 @@ for (const block of blocks) {
     block.type === "SCHEMA" ||
     (block.type === "COMMENT" && block.schema === "-")
   ) {
-    target = "00-schemas.sql";
+    target = "00-core-schemas.sql";
   } else if (
     ["TABLE", "SEQUENCE", "SEQUENCE OWNED BY", "DEFAULT"].includes(block.type)
   ) {
-    target =
-      block.schema === "olap"
-        ? "02-olap-tables.sql"
-        : block.schema === "reporting"
-          ? "02-reporting-state.sql"
-          : "01-oltp-tables.sql";
+    target = "01-tables.sql";
   } else if (["CONSTRAINT", "FK CONSTRAINT"].includes(block.type)) {
-    target = "03-table-constraints.sql";
+    target = "02-constraints.sql";
   } else if (block.type === "FUNCTION") {
     target = reportingFunctions.has(block.name)
-      ? "06-reporting-functions.sql"
-      : "04-functions.sql";
+      ? "05-reporting-functions.sql"
+      : "03-functions.sql";
   } else if (block.type === "VIEW") {
     target =
       sourceViews.has(block.name) ||
       block.name.endsWith("_source") ||
       block.name === "lifecycle_movements_from_olap_cycles"
-        ? "05-source-views.sql"
-        : "07-views.sql";
+        ? "04-source-views.sql"
+        : "06-reporting-views.sql";
   } else if (block.type === "INDEX") {
-    target =
-      block.schema === "olap" ? "09-olap-indexes.sql" : "08-oltp-indexes.sql";
+    target = "07-indexes.sql";
   } else if (block.type === "TRIGGER") {
-    target = "10-triggers.sql";
+    target = "08-triggers.sql";
   } else if (block.type === "COMMENT") {
     const objectType = block.name.split(" ", 1)[0];
-    if (objectType === "FUNCTION") target = "06-reporting-functions.sql";
+    if (objectType === "FUNCTION") target = "05-reporting-functions.sql";
     else if (objectType === "VIEW") {
       const viewName = block.name.replace(/^VIEW /, "");
       target =
         sourceViews.has(viewName) ||
         viewName.endsWith("_source") ||
         viewName === "lifecycle_movements_from_olap_cycles"
-          ? "05-source-views.sql"
-          : "07-views.sql";
-    } else
-      target =
-        block.schema === "olap"
-          ? "02-olap-tables.sql"
-          : block.schema === "reporting"
-            ? "02-reporting-state.sql"
-            : "01-oltp-tables.sql";
+          ? "04-source-views.sql"
+          : "06-reporting-views.sql";
+    } else target = "01-tables.sql";
   }
   if (target) files.get(target).push(block);
 }
@@ -127,7 +112,7 @@ for (const block of blocks) {
 fs.mkdirSync(outputDir, { recursive: true });
 for (const [name, parts] of files) {
   const heading = `-- Canonical ${name.slice(3, -4).replaceAll("-", " ")} baseline.\n`;
-  if (name === "06-reporting-functions.sql") {
+  if (name === "05-reporting-functions.sql") {
     const rank = (block) => {
       if (block.type === "COMMENT") return 90;
       if (block.name === "refresh_dashboard_olap_full()") return 20;
@@ -152,25 +137,19 @@ const inserts = neighborhoodDump
   .split("\n")
   .filter((line) => line.startsWith("INSERT INTO public.neighborhoods "));
 fs.writeFileSync(
-  path.join(outputDir, "11-neighborhood-data.sql"),
+  path.join(outputDir, "09-neighborhood-data.sql"),
   "-- Generated neighborhood polygon rows; regenerate from geo source, never edit by hand.\n" +
     inserts.join("\n") +
     "\n",
 );
 
 fs.writeFileSync(
-  path.join(outputDir, "12-seed-state.sql"),
-  `-- Initial singleton/control rows.\n
+  path.join(outputDir, "10-seed-and-access.sql"),
+  `-- Initial singleton/control rows and reporting grants.\n
 INSERT INTO public.analytics_refresh_state (scope) VALUES ('listing_daily') ON CONFLICT DO NOTHING;
 INSERT INTO public.raw_retention_transition (id, horizon_days) VALUES (1, 3) ON CONFLICT DO NOTHING;
 INSERT INTO public.publication_evidence_transition (id) VALUES (1) ON CONFLICT DO NOTHING;
 INSERT INTO reporting.current_market_refresh_state (singleton) VALUES (true) ON CONFLICT DO NOTHING;
-`,
-);
-
-fs.writeFileSync(
-  path.join(outputDir, "13-reporting-access.sql"),
-  `-- Stable reporting routine access for the read-only parent role.\n
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA reporting TO pg_read_all_data;
 ALTER DEFAULT PRIVILEGES FOR ROLE CURRENT_USER IN SCHEMA reporting
   GRANT EXECUTE ON FUNCTIONS TO pg_read_all_data;

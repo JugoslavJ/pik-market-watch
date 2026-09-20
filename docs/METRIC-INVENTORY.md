@@ -14,7 +14,7 @@ visible in its title, description, or query.
 | Buyer / Renter / Agent     | Private current comparisons                                         | Query time, observed within 14 days                        | `reporting.current_listing_scores`; one row per article                             | Verified BAM asking evidence; sale KM/m², rent KM/month and KM/m²/month; exact local cohort with a labeled three-nearest-neighbourhood fallback | Null scores retain explicit reasons; neighbourhood statistics require 10 eligible listings; individual scores require 5 other comparables and label sparse or geographically expanded cohorts as higher variance |
 | Buyer / Renter / Agent     | Private historical context                                          | Sarajevo reconstructed day or observed lifecycle boundary  | `reporting.daily_listing_facts`, `lifecycle_movements`, `lifecycle_cycles`          | Historical assertion currency and features; separate total-price and rate samples                      | Inferred, stale and provisional evidence shown; closure prices are asking prices, never transactions                                                                                  |
 
-Shared filter semantics are implemented in [06-reporting-functions.sql](../db/init/06-reporting-functions.sql): empty multi-selects mean no
+Shared filter semantics are implemented in [05-reporting-functions.sql](../db/init/05-reporting-functions.sql): empty multi-selects mean no
 restriction, numeric bounds are independently optional, and the canonical deal
 values are `sale` and `rent`.
 Queries that measure current inventory, event-time changes, daily projections,
