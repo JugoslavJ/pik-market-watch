@@ -61,6 +61,22 @@ test("home sync repairs stopped dependencies with stale network endpoints", () =
   );
 });
 
+test("one-shot scraper closes healthcheck sockets before waiting for server close", () => {
+  const index = fs.readFileSync(
+    path.join(ROOT, "scraper", "src", "index.js"),
+    "utf8",
+  );
+  const once = index.slice(index.indexOf("if (config.runOnce)"));
+  const destroySocketsAt = once.indexOf("healthServer.closeAllConnections?.();");
+  const waitForCloseAt = once.indexOf("healthServer.close(resolve)");
+  assert.ok(destroySocketsAt >= 0, "one-shot shutdown must destroy open sockets");
+  assert.ok(waitForCloseAt >= 0, "one-shot shutdown must await server close");
+  assert.ok(
+    destroySocketsAt < waitForCloseAt,
+    "open healthcheck sockets must be destroyed before close() is awaited",
+  );
+});
+
 test("production Grafana settings fail closed before deployment", () => {
   assert.match(deploy, /GRAFANA_BIND/);
   assert.match(deploy, /127\.0\.0\.1/);

@@ -264,8 +264,12 @@ async function main() {
 
   if (config.runOnce) {
     await db.close();
+    // Destroy healthcheck keep-alive sockets before waiting for close().
+    // Docker may have an open probe connection; waiting for close() first
+    // would leave RUN_ONCE (and callers such as sync-to-instance.ps1) blocked
+    // forever waiting for that socket to close on its own.
+    healthServer.closeAllConnections?.();
     await new Promise((resolve) => healthServer.close(resolve));
-    healthServer.closeAllConnections?.(); // drop keep-alive healthcheck sockets
     const failed = initialResult.failedRuns > 0;
     process.exitCode = failed ? 1 : 0;
     log(
