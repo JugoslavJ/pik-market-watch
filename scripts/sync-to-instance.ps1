@@ -158,35 +158,59 @@ if ($LASTEXITCODE -ne 0) { throw "database failed to become healthy (exit $LASTE
 docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
 if ($LASTEXITCODE -ne 0) { throw "database ownership repair failed (exit $LASTEXITCODE)" }
 
-Log 'scraping (full cycle, all searches)...'
-docker compose --profile scrape run --rm scraper node src/index.js --once
-if ($LASTEXITCODE -ne 0) { throw "scrape failed (exit $LASTEXITCODE) - instance left untouched; retry later" }
+# A long-running scraper service can already hold the database cycle lease.
+# In that case `compose run --rm scraper ... --once` exits successfully without
+# fetching anything. Pause it for the complete snapshot window, then restore
+# its prior state even when scraping, dumping, or remote restore fails.
+$scraperWasRunning = $false
+$runningScraper = (& docker compose --profile scrape ps --status running -q scraper 2>$null |
+  Select-Object -First 1)
+if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($runningScraper)) {
+  Log "pausing running scraper ($($runningScraper.Trim())) for sync..."
+  docker compose --profile scrape stop scraper
+  if ($LASTEXITCODE -ne 0) { throw "could not stop the running scraper (exit $LASTEXITCODE)" }
+  $scraperWasRunning = $true
+}
 
-Log 'dumping database...'
-$stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$dumpName = "olx-sync-$stamp.dump"
-# Read the Compose-configured bootstrap role and database inside the container;
-# this keeps sync aligned with POSTGRES_USER/POSTGRES_DB overrides in .env.
-docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -Fc -f "$1" "$POSTGRES_DB"' sh "/backups/$dumpName"
-if ($LASTEXITCODE -ne 0) { throw "pg_dump failed (exit $LASTEXITCODE)" }
-$dump = Join-Path $root "backups/$dumpName"
-if ((Get-Item $dump).Length -lt 20000) { throw "dump suspiciously small - aborting" }
+try {
+  Log 'scraping (full cycle, all searches)...'
+  docker compose --profile scrape run --rm scraper node src/index.js --once
+  if ($LASTEXITCODE -ne 0) { throw "scrape failed (exit $LASTEXITCODE) - instance left untouched; retry later" }
 
-Log ('streaming {0:N0} bytes to {1}@{2} and restoring...' -f (Get-Item $dump).Length, $SshUser, $InstanceHost)
-$out = Invoke-SshRestore $dump
-$out | ForEach-Object { Log "remote: $_" }
+  Log 'dumping database...'
+  $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+  $dumpName = "olx-sync-$stamp.dump"
+  # Read the Compose-configured bootstrap role and database inside the container;
+  # this keeps sync aligned with POSTGRES_USER/POSTGRES_DB overrides in .env.
+  docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -Fc -f "$1" "$POSTGRES_DB"' sh "/backups/$dumpName"
+  if ($LASTEXITCODE -ne 0) { throw "pg_dump failed (exit $LASTEXITCODE)" }
+  $dump = Join-Path $root "backups/$dumpName"
+  if ((Get-Item $dump).Length -lt 20000) { throw "dump suspiciously small - aborting" }
 
-if (($out -join "`n") -match 'RESTORE_OK') {
-  Log 'sync complete - instance database updated.'
-  # Prune local dumps now that the instance confirmed the restore — every
-  # scheduled run otherwise drops another olx-sync-*.dump into ./backups
-  # forever. Keep the newest few (timestamped names sort chronologically).
-  # Dumps from FAILED runs never reach this branch, so they stay for forensics.
-  Get-ChildItem (Join-Path $root 'backups') -Filter 'olx-sync-*.dump' |
-    Sort-Object Name -Descending | Select-Object -Skip 3 | ForEach-Object {
-      Log "pruning superseded local dump: $($_.Name)"
-      Remove-Item -LiteralPath $_.FullName -Force
+  Log ('streaming {0:N0} bytes to {1}@{2} and restoring...' -f (Get-Item $dump).Length, $SshUser, $InstanceHost)
+  $out = Invoke-SshRestore $dump
+  $out | ForEach-Object { Log "remote: $_" }
+
+  if (($out -join "`n") -match 'RESTORE_OK') {
+    Log 'sync complete - instance database updated.'
+    # Prune local dumps now that the instance confirmed the restore — every
+    # scheduled run otherwise drops another olx-sync-*.dump into ./backups
+    # forever. Keep the newest few (timestamped names sort chronologically).
+    # Dumps from FAILED runs never reach this branch, so they stay for forensics.
+    Get-ChildItem (Join-Path $root 'backups') -Filter 'olx-sync-*.dump' |
+      Sort-Object Name -Descending | Select-Object -Skip 3 | ForEach-Object {
+        Log "pruning superseded local dump: $($_.Name)"
+        Remove-Item -LiteralPath $_.FullName -Force
+      }
+  } else {
+    throw 'remote restore did not report RESTORE_OK - check the instance'
+  }
+} finally {
+  if ($scraperWasRunning) {
+    Log 'resuming scraper service after sync...'
+    docker compose --profile scrape start scraper
+    if ($LASTEXITCODE -ne 0) {
+      Log "WARNING: could not resume scraper service (exit $LASTEXITCODE)"
     }
-} else {
-  throw 'remote restore did not report RESTORE_OK - check the instance'
+  }
 }

@@ -61,12 +61,32 @@ test("home sync repairs stopped dependencies with stale network endpoints", () =
   );
 });
 
+test("home sync pauses a persistent scraper around the snapshot", () => {
+  const sync = fs.readFileSync(
+    path.join(ROOT, "scripts", "sync-to-instance.ps1"),
+    "utf8",
+  );
+  assert.match(sync, /ps --status running -q scraper/);
+  assert.match(sync, /stop scraper/);
+  assert.match(sync, /try \{/);
+  assert.match(sync, /finally \{/);
+  assert.match(sync, /start scraper/);
+  assert.ok(
+    sync.indexOf("stop scraper") < sync.indexOf("run --rm scraper node src/index.js --once"),
+    "persistent scraper must be stopped before the one-shot scrape",
+  );
+  assert.ok(
+    sync.indexOf("start scraper") > sync.indexOf("Invoke-SshRestore $dump"),
+    "persistent scraper must remain paused through remote restore",
+  );
+});
+
 test("one-shot scraper closes healthcheck sockets before waiting for server close", () => {
   const index = fs.readFileSync(
     path.join(ROOT, "scraper", "src", "index.js"),
     "utf8",
   );
-  const once = index.slice(index.indexOf("if (config.runOnce)"));
+  const once = index.slice(index.lastIndexOf("if (config.runOnce)"));
   const destroySocketsAt = once.indexOf(
     "healthServer.closeAllConnections?.();",
   );

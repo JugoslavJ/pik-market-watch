@@ -153,6 +153,15 @@ async function runAllUnlocked(db) {
 async function runAll(db) {
   const lease = await db.tryAcquireCycleLease?.();
   if (db.tryAcquireCycleLease && !lease) {
+    if (config.runOnce) {
+      log("✖ one-shot scrape could not acquire the cycle lease — another scraper is running");
+      return {
+        okRuns: 0,
+        failedRuns: 1,
+        skipped: 0,
+        totalCards: 0,
+      };
+    }
     state.lastStatus = "skipped: another scraper cycle is running";
     return {
       okRuns: 0,
