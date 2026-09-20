@@ -33,17 +33,8 @@ module.exports = function installIngestionMethods(Db) {
           [LISTING_LIFECYCLE_LOCK],
         );
 
-        const previous = await client.query(
-          "SELECT article_id FROM search_results WHERE search_key = $1",
-          [payload.membership.searchKey],
-        );
-        const previousIds = previous.rows.map((row) => Number(row.article_id));
-        const previouslyClosed = await client.query(
-          "SELECT article_id FROM listings WHERE article_id = ANY($1::bigint[]) AND closed_at IS NOT NULL",
-          [articleIds],
-        );
         const existing = await client.query(
-          "SELECT article_id, price, ppm2 FROM listings WHERE article_id = ANY($1::bigint[])",
+          "SELECT article_id, price, ppm2, closed_at FROM listings WHERE article_id = ANY($1::bigint[])",
           [articleIds],
         );
         const previousById = new Map(
@@ -177,9 +168,10 @@ module.exports = function installIngestionMethods(Db) {
 
         const ids = [...new Set(articleIds)];
         const idSet = new Set(ids);
-        await client.query(
+        const removed = await client.query(
           `DELETE FROM search_results
-          WHERE search_key = $1 AND NOT (article_id = ANY($2::bigint[]))`,
+          WHERE search_key = $1 AND NOT (article_id = ANY($2::bigint[]))
+          RETURNING article_id`,
           [payload.membership.searchKey, ids],
         );
         if (ids.length) {
@@ -191,7 +183,8 @@ module.exports = function installIngestionMethods(Db) {
           );
         }
 
-        const reopenedIds = previouslyClosed.rows
+        const reopenedIds = existing.rows
+          .filter((entry) => entry.closed_at != null)
           .map((entry) => Number(entry.article_id))
           .filter((id) => idSet.has(id));
         if (reopenedIds.length) {
@@ -205,7 +198,7 @@ module.exports = function installIngestionMethods(Db) {
           );
         }
 
-        const removedIds = previousIds.filter((id) => !idSet.has(id));
+        const removedIds = removed.rows.map((row) => Number(row.article_id));
         if (removedIds.length) {
           await client.query(
             `WITH closed AS (

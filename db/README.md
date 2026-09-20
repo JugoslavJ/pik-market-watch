@@ -30,6 +30,9 @@ entrypoint and the application migration runner:
 | `21-data-contracts-retention.sql` | Mart grains, domain checks, append-only evidence, date partitions, retention, and refresh validation |
 | `22-widen-evidence-source-domains.sql` | Extend controlled evidence source domains for supported imports, benchmarks, and fixtures |
 | `23-allow-unknown-olap-deal.sql` | Permit explicit unknown deal evidence in OLAP marts |
+| `24-price-event-currency-identity.sql` | Include normalized currency in price-event identity |
+| `25-enrichment-price-change-index.sql` | Index detail-enrichment price-change probes |
+| `26-scrape-run-success-index.sql` | Index recent complete-success lookups by search |
 | `zz-database-roles.sh`       | Application ownership and reader permissions                   |
 
 Fresh volumes execute these files in order. The migrator subsequently records
