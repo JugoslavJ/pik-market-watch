@@ -1,8 +1,11 @@
 node_modules
+coverage
 *.log
+*.md
 .git
 Dockerfile
 .dockerignore
+.prettierignore
 test/
 eslint.config.js
 scripts/run-integration-tests.js

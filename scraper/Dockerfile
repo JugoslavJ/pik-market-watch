@@ -16,7 +16,7 @@ WORKDIR /app
 # Dependencies first so this layer caches; BuildKit cache mount speeds rebuilds.
 COPY package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm \
-    npm ci --omit=dev && npm cache clean --force
+    npm ci --omit=dev
 
 # Non-root runtime user (busybox adduser — Alpine has no useradd).
 RUN addgroup -S -g 10001 scraper && adduser -S -u 10001 -G scraper scraper \
@@ -28,5 +28,4 @@ COPY --chown=scraper:scraper src ./src
 COPY --chown=scraper:scraper scripts ./scripts
 
 CMD ["node", "src/index.js"]
-
 
