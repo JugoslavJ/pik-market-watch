@@ -28,6 +28,7 @@ entrypoint and the application migration runner:
 | `19-remove-dashboard-public.sql` | Remove the retired public dashboard schema and move sources private |
 | `20-align-olap-health-after-public-schema-removal.sql` | Keep OLAP health consistent with retained internal compatibility marts |
 | `21-data-contracts-retention.sql` | Mart grains, domain checks, append-only evidence, date partitions, retention, and refresh validation |
+| `22-widen-evidence-source-domains.sql` | Extend controlled evidence source domains for supported imports, benchmarks, and fixtures |
 | `zz-database-roles.sh`       | Application ownership and reader permissions                   |
 
 Fresh volumes execute these files in order. The migrator subsequently records
