@@ -258,7 +258,7 @@ BEGIN
     'olap.public_current_listings', 'olap.public_daily_market',
     'olap.public_exit_cycles', 'olap.public_price_reductions',
     'olap.current_listing_scores', 'olap.daily_listing_facts',
-    'olap.lifecycle_cycles', 'olap.lifecycle_movements',
+    'olap.lifecycle_movements',
     'olap.listing_price_changes'
   ] LOOP
     BEGIN
