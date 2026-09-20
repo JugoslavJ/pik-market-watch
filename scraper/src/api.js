@@ -20,7 +20,7 @@ const { parseListingDetail, PARSER_BUILD_VERSION } = require("./parser");
 
 const API_ORIGIN = "https://olx.ba";
 
-// olx.ba advertises x-ratelimit-limit: 60 per window across these endpoints.
+// olx.ba advertises x-ratelimit-limit: 100 per window across these endpoints.
 // A full cycle stays far below that (a few dozen search pages + capped detail
 // fetches); if the budget ever runs low mid-cycle, back off until it resets
 // instead of burning requests into a 429.
