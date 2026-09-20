@@ -96,6 +96,14 @@ needsDb(
         2,
         "one resolution per distinct merged attributes, not per day or article",
       );
+      const dirty = await client.query(
+        "SELECT count(*) FROM analytics_daily_dirty_articles",
+      );
+      assert.equal(
+        Number(dirty.rows[0].count),
+        0,
+        "the rebuild acknowledges the article cohort after publishing it",
+      );
       const invalid = await client.query(
         "SELECT count(*) FROM listing_daily WHERE location <> 'Center' OR neighborhood <> 'Center' OR resolved_state_version <> 1",
       );

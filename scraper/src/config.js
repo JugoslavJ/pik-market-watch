@@ -206,6 +206,13 @@ module.exports = {
     31,
     { min: 1, max: 366 },
   ),
+  // Scrape cycles keep ingestion and bounded daily reconstruction responsive.
+  // The dedicated maintenance profile publishes the expensive OLAP snapshot.
+  runAnalyticsMaintenance: boolean(
+    "RUN_ANALYTICS_MAINTENANCE",
+    process.env.RUN_ANALYTICS_MAINTENANCE,
+    true,
+  ),
   geoConcurrency: integer("GEO_CONCURRENCY", process.env.GEO_CONCURRENCY, 2, {
     min: 1,
   }), // parallel detail calls

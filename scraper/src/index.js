@@ -139,6 +139,7 @@ async function runAllUnlocked(db) {
   // failed rebuild, or skipped cycle must not suppress raw cleanup.
   const maintenance = await db.runMaintenanceCycle({
     maxDays: config.analyticsRebuildMaxDays,
+    publishCurrentMarket: config.runAnalyticsMaintenance,
     log: (message) => log(`maintenance: ${message}`),
   });
   if (!maintenance.ok)

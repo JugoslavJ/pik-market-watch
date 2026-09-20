@@ -238,7 +238,11 @@ module.exports = function installMaintenanceMethods(Db) {
      * task is attempted even when another task fails; callers can decide
      * whether an error should fail a one-shot job or merely affect health logs.
      */
-    async runMaintenanceCycle({ maxDays = 31, log = () => {} } = {}) {
+    async runMaintenanceCycle({
+      maxDays = 31,
+      log = () => {},
+      publishCurrentMarket = true,
+    } = {}) {
       const result = { ok: true, errors: {} };
       const run = async (name, operation) => {
         const started = new Date();
@@ -289,7 +293,15 @@ module.exports = function installMaintenanceMethods(Db) {
       // of both upstream success and the rebuild result.
       await run("purged", () => this.purgeRawResponses());
       await run("rebuilt", () => this.rebuildDailyInventory({ maxDays, log }));
-      await run("currentMarket", () => this.refreshCurrentMarket(log));
+      if (publishCurrentMarket) {
+        await run("currentMarket", () => this.refreshCurrentMarket(log));
+      } else {
+        result.currentMarket = {
+          skipped: true,
+          reason: "deferred to the maintenance profile",
+        };
+        log("currentMarket deferred to the maintenance profile");
+      }
       return result;
     },
 

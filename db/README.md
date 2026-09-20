@@ -25,6 +25,7 @@ script because it needs environment-provided credentials.
 | `15-data-contracts.sql` | Evidence contracts, mart constraints, partitions, and validation |
 | `16-evidence-integrity.sql` | Currency identity and operational evidence indexes |
 | `17-upgrade-to-current.sql` | One-time idempotent bridge for volumes created before the final split baseline |
+| `18-performance-maintenance.sql` | Dirty-article daily rebuild queue and bounded OLAP maintenance support |
 | `zz-database-roles.sh` | Runtime ownership and reader permissions |
 
 Fresh volumes execute these files in order. The migrator records each filename

@@ -78,6 +78,26 @@ test("maintenance attempts purge and rebuild independently", async () => {
   assert.equal(result.currentMarket.rows_written, 12);
 });
 
+test("scrape maintenance can defer the expensive current-market publication", async () => {
+  const db = new Db("postgres://unused");
+  const calls = [];
+  db.backfillPublicationEvidence = async () => ({ complete: true });
+  db.backfillPublicationEvidenceFromRaw = async () => ({ complete: true });
+  db.transitionRawResponseRetention = async () => ({ complete: true });
+  db.compactDuplicateRawBodies = async () => 0;
+  db.purgeRawResponses = async () => 0;
+  db.rebuildDailyInventory = async () => ({ rows: [{ rows_written: 1 }] });
+  db.refreshCurrentMarket = async () => calls.push("current-market");
+  db.recordMaintenanceOutcome = async () => {};
+
+  const result = await db.runMaintenanceCycle({ publishCurrentMarket: false });
+  assert.deepEqual(calls, []);
+  assert.deepEqual(result.currentMarket, {
+    skipped: true,
+    reason: "deferred to the maintenance profile",
+  });
+});
+
 test("maintenance logs stage and current-market substep timings", async () => {
   const db = new Db("postgres://unused");
   const logs = [];

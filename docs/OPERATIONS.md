@@ -36,6 +36,7 @@ docker compose up -d --build
 | `DETAIL_JOB_LEASE_MINUTES`                                       |                                       `30` | Database lease duration for an in-flight durable detail job (maximum 24 hours).                                                        |
 | `RAW_RESPONSE_RETENTION_COUNT`                                  |                                        `3` | Newest raw search/detail responses retained per request kind and URL. Maintenance removes older rows.                                  |
 | `ANALYTICS_REBUILD_MAX_DAYS`                                     |                                       `31` | Maximum Banja Luka days rebuilt per maintenance transaction.                                                                           |
+| `RUN_ANALYTICS_MAINTENANCE`                                     | `true` bare-metal / `false` scrape Compose | Whether a process publishes the expensive current-market OLAP snapshot after rebuilding daily inventory. The maintenance profile sets this to `true`. |
 | `ABANDONED_RUN_AFTER_MINUTES`                                    |                                      `180` | Age after which startup marks an unfinished `running` scrape as abandoned.                                                             |
 | `RATE_LIMIT_COOLDOWN_MS`                                         |                                    `65000` | Fallback pause when the upstream rate-limit window is low and no reset is advertised.                                                  |
 | `BACKUP_RETENTION_DAYS`                                          |                                       `14` | Days of database and Grafana archives retained by `db-backup`; `0` disables pruning.                                                   |
@@ -287,6 +288,12 @@ snapshot after a failure. Do not run `pg_restore --clean` directly now that
 objects cross `public`, `reporting`, and `olap`; archive
 drop order cannot safely represent those dependencies. After a restore,
 reapply reader privileges and restart clients:
+
+The database service sets `max_locks_per_transaction=512` because the
+transactional schema reset traverses the full public/reporting/OLAP dependency
+graph. Keep that setting when deploying the restore endpoint; reverting to the
+PostgreSQL default can fail with `out of shared memory` before the archive is
+restored.
 
 ```bash
 docker compose stop scraper

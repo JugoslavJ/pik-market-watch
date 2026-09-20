@@ -35,6 +35,7 @@ async function reset(pool) {
                             scrape_run_pages,
                             listing_state_history, listing_price_events,
                             listing_daily, analytics_daily_coverage,
+                            analytics_daily_dirty_articles,
                             analytics_daily_olap_dirty
                             RESTART IDENTITY CASCADE`);
   await pool.query(`TRUNCATE olap.current_listing_scores,

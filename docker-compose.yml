@@ -50,6 +50,15 @@ services:
       - -c
       - max_connections=40
       - -c
+      - max_wal_size=4GB
+      - -c
+      - checkpoint_timeout=15min
+      # Schema replacement restores cascade through the public, reporting,
+      # and OLAP object graph in one transaction. The default lock budget is
+      # too small for the current ~250-object graph.
+      - -c
+      - max_locks_per_transaction=512
+      - -c
       - work_mem=8MB
       - -c
       - maintenance_work_mem=64MB
@@ -131,6 +140,7 @@ services:
       MIGRATIONS_ON_STARTUP: "0"
       RAW_RESPONSE_RETENTION_COUNT: ${RAW_RESPONSE_RETENTION_COUNT:-3}
       ANALYTICS_REBUILD_MAX_DAYS: ${ANALYTICS_REBUILD_MAX_DAYS:-31}
+      RUN_ANALYTICS_MAINTENANCE: ${RUN_ANALYTICS_MAINTENANCE:-1}
     entrypoint: ["node", "src/maintenance-only.js"]
 
   olap-reconcile:
@@ -167,6 +177,9 @@ services:
       DETAIL_JOB_LEASE_MINUTES: ${DETAIL_JOB_LEASE_MINUTES:-30}
       RAW_RESPONSE_RETENTION_COUNT: ${RAW_RESPONSE_RETENTION_COUNT:-3}
       ANALYTICS_REBUILD_MAX_DAYS: ${ANALYTICS_REBUILD_MAX_DAYS:-31}
+      # Keep score/OLAP publication out of the scrape transaction. Schedule
+      # the maintenance profile to publish the snapshot separately.
+      RUN_ANALYTICS_MAINTENANCE: ${RUN_ANALYTICS_MAINTENANCE:-0}
       ABANDONED_RUN_AFTER_MINUTES: ${ABANDONED_RUN_AFTER_MINUTES:-180}
       HEALTH_BIND: ${HEALTH_BIND:-0.0.0.0}
     volumes:

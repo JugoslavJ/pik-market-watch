@@ -212,6 +212,22 @@ test("migration startup fallback defaults to enabled outside Compose", () => {
   assert.equal(out, "true");
 });
 
+test("analytics publication can be deferred from scrape cycles", () => {
+  const script = `
+    const cfg = require(${JSON.stringify(CONFIG_PATH)});
+    process.stdout.write(JSON.stringify(cfg.runAnalyticsMaintenance));
+  `;
+  const out = execFileSync(process.execPath, ["-e", script], {
+    env: {
+      ...process.env,
+      RUN_ANALYTICS_MAINTENANCE: "0",
+      SEARCHES_FILE: "",
+    },
+    encoding: "utf8",
+  });
+  assert.equal(out, "false");
+});
+
 test("migration startup fallback rejects ambiguous values", () => {
   runConfigFailure({ MIGRATIONS_ON_STARTUP: "sometimes" });
 });

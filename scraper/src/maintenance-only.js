@@ -27,6 +27,7 @@ async function main() {
     );
     const result = await db.runMaintenanceCycle({
       maxDays: config.analyticsRebuildMaxDays,
+      publishCurrentMarket: true,
       log: (message) => console.log(`[maintenance] ${message}`),
     });
     console.log(
