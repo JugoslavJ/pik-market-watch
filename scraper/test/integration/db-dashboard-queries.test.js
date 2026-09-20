@@ -6,7 +6,9 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const { Pool } = require("pg");
-const { needsDb, reset, setupDb } = require("../helpers/db.js");
+const { needsDb, reset, ensureSchema } = require("../helpers/db.js");
+const Db = require("../../src/db");
+const applyMigrations = require("../../src/migrate");
 const root = path.resolve(__dirname, "../../..");
 const dashboards = fs
   .readdirSync(path.join(root, "grafana", "dashboards"))
@@ -54,17 +56,40 @@ function dashboardValues(dashboard, selected, scenario) {
 }
 let db;
 let reporting;
+let admin;
+let isolatedDatabase;
+let sharedOwnership;
+const ownershipQuery = `SELECT p.proname, pg_get_userbyid(p.proowner) AS owner
+  FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+  WHERE n.nspname = 'public' AND p.proname = 'apply_operational_cleanup'`;
 test.before(async () => {
-  db = await setupDb();
   assert.ok(
     process.env.TEST_DATABASE_CONTAINER,
     "run through npm run test:integration to bootstrap the real Grafana role",
   );
+  // Role bootstrap transfers function ownership, including SECURITY DEFINER
+  // maintenance routines. Keep those changes out of the runner's shared DB:
+  // later suites create fixtures as the bootstrap user, not the migration role.
+  admin = new Pool({ connectionString: process.env.TEST_DATABASE_URL });
+  await ensureSchema(admin);
+  sharedOwnership = (await admin.query(ownershipQuery)).rows;
+  const databaseName = `olx_dashboard_roles_${process.pid}`;
+  await admin.query(`CREATE DATABASE "${databaseName}" TEMPLATE template0`);
+  isolatedDatabase = databaseName;
+  const url = new URL(process.env.TEST_DATABASE_URL);
+  url.pathname = `/${databaseName}`;
+  db = new Db(url.toString());
+  await db.waitUntilReady();
+  // Always migrate the new database, even when the runner marks its shared
+  // database's schema ready for subsequent test files.
+  await applyMigrations(db.pool, path.join(root, "db/init"));
   const roleSetup = spawnSync(
     "docker",
     [
       "exec",
       "-i",
+      "-e",
+      `POSTGRES_DB=${databaseName}`,
       "-e",
       "POSTGRES_MIGRATOR_PASSWORD=integration-migrator",
       "-e",
@@ -85,7 +110,6 @@ test.before(async () => {
     },
   );
   assert.equal(roleSetup.status, 0, roleSetup.stderr);
-  const url = new URL(process.env.TEST_DATABASE_URL);
   url.username = "olx_reporting";
   url.password = "integration-reporting";
   reporting = new Pool({ connectionString: url.toString() });
@@ -93,7 +117,26 @@ test.before(async () => {
 test.after(async () => {
   if (reporting) await reporting.end();
   if (db) await db.close();
+  if (admin) {
+    try {
+      if (isolatedDatabase) {
+        await admin.query(`DROP DATABASE "${isolatedDatabase}"`);
+      }
+    } finally {
+      await admin.end();
+    }
+  }
 });
+
+needsDb(
+  "Grafana role bootstrap preserves shared database function ownership",
+  async () => {
+    assert.deepEqual((await admin.query(ownershipQuery)).rows, sharedOwnership);
+    assert.deepEqual((await db.pool.query(ownershipQuery)).rows, [
+      { proname: "apply_operational_cleanup", owner: "olx_migrator" },
+    ]);
+  },
+);
 
 needsDb(
   "Grafana can read its contract but cannot read raw tables or write",
