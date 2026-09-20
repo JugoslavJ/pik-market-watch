@@ -21,6 +21,8 @@ order for the PostgreSQL entrypoint and the application migrator.
 | `15-postgis-neighborhood-boundaries.sql` / `16-rebuild-postgis-neighborhood-index.sql` | PostGIS boundaries, assignment, and spatial index |
 | `17-olap-refresh-performance.sql` / `18-olap-targeted-refresh.sql` | Refresh source optimization and dirty-grain publication |
 | `19-remove-dashboard-public.sql` / `20-align-olap-health-after-public-schema-removal.sql` | Reporting surface and OLAP health definitions |
+| `20-y-data-contract-maintenance-context.sql` | Grants the migration transaction its audited evidence-repair context |
+| `20-z-data-contract-preflight.sql` | Repairs legacy evidence before strict data-contract constraints |
 | `21-data-contracts-retention.sql` | Mart grains, evidence rules, partitions, retention, and validation |
 | `22-widen-evidence-source-domains.sql` through `26-scrape-run-success-index.sql` | Evidence, enrichment, and run-state constraints and indexes |
 | `zz-database-roles.sh` | Runtime ownership and reader permissions |
