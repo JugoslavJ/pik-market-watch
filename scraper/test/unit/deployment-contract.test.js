@@ -40,15 +40,16 @@ test("database checkpoint settings avoid long scrape stalls", () => {
   assert.match(compose, /checkpoint_timeout=15min/);
 });
 
-test("scraper defers OLAP publication to the maintenance profile", () => {
+test("scraper publishes OLAP and maintenance does not", () => {
   assert.match(
     compose,
-    /scraper:[\s\S]*RUN_ANALYTICS_MAINTENANCE: \$\{RUN_ANALYTICS_MAINTENANCE:-0\}/,
+    /scraper:[\s\S]*RUN_ANALYTICS_MAINTENANCE: \$\{RUN_ANALYTICS_MAINTENANCE:-1\}/,
   );
-  assert.match(
-    compose,
-    /maintenance:[\s\S]*RUN_ANALYTICS_MAINTENANCE: \$\{RUN_ANALYTICS_MAINTENANCE:-1\}/,
+  const maintenance = compose.slice(
+    compose.indexOf("  maintenance:"),
+    compose.indexOf("  olap-reconcile:"),
   );
+  assert.doesNotMatch(maintenance, /RUN_ANALYTICS_MAINTENANCE/);
 });
 
 test("deployment runs migration job before publishing the stack", () => {

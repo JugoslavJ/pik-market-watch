@@ -1,7 +1,8 @@
 "use strict";
 
-// Run operational cleanup and daily analytics maintenance without scraping. Schedule
-// this independently so an upstream outage cannot also stop housekeeping.
+// Run operational cleanup and daily analytics maintenance without scraping.
+// OLAP publication belongs to the scraper instance and is intentionally not
+// part of this scheduled maintenance process.
 const config = require("./config");
 const Db = require("./db");
 const applyMigrations = require("./migrate");
@@ -27,7 +28,6 @@ async function main() {
     );
     const result = await db.runMaintenanceCycle({
       maxDays: config.analyticsRebuildMaxDays,
-      publishCurrentMarket: true,
       log: (message) => console.log(`[maintenance] ${message}`),
     });
     console.log(

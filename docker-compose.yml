@@ -140,7 +140,6 @@ services:
       MIGRATIONS_ON_STARTUP: "0"
       RAW_RESPONSE_RETENTION_COUNT: ${RAW_RESPONSE_RETENTION_COUNT:-3}
       ANALYTICS_REBUILD_MAX_DAYS: ${ANALYTICS_REBUILD_MAX_DAYS:-31}
-      RUN_ANALYTICS_MAINTENANCE: ${RUN_ANALYTICS_MAINTENANCE:-1}
     entrypoint: ["node", "src/maintenance-only.js"]
 
   olap-reconcile:
@@ -177,9 +176,9 @@ services:
       DETAIL_JOB_LEASE_MINUTES: ${DETAIL_JOB_LEASE_MINUTES:-30}
       RAW_RESPONSE_RETENTION_COUNT: ${RAW_RESPONSE_RETENTION_COUNT:-3}
       ANALYTICS_REBUILD_MAX_DAYS: ${ANALYTICS_REBUILD_MAX_DAYS:-31}
-      # Keep score/OLAP publication out of the scrape transaction. Schedule
-      # the maintenance profile to publish the snapshot separately.
-      RUN_ANALYTICS_MAINTENANCE: ${RUN_ANALYTICS_MAINTENANCE:-0}
+      # Publish score/OLAP synchronously after this scraper instance's
+      # ingestion and bounded daily reconstruction.
+      RUN_ANALYTICS_MAINTENANCE: ${RUN_ANALYTICS_MAINTENANCE:-1}
       ABANDONED_RUN_AFTER_MINUTES: ${ABANDONED_RUN_AFTER_MINUTES:-180}
       HEALTH_BIND: ${HEALTH_BIND:-0.0.0.0}
     volumes:

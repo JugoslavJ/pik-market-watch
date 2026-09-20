@@ -24,6 +24,18 @@ const state = {
   searches: config.searches.map((s) => ({ name: s.name })),
 };
 
+async function publishSynchronousOlap(db) {
+  if (!config.runAnalyticsMaintenance) {
+    return { skipped: true, reason: "disabled by configuration" };
+  }
+  try {
+    return await db.refreshCurrentMarket((message) => log(`olap: ${message}`));
+  } catch (error) {
+    log(`✖ synchronous OLAP publication failed: ${error.message || error}`);
+    return { error: error.message || String(error) };
+  }
+}
+
 async function runAllUnlocked(db) {
   if (!config.searches.length) {
     log(
@@ -37,7 +49,15 @@ async function runAllUnlocked(db) {
       maxDays: config.analyticsRebuildMaxDays,
       log: (message) => log(`maintenance: ${message}`),
     });
-    return { okRuns: 0, failedRuns: 0, skipped: 0, totalCards: 0, maintenance };
+    const olap = await publishSynchronousOlap(db);
+    return {
+      okRuns: 0,
+      failedRuns: 0,
+      skipped: 0,
+      totalCards: 0,
+      maintenance,
+      olap,
+    };
   }
 
   let okRuns = 0;
@@ -139,7 +159,6 @@ async function runAllUnlocked(db) {
   // failed rebuild, or skipped cycle must not suppress raw cleanup.
   const maintenance = await db.runMaintenanceCycle({
     maxDays: config.analyticsRebuildMaxDays,
-    publishCurrentMarket: config.runAnalyticsMaintenance,
     log: (message) => log(`maintenance: ${message}`),
   });
   if (!maintenance.ok)
@@ -147,8 +166,10 @@ async function runAllUnlocked(db) {
       `✖ maintenance had independent failures: ${JSON.stringify(maintenance.errors)}`,
     );
 
+  const olap = await publishSynchronousOlap(db);
+
   state.lastRunAt = new Date().toISOString();
-  return { okRuns, failedRuns, skipped, totalCards, maintenance };
+  return { okRuns, failedRuns, skipped, totalCards, maintenance, olap };
 }
 
 async function runAll(db) {

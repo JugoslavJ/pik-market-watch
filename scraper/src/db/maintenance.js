@@ -209,6 +209,23 @@ module.exports = function installMaintenanceMethods(Db) {
       }
     },
 
+    /** Refresh planner statistics for inheritance parents and every child. */
+    async analyzeAnalyticsPartitions() {
+      const relations = await this.pool.query(`
+        SELECT string_agg(relation, ', ' ORDER BY relation) AS relations
+          FROM (
+            SELECT DISTINCT format('%I.%I', parent_schema, parent_table) AS relation
+              FROM public.analytics_partition_registry
+            UNION
+            SELECT DISTINCT format('%I.%I', parent_schema, child_table) AS relation
+              FROM public.analytics_partition_registry
+          ) q`);
+      const sql = relations.rows[0]?.relations;
+      if (!sql) return { analyzed: 0 };
+      await this.pool.query(`ANALYZE ${sql}`);
+      return { analyzed: sql.split(", ").length };
+    },
+
     async recordMaintenanceOutcome(
       runType,
       startedAt,
@@ -238,11 +255,7 @@ module.exports = function installMaintenanceMethods(Db) {
      * task is attempted even when another task fails; callers can decide
      * whether an error should fail a one-shot job or merely affect health logs.
      */
-    async runMaintenanceCycle({
-      maxDays = 31,
-      log = () => {},
-      publishCurrentMarket = true,
-    } = {}) {
+    async runMaintenanceCycle({ maxDays = 31, log = () => {} } = {}) {
       const result = { ok: true, errors: {} };
       const run = async (name, operation) => {
         const started = new Date();
@@ -292,16 +305,10 @@ module.exports = function installMaintenanceMethods(Db) {
       // Purge runs before the potentially expensive rebuild and is independent
       // of both upstream success and the rebuild result.
       await run("purged", () => this.purgeRawResponses());
+      await run("analyzeAnalyticsPartitions", () =>
+        this.analyzeAnalyticsPartitions(),
+      );
       await run("rebuilt", () => this.rebuildDailyInventory({ maxDays, log }));
-      if (publishCurrentMarket) {
-        await run("currentMarket", () => this.refreshCurrentMarket(log));
-      } else {
-        result.currentMarket = {
-          skipped: true,
-          reason: "deferred to the maintenance profile",
-        };
-        log("currentMarket deferred to the maintenance profile");
-      }
       return result;
     },
 

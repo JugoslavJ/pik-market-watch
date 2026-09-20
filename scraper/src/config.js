@@ -206,8 +206,8 @@ module.exports = {
     31,
     { min: 1, max: 366 },
   ),
-  // Scrape cycles keep ingestion and bounded daily reconstruction responsive.
-  // The dedicated maintenance profile publishes the expensive OLAP snapshot.
+  // The scraper publishes the OLAP snapshot synchronously after ingestion and
+  // bounded daily reconstruction. The maintenance profile does not publish it.
   runAnalyticsMaintenance: boolean(
     "RUN_ANALYTICS_MAINTENANCE",
     process.env.RUN_ANALYTICS_MAINTENANCE,
