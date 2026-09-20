@@ -26,6 +26,11 @@ async function main() {
     const refreshed = await pool.query(
       "SELECT * FROM reporting.refresh_dashboard_olap(true)",
     );
+    await pool.query("SELECT public.ensure_analytics_partitions()");
+    await pool.query("SELECT public.apply_history_retention($1)", [5000]);
+    const contract = await pool.query(
+      "SELECT reporting.validate_olap_contracts() AS result",
+    );
     const parity = await pool.query(
       "SELECT * FROM reporting.validate_dashboard_olap()",
     );
@@ -39,6 +44,7 @@ async function main() {
     ).rows[0];
     const result = {
       refreshed: refreshed.rows[0],
+      contract: contract.rows[0]?.result,
       parity: parity.rows,
       health,
       queueHealth,

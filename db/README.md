@@ -27,6 +27,7 @@ entrypoint and the application migration runner:
 | `18-olap-targeted-refresh.sql` | Dirty-day/article source functions and single-pass cycle publication |
 | `19-remove-dashboard-public.sql` | Remove the retired public dashboard schema and move sources private |
 | `20-align-olap-health-after-public-schema-removal.sql` | Keep OLAP health consistent with retained internal compatibility marts |
+| `21-data-contracts-retention.sql` | Mart grains, domain checks, append-only evidence, date partitions, retention, and refresh validation |
 | `zz-database-roles.sh`       | Application ownership and reader permissions                   |
 
 Fresh volumes execute these files in order. The migrator subsequently records
@@ -63,6 +64,14 @@ now publishes the complete dashboard generation after daily reconstruction.
 `reporting.olap_health` exposes generation consistency, maximum age, and total
 tracked rows for monitoring. Operational health panels remain live against run
 and refresh-control tables by design; analytical panels use only snapshots.
+
+Migration 21 provisions monthly inheritance partitions for event/day history,
+keeps the existing table/view OIDs stable, and records the policy in
+`analytics_partition_policy` and `analytics_retention_policy`. The maintenance
+cycle creates upcoming partitions, removes expired partitions/legacy rows, and
+records the result of `reporting.validate_olap_contracts()` after publication.
+Evidence updates/deletes are rejected by the database; retention is the audited
+exception path.
 
 ## Future changes
 
