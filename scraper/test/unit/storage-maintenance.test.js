@@ -77,3 +77,31 @@ test("maintenance attempts purge and rebuild independently", async () => {
   assert.match(result.errors.rebuilt, /rebuild unavailable/);
   assert.equal(result.currentMarket.rows_written, 12);
 });
+
+test("maintenance logs stage and current-market substep timings", async () => {
+  const db = new Db("postgres://unused");
+  const logs = [];
+  db.pool = {
+    query: async (sql) =>
+      String(sql).includes("refresh_current_market")
+        ? { rows: [{ rows_written: 4 }] }
+        : { rows: [] },
+  };
+  await db.refreshCurrentMarket((message) => logs.push(message));
+  assert.match(logs[0], /^starting currentMarket\/olapRefresh$/);
+  assert.match(
+    logs[1],
+    /^currentMarket\/olapRefresh completed in \d+\.\d{2}s$/,
+  );
+  assert.deepEqual(
+    logs
+      .filter((message) => message.startsWith("starting currentMarket/"))
+      .map((message) => message.replace(/^starting /, "")),
+    [
+      "currentMarket/olapRefresh",
+      "currentMarket/ensureAnalyticsPartitions",
+      "currentMarket/operationalCleanup",
+      "currentMarket/validateContracts",
+    ],
+  );
+});

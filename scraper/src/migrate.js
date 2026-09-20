@@ -24,8 +24,9 @@ async function applyMigrations(pool, dir, log = () => {}) {
     .readdirSync(dir)
     .filter((f) => f.endsWith(".sql"))
     .sort();
-  // Only the squashed 00..16 schema is represented by the fingerprint below.
-  // Later migrations must execute even when an existing volume adopts it.
+  // The canonical schema remains split into responsibility-oriented files.
+  // Existing volumes with the complete current schema can adopt the whole
+  // set atomically; otherwise the current-state upgrade files run normally.
   const baselineFiles = files.filter((file) => /^(?:0\d|1[0-6])-/.test(file));
   const client = await pool.connect();
   const applied = [];
@@ -63,6 +64,50 @@ async function applyMigrations(pool, dir, log = () => {}) {
       "SELECT count(*)::int AS count FROM schema_migrations WHERE filename = ANY($1::text[])",
       [files],
     );
+    const completeSchema = await client.query(`
+      SELECT to_regclass('olap.refresh_state') IS NOT NULL
+         AND to_regclass('public.analytics_daily_olap_dirty') IS NOT NULL
+         AND to_regclass('public.olap_article_dirty') IS NOT NULL
+         AND to_regprocedure('reporting.refresh_dashboard_olap(boolean)') IS NOT NULL
+         AND to_regprocedure('public.mark_article_olap_dirty()') IS NOT NULL
+         AND to_regclass('reporting.current_comparison_inputs') IS NOT NULL
+         AND to_regprocedure('reporting.room_bucket(text)') IS NOT NULL
+         AND NOT EXISTS (
+               SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'analytics_partition_policy'
+                  AND column_name IN ('action', 'retention_days')
+             )
+         AND EXISTS (
+               SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'analytics_daily_olap_dirty'
+                  AND column_name = 'marked_at'
+             ) AS complete`);
+    if (currentRows.rows[0].count > 0 && completeSchema.rows[0].complete) {
+      // A previously deployed final schema may have been installed by the
+      // Docker entrypoint while its ledger still contains pre-squash checksums.
+      // Reconcile the ledger to the current split baseline only after the live
+      // schema proves that replaying SQL is unnecessary.
+      for (const file of files) {
+        const sql = fs.readFileSync(path.join(dir, file), "utf8");
+        const checksum = migrationChecksum(sql);
+        const existing = await client.query(
+          "SELECT checksum FROM schema_migrations WHERE filename = $1",
+          [file],
+        );
+        if (existing.rowCount && existing.rows[0].checksum === checksum) {
+          continue;
+        }
+        await client.query(
+          `INSERT INTO schema_migrations (filename, checksum)
+           VALUES ($1, $2)
+           ON CONFLICT (filename) DO UPDATE SET checksum = EXCLUDED.checksum`,
+          [file, checksum],
+        );
+        applied.push(`${file} (current schema adopted)`);
+      }
+    }
     if (currentRows.rows[0].count === 0 && files.length > 0) {
       const advancedSchema = await client.query(`
         SELECT to_regclass('olap.refresh_state') IS NOT NULL
@@ -92,7 +137,11 @@ async function applyMigrations(pool, dir, log = () => {}) {
       const fingerprint = await client.query(`
         SELECT to_regclass('olap.refresh_state') IS NOT NULL
            AND to_regclass('public.analytics_daily_olap_dirty') IS NOT NULL
+           AND to_regclass('public.olap_article_dirty') IS NOT NULL
            AND to_regprocedure('reporting.refresh_dashboard_olap(boolean)') IS NOT NULL
+           AND to_regprocedure('public.mark_article_olap_dirty()') IS NOT NULL
+           AND to_regclass('reporting.current_comparison_inputs') IS NOT NULL
+           AND to_regprocedure('reporting.room_bucket(text)') IS NOT NULL
            AND EXISTS (
              SELECT 1 FROM information_schema.columns
               WHERE table_schema = 'public'
@@ -117,12 +166,25 @@ async function applyMigrations(pool, dir, log = () => {}) {
                    SELECT 1 FROM public.analytics_retention_policy
                     WHERE table_schema = 'public' AND table_name = 'scrape_runs'
                  ) AS present`);
-        // The retention fingerprint only proves migrations through 32. Later
-        // migrations must run even on an untracked pre-squash volume.
+        // The complete fingerprint includes the current-state upgrade files,
+        // so a volume is only adopted when every published contract is live.
         const adoptedFiles = finalSchema.rows[0].present
           ? files.filter((file) => /^(?:[0-2]\d|3[0-2])-/.test(file))
           : baselineFiles;
         for (const file of adoptedFiles) {
+          const sql = fs.readFileSync(path.join(dir, file), "utf8");
+          const checksum = migrationChecksum(sql);
+          await client.query(
+            "INSERT INTO schema_migrations (filename, checksum) VALUES ($1, $2)",
+            [file, checksum],
+          );
+          applied.push(`${file} (canonical baseline)`);
+        }
+      } else if (advancedSchema.rows[0].present) {
+        // A Docker-style bootstrap may have executed only the canonical
+        // baseline before the application migrator starts. Record that
+        // baseline, then let the current-state files finish the install.
+        for (const file of baselineFiles) {
           const sql = fs.readFileSync(path.join(dir, file), "utf8");
           const checksum = migrationChecksum(sql);
           await client.query(

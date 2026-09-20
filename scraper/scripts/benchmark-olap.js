@@ -13,6 +13,7 @@ const repetitions = Number(process.env.OLAP_BENCHMARK_REPETITIONS || "3");
 const forceFull = process.env.OLAP_BENCHMARK_FORCE_FULL === "1";
 const validate = process.env.OLAP_BENCHMARK_VALIDATE === "1";
 const profileSources = process.env.OLAP_BENCHMARK_PROFILE_SOURCES !== "0";
+const requestedSource = process.env.OLAP_BENCHMARK_SOURCE || "";
 const maxRefreshMs = Number(process.env.OLAP_BENCHMARK_MAX_REFRESH_MS || "0");
 if (!Number.isSafeInteger(repetitions) || repetitions < 1 || repetitions > 20) {
   throw new Error("OLAP_BENCHMARK_REPETITIONS must be an integer from 1 to 20");
@@ -29,6 +30,8 @@ const sources = {
   lifecycle_cycles: "reporting.lifecycle_cycles_source",
   lifecycle_movements: "reporting.lifecycle_movements_source",
   comparison_price_changes: "reporting.comparison_price_changes_source",
+  current_comparison_inputs: "reporting.current_comparison_inputs",
+  resolved_price_evidence: "reporting.resolved_price_evidence",
   market_daily: "v_market_daily_source",
   listing_price_changes: "v_listing_price_changes_source",
   listing_exit_economics: "v_listing_exit_economics_source",
@@ -39,11 +42,20 @@ const sources = {
   freshness_source: "reporting.freshness_source",
 };
 
+function planStats(node, stats = { tempReadBlocks: 0, tempWrittenBlocks: 0 }) {
+  if (!node || typeof node !== "object") return stats;
+  stats.tempReadBlocks += Number(node["Temp Read Blocks"] || 0);
+  stats.tempWrittenBlocks += Number(node["Temp Written Blocks"] || 0);
+  if (node.Plans) for (const child of node.Plans) planStats(child, stats);
+  return stats;
+}
+
 async function measuredSource(pool, [mart, relation]) {
   const result = await pool.query(
     `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) SELECT * FROM ${relation}`,
   );
   const plan = result.rows[0]["QUERY PLAN"][0];
+  const stats = planStats(plan.Plan);
   return {
     mart,
     source: relation,
@@ -52,6 +64,7 @@ async function measuredSource(pool, [mart, relation]) {
     sharedHitBlocks: plan.Plan["Shared Hit Blocks"] ?? 0,
     sharedReadBlocks: plan.Plan["Shared Read Blocks"] ?? 0,
     rows: plan.Plan["Actual Rows"],
+    ...stats,
   };
 }
 
@@ -66,13 +79,60 @@ async function databaseSnapshot(pool) {
   return result.rows[0];
 }
 
+async function benchmarkState(pool) {
+  const result = await pool.query(`
+    WITH previous AS (
+      SELECT refreshed_at
+        FROM olap.refresh_state
+       WHERE mart = 'daily_listing_facts'
+    ), dirty_articles AS (
+      SELECT article_id FROM public.listing_state_history, previous
+       WHERE ingested_at > previous.refreshed_at
+      UNION
+      SELECT article_id FROM public.listing_price_events, previous
+       WHERE ingested_at > previous.refreshed_at
+      UNION
+      SELECT article_id FROM public.listings, previous
+       WHERE first_seen > previous.refreshed_at
+          OR last_seen > previous.refreshed_at
+          OR closed_at > previous.refreshed_at
+          OR renewed_at > previous.refreshed_at
+          OR published_at > previous.refreshed_at
+          OR details_fetched_at > previous.refreshed_at
+      UNION
+      SELECT article_id FROM olap.lifecycle_cycles
+       WHERE NOT is_closed
+         AND current_cycle_age_days IS DISTINCT FROM greatest(
+           floor(extract(epoch FROM (now() - opened_at)) / 86400.0)::int, 0)
+    )
+    SELECT
+      (SELECT count(*)::bigint FROM dirty_articles) AS dirty_article_count,
+      (SELECT count(*)::bigint FROM analytics_daily_olap_dirty) AS dirty_day_count,
+      (SELECT count(*)::bigint FROM public.listing_price_events) AS listing_price_events,
+      (SELECT count(*)::bigint FROM public.listing_state_history) AS listing_state_history,
+      (SELECT count(*)::bigint FROM public.listings
+        WHERE closed_at IS NULL AND last_seen > now() - interval '14 days') AS active_listing_count
+  `);
+  return result.rows[0];
+}
+
 async function main() {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   try {
     const before = await databaseSnapshot(pool);
+    const state = await benchmarkState(pool);
     const sourceMeasurements = [];
     if (profileSources) {
-      for (const entry of Object.entries(sources)) {
+      const entries = Object.entries(sources).filter(
+        ([mart, relation]) =>
+          !requestedSource ||
+          requestedSource === mart ||
+          requestedSource === relation,
+      );
+      if (requestedSource && entries.length === 0) {
+        throw new Error(`unknown OLAP benchmark source: ${requestedSource}`);
+      }
+      for (const entry of entries) {
         sourceMeasurements.push(await measuredSource(pool, entry));
       }
     }
@@ -119,9 +179,13 @@ async function main() {
       JSON.stringify(
         {
           mode: forceFull ? "full" : "incremental",
+          requestedSource: requestedSource || null,
           profileSources,
           repetitions,
-          sourceMeasurements,
+          state,
+          sourceMeasurements: sourceMeasurements.sort(
+            (a, b) => b.sourceEvaluationMs - a.sourceEvaluationMs,
+          ),
           refreshes,
           marts: marts.rows,
           health: health.rows[0],

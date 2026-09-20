@@ -36,13 +36,13 @@ const currentMigrations = fs
   .sort();
 
 needsDb(
-  "baseline adoption still applies the reporting access migration",
+  "baseline adoption still applies the current-state files",
   async () => {
     const pool = new Pool({
       connectionString: await recreateDb("mig_reporting"),
     });
     try {
-      for (const file of currentMigrations.filter((name) => name < "33-")) {
+      for (const file of currentMigrations.filter((name) => name < "17-")) {
         await pool.query(fs.readFileSync(path.join(FULL_DIR, file), "utf8"));
       }
       assert.equal(
@@ -51,7 +51,7 @@ needsDb(
             "SELECT to_regprocedure('reporting.room_bucket(text)') AS helper",
           )
         ).rows[0].helper,
-        null,
+        "reporting.room_bucket(text)",
       );
       await applyMigrations(pool, FULL_DIR, log);
       assert.equal(
