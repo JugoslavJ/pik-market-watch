@@ -93,6 +93,7 @@ needsDb(
           "listing_daily_10_resolve_sparse_state",
           "listing_daily_20_normalize_flags_insert",
           "listing_daily_normalize_flags_update",
+          "listing_daily_partition_route",
         ],
       );
       await applyMigrations(pool, FULL_DIR, () =>
