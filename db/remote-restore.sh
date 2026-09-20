@@ -260,8 +260,6 @@ if [ "$restore_failed" = "1" ]; then
   fi
   exit 1
 fi
-restore_ok=1
-
 # Belt & braces: FUTURE tables created by migrations must stay readable by
 # Grafana even if some future dump ever lacks the app-role defaults.
 docker compose exec -T db psql -U "$migrator_user" -d "$db_name" -q \
@@ -275,6 +273,16 @@ docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
 
 if [ "$was_running" = "1" ]; then
   docker compose start scraper
+fi
+restore_ok=1
+
+# Role repair retires olx_reader, but a running Grafana keeps its previously
+# provisioned datasource until startup. Recreate it to load both the current
+# Compose environment and datasource provisioning, even if only bind-mounted
+# files changed. Do not recreate the database we just restored.
+if ! docker compose up -d --no-deps --force-recreate --wait --wait-timeout 120 grafana; then
+  echo "RESTORE_ERROR: database restored, but Grafana refresh failed; check docker compose logs grafana and recreate Grafana (no need to repeat the scrape/restore)" >&2
+  exit 1
 fi
 
 echo "RESTORE_OK $stamp ($size bytes)"

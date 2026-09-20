@@ -81,7 +81,7 @@ SELECT format('ALTER DATABASE %I OWNER TO %I', :'db_name', :'migrator_user') \ge
 SELECT format('ALTER TABLE %I.%I OWNER TO %I', n.nspname, c.relname, :'migrator_user')
 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
 WHERE n.nspname = 'public'
-  AND c.relkind IN ('r','p','v','m','f')
+  AND c.relkind IN ('r','p','v','m','f','S')
   -- serial/identity-owned sequences follow their table's owner automatically:
   AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.classid = 'pg_class'::regclass
                     AND d.objid = c.oid AND d.deptype IN ('a','i'))

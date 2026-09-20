@@ -104,8 +104,8 @@ async function applyMigrations(pool, dir, log = () => {}) {
         // migrator starts, so a brand-new volume may already have the latest
         // forward migrations while its ledger is still empty. The absence of
         // the legacy history-retention columns is the final-schema marker;
-        // adopt every file in that case instead of replaying non-idempotent
-        // intermediate migrations over the already-final schema.
+        // adopt the known retention migrations in that case instead of
+        // replaying their non-idempotent intermediate schema changes.
         const finalSchema = await client.query(`
           SELECT NOT EXISTS (
                    SELECT 1 FROM information_schema.columns
@@ -117,8 +117,10 @@ async function applyMigrations(pool, dir, log = () => {}) {
                    SELECT 1 FROM public.analytics_retention_policy
                     WHERE table_schema = 'public' AND table_name = 'scrape_runs'
                  ) AS present`);
+        // The retention fingerprint only proves migrations through 32. Later
+        // migrations must run even on an untracked pre-squash volume.
         const adoptedFiles = finalSchema.rows[0].present
-          ? files
+          ? files.filter((file) => /^(?:[0-2]\d|3[0-2])-/.test(file))
           : baselineFiles;
         for (const file of adoptedFiles) {
           const sql = fs.readFileSync(path.join(dir, file), "utf8");

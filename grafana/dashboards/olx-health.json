@@ -115,7 +115,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT count(*) FROM saved_searches",
+          "rawSql": "SELECT count(*) FROM reporting.saved_searches",
           "refId": "A"
         }
       ],
@@ -186,7 +186,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT count(*) FROM scrape_runs\nWHERE status = 'error'\n  AND started_at > now() - INTERVAL '24 hours'",
+          "rawSql": "SELECT count(*) FROM reporting.scrape_health\nWHERE status = 'error'\n  AND started_at > now() - INTERVAL '24 hours'",
           "refId": "A"
         }
       ],
@@ -257,7 +257,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT round(100.0 * count(*) FILTER (WHERE status = 'ok') / NULLIF(count(*), 0))\nFROM scrape_runs\nWHERE started_at > now() - INTERVAL '24 hours'\n  AND status IN ('ok', 'error')",
+          "rawSql": "SELECT round(100.0 * count(*) FILTER (WHERE status = 'ok') / NULLIF(count(*), 0))\nFROM reporting.scrape_health\nWHERE started_at > now() - INTERVAL '24 hours'\n  AND status IN ('ok', 'error')",
           "refId": "A"
         }
       ],
@@ -328,7 +328,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT EXTRACT(EPOCH FROM (now() - max(finished_at)))::bigint\nFROM scrape_runs\nWHERE status = 'ok' AND is_complete = TRUE AND finished_at IS NOT NULL",
+          "rawSql": "SELECT EXTRACT(EPOCH FROM (now() - max(finished_at)))::bigint\nFROM reporting.scrape_health\nWHERE status = 'ok' AND is_complete = TRUE AND finished_at IS NOT NULL",
           "refId": "A"
         }
       ],
@@ -391,7 +391,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT COALESCE(sum(cards), 0) FROM scrape_runs\nWHERE status = 'ok'\n  AND started_at > now() - INTERVAL '24 hours'",
+          "rawSql": "SELECT COALESCE(sum(cards), 0) FROM reporting.scrape_health\nWHERE status = 'ok'\n  AND started_at > now() - INTERVAL '24 hours'",
           "refId": "A"
         }
       ],
@@ -455,7 +455,7 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT date_trunc('hour', r.started_at) AS time,\n       count(*) FILTER (WHERE r.status = 'ok')      AS ok,\n       count(*) FILTER (WHERE r.status = 'error')   AS error,\n       count(*) FILTER (WHERE r.status = 'running') AS running\nFROM scrape_runs r\nWHERE $__timeFilter(r.started_at)\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT date_trunc('hour', r.started_at) AS time,\n       count(*) FILTER (WHERE r.status = 'ok')      AS ok,\n       count(*) FILTER (WHERE r.status = 'error')   AS error,\n       count(*) FILTER (WHERE r.status = 'running') AS running\nFROM reporting.scrape_health r\nWHERE $__timeFilter(r.started_at)\nGROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -507,7 +507,7 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT date_trunc('hour', started_at) AS time,\n       round(avg(cards))::int AS \"avg cards\",\n       round(avg(pages))::int AS \"avg pages\"\nFROM scrape_runs\nWHERE status IN ('ok', 'error')\n  AND $__timeFilter(started_at)\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT date_trunc('hour', started_at) AS time,\n       round(avg(cards))::int AS \"avg cards\",\n       round(avg(pages))::int AS \"avg pages\"\nFROM reporting.scrape_health\nWHERE status IN ('ok', 'error')\n  AND $__timeFilter(started_at)\nGROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -647,7 +647,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT ss.name, COALESCE(ss.category, '(none)') AS category,\n       ss.listing_count AS listings,\n       ss.median_ppm2 AS \"median KM/m2\",\n       ss.new_count AS new, ss.drop_count AS drops,\n       round(EXTRACT(EPOCH FROM (now() - ss.last_scraped_at)) / 60)::int AS age_min,\n       ss.url\nFROM saved_searches ss\nWHERE ss.category IS NULL OR ss.category = ANY (ARRAY[${category:sqlstring}])\nORDER BY ss.last_scraped_at ASC NULLS FIRST",
+          "rawSql": "SELECT ss.name, COALESCE(ss.category, '(none)') AS category,\n       ss.listing_count AS listings,\n       ss.median_ppm2 AS \"median KM/m2\",\n       ss.new_count AS new, ss.drop_count AS drops,\n       round(EXTRACT(EPOCH FROM (now() - ss.last_scraped_at)) / 60)::int AS age_min,\n       ss.url\nFROM reporting.saved_searches ss\nWHERE ss.category IS NULL OR ss.category = ANY (ARRAY[${category:sqlstring}]::text[])\nORDER BY ss.last_scraped_at ASC NULLS FIRST",
           "refId": "A"
         }
       ],
@@ -782,7 +782,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT r.id, COALESCE(ss.category, '(none)') AS category, r.search_key, r.status,\n       r.pages, r.cards, r.started_at AS started, r.finished_at AS finished, r.error\nFROM scrape_runs r\nLEFT JOIN saved_searches ss ON ss.search_key = r.search_key\nORDER BY r.id DESC\nLIMIT 50",
+          "rawSql": "SELECT r.id, COALESCE(ss.category, '(none)') AS category, r.search_key, r.status,\n       r.pages, r.cards, r.started_at AS started, r.finished_at AS finished, r.error\nFROM reporting.scrape_health r\nLEFT JOIN reporting.saved_searches ss ON ss.search_key = r.search_key\nORDER BY r.id DESC\nLIMIT 50",
           "refId": "A"
         }
       ],
@@ -865,7 +865,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT round(100.0 * count(*) FILTER (WHERE latitude IS NOT NULL AND longitude IS NOT NULL) / NULLIF(count(*), 0))\nFROM listings\nWHERE closed_at IS NULL\n  AND last_seen > now() - INTERVAL '14 days'",
+          "rawSql": "SELECT round(100.0 * count(*) FILTER (WHERE latitude IS NOT NULL AND longitude IS NOT NULL) / NULLIF(count(*), 0))\nFROM reporting.listing_health listings\nWHERE closed_at IS NULL\n  AND last_seen > now() - INTERVAL '14 days'",
           "refId": "A"
         }
       ],
@@ -936,7 +936,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT round(100.0 * count(details_fetched_at) / NULLIF(count(*), 0))\nFROM listings\nWHERE closed_at IS NULL\n  AND last_seen > now() - INTERVAL '14 days'",
+          "rawSql": "SELECT round(100.0 * count(details_fetched_at) / NULLIF(count(*), 0))\nFROM reporting.listing_health listings\nWHERE closed_at IS NULL\n  AND last_seen > now() - INTERVAL '14 days'",
           "refId": "A"
         }
       ],
@@ -1007,7 +1007,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT round(100.0 * count(*) FILTER (WHERE ppm2 > 0) / NULLIF(count(*), 0))\nFROM listings\nWHERE closed_at IS NULL\n  AND last_seen > now() - INTERVAL '14 days'",
+          "rawSql": "SELECT round(100.0 * count(*) FILTER (WHERE ppm2 > 0) / NULLIF(count(*), 0))\nFROM reporting.listing_health listings\nWHERE closed_at IS NULL\n  AND last_seen > now() - INTERVAL '14 days'",
           "refId": "A"
         }
       ],
@@ -1074,7 +1074,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT round(100.0 * count(api_status) / NULLIF(count(*), 0))\nFROM listings\nWHERE closed_at IS NULL\n  AND last_seen > now() - INTERVAL '14 days'",
+          "rawSql": "SELECT round(100.0 * count(api_status) / NULLIF(count(*), 0))\nFROM reporting.listing_health listings\nWHERE closed_at IS NULL\n  AND last_seen > now() - INTERVAL '14 days'",
           "refId": "A"
         }
       ],
@@ -1127,7 +1127,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT COALESCE(api_status, '(not exposed)') AS olx_says,\n       CASE WHEN closed_at IS NOT NULL THEN 'closed' ELSE 'open' END AS we_say,\n       count(*) AS listings\nFROM listings\nWHERE last_seen > now() - INTERVAL '14 days'\nGROUP BY 1, 2 ORDER BY 3 DESC",
+          "rawSql": "SELECT COALESCE(api_status, '(not exposed)') AS olx_says,\n       CASE WHEN closed_at IS NOT NULL THEN 'closed' ELSE 'open' END AS we_say,\n       count(*) AS listings\nFROM reporting.listing_health listings\nWHERE last_seen > now() - INTERVAL '14 days'\nGROUP BY 1, 2 ORDER BY 3 DESC",
           "refId": "A"
         }
       ],
@@ -1180,7 +1180,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT ss.name, COALESCE(ss.category, '(none)') AS category,\n       count(r.id) AS runs,\n       round(avg(EXTRACT(EPOCH FROM (r.finished_at - r.started_at))))::int AS avg_s,\n       max(EXTRACT(EPOCH FROM (r.finished_at - r.started_at)))::int AS max_s\nFROM scrape_runs r\nJOIN saved_searches ss ON ss.search_key = r.search_key\nWHERE r.finished_at IS NOT NULL AND $__timeFilter(r.started_at)\nGROUP BY 1, 2 ORDER BY 4 DESC",
+          "rawSql": "SELECT ss.name, COALESCE(ss.category, '(none)') AS category,\n       count(r.id) AS runs,\n       round(avg(EXTRACT(EPOCH FROM (r.finished_at - r.started_at))))::int AS avg_s,\n       max(EXTRACT(EPOCH FROM (r.finished_at - r.started_at)))::int AS max_s\nFROM reporting.scrape_health r\nJOIN reporting.saved_searches ss ON ss.search_key = r.search_key\nWHERE r.finished_at IS NOT NULL AND $__timeFilter(r.started_at)\nGROUP BY 1, 2 ORDER BY 4 DESC",
           "refId": "A"
         }
       ],
@@ -1240,7 +1240,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT count(*)::bigint AS incomplete\nFROM scrape_runs\nWHERE is_complete = FALSE AND status IN ('ok', 'error') AND finished_at IS NOT NULL\n  AND started_at > now() - INTERVAL '24 hours'",
+          "rawSql": "SELECT count(*)::bigint AS incomplete\nFROM reporting.scrape_health\nWHERE is_complete = FALSE AND status IN ('ok', 'error') AND finished_at IS NOT NULL\n  AND started_at > now() - INTERVAL '24 hours'",
           "refId": "A"
         }
       ]
@@ -1287,7 +1287,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT count(*)::bigint AS backlog\nFROM listings\nWHERE closed_at IS NULL\n  AND last_seen > now() - INTERVAL '14 days'\n  AND (latitude IS NULL\n       OR longitude IS NULL\n       OR (sqm IS NULL AND price IS NOT NULL AND NOT is_rent)\n       OR details_fetched_at IS NULL\n       OR details_fetched_at <= now() - INTERVAL '7 days'\n       OR EXISTS (SELECT 1 FROM listing_price_events pe\n                 WHERE pe.article_id = listings.article_id\n                   AND pe.source <> 'detail'\n                   AND pe.ingested_at > COALESCE(listings.details_fetched_at, '-infinity'::timestamptz)))\n  AND (details_fetched_at IS NOT NULL\n       OR last_enrichment_attempted_at IS NULL\n       OR last_enrichment_attempted_at <= now() - INTERVAL '720 minutes')",
+          "rawSql": "SELECT count(*)::bigint AS backlog\nFROM reporting.listing_health listings\nWHERE closed_at IS NULL\n  AND last_seen > now() - INTERVAL '14 days'\n  AND (latitude IS NULL\n       OR longitude IS NULL\n       OR (sqm IS NULL AND price IS NOT NULL AND NOT is_rent)\n       OR details_fetched_at IS NULL\n       OR details_fetched_at <= now() - INTERVAL '7 days'\n       OR EXISTS (SELECT 1 FROM reporting.price_event_health pe\n                 WHERE pe.article_id = listings.article_id\n                   AND pe.source <> 'detail'\n                   AND pe.ingested_at > COALESCE(listings.details_fetched_at, '-infinity'::timestamptz)))\n  AND (details_fetched_at IS NOT NULL\n       OR last_enrichment_attempted_at IS NULL\n       OR last_enrichment_attempted_at <= now() - INTERVAL '720 minutes')",
           "refId": "A"
         }
       ]
@@ -1334,7 +1334,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT count(*)::bigint AS rejected\nFROM listing_price_events\nWHERE price_state IN ('invalid', 'conflict')\n  AND ingested_at > now() - INTERVAL '30 days'",
+          "rawSql": "SELECT count(*)::bigint AS rejected\nFROM reporting.price_event_health\nWHERE price_state IN ('invalid', 'conflict')\n  AND ingested_at > now() - INTERVAL '30 days'",
           "refId": "A"
         }
       ]
@@ -1381,7 +1381,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT CASE WHEN s.scope IS NULL OR s.last_successful_refresh_at IS NULL THEN NULL\n            ELSE EXTRACT(EPOCH FROM (now() - s.last_successful_refresh_at))::bigint END AS age_seconds\nFROM (VALUES ('listing_daily'::text)) expected(scope)\nLEFT JOIN analytics_refresh_state s ON s.scope = expected.scope",
+          "rawSql": "SELECT CASE WHEN s.scope IS NULL OR s.last_successful_refresh_at IS NULL THEN NULL\n            ELSE EXTRACT(EPOCH FROM (now() - s.last_successful_refresh_at))::bigint END AS age_seconds\nFROM (VALUES ('listing_daily'::text)) expected(scope)\nLEFT JOIN reporting.analytics_refresh_state s ON s.scope = expected.scope",
           "refId": "A"
         }
       ]
@@ -1470,7 +1470,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT count(*)::int AS runs,\n       left(regexp_replace(regexp_replace(COALESCE(error, '(no message)'), '[0-9]+', '#', 'g'), '\\s+', ' ', 'g'), 120) AS failure_pattern,\n       max(started_at) AS last_seen\nFROM scrape_runs\nWHERE status = 'error'\n  AND started_at > now() - INTERVAL '7 days'\nGROUP BY 2\nORDER BY 1 DESC",
+          "rawSql": "SELECT count(*)::int AS runs,\n       left(regexp_replace(regexp_replace(COALESCE(error, '(no message)'), '[0-9]+', '#', 'g'), '\\s+', ' ', 'g'), 120) AS failure_pattern,\n       max(started_at) AS last_seen\nFROM reporting.scrape_health\nWHERE status = 'error'\n  AND started_at > now() - INTERVAL '7 days'\nGROUP BY 2\nORDER BY 1 DESC",
           "refId": "A"
         }
       ],
@@ -1538,7 +1538,7 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT date_trunc('hour', r.started_at) AS time,\n       round(avg(EXTRACT(EPOCH FROM (r.finished_at - r.started_at))) / 60.0, 1) AS \"avg min\",\n       round(max(EXTRACT(EPOCH FROM (r.finished_at - r.started_at))) / 60.0, 1) AS \"max min\"\nFROM scrape_runs r\nWHERE r.finished_at IS NOT NULL\n  AND $__timeFilter(r.started_at)\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT date_trunc('hour', r.started_at) AS time,\n       round(avg(EXTRACT(EPOCH FROM (r.finished_at - r.started_at))) / 60.0, 1) AS \"avg min\",\n       round(max(EXTRACT(EPOCH FROM (r.finished_at - r.started_at))) / 60.0, 1) AS \"max min\"\nFROM reporting.scrape_health r\nWHERE r.finished_at IS NOT NULL\n  AND $__timeFilter(r.started_at)\nGROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -1617,7 +1617,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH searches AS (\n  SELECT ss.search_key, ss.name, COALESCE(ss.category, '(none)') AS category, ss.url,\n         ss.last_scraped_at,\n         latest.status AS latest_status, latest.started_at AS latest_started_at,\n         latest.finished_at AS latest_finished_at, latest.is_complete AS latest_is_complete,\n         latest.error AS latest_error, latest.failure_reason, latest.truncation_reason,\n         success.finished_at AS last_success_at\n  FROM saved_searches ss\n  LEFT JOIN LATERAL (\n    SELECT r.status, r.started_at, r.finished_at, r.is_complete, r.error,\n           r.failure_reason, r.truncation_reason\n    FROM scrape_runs r\n    WHERE r.search_key = ss.search_key\n    ORDER BY r.id DESC\n    LIMIT 1\n  ) latest ON TRUE\n  LEFT JOIN LATERAL (\n    SELECT r.finished_at\n    FROM scrape_runs r\n    WHERE r.search_key = ss.search_key\n      AND r.status = 'ok'\n      AND r.is_complete = TRUE\n      AND r.finished_at IS NOT NULL\n    ORDER BY r.finished_at DESC\n    LIMIT 1\n  ) success ON TRUE\n  WHERE ss.category IS NULL OR ss.category = ANY (ARRAY[${category:sqlstring}])\n)\nSELECT name, category, search_key,\n       CASE\n         WHEN last_success_at IS NULL THEN 'never successful'\n         WHEN last_success_at < now() - INTERVAL '26 hours' THEN 'stale'\n         WHEN latest_status = 'running' THEN 'running'\n         WHEN latest_status = 'error' THEN 'failed'\n         WHEN latest_is_complete = FALSE THEN 'incomplete'\n         ELSE 'ok'\n       END AS phase,\n       round(EXTRACT(EPOCH FROM (now() - last_success_at)) / 60)::int AS success_age_min,\n       latest_status, latest_is_complete, latest_started_at, latest_finished_at,\n       last_success_at, failure_reason, truncation_reason,\n       left(COALESCE(latest_error, ''), 240) AS latest_error, url\nFROM searches\nORDER BY last_success_at ASC NULLS FIRST, latest_started_at DESC NULLS LAST",
+          "rawSql": "WITH searches AS (\n  SELECT ss.search_key, ss.name, COALESCE(ss.category, '(none)') AS category, ss.url,\n         ss.last_scraped_at,\n         latest.status AS latest_status, latest.started_at AS latest_started_at,\n         latest.finished_at AS latest_finished_at, latest.is_complete AS latest_is_complete,\n         latest.error AS latest_error, latest.failure_reason, latest.truncation_reason,\n         success.finished_at AS last_success_at\n  FROM reporting.saved_searches ss\n  LEFT JOIN LATERAL (\n    SELECT r.status, r.started_at, r.finished_at, r.is_complete, r.error,\n           r.failure_reason, r.truncation_reason\n    FROM reporting.scrape_health r\n    WHERE r.search_key = ss.search_key\n    ORDER BY r.id DESC\n    LIMIT 1\n  ) latest ON TRUE\n  LEFT JOIN LATERAL (\n    SELECT r.finished_at\n    FROM reporting.scrape_health r\n    WHERE r.search_key = ss.search_key\n      AND r.status = 'ok'\n      AND r.is_complete = TRUE\n      AND r.finished_at IS NOT NULL\n    ORDER BY r.finished_at DESC\n    LIMIT 1\n  ) success ON TRUE\n  WHERE ss.category IS NULL OR ss.category = ANY (ARRAY[${category:sqlstring}]::text[])\n)\nSELECT name, category, search_key,\n       CASE\n         WHEN last_success_at IS NULL THEN 'never successful'\n         WHEN last_success_at < now() - INTERVAL '26 hours' THEN 'stale'\n         WHEN latest_status = 'running' THEN 'running'\n         WHEN latest_status = 'error' THEN 'failed'\n         WHEN latest_is_complete = FALSE THEN 'incomplete'\n         ELSE 'ok'\n       END AS phase,\n       round(EXTRACT(EPOCH FROM (now() - last_success_at)) / 60)::int AS success_age_min,\n       latest_status, latest_is_complete, latest_started_at, latest_finished_at,\n       last_success_at, failure_reason, truncation_reason,\n       left(COALESCE(latest_error, ''), 240) AS latest_error, url\nFROM searches\nORDER BY last_success_at ASC NULLS FIRST, latest_started_at DESC NULLS LAST",
           "refId": "A"
         }
       ]
@@ -1695,7 +1695,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH expected AS (\n  SELECT 'listing_daily'::text AS scope\n), state AS (\n  SELECT e.scope, s.pending_from_day, s.pending_through_day,\n         s.last_successful_refresh_at, s.completed_through_day, s.updated_at\n  FROM expected e\n  LEFT JOIN analytics_refresh_state s ON s.scope = e.scope\n)\nSELECT CASE\n         WHEN last_successful_refresh_at IS NULL THEN 'unknown'\n         WHEN pending_from_day IS NOT NULL THEN 'pending'\n         ELSE 'current'\n       END AS status,\n       CASE WHEN last_successful_refresh_at IS NULL THEN NULL\n            ELSE EXTRACT(EPOCH FROM (now() - last_successful_refresh_at))::bigint END AS refresh_age_s,\n       CASE WHEN pending_from_day IS NULL THEN NULL\n            ELSE round(EXTRACT(EPOCH FROM (now() - (pending_from_day::timestamp AT TIME ZONE 'Europe/Sarajevo'))) / 3600.0, 1) END AS pending_age_h,\n       pending_from_day, pending_through_day, completed_through_day,\n       last_successful_refresh_at, updated_at\nFROM state",
+          "rawSql": "WITH expected AS (\n  SELECT 'listing_daily'::text AS scope\n), state AS (\n  SELECT e.scope, s.pending_from_day, s.pending_through_day,\n         s.last_successful_refresh_at, s.completed_through_day, s.updated_at\n  FROM expected e\n  LEFT JOIN reporting.analytics_refresh_state s ON s.scope = e.scope\n)\nSELECT CASE\n         WHEN last_successful_refresh_at IS NULL THEN 'unknown'\n         WHEN pending_from_day IS NOT NULL THEN 'pending'\n         ELSE 'current'\n       END AS status,\n       CASE WHEN last_successful_refresh_at IS NULL THEN NULL\n            ELSE EXTRACT(EPOCH FROM (now() - last_successful_refresh_at))::bigint END AS refresh_age_s,\n       CASE WHEN pending_from_day IS NULL THEN NULL\n            ELSE round(EXTRACT(EPOCH FROM (now() - (pending_from_day::timestamp AT TIME ZONE 'Europe/Sarajevo'))) / 3600.0, 1) END AS pending_age_h,\n       pending_from_day, pending_through_day, completed_through_day,\n       last_successful_refresh_at, updated_at\nFROM state",
           "refId": "A"
         }
       ]
@@ -1788,13 +1788,13 @@
           "type": "postgres",
           "uid": "olx-postgres"
         },
-        "definition": "SELECT DISTINCT category AS __value, category AS __text FROM saved_searches WHERE category IS NOT NULL ORDER BY 1",
+        "definition": "SELECT DISTINCT category AS __value, category AS __text FROM reporting.saved_searches WHERE category IS NOT NULL ORDER BY 1",
         "includeAll": true,
         "label": "Category (search tables)",
         "multi": false,
         "name": "category",
         "options": [],
-        "query": "SELECT DISTINCT category AS __value, category AS __text FROM saved_searches WHERE category IS NOT NULL ORDER BY 1",
+        "query": "SELECT DISTINCT category AS __value, category AS __text FROM reporting.saved_searches WHERE category IS NOT NULL ORDER BY 1",
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,

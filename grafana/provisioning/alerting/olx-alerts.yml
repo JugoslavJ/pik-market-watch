@@ -49,7 +49,7 @@ groups:
             model:
               rawSql: |
                 SELECT count(*)::int AS ok_runs
-                  FROM scrape_runs
+                  FROM reporting.scrape_health
                  WHERE status = 'ok'
                    AND started_at > now() - interval '26 hours';
               format: table
@@ -97,10 +97,10 @@ groups:
             model:
               rawSql: |
                 SELECT count(*)::int AS stale_searches
-                  FROM saved_searches ss
+                  FROM reporting.saved_searches ss
                   LEFT JOIN LATERAL (
                     SELECT r.finished_at
-                      FROM scrape_runs r
+                      FROM reporting.scrape_health r
                      WHERE r.search_key = ss.search_key
                        AND r.status = 'ok'
                        AND r.is_complete = TRUE
@@ -165,7 +165,7 @@ groups:
                          ELSE 0
                        END::int AS unhealthy
                   FROM expected e
-                  LEFT JOIN analytics_refresh_state s ON s.scope = e.scope;
+                  LEFT JOIN reporting.analytics_refresh_state s ON s.scope = e.scope;
               format: table
           - refId: B
             datasourceUid: __expr__

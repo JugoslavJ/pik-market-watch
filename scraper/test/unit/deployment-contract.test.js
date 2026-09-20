@@ -113,6 +113,30 @@ test("production Grafana settings fail closed before deployment", () => {
   assert.match(deploy, /GRAFANA_COOKIE_SECURE/);
 });
 
+test("remote sync refreshes Grafana after role repair before reporting success", () => {
+  const restore = fs.readFileSync(
+    path.join(ROOT, "db", "remote-restore.sh"),
+    "utf8",
+  );
+  const grantsAt = restore.lastIndexOf(
+    "docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh",
+  );
+  const refreshAt = restore.indexOf(
+    "if ! docker compose up -d --no-deps --force-recreate --wait --wait-timeout 120 grafana; then",
+  );
+  const successAt = restore.indexOf('echo "RESTORE_OK');
+  assert.ok(grantsAt >= 0 && refreshAt > grantsAt);
+  assert.ok(successAt > refreshAt);
+  assert.match(
+    restore.slice(refreshAt, successAt),
+    /RESTORE_ERROR: database restored, but Grafana refresh failed[\s\S]*exit 1/,
+  );
+  assert.ok(
+    restore.indexOf("restore_ok=1") > grantsAt,
+    "writer recovery must remain active until role repair completes",
+  );
+});
+
 test("Cloudflare Tunnel is the documented public entry point", () => {
   const operations = fs.readFileSync(
     path.join(ROOT, "docs", "OPERATIONS.md"),

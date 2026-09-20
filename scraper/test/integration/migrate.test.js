@@ -19,7 +19,7 @@ async function fnCount(pool) {
   return Number(
     (
       await pool.query(
-        "SELECT count(*) AS n FROM pg_proc WHERE proname IN ('listings_filtered','room_bucket')",
+        "SELECT count(*) AS n FROM pg_proc WHERE pronamespace = 'public'::regnamespace AND proname IN ('listings_filtered','room_bucket')",
       )
     ).rows[0].n,
   );
@@ -34,6 +34,37 @@ const currentMigrations = fs
   .readdirSync(FULL_DIR)
   .filter((file) => file.endsWith(".sql"))
   .sort();
+
+needsDb(
+  "baseline adoption still applies the reporting access migration",
+  async () => {
+    const pool = new Pool({
+      connectionString: await recreateDb("mig_reporting"),
+    });
+    try {
+      for (const file of currentMigrations.filter((name) => name < "33-")) {
+        await pool.query(fs.readFileSync(path.join(FULL_DIR, file), "utf8"));
+      }
+      assert.equal(
+        (
+          await pool.query(
+            "SELECT to_regprocedure('reporting.room_bucket(text)') AS helper",
+          )
+        ).rows[0].helper,
+        null,
+      );
+      await applyMigrations(pool, FULL_DIR, log);
+      assert.equal(
+        (await pool.query("SELECT reporting.room_bucket('2') AS bucket"))
+          .rows[0].bucket,
+        "2",
+      );
+      assert.deepEqual(await recorded(pool), currentMigrations);
+    } finally {
+      await pool.end();
+    }
+  },
+);
 
 needsDb(
   "baseline: Docker-style initialization can be adopted by the runner",
@@ -436,7 +467,8 @@ needsDb(
     const analytics = await pool.query(`
       SELECT count(*)::int AS n
         FROM information_schema.routines
-       WHERE routine_name IN ('market_daily_filtered', 'rebuild_listing_daily')`);
+       WHERE routine_schema = 'public'
+         AND routine_name IN ('market_daily_filtered', 'rebuild_listing_daily')`);
     assert.equal(analytics.rows[0].n, 2);
     await pool.end();
   },

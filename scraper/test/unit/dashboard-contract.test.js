@@ -196,7 +196,7 @@ test("dashboard metric labels match their query grain and evidence semantics", (
   const backlogSql = sql(panel(health, 25));
   assert.match(backlogSql, /latitude IS NULL/);
   assert.match(backlogSql, /details_fetched_at <= now\(\) - INTERVAL '7 days'/);
-  assert.match(backlogSql, /listing_price_events/);
+  assert.match(backlogSql, /reporting\.price_event_health/);
   const rejected = panel(health, 26);
   assert.match(rejected.title, /Invalid or conflicting price evidence/);
   assert.match(sql(rejected), /price_state IN \('invalid', 'conflict'\)/);
@@ -214,7 +214,7 @@ test("health dashboard exposes per-search and analytics freshness state", () => 
   const searchHealth = panel(28);
   assert.equal(searchHealth.type, "table");
   assert.match(searchHealth.title, /Per-search freshness/);
-  assert.match(panelSql(28), /FROM saved_searches ss/);
+  assert.match(panelSql(28), /FROM reporting\.saved_searches ss/);
   assert.match(panelSql(28), /latest_status/);
   assert.match(panelSql(28), /last_success_at/);
   assert.match(panelSql(28), /r\.is_complete = TRUE/);

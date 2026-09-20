@@ -67,7 +67,13 @@ try {
   const files = fs
     .readdirSync(path.resolve("test", "integration"))
     .filter((file) => file.endsWith(".test.js"))
+    .filter(
+      (file) =>
+        !process.env.TEST_FILE_PATTERN ||
+        new RegExp(process.env.TEST_FILE_PATTERN).test(file),
+    )
     .sort();
+  if (files.length === 0) throw new Error("no integration test files matched");
   exit = 0;
   let schemaReady = false;
   for (const file of files) {
@@ -83,6 +89,7 @@ try {
         env: {
           ...process.env,
           TEST_DATABASE_URL: DB_URL,
+          TEST_DATABASE_CONTAINER: NAME,
           ...(schemaReady ? { TEST_DATABASE_SCHEMA_READY: "1" } : {}),
         },
       },

@@ -4,6 +4,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const { spawnSync } = require("node:child_process");
+const { Pool } = require("pg");
 const { needsDb, reset, setupDb } = require("../helpers/db.js");
 const root = path.resolve(__dirname, "../../..");
 const dashboards = fs
@@ -51,12 +53,81 @@ function dashboardValues(dashboard, selected, scenario) {
   return result;
 }
 let db;
+let reporting;
 test.before(async () => {
   db = await setupDb();
+  assert.ok(
+    process.env.TEST_DATABASE_CONTAINER,
+    "run through npm run test:integration to bootstrap the real Grafana role",
+  );
+  const roleSetup = spawnSync(
+    "docker",
+    [
+      "exec",
+      "-i",
+      "-e",
+      "POSTGRES_MIGRATOR_PASSWORD=integration-migrator",
+      "-e",
+      "POSTGRES_APP_PASSWORD=integration-app",
+      "-e",
+      "POSTGRES_REPORTING_PASSWORD=integration-reporting",
+      "-e",
+      "POSTGRES_BACKUP_PASSWORD=integration-backup",
+      process.env.TEST_DATABASE_CONTAINER,
+      "bash",
+      "-s",
+    ],
+    {
+      input: fs
+        .readFileSync(path.join(root, "db/init/zz-database-roles.sh"), "utf8")
+        .replaceAll("\r\n", "\n"),
+      encoding: "utf8",
+    },
+  );
+  assert.equal(roleSetup.status, 0, roleSetup.stderr);
+  const url = new URL(process.env.TEST_DATABASE_URL);
+  url.username = "olx_reporting";
+  url.password = "integration-reporting";
+  reporting = new Pool({ connectionString: url.toString() });
 });
 test.after(async () => {
+  if (reporting) await reporting.end();
   if (db) await db.close();
 });
+
+needsDb(
+  "Grafana can read its contract but cannot read raw tables or write",
+  async () => {
+    for (const sql of [
+      "SELECT * FROM public.raw_api_responses LIMIT 1",
+      "SELECT * FROM public.listings LIMIT 1",
+      "SELECT * FROM olap.listings LIMIT 1",
+      "UPDATE reporting.saved_searches SET name = 'forbidden'",
+      "SELECT * FROM reporting.refresh_dashboard_olap()",
+    ]) {
+      await assert.rejects(reporting.query(sql), { code: "42501" });
+    }
+  },
+);
+
+needsDb(
+  "all provisioned alert queries execute as the Grafana role",
+  async () => {
+    const source = fs.readFileSync(
+      path.join(root, "grafana/provisioning/alerting/olx-alerts.yml"),
+      "utf8",
+    );
+    const queries = [
+      ...source.matchAll(/rawSql: \|\r?\n((?: {16}[^\n]*\n)+)/g),
+    ];
+    assert.equal(queries.length, 4);
+    for (const [, query] of queries) {
+      await reporting.query(
+        query.replaceAll("${SCRAPE_STALE_AFTER_HOURS}", "26"),
+      );
+    }
+  },
+);
 
 needsDb(
   "daily OLAP queue retains a reconstruction that commits during publication",
@@ -173,7 +244,7 @@ needsDb(
 );
 
 needsDb(
-  "every dashboard query executes for empty data and selected sale/rent filters",
+  "every dashboard query executes as Grafana for empty data and selected sale/rent filters",
   async () => {
     await reset(db.pool);
     const values = {
@@ -184,7 +255,13 @@ needsDb(
       min_sqm: ["0"],
       max_sqm: ["99999"],
     };
-    for (const scenario of ["empty", "sale", "rent", "no match"]) {
+    for (const scenario of [
+      "empty",
+      "sale",
+      "rent",
+      "no match",
+      "empty filters",
+    ]) {
       if (scenario === "sale") {
         await db.pool.query(`
         INSERT INTO saved_searches (search_key, name, url, category)
@@ -210,6 +287,11 @@ needsDb(
         selected.min_sqm = ["invalid input"];
         selected.max_sqm = [""];
       }
+      if (scenario === "empty filters") {
+        for (const key of ["category", "deal", "rooms", "neighborhood"]) {
+          selected[key] = [];
+        }
+      }
       for (const { name, dashboard } of dashboards) {
         const interpolatedValues = dashboardValues(
           dashboard,
@@ -218,14 +300,14 @@ needsDb(
         );
         for (const v of dashboard.templating?.list || [])
           if (v.type === "query")
-            await db.pool.query(interpolate(v.query, interpolatedValues));
+            await reporting.query(interpolate(v.query, interpolatedValues));
         for (const a of dashboard.annotations?.list || [])
           if (a.rawSql)
-            await db.pool.query(interpolate(a.rawSql, interpolatedValues));
+            await reporting.query(interpolate(a.rawSql, interpolatedValues));
         for (const p of dashboard.panels) {
           const names = new Set();
           for (const t of p.targets || []) {
-            const result = await db.pool
+            const result = await reporting
               .query(interpolate(t.rawSql, interpolatedValues))
               .catch((e) => {
                 e.message = `${name} panel ${p.id}/${t.refId} (${scenario}): ${e.message}`;
@@ -246,7 +328,7 @@ needsDb(
       const yieldPanel = dashboards
         .find((x) => x.name === "olx-overview.json")
         .dashboard.panels.find((p) => p.id === 27);
-      const ratio = await db.pool.query(
+      const ratio = await reporting.query(
         interpolate(yieldPanel.targets[0].rawSql, selected),
       );
       assert.equal(

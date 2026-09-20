@@ -300,7 +300,7 @@ pwsh -File scripts\sync-to-instance.ps1
 pwsh -File scripts\register-sync-task.ps1
 ```
 
-The restore endpoint receives and validates the archive, audits ownership, saves a rollback snapshot, pauses a running scraper, restores in a transaction, restores the prior snapshot on failure when available, reasserts reader defaults, and resumes the writer. Input is capped at `OLX_SYNC_MAX_BYTES` (default 512 MiB) and the temporary incoming file is removed on every exit path. Its `RESTORE_OK` or `RESTORE_ERROR` output is the protocol consumed by the PowerShell script. A holder of the restore SSH key has database-administrator-equivalent capability over application data, even though the key is restricted to a forced command and has no interactive shell; protect and rotate it accordingly.
+The restore endpoint receives and validates the archive, audits ownership, saves a rollback snapshot, pauses a running scraper, restores in a transaction, restores the prior snapshot on failure when available, reasserts role grants, and resumes the writer. It then recreates Grafana to reload datasource provisioning and credentials, briefly interrupting dashboard access, and waits for health before reporting success. If that refresh fails, the restored data remains in place; repair Grafana without repeating the scrape/restore. Input is capped at `OLX_SYNC_MAX_BYTES` (default 512 MiB) and the temporary incoming file is removed on every exit path. Its `RESTORE_OK` or `RESTORE_ERROR` output is the protocol consumed by the PowerShell script. A holder of the restore SSH key has database-administrator-equivalent capability over application data, even though the key is restricted to a forced command and has no interactive shell; protect and rotate it accordingly.
 
 Recovery should be rehearsed periodically against a disposable PostgreSQL
 instance: verify representative data, expected tables, ownership, reader
@@ -343,19 +343,45 @@ tunnel path.
   `docker compose logs grafana`. From the OCI host, check
   `curl -f http://127.0.0.1:3000/api/health`; then inspect
   `journalctl -u cloudflared -n 100 --no-pager`. Datasource failures usually
-  indicate missing reader credentials or reader grants; re-run the roles script
-  after a restore. If the public datasource reports `password authentication
-failed`, make the database role and Grafana container consume the same current
-  `.env` value (a plain `restart` does not refresh container environment):
+  indicate missing reporting credentials or grants. An error naming
+  `olx_reader` after sync means Grafana still uses the retired datasource login;
+  the roles script removes that role and replaces it with `olx_reporting`.
+  With the current Compose and provisioning files deployed, run these commands
+  in the instance's repository directory to align both containers with `.env`
+  and reload the datasource (a plain `restart` does not refresh environment):
 
   ```bash
+  docker compose up -d --wait db
   docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
-  docker compose up -d --force-recreate grafana
+  docker compose up -d --no-deps --force-recreate --wait --wait-timeout 120 grafana
   docker compose logs --tail=100 grafana
   ```
 
+  The datasource `olx-postgres` should use `POSTGRES_REPORTING_USER` (default
+  `olx_reporting`) and `POSTGRES_REPORTING_PASSWORD`. Set the reporting password
+  in the instance's `.env` if missing; do not recreate the retired `olx_reader`.
   Use a URL-safe password such as `openssl rand -hex 24`; never print it in
   logs or commit it.
+
+- **Dashboard filters fail and panels report `cannot determine type of empty array`:**
+  older dashboard queries accessed private tables/functions after the Grafana
+  login moved to `olx_reporting`. Failed category/room queries then produced
+  untyped empty arrays in panels. Deploy the updated dashboards and migration
+  `33-dashboard-reporting-access.sql` together. The migration exposes the
+  required read-only reporting contract; dashboard arrays use explicit
+  `text[]` casts. From the instance checkout containing these changes, run:
+
+  ```bash
+  docker compose up -d --wait db
+  docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
+  docker compose --profile migrate run --build --rm migrator
+  docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
+  docker compose up -d --no-deps --force-recreate --wait --wait-timeout 120 grafana
+  ```
+
+  Reload the dashboard so its variable queries run again. A database sync alone
+  does not ship dashboard files. The usual `scripts/deploy-stack.sh` deployment
+  performs the migration, grant repair, and Grafana reload in this order.
 
 - **Backup is unhealthy:** inspect `docker compose logs db-backup`, confirm a recent `backups/olx-*.dump`, and run `pg_restore -l` on it. The included Grafana alert tracks scrape freshness, not backup freshness.
 - **Sync fails:** retain the local dump and read the remote `RESTORE_ERROR` lines in `logs/sync.log`. Ownership failures must be corrected on the source database before retrying; a restore failure after the schema swap triggers the remote rollback procedure.

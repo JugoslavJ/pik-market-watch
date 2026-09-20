@@ -532,7 +532,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT CASE WHEN max(finished_at) IS NULL THEN NULL ELSE round(EXTRACT(EPOCH FROM (now() - max(finished_at))) / 60)::int END\nFROM scrape_runs\nWHERE status = 'ok' AND is_complete = TRUE AND finished_at IS NOT NULL",
+          "rawSql": "SELECT CASE WHEN max(finished_at) IS NULL THEN NULL ELSE round(EXTRACT(EPOCH FROM (now() - max(finished_at))) / 60)::int END\nFROM reporting.scrape_health\nWHERE status = 'ok' AND is_complete = TRUE AND finished_at IS NOT NULL",
           "refId": "A"
         }
       ],
@@ -603,7 +603,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT count(*) FROM scrape_runs\nWHERE status = 'error'\n  AND started_at > now() - INTERVAL '24 hours'",
+          "rawSql": "SELECT count(*) FROM reporting.scrape_health\nWHERE status = 'error'\n  AND started_at > now() - INTERVAL '24 hours'",
           "refId": "A"
         }
       ],
@@ -666,7 +666,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT COALESCE(sum(cards), 0) FROM scrape_runs\nWHERE status = 'ok'\n  AND started_at > now() - INTERVAL '24 hours'",
+          "rawSql": "SELECT COALESCE(sum(cards), 0) FROM reporting.scrape_health\nWHERE status = 'ok'\n  AND started_at > now() - INTERVAL '24 hours'",
           "refId": "A"
         }
       ],
