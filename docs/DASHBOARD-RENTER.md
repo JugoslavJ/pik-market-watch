@@ -1,7 +1,6 @@
 # Real Estate Renter dashboard
 
-Status: proposed specification. This document does not implement dashboard, SQL,
-scraper, or provisioning changes.
+This document defines the implemented private renter dashboard contract.
 
 ## Purpose
 
@@ -9,7 +8,7 @@ Help a renter find a home within a recurring rent budget, compare neighbourhood
 asking rents and identify interesting rentals below comparable local asking
 rates. Prioritise affordability, size, furnishing and availability evidence.
 
-Proposed dashboard title: **Find a home to rent**. Proposed UID: `olx-renter`.
+Dashboard title: **Find a home to rent**. UID: `olx-renter`.
 This is an interactive private dashboard. Follow the
 [shared listing-score contract](DASHBOARD-BUYER.md#shared-listing-score-contract-version-1)
 for active inventory, deduplication, sample thresholds, score interpretation,
@@ -83,7 +82,7 @@ Use the buyer spec's cohort and formula with these additions:
 - Both target and comparables must be rentals with a common currency. All rental
   prices use the dataset's monthly basis; property types remain separate.
 - Calculate `listing_rate = monthly asking rent / valid area` in
-  KM/m²/month. Require a future documented rental area/price-quality rule; sale
+  KM/m²/month. Use the documented rental area/price-quality rule; sale
   plausibility thresholds do not automatically validate rental rates.
 - Match the same neighbourhood, property type, room bucket and ±20% area band.
   Also require the same known furnished/unfurnished status. Unknown or partially
@@ -108,27 +107,27 @@ are not included. Display “Total move-in cost unknown” when those costs are 
 never fill missing costs with zero. A recent sighting is observation evidence,
 not confirmation that a home is ready to occupy.
 
-## Data readiness and implementation boundaries
+## Implementation and validation
 
-Current-listing panels use `reporting.renter_listing_scope(...)` as their shared
-filter contract. It centralizes the market and rental-feature scope and can
-optionally apply rent, rate, score and listing-selection filters. Historical
-and exact-comparable panels retain their distinct event-time and cohort rules.
+Current-listing panels use `reporting.renter_listing_scope(...)`. Current scores
+and exact comparables come from `reporting.current_listing_scores` and
+`reporting.listing_comparables(...)`; historical panels use
+`reporting.daily_listing_facts` and event-time reporting views.
 
-| Requirement | Current support and future work |
+| Requirement | Current support |
 |---|---|
-| Active rentals and details | `reporting.current_listings` provides `is_rent`, price, area, rooms and nullable features. Resolve current valid price evidence as described in the buyer spec. |
-| Monthly rent and comparable rates | Treat rental `price` as KM/month under the confirmed dataset rule, subject to the common currency and valid-price rules. Compute a dedicated rental rate; never overwrite or reinterpret sale `ppm2`. |
+| Active rentals and details | `reporting.current_listing_scores` provides current rental price, area, rooms, nullable features, score inputs, and quality reasons. |
+| Monthly rent and comparable rates | Rental `asking_price` is KM/month and `asking_rate` is KM/m²/month. Sale `ppm2` is not reused. |
 | Furnishing comparability | Use populated `furnished` for known yes/no only; preserve unknown status and show coverage. |
 | Rental price reductions | Use canonical valid-to-valid events within the rent segment and a common currency. Require the reduction to still apply to the current price. |
-| Historical rent panels | `reporting.daily_listing_facts` has prices and quality flags. Aggregate valid rental prices as KM/month; derive per-m² rates separately where area is valid. Feature-filtered history requires historical feature evidence; do not apply today's furnishing to earlier days. |
-| Freshness | Reuse complete-search watermarks and per-listing last seen; show unknown explicitly. |
+| Historical rent panels | `reporting.daily_listing_facts` supplies monthly prices, derived rates, historical attributes, and quality flags. |
+| Freshness | Complete-search watermarks and per-listing last-seen timestamps are exposed by reporting views. |
 
 Saved searches, alerts, landlord contact, application submission and persistent
 favourites are outside the first dashboard version. Listing detail remains a
 read-only inspection with a link to OLX.
 
-## Acceptance criteria for future implementation
+## Acceptance criteria
 
 - A renter can set a monthly budget and compare neighbourhood asking rents from
   the first version without collecting an additional billing-period field.

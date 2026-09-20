@@ -1,8 +1,7 @@
 # Dashboard metric inventory
 
 This inventory defines the dimensions that every provisioned panel must make
-visible in its title, description, or query. It prevents a corrected SQL query
-from silently retaining an obsolete metric label.
+visible in its title, description, or query.
 
 | Dashboard                  | Scope                                                               | Time basis                                                 | Population                                                                          | Price rule                                                                                             | Uncertainty                                                                                                                                                                           |
 | -------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -17,7 +16,7 @@ from silently retaining an obsolete metric label.
 
 Shared filter semantics are implemented in [06-reporting-functions.sql](../db/init/06-reporting-functions.sql): empty multi-selects mean no
 restriction, numeric bounds are independently optional, and the canonical deal
-values are `sale` and `rent` (`sell` is accepted only as a compatibility input).
+values are `sale` and `rent`.
 Queries that measure current inventory, event-time changes, daily projections,
 and exit cycles intentionally use different time bases; a panel must state its
 choice instead of implying that all dashboard numbers are directly comparable.

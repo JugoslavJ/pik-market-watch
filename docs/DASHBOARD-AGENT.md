@@ -1,7 +1,6 @@
 # Real Estate Agent dashboard
 
-Status: proposed specification. This document does not implement dashboard, SQL,
-scraper, or provisioning changes.
+This document defines the implemented private agent dashboard contract.
 
 ## Purpose
 
@@ -10,7 +9,7 @@ prepare a comparable-listing discussion and identify ads whose pricing or recent
 changes merit review. The workflow is: select a market segment, compare local
 inventory, select a listing, then inspect its evidence and comparables.
 
-Proposed dashboard title: **Agent market desk**. Proposed UID: `olx-agent`.
+Dashboard title: **Agent market desk**. UID: `olx-agent`.
 This is an interactive private dashboard. It describes the tracked OLX inventory;
 it does not assume access to an agent's portfolio, CRM or completed transactions.
 
@@ -122,29 +121,27 @@ Do not combine sale and rental prices into yields or produce commissions,
 seller motivation, agent ownership or conversion estimates without supporting
 data. These are outside this dashboard's comparison task.
 
-## Data readiness and implementation boundaries
+## Implementation and validation
 
-The dashboard's repeated current-market and matching-result predicates are
-centralized in `reporting.agent_listing_scope`. Panels choose whether to apply
-result-only price, score, workflow, position and signal filters while sharing
-one implementation of validation and market/attribute scoping.
+The dashboard's current-market and matching-result predicates are centralized
+in `reporting.agent_listing_scope`. Panels share one implementation of
+validation and market/attribute scoping while applying their own review filters.
 
-| Requirement | Current support and future work |
+| Requirement | Current support |
 |---|---|
-| Current listings and features | `reporting.current_listings`; add a future resolved current-price and score projection shared with the buyer/renter dashboards. |
-| Comparable cohorts | Future reusable reporting logic implementing the same formula, exclusions and sample thresholds across all three dashboards. Keep the comparable list consistent with the displayed aggregate at one evaluation time. |
+| Current listings and features | `reporting.current_listing_scores` and `reporting.agent_listing_scope` provide current attributes, resolved price evidence, score inputs, and review filters. |
+| Comparable cohorts | `reporting.listing_comparables(...)` provides the exact cohort used by the shared score contract. |
 | Reductions | `price_changes_filtered` and canonical events; current review lists also enforce present availability and that the reduction still applies. |
 | Daily neighbourhood trends | `reporting.daily_listing_facts`; preserve quality flags and historical attributes. Rental prices use the confirmed monthly basis; feature-filtered history requires historical feature evidence as described in the renter document. |
 | Lifecycle and exits | `v_listing_lifecycle_cycles` and `reporting.lifecycle_cycles`; use one row per cycle and frozen closure-time facts. |
 | Freshness | Latest complete-search watermark for the selected scope and per-listing observation time. |
-| Agent's own portfolio | No reliable ownership relationship is defined. A future portfolio view requires explicit mapping, rather than inferring ownership from seller type. |
+| Agent's own portfolio | Not represented. Seller type is source metadata and is not treated as ownership by the agent. |
 
-These dependencies are future work. This specification does not create reporting
-objects, change existing dashboards, expose new public data, add exports or
-connect to a CRM. A hypothetical unlisted-property valuation form is also outside
-version 1; the initial comparable workflow starts from an observed listing.
+The dashboard does not expose public data, add exports, connect to a CRM, or
+estimate unlisted properties. The comparable workflow starts from an observed
+listing.
 
-## Acceptance criteria for future implementation
+## Acceptance criteria
 
 - An agent can compare neighbourhoods, filter by price and open a reviewable
   listing with its exact local comparables from this dashboard.

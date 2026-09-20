@@ -5,15 +5,14 @@ asking-price score**. Higher means cheaper relative to comparable local asking
 prices. It compares tracked asking prices; it is not an appraisal, confirmed
 transaction price, or a prediction that a property is a bargain.
 
-The implementation is additive in
-[`05-source-views.sql`](../db/init/05-source-views.sql) and [`06-reporting-functions.sql`](../db/init/06-reporting-functions.sql). Existing
-checksummed migrations and public dashboard data contracts remain separate.
+The implementation is defined by
+[`05-source-views.sql`](../db/init/05-source-views.sql) and [`06-reporting-functions.sql`](../db/init/06-reporting-functions.sql).
 
 ## Reporting interfaces
 
 | Interface                                                                     | Contract                                                                                                                                                                                                                                      |
 | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `reporting.resolved_price_evidence`                                           | One canonical assertion per article and effective timestamp, including invalid, conflict and unpriced boundaries. Original event fields, `currency_normalized`, and historically resolved `evidence_is_rent`. Future assertions are excluded. |
+| `reporting.resolved_price_evidence`                                           | One canonical assertion per article and effective timestamp, including invalid, conflict and unpriced boundaries. Original event fields, `currency_normalized`, and historically resolved `evidence_is_rent`. Assertions dated in the future are excluded. |
 | `reporting.current_comparison_inputs`                                         | One row per current article, resolved eligible total asking price/rate, quality reasons, type, rooms, neighbourhood, features and observed cycle age.                                                                                         |
 | `reporting.current_listing_scores_source`                                     | Canonical OLTP-to-OLAP transformation. It is evaluated during refresh, never by dashboard panels.                                                                                                                                             |
 | `olap.current_listing_scores`                                                 | Physical, indexed current-market OLAP snapshot.                                                                                                                                                                                               |
@@ -63,9 +62,8 @@ Search memberships are aggregated before any comparisons, so overlapping searche
 cannot multiply an article. Different OLX ads for one physical property remain
 separate articles and can affect the benchmark.
 
-Canonical price resolution orders by latest effective time, then modern
-search/detail evidence ahead of legacy/import evidence, then conflict, invalid,
-unpriced, valid, then descending event ID. A rejected latest assertion never
+Canonical price resolution orders by latest effective time, then source
+priority, then conflict, invalid, unpriced, valid, and descending event ID. A rejected latest assertion never
 falls back to an older valid one. The price's recorded deal segment must match
 the current segment, with no intervening sale/rent switch. Missing deal evidence
 does not become sale by default.
@@ -100,8 +98,8 @@ confirmed monthly dataset rule. Require a valid positive finite asking price of
 at least 50 BAM/month, verified KM/BAM currency, and valid finite area of
 5–500 m² inclusive. Derive the unrounded monthly rate directly from rent/area.
 There is no borrowed sale-rate threshold or invented rental upper-rate cap.
-These are conservative input-quality defaults, not measured valuation accuracy;
-future changes to the policy must be versioned. Existing sale `ppm2` remains
+These are conservative input-quality defaults, not measured valuation accuracy.
+Policy changes must be versioned. Existing sale `ppm2` remains
 unmodified and is not used for rental rates.
 
 Rental scoring additionally requires known furnished/unfurnished status for both
@@ -164,9 +162,9 @@ true time on market, confirmed availability or a completed transaction.
 Reduction candidates require adjacent valid common-currency assertions in the
 same deal series and current cycle. Repeated unchanged observations preserve a
 reduction. A later increase, invalid/unpriced/conflicting assertion, foreign or
-unknown currency, intervening deal change, or reopening removes an obsolete
-reduction badge. A later price returning to the old reduced price after an
-invalid boundary does not resurrect that old reduction. More recent independently
+unknown currency, intervening deal change, or reopening removes an inapplicable
+reduction badge. A later price returning to the earlier reduced price after an
+invalid boundary does not resurrect that reduction. More recent independently
 valid reductions may qualify on their own evidence.
 
 Core regression coverage lives in

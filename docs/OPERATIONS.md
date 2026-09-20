@@ -12,7 +12,7 @@ cp config/searches.example.json config/searches.json
 docker compose up -d --build
 ```
 
-`.env.example` intentionally leaves `POSTGRES_PASSWORD`, `POSTGRES_MIGRATOR_PASSWORD`, `POSTGRES_APP_PASSWORD`, `POSTGRES_REPORTING_PASSWORD`, `POSTGRES_BACKUP_PASSWORD`, `GRAFANA_ADMIN_PASSWORD`, and `GRAFANA_SECRET_KEY` blank. Set all seven before starting or deploying; the deployment preflight rejects blank and legacy `change-me*` values. Database passwords are embedded in connection settings, so use URL-safe values such as `openssl rand -hex 24`.
+`.env.example` intentionally leaves `POSTGRES_PASSWORD`, `POSTGRES_MIGRATOR_PASSWORD`, `POSTGRES_APP_PASSWORD`, `POSTGRES_REPORTING_PASSWORD`, `POSTGRES_BACKUP_PASSWORD`, `GRAFANA_ADMIN_PASSWORD`, and `GRAFANA_SECRET_KEY` blank. Set all seven before starting or deploying; the deployment preflight rejects blank and placeholder `change-me*` values. Database passwords are embedded in connection settings, so use URL-safe values such as `openssl rand -hex 24`.
 
 | Setting                                                          |                                    Default | Consumer                                                                                                                               |
 | ---------------------------------------------------------------- | -----------------------------------------: | -------------------------------------------------------------------------------------------------------------------------------------- |
@@ -50,8 +50,8 @@ docker compose up -d db
 docker compose exec db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
 ```
 
-This transfers object ownership to `olx_migrator`, retires the old
-`olx_reader` login, and refreshes writer/reporting grants. Do this before
+This transfers object ownership to `olx_migrator` and refreshes the
+writer/reporting grants. Do this before
 starting Grafana or the scraper with the new credentials.
 
 Search configuration is read from `config/searches.json`; `SEARCH_URLS` is an environment override for a bare scraper process or an explicit `docker compose run -e SEARCH_URLS=...` invocation. The scraper also accepts `SCRAPE_USER_AGENT`, `HEALTH_PORT`, and pacing/health variables (`MAX_PAGES`, `CONCURRENCY`, `PAGE_DELAY_MS`, `API_PER_PAGE`, `API_TIMEOUT_MS`, `MAX_GEO_FETCHES`, `GEO_CONCURRENCY`, `GEO_DELAY_MS`, `SCRAPE_MIN_GAP_MINUTES`, `ABANDONED_RUN_AFTER_MINUTES`, `DETAIL_JOB_LEASE_MINUTES`, and `HEALTH_FAILURE_THRESHOLD`). Compose injects `ABANDONED_RUN_AFTER_MINUTES`, `DETAIL_JOB_LEASE_MINUTES`, and `ANALYTICS_REBUILD_MAX_DAYS`; pass the other tuning variables explicitly with `docker compose run -e NAME=value` or set them in a supported deployment change.
@@ -98,7 +98,7 @@ systemd service. Keep the tunnel token or credentials file only in the local
 place it in `.env`, a tracked Compose file, CI secrets sent to the repository,
 logs, or shell scripts.
 
-Before removing the old host ingress, validate the private origin and tunnel:
+Validate the private origin and tunnel:
 
 ```bash
 curl -f http://127.0.0.1:3000/api/health
@@ -113,27 +113,16 @@ as healthy, login cookies are marked Secure, and the Grafana URL is the public
 HTTPS URL. Optional Cloudflare Access can be placed in front of the hostname;
 it does not change Grafana's `GRAFANA_ROOT_URL`.
 
-After the tunnel is verified, perform host cleanup in this order:
-
-1. Stop and disable the legacy public edge service.
-2. Uninstall that service and remove its configuration only after checking it
-   is not used by another application.
-3. Remove old origin certificates only after checking that no other service
-   uses them.
-4. Remove OCI inbound TCP 80 and 443 rules; keep SSH according to the existing
-   access policy and keep TCP 3000 private.
-5. Confirm listeners with `sudo ss -lntp | grep -E ':80|:443|:3000'`.
-
-The expected application listener is `127.0.0.1:3000`; there must be no public
-Grafana listener and no legacy proxy listener on 80 or 443.
+After the tunnel is verified, remove OCI inbound TCP 80 and 443 rules according
+to the host access policy and confirm listeners with
+`sudo ss -lntp | grep -E ':80|:443|:3000'`. The expected application listener
+is `127.0.0.1:3000`; Grafana must not listen on a public interface.
 
 ## Dashboard access
 
 All Grafana dashboards require authentication. Anonymous organization access is
 disabled with `GF_AUTH_ANONYMOUS_ENABLED=false`, and no externally shared
-dashboards are provisioned. The empty, deletion-enabled legacy provider remains
-mounted temporarily so an upgrade removes dashboards that older releases had
-provisioned, including their public shares.
+dashboards are provisioned.
 
 ## Normal operation
 
@@ -154,8 +143,8 @@ The first command shows service health. The `scraper` service exists only when t
 
 Migrations run through the profile-only `migrator` job and are tracked by
 filename plus a SHA-256 checksum. The `scrape` profile activates that job as a
-completed dependency before the scraper starts. Existing filename-only ledgers
-are baselined once; an edited applied file then fails the migration job. The
+completed dependency before the scraper starts. An edited applied file fails
+the migration job. The
 scraper keeps a startup migration fallback for bare-metal runs; Compose sets
 `MIGRATIONS_ON_STARTUP=0` because the deployment gate already ran. Do not run
 a tracked migration manually as the bootstrap user: application objects must
@@ -169,30 +158,20 @@ docker compose --profile scrape run --rm scraper node src/backfill-geo.js --all
 docker compose --profile scrape run --rm scraper node src/backfill-geo.js --max=100
 ```
 
-The default backfill targets recently active rows; `--all` includes closed history. The legacy price-history conversion also makes no OLX requests.
-The `maintenance` profile caps legacy raw expiry timestamps, removes proven
-duplicate successful bodies, rebuilds pending daily analytics, refreshes the
-current-market OLAP snapshot, and purges
-expired raw responses without making OLX requests. Each operation has an
-independent outcome; schedule it independently so housekeeping continues during
-an upstream outage or failed rebuild. The default live raw horizon is a rolling
-72 hours from `fetched_at`. Run this profile hourly on the host; the expected
-maximum cleanup lag is one hour plus the duration of the maintenance run. The
-legacy expiry transition and duplicate compaction are bounded and idempotent;
-rerunning the same command resumes from remaining rows. To inspect a retained
-response offline, run `docker compose --profile scrape run --rm scraper node
-src/replay-response.js --id=<raw-response-id>`; replay only reads and parses
-the retained payload.
+The default backfill targets recently active rows; `--all` includes closed
+history. The maintenance profile rebuilds pending daily analytics, refreshes the
+current-market OLAP snapshot, applies retention, and purges expired raw
+responses without making OLX requests. Each operation has an independent
+outcome. The default raw-response horizon is 72 hours from `fetched_at`; run
+maintenance hourly on the host. To inspect a retained response offline, run
+`docker compose --profile scrape run --rm scraper node
+src/replay-response.js --id=<raw-response-id>`.
 
-The maintenance JSON reports `publicationEvidence`, `retentionTransition`,
-`duplicateCompaction`, `purged`, `rebuilt`, and `currentMarket` separately. A failed purge does
-not suppress a rebuild, and a failed rebuild does not suppress purge. Raw
-archive v2 uses one canonical body: successful search records retain the
-original in `source_payload`, successful detail records retain it in `payload`
-for compatibility with existing detail readers, and diagnostic records retain
-bounded metadata without a successful body. Legacy rows replay through the
-`source_payload`/`payload` fallback until expiry. Existing backups retain their
-separate backup policy.
+The maintenance result reports publication, retention, purge, rebuild, and
+current-market refresh separately. A failed purge does not suppress a rebuild,
+and a failed rebuild does not suppress purge. Successful raw records retain the
+bounded source payload and request metadata; diagnostic records retain bounded
+failure metadata without a successful body.
 
 ### Dashboard OLAP benchmark and health
 
@@ -272,69 +251,6 @@ growth monthly with `pg_stat_user_tables` and `pg_total_relation_size`. Use
 `VACUUM (ANALYZE)`, never routine `VACUUM FULL`, while dashboards are online.
 Backups must include both OLTP and OLAP schemas, although OLAP can be rebuilt
 from the canonical sources after recovery.
-
-```bash
-docker compose --profile scrape run --rm scraper node src/backfill-price-history.js --dry-run
-docker compose --profile scrape run --rm scraper node src/backfill-price-history.js --checkpoint=/tmp/price-history.checkpoint
-```
-
-## Applying the daily rebuild performance fix
-
-The current `04-functions.sql` definition removes repeated geography and sparse
-history work from the daily INSERT path. The local restored-backup benchmark
-completed a 31-day rebuild in a workload-specific benchmark. Use the checked-in
-[daily rebuild profiling query](../db/diagnostics/profile-daily-rebuild.sql) to
-measure it against a representative database.
-
-Update the checkout on the machine running maintenance before these steps.
-An already executing function continues using its old definition, and its
-locks can block schema application. Stop the scheduled scraper if it runs here:
-
-```text
-docker compose --profile scrape stop scraper
-docker ps --filter label=com.docker.compose.service=maintenance
-```
-
-Stop each listed maintenance container belonging to this checkout using
-`docker stop CONTAINER_NAME` (substitute its actual name). One-off `compose run`
-containers may not appear in `docker compose logs`; use `docker logs -f
-CONTAINER_NAME` while diagnosing them.
-
-Check for remaining rebuilds and EXPLAIN probes. This PowerShell command avoids
-nested shell quoting; `olx` is the default bootstrap user and database name,
-so substitute your configured names if different:
-
-```powershell
-@'
-SELECT pid, state, wait_event_type, wait_event,
-       now() - query_start AS elapsed, left(query, 240) AS query
-FROM pg_stat_activity
-WHERE datname = current_database() AND pid <> pg_backend_pid()
-  AND state <> 'idle' AND query ILIKE '%rebuild_listing_daily%';
-'@ | docker compose exec -T db psql -X -U olx -d olx -P pager=off -x
-```
-
-Cancel any remaining old rebuild or diagnostic session by its inspected PID:
-`'SELECT pg_cancel_backend(12345);' | docker compose exec -T db psql -X -U olx -d olx`
-(replace `12345`). Recheck until none remain; cancelled rebuild transactions
-roll back. On Linux, pass the same SQL directly with `psql -c` instead of the
-PowerShell pipeline.
-
-Then run these commands, proceeding only after each succeeds:
-
-```text
-docker compose --profile migrate run --build --rm --no-deps migrator
-docker compose --profile maintenance run --build --rm --no-deps maintenance
-```
-
-The migrator must finish successfully, applying the baseline through
-`10-triggers.sql` or verifying that its files are already recorded. Use the migrator's application owner;
-do not apply the SQL manually as the bootstrap user. Maintenance logs each
-completed batch's date range and reports total rows in its final JSON result.
-It processes the pending range;
-schema application does not itself force a rebuild of already completed history.
-After success, restart the scheduled scraper with
-`docker compose --profile scrape up -d --build scraper` if it was running here.
 
 ## Backup and restore
 

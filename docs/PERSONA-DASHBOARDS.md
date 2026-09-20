@@ -32,10 +32,8 @@ The three dashboard JSON files are checked-in Grafana provisioning artifacts:
 persona contract changes. CI validates their structure and query contracts with
 the `npm test` suite from `scraper`.
 
-The private reporting objects are supplied by additive migrations
-[`05-source-views.sql`](../db/init/05-source-views.sql) and
-[`07-views.sql`](../db/init/07-views.sql). On a
-dashboard-only host, apply them with:
+The private reporting objects are supplied by the reporting SQL files and are
+applied by the migrator. On a dashboard-only host, run:
 
 ```bash
 docker compose --profile migrate run --build --rm migrator
@@ -52,13 +50,12 @@ reader grants. No externally shared dashboards are provisioned.
 
 | Contract area | Delivered component | Validation boundary |
 |---|---|---|
-| Shared score, currency, comparable cohort | Migration 16 and private reporting views | SQL and integration checks; rendered Grafana values still require deployment verification. |
-| Historical prices, units, lifecycle facts | Migration 17 and `reporting.daily_listing_facts` / lifecycle views | Historical rows preserve evidence quality; no inferred pre-currency backfill. |
+| Shared score, currency, comparable cohort | `reporting.current_listing_scores` and comparison functions | SQL and integration checks; rendered Grafana values still require deployment verification. |
+| Historical prices, units, lifecycle facts | `reporting.daily_listing_facts` and lifecycle views | Historical rows preserve evidence quality; no inferred pre-currency backfill. |
 | Persona filters and panels | Checked-in dashboard JSON artifacts | CI checks the JSON structure and query contracts; rendered Grafana values still require deployment verification. |
 | Private access | `zz-database-roles.sh` reader grants | Re-run the helper after manual migration, then restart Grafana. |
 
-The supplied specification filenames are the source of truth; no filename
-normalization is implied. The remaining product limitations are explicit in
+The remaining product limitations are explicit in
 the persona specifications, including sparse attributes, listing-level rather
 than property-level identity, and lack of transaction outcomes.
 

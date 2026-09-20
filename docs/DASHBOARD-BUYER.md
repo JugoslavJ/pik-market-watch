@@ -1,7 +1,6 @@
 # Real Estate Buyer dashboard
 
-Status: proposed specification. This document does not implement dashboard, SQL,
-scraper, or provisioning changes.
+This document defines the implemented private buyer dashboard contract.
 
 ## Purpose
 
@@ -10,10 +9,10 @@ neighbourhoods, and shortlist listings priced below comparable local listings.
 The main journey is: set requirements, compare neighbourhoods, inspect interesting
 listings, then open the original OLX ad.
 
-Proposed dashboard title: **Find a home to buy**. Proposed UID: `olx-buyer`.
+Dashboard title: **Find a home to buy**. UID: `olx-buyer`.
 This is an interactive private dashboard using the private reporting surface.
-Public publication is outside scope; retired public dashboards had
-fixed filters and do not publish listing-value claims.
+It describes tracked asking evidence and does not publish appraisal or
+transaction claims.
 
 ## Filters and defaults
 
@@ -67,7 +66,7 @@ KM/m², newest and largest valid reduction. Show 25 rows per page.
 
 The [renter](DASHBOARD-RENTER.md) and [agent](DASHBOARD-AGENT.md) specifications
 reuse this contract, with the renter's explicit rental-period and unit rules.
-All thresholds here are proposed product defaults, not measured valuation accuracy.
+All thresholds are product defaults, not measured valuation accuracy.
 
 ### Population and comparable selection
 
@@ -142,35 +141,20 @@ median, P25–P75 range, matching criteria and links to comparables. Missing are
 missing neighbourhood, invalid price and insufficient sample each have a specific
 unscored reason. No citywide fallback is labelled a neighbourhood score.
 
-## Data readiness and implementation boundaries
+## Implementation and validation
 
-Current-listing panels use `reporting.buyer_listing_scope(...)` as their shared
-filter contract. It centralizes the market and optional-feature scope and can
-optionally apply price, rate, score and listing-selection filters. Historical
-and exact-comparable panels retain their distinct event-time and cohort rules.
+Current-listing panels use `reporting.buyer_listing_scope(...)`. Current scores
+and exact comparables come from `reporting.current_listing_scores` and
+`reporting.listing_comparables(...)`; historical panels use
+`reporting.daily_listing_facts` and event-time reporting views. The OLAP refresh
+publishes these reporting surfaces as one consistent generation.
 
-- `reporting.current_listings` supplies active listing attributes; it does not
-  expose a resolved current `price_state`. A future reporting projection must
-  resolve current price evidence using the canonical event precedence rules,
-  expose score inputs and preserve invalid/conflict boundaries.
-- `price_changes_filtered` supplies valid event-time changes. Interesting current
-  reductions also require current availability, the same deal segment and a
-  reduction that still applies to the current price. A later increase must not
-  leave an obsolete “currently reduced” badge.
-- `reporting.daily_listing_facts` supplies historical prices and quality flags.
-  Recompute aggregates from each day's eligible population; do not apply today's
-  scores to historical rows. Use `Europe/Sarajevo` calendar days.
-- The latest per-category complete-search watermark can come from
-  `reporting.freshness`; unknown remains unknown. Display the oldest
-  relevant search success and each ad's last seen time.
-- Approximate pin-based neighbourhood assignment, sparse detail coverage and
-  multiple ads for one home constrain comparisons. Missing map pins never remove
-  otherwise matching listings from the table.
-- Scoring, price filters, the comparable drilldown and any required reporting
-  additions are future implementation work. Saved favourites and alerts are
-  outside the first dashboard version.
+The dashboard preserves explicit unscored reasons, evidence-quality flags,
+unknown location, sparse detail coverage, and listing-level rather than
+property-level identity. It is a comparison of tracked asking prices, not an
+appraisal, transaction record, or bargain probability.
 
-## Acceptance criteria for future implementation
+## Acceptance criteria
 
 - A buyer can set a total budget, compare neighbourhood prices and open an
   interesting matching listing without visiting an operational dashboard.

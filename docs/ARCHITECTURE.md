@@ -8,15 +8,14 @@ The stack collects configured OLX search results, stores current state and durab
 profile-only `migrator` job first applies the unapplied files in `db/init/` and
 the scraper waits for its successful completion. The scraper's
 `MIGRATIONS_ON_STARTUP` fallback remains enabled for bare-metal runs. After the
-schema gate it marks stale `running` rows as abandoned, converts eligible
-legacy price history, starts the health endpoint, and runs every configured
+schema gate it marks stale `running` rows as abandoned, starts the health
+endpoint, and runs every configured
 search. Each cycle holds a session-level PostgreSQL advisory lease so a second
 scraper process skips rather than fetching the same cycle. Without `--once`, it
 repeats at `SCRAPE_INTERVAL_MINUTES` and never overlaps cycles.
 `src/migrate-only.js` applies migrations without scraping, `src/maintenance-only.js`
 runs retention and analytics maintenance, and `src/replay-response.js` replays a
-retained response without writes. `src/backfill-price-history.js` performs the
-offline price-history conversion.
+retained response without writes.
 
 Searches come from `/config/searches.json`, unless `SEARCH_URLS` is set. Each URL is normalized to a stable search key. The scraper converts it to the OLX JSON search endpoint, fetches page 1 first, then fetches later pages in paced concurrent waves. A blank first page, failed page, or incomplete pagination marks the run unsuccessful; its prior result membership is retained. A cycle with no cards skips the closing pass. These guards prevent a blocked or changed upstream response from mass-closing listings.
 
@@ -40,7 +39,10 @@ Detail enrichment is a separate, bounded part of a successful search. The queue 
 | `analytics_refresh_state` | Pending and successful daily-rebuild coverage. |
 | `neighborhoods` | Generated Banja Luka MZ polygons used to resolve listing pins. |
 
-`price_history` remains the legacy append-only snapshot table and is still consumed by the conversion path. New canonical price evidence is written through `listing_price_events`; duplicate evidence is idempotent by article, effective time, normalized price, and state.
+Canonical price evidence is written through `listing_price_events`; each event
+retains its source, effective time, normalized currency, value state, and
+provenance. Duplicate evidence is idempotent by article, effective time,
+normalized price, and state.
 
 The scraper writes OLTP current/evidence tables in `public`; Grafana reads OLAP facts exposed through `reporting`. `reporting.current_listing_scores_source` is the canonical OLTP-to-OLAP transformation and is evaluated only by `reporting.refresh_current_market()`. The stable `reporting.current_listing_scores` dashboard contract reads the physical snapshot, so panel concurrency never reconstructs event history. `listing_daily` answers historical questions by reconstructing state at each Banja Luka calendar-day boundary. It carries explicit `membership_inferred`, `attributes_inferred`, `stale_observation`, and `provisional_day` flags. Historical membership and attributes can be inferred when observations are sparse; today is provisional and active inventory can be carried through the configured 14-day observation window. Treat flagged values as estimates, not direct daily captures.
 
@@ -54,16 +56,24 @@ Price quality is explicit. A valid price without valid area can remain price evi
 
 ## Database ownership and migrations
 
-PostgreSQL initialization runs `db/init/*.sql` only for a new volume. These files contain the current schema split by responsibility; their prefixes express dependency order, not historical fix numbers. The migrator records unapplied files and verifies their checksums before application services start; standalone scraper runs retain a startup fallback. See [the database guide](../db/README.md) for the file map, supported baseline adoption, and future migration policy. Do not edit applied SQL or generated polygon data by hand. The bootstrap database user administers the instance. `olx_app` owns application objects and is used by the scraper and restore endpoint; `olx_reader` is read-only and is used by Grafana and backups.
+PostgreSQL initialization runs `db/init/*.sql` only for a new volume. The files
+are ordered by dependency; the migrator records unapplied files and verifies
+their checksums before application services start. Standalone scraper runs
+retain a startup fallback. See [the database guide](../db/README.md) for the
+schema map and change policy. Do not edit applied SQL or generated polygon data
+by hand. The bootstrap database user administers the instance. `olx_app` owns
+application objects and is used by the scraper and restore endpoint;
+`olx_reader` is read-only and is used by Grafana and backups.
 
 ## Dashboards
 
-Grafana provisions a read-only PostgreSQL datasource and four dashboard definitions from `grafana/dashboards/`:
+Grafana provisions a read-only PostgreSQL datasource and seven dashboard definitions from `grafana/dashboards/`:
 
 - **OLX.ba Home** summarizes current market and scraper health without market filters.
 - **OLX.ba Market Overview** shows active inventory, asking-price trends, search-derived market flow, maps, segments, and selected detail coverage. Its Category, Deal, Rooms, m², and Neighborhood variables scope applicable panels.
 - **OLX.ba Exits & Price Endings** examines closed listings. Exit values are final observed asking values; they are not sales. It uses the same market filters.
 - **OLX Scraper Health** shows run outcomes, freshness, throughput, errors, and data-quality coverage. Its Category variable scopes search-related panels, not the market dataset.
+- **Buyer**, **Renter**, and **Agent** provide private persona workflows backed by the shared comparison contract.
 
 Dashboard formulas are query-specific: comparable-looking ratios can use different scopes and denominators. Read panel titles and query aliases as the authoritative definition. Daily inventory and flow are estimates built from stored evidence, and raw/detailed-data coverage limits map, segmentation, and attribute panels.
 
