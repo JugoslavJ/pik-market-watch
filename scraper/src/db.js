@@ -1,5 +1,4 @@
 "use strict";
-// PostgreSQL access layer (node-postgres).
 //
 // Search writes, lifecycle transitions and canonical evidence are committed at
 // one transaction boundary. Historical imports use the same event writer.

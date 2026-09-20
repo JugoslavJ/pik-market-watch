@@ -32,10 +32,9 @@ services:
     # PostGIS-enabled PostgreSQL 16 image. Digest pin = exactly this build
     # everywhere (refresh tag+digest together when upgrading PostGIS).
     image: ghcr.io/baosystems/postgis:16-3.5@sha256:0f1c5c0f70f03d4d19ad1d7308d86e6162dff5429c491002298a7b5e46d2f2e8
-    container_name: olx-db
     restart: unless-stopped
     security_opt:
-      - no-new-privileges:true # nothing here may gain privileges
+      - no-new-privileges:true
     pids_limit: 100 # max_connections forks (40) + background workers
     # Right-size for the 768m cap (stock defaults assume a dedicated server):
     #   shared_buffers/effective_cache_size fit inside the limit; 40 conns cover
@@ -88,7 +87,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 12
-    mem_limit: 768m # plenty for a personal-scale tracker; raise if needed
+    mem_limit: 768m
     memswap_limit: 768m # hit OOM decisively instead of swapping into latency spikes
     cpus: 0.50
     logging: *logging
@@ -149,9 +148,9 @@ services:
 
   scraper:
     <<: *scraper-runtime
-    container_name: olx-scraper
-    profiles: ["scrape"] # opt-in: runs where you point COMPOSE_PROFILES at it
+    profiles: ["scrape"]
     restart: unless-stopped
+    stop_grace_period: 45s
     pids_limit: 64
     depends_on:
       db:
@@ -170,13 +169,8 @@ services:
       ANALYTICS_REBUILD_MAX_DAYS: ${ANALYTICS_REBUILD_MAX_DAYS:-31}
       ABANDONED_RUN_AFTER_MINUTES: ${ABANDONED_RUN_AFTER_MINUTES:-180}
       HEALTH_BIND: ${HEALTH_BIND:-0.0.0.0}
-      # NOTE: do NOT add RUN_ONCE here. Combined with this service's restart
-      # policy, a finished one-shot container would be relaunched forever
-      # (= endless scrape loop). For one-off runs use:
-      #   docker compose run --rm scraper node src/index.js --once
     volumes:
       - ./config:/config:ro
-      - ./db/init:/db/init:ro
     ports:
       - "127.0.0.1:9100:9100" # health/status JSON endpoint
     healthcheck:
@@ -202,7 +196,6 @@ services:
   grafana:
     # Digest pin alongside the version tag (Dependabot keeps both current).
     image: grafana/grafana-oss:13.0.2@sha256:5dad0df181cb644a14e13617b913b261a54f7d4fd4510721dba420929f35bea2
-    container_name: olx-grafana
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
@@ -288,7 +281,6 @@ services:
   db-backup:
     # PostgreSQL 16 client; pg_dump stays major-version matched with db.
     image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
-    container_name: olx-db-backup
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true

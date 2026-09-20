@@ -133,10 +133,20 @@ docker compose restart grafana
 
 echo "▶ Waiting for containers to become healthy…"
 deadline=$((SECONDS + 360))
+health_status() {
+  local service=$1
+  local id
+  id=$(docker compose ps -q "$service" 2>/dev/null || true)
+  if [ -z "$id" ]; then
+    echo missing
+  else
+    docker inspect -f '{{.State.Health.Status}}' "$id" 2>/dev/null || echo missing
+  fi
+}
 while :; do
-  db=$(docker inspect -f '{{.State.Health.Status}}' olx-db 2>/dev/null || echo missing)
-  gr=$(docker inspect -f '{{.State.Health.Status}}' olx-grafana 2>/dev/null || echo missing)
-  bk=$(docker inspect -f '{{.State.Health.Status}}' olx-db-backup 2>/dev/null || echo missing)
+  db=$(health_status db)
+  gr=$(health_status grafana)
+  bk=$(health_status db-backup)
   echo "   db=$db  grafana=$gr  db-backup=$bk  (t=${SECONDS}s)"
   if [ "$db" = healthy ] && [ "$gr" = healthy ]; then
     echo "✓ Stack healthy — deployed ${GIT_SHA:-unknown} to the instance"

@@ -1,5 +1,4 @@
 "use strict";
-// Small helpers shared by the scraping entry points.
 
 // Browser-like UA: Cloudflare scores bare runtime UAs ("node") harshly. The
 // default mimics a real Chrome session; override via SCRAPE_USER_AGENT once it

@@ -1,5 +1,4 @@
 "use strict";
-// Unit tests for util.js.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { computeMedian, sleep } = require("../../src/util");
@@ -13,7 +12,7 @@ test("computeMedian: odd count picks middle value", () => {
 });
 
 test("computeMedian: even count averages the two middles and rounds", () => {
-  assert.equal(computeMedian([1800, 2000]), 1900); // exact
+  assert.equal(computeMedian([1800, 2000]), 1900);
   assert.equal(computeMedian([1000, 1001]), 1001); // Math.round rounds .5 up
 });
 
