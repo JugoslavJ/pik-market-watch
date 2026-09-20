@@ -30,10 +30,13 @@ script because it needs environment-provided credentials.
 Fresh volumes execute these files in order. The migrator records each filename
 and checksum in `schema_migrations`, applies each file transactionally, and
 uses an advisory lock. Existing volumes from the former migration chain are
-adopted after a complete-schema fingerprint check; their SQL is not replayed.
-For future changes, add a normal forward migration; periodically repeat this
-squash process when the chain grows, updating the complete-schema adoption
-check if the final schema fingerprint changes.
+adopted after a schema fingerprint check; their baseline SQL is not replayed.
+The September 2026 split-baseline transition accepts only the previous and
+replacement checksums listed in `scraper/src/migration-baseline.js`, while the
+checksum-pinned `17-upgrade-to-current.sql` bridge is still pending. The bridge
+runs in the same transaction as those ledger updates. Unexpected changes still
+fail, and later migrations always execute. For future changes, add a normal
+forward migration rather than editing an applied file.
 
 ## OLTP and OLAP boundary
 

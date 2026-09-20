@@ -26,7 +26,19 @@ const docker = (args, opts = {}) =>
 
 function waitUntilReady() {
   for (let i = 1; i <= 60; i++) {
-    const r = docker(["exec", NAME, "pg_isready", "-U", "olx", "-d", "olx"]);
+    // The entrypoint's temporary bootstrap server accepts socket connections
+    // before initialization finishes. Wait for the final TCP listener instead.
+    const r = docker([
+      "exec",
+      NAME,
+      "pg_isready",
+      "-h",
+      "127.0.0.1",
+      "-U",
+      "olx",
+      "-d",
+      "olx",
+    ]);
     if (r.status === 0) return;
     // Synchronous 1 s pause without spawning a process: Windows timeout.exe
     // refuses to run under execSync ("input redirection not supported").

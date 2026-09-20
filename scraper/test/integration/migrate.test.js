@@ -10,6 +10,7 @@ const os = require("node:os");
 const assert = require("node:assert/strict");
 const { Pool } = require("pg");
 const applyMigrations = require("../../src/migrate");
+const baselineTransitions = require("../../src/migration-baseline");
 const { needsDb } = require("../helpers/db.js");
 
 const FULL_DIR = path.resolve(__dirname, "..", "..", "..", "db", "init");
@@ -34,6 +35,172 @@ const currentMigrations = fs
   .readdirSync(FULL_DIR)
   .filter((file) => file.endsWith(".sql"))
   .sort();
+
+needsDb(
+  "migrations: known split-baseline drift executes the bridge atomically",
+  async () => {
+    const pool = new Pool({ connectionString: await recreateDb("mig_split") });
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "pik-split-"));
+    try {
+      await applyMigrations(pool, FULL_DIR, log);
+      for (const file of currentMigrations) {
+        fs.copyFileSync(path.join(FULL_DIR, file), path.join(tempDir, file));
+      }
+      await pool.query(
+        "INSERT INTO listings (article_id, url, title) VALUES (1, 'test', 'preserved')",
+      );
+      // Reproduce the deployed ledger and missing dashboard helper. The baseline
+      // CREATE statements cannot be replayed over this populated database.
+      await pool.query(
+        "DELETE FROM schema_migrations WHERE filename = '17-upgrade-to-current.sql'",
+      );
+      await pool.query("DROP FUNCTION reporting.room_bucket(text)");
+      for (const [file, transition] of Object.entries(baselineTransitions)) {
+        await pool.query(
+          "UPDATE schema_migrations SET checksum = $2 WHERE filename = $1",
+          [file, transition.previous.at(-1)],
+        );
+      }
+      const before = (
+        await pool.query("SELECT * FROM schema_migrations ORDER BY filename")
+      ).rows;
+      const laterFile = path.join(tempDir, "18-probe.sql");
+      fs.writeFileSync(laterFile, "SELECT missing_upgrade_probe();");
+      await assert.rejects(
+        applyMigrations(pool, tempDir, log),
+        /migration 18-probe.sql failed/,
+      );
+      assert.deepEqual(
+        (await pool.query("SELECT * FROM schema_migrations ORDER BY filename"))
+          .rows,
+        before,
+      );
+      assert.equal(
+        (
+          await pool.query(
+            "SELECT to_regprocedure('reporting.room_bucket(text)') AS helper",
+          )
+        ).rows[0].helper,
+        null,
+      );
+
+      fs.writeFileSync(laterFile, "CREATE TABLE upgrade_probe (id integer);");
+      await applyMigrations(pool, tempDir, log);
+      assert.equal(
+        (await pool.query("SELECT reporting.room_bucket('2') AS bucket"))
+          .rows[0].bucket,
+        "2",
+      );
+      assert.equal(
+        (await pool.query("SELECT title FROM listings WHERE article_id = 1"))
+          .rows[0].title,
+        "preserved",
+      );
+      assert.equal(
+        (await pool.query("SELECT to_regclass('upgrade_probe') AS probe"))
+          .rows[0].probe,
+        "upgrade_probe",
+      );
+      await applyMigrations(pool, tempDir, () =>
+        assert.fail("second pass must be a no-op"),
+      );
+
+      // The complete schema must neither swallow new migrations nor bless edits.
+      fs.writeFileSync(
+        path.join(tempDir, "19-probe.sql"),
+        "ALTER TABLE upgrade_probe ADD COLUMN label text;",
+      );
+      await applyMigrations(pool, tempDir, log);
+      await pool.query("SELECT label FROM upgrade_probe");
+      fs.appendFileSync(
+        path.join(tempDir, "04-source-views.sql"),
+        "\n-- unexpected edit\n",
+      );
+      await assert.rejects(
+        applyMigrations(pool, tempDir, log),
+        /migration 04-source-views.sql has changed/,
+      );
+
+      // Even a known old checksum is invalid once the bridge has committed.
+      fs.copyFileSync(
+        path.join(FULL_DIR, "04-source-views.sql"),
+        path.join(tempDir, "04-source-views.sql"),
+      );
+      await pool.query(
+        "UPDATE schema_migrations SET checksum = $1 WHERE filename = '04-source-views.sql'",
+        [baselineTransitions["04-source-views.sql"].previous[0]],
+      );
+      await assert.rejects(
+        applyMigrations(pool, tempDir, log),
+        /migration 04-source-views.sql has changed/,
+      );
+    } finally {
+      await pool.end();
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  },
+);
+
+needsDb(
+  "migrations: pending bridge rejects unknown drift and changed targets",
+  async () => {
+    const pool = new Pool({
+      connectionString: await recreateDb("mig_split_drift"),
+    });
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "pik-split-drift-"));
+    try {
+      await applyMigrations(pool, FULL_DIR, log);
+      for (const file of currentMigrations) {
+        fs.copyFileSync(path.join(FULL_DIR, file), path.join(tempDir, file));
+      }
+      await pool.query(
+        "DELETE FROM schema_migrations WHERE filename = '17-upgrade-to-current.sql'",
+      );
+      await pool.query(
+        "UPDATE schema_migrations SET checksum = 'unexpected' WHERE filename = '04-source-views.sql'",
+      );
+      await assert.rejects(
+        applyMigrations(pool, tempDir, log),
+        /migration 04-source-views.sql has changed/,
+      );
+      await pool.query(
+        "UPDATE schema_migrations SET checksum = $1 WHERE filename = '04-source-views.sql'",
+        [baselineTransitions["04-source-views.sql"].previous[0]],
+      );
+      fs.appendFileSync(
+        path.join(tempDir, "04-source-views.sql"),
+        "\n-- unexpected edit\n",
+      );
+      await assert.rejects(
+        applyMigrations(pool, tempDir, log),
+        /migration 04-source-views.sql has changed/,
+      );
+      fs.copyFileSync(
+        path.join(FULL_DIR, "04-source-views.sql"),
+        path.join(tempDir, "04-source-views.sql"),
+      );
+      fs.appendFileSync(
+        path.join(tempDir, "17-upgrade-to-current.sql"),
+        "\n-- unexpected bridge edit\n",
+      );
+      await assert.rejects(
+        applyMigrations(pool, tempDir, log),
+        /migration 04-source-views.sql has changed/,
+      );
+      assert.equal(
+        (
+          await pool.query(
+            "SELECT checksum FROM schema_migrations WHERE filename = '04-source-views.sql'",
+          )
+        ).rows[0].checksum,
+        baselineTransitions["04-source-views.sql"].previous[0],
+      );
+    } finally {
+      await pool.end();
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  },
+);
 
 needsDb("baseline adoption still applies the current-state files", async () => {
   const pool = new Pool({

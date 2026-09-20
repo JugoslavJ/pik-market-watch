@@ -5,6 +5,11 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const baselineTransitions = require("./migration-baseline");
+
+const BASELINE_BRIDGE = "17-upgrade-to-current.sql";
+const BASELINE_BRIDGE_CHECKSUM =
+  "1726c1a3cc3a9f3cad852688e9335b50b8bec7d617f692f5d1e03b3ba7dc4801";
 
 function migrationChecksum(sql) {
   // Git checkouts may use LF or CRLF depending on the host. Hash the logical
@@ -24,9 +29,7 @@ async function applyMigrations(pool, dir, log = () => {}) {
     .readdirSync(dir)
     .filter((f) => f.endsWith(".sql"))
     .sort();
-  // The canonical schema remains split into responsibility-oriented files.
-  // Existing volumes with the complete current schema can adopt the whole
-  // set atomically; otherwise the current-state upgrade files run normally.
+  // Only the canonical baseline can be adopted; forward migrations must run.
   const baselineFiles = files.filter((file) => /^(?:0\d|1[0-6])-/.test(file));
   const client = await pool.connect();
   const applied = [];
@@ -64,50 +67,17 @@ async function applyMigrations(pool, dir, log = () => {}) {
       "SELECT count(*)::int AS count FROM schema_migrations WHERE filename = ANY($1::text[])",
       [files],
     );
-    const completeSchema = await client.query(`
-      SELECT to_regclass('olap.refresh_state') IS NOT NULL
-         AND to_regclass('public.analytics_daily_olap_dirty') IS NOT NULL
-         AND to_regclass('public.olap_article_dirty') IS NOT NULL
-         AND to_regprocedure('reporting.refresh_dashboard_olap(boolean)') IS NOT NULL
-         AND to_regprocedure('public.mark_article_olap_dirty()') IS NOT NULL
-         AND to_regclass('reporting.current_comparison_inputs') IS NOT NULL
-         AND to_regprocedure('reporting.room_bucket(text)') IS NOT NULL
-         AND NOT EXISTS (
-               SELECT 1 FROM information_schema.columns
-                WHERE table_schema = 'public'
-                  AND table_name = 'analytics_partition_policy'
-                  AND column_name IN ('action', 'retention_days')
-             )
-         AND EXISTS (
-               SELECT 1 FROM information_schema.columns
-                WHERE table_schema = 'public'
-                  AND table_name = 'analytics_daily_olap_dirty'
-                  AND column_name = 'marked_at'
-             ) AS complete`);
-    if (currentRows.rows[0].count > 0 && completeSchema.rows[0].complete) {
-      // A previously deployed final schema may have been installed by the
-      // Docker entrypoint while its ledger still contains pre-squash checksums.
-      // Reconcile the ledger to the current split baseline only after the live
-      // schema proves that replaying SQL is unnecessary.
-      for (const file of files) {
-        const sql = fs.readFileSync(path.join(dir, file), "utf8");
-        const checksum = migrationChecksum(sql);
-        const existing = await client.query(
-          "SELECT checksum FROM schema_migrations WHERE filename = $1",
-          [file],
-        );
-        if (existing.rowCount && existing.rows[0].checksum === checksum) {
-          continue;
-        }
-        await client.query(
-          `INSERT INTO schema_migrations (filename, checksum)
-           VALUES ($1, $2)
-           ON CONFLICT (filename) DO UPDATE SET checksum = EXCLUDED.checksum`,
-          [file, checksum],
-        );
-        applied.push(`${file} (current schema adopted)`);
-      }
-    }
+    const bridgePending = files.includes(BASELINE_BRIDGE)
+      ? !(
+          await client.query(
+            "SELECT 1 FROM schema_migrations WHERE filename = $1",
+            [BASELINE_BRIDGE],
+          )
+        ).rowCount &&
+        migrationChecksum(
+          fs.readFileSync(path.join(dir, BASELINE_BRIDGE), "utf8"),
+        ) === BASELINE_BRIDGE_CHECKSUM
+      : false;
     if (currentRows.rows[0].count === 0 && files.length > 0) {
       const advancedSchema = await client.query(`
         SELECT to_regclass('olap.refresh_state') IS NOT NULL
@@ -149,29 +119,9 @@ async function applyMigrations(pool, dir, log = () => {}) {
                 AND column_name = 'marked_at'
            ) AS complete`);
       if (fingerprint.rows[0].complete) {
-        // A Docker entrypoint executes every SQL file before the application
-        // migrator starts, so a brand-new volume may already have the latest
-        // forward migrations while its ledger is still empty. The absence of
-        // the legacy history-retention columns is the final-schema marker;
-        // adopt the known retention migrations in that case instead of
-        // replaying their non-idempotent intermediate schema changes.
-        const finalSchema = await client.query(`
-          SELECT NOT EXISTS (
-                   SELECT 1 FROM information_schema.columns
-                    WHERE table_schema = 'public'
-                      AND table_name = 'analytics_partition_policy'
-                      AND column_name IN ('action', 'retention_days')
-                 )
-             AND NOT EXISTS (
-                   SELECT 1 FROM public.analytics_retention_policy
-                    WHERE table_schema = 'public' AND table_name = 'scrape_runs'
-                 ) AS present`);
-        // The complete fingerprint includes the current-state upgrade files,
-        // so a volume is only adopted when every published contract is live.
-        const adoptedFiles = finalSchema.rows[0].present
-          ? files.filter((file) => /^(?:[0-2]\d|3[0-2])-/.test(file))
-          : baselineFiles;
-        for (const file of adoptedFiles) {
+        // The bridge is idempotent and must execute even when its objects
+        // already exist. Object names cannot prove a function's definition.
+        for (const file of baselineFiles) {
           const sql = fs.readFileSync(path.join(dir, file), "utf8");
           const checksum = migrationChecksum(sql);
           await client.query(
@@ -223,9 +173,22 @@ async function applyMigrations(pool, dir, log = () => {}) {
           );
           applied.push(`${file} (checksum baseline)`);
         } else if (recordedChecksum !== checksum) {
-          throw new Error(
-            `migration ${file} has changed after being applied (recorded sha256 ${recordedChecksum}, current ${checksum})`,
-          );
+          const transition = baselineTransitions[file];
+          if (
+            bridgePending &&
+            transition?.current === checksum &&
+            transition.previous.includes(recordedChecksum)
+          ) {
+            await client.query(
+              "UPDATE schema_migrations SET checksum = $2 WHERE filename = $1",
+              [file, checksum],
+            );
+            applied.push(`${file} (compatibility bridge baseline)`);
+          } else {
+            throw new Error(
+              `migration ${file} has changed after being applied (recorded sha256 ${recordedChecksum}, current ${checksum})`,
+            );
+          }
         }
         continue;
       }
