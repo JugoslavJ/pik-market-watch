@@ -26,7 +26,7 @@ const log = makeLogger("backfill");
   const max = maxArg ? parseInt(maxArg.split("=")[1], 10) : Infinity;
 
   const db = new Db(config.databaseUrl, {
-    rawResponseRetentionDays: config.rawResponseRetentionDays,
+    rawResponseRetentionCount: config.rawResponseRetentionCount,
   });
   await db.waitUntilReady();
 

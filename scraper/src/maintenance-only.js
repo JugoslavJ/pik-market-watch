@@ -8,7 +8,7 @@ const applyMigrations = require("./migrate");
 
 async function main() {
   const db = new Db(config.databaseUrl, {
-    rawResponseRetentionDays: config.rawResponseRetentionDays,
+    rawResponseRetentionCount: config.rawResponseRetentionCount,
   });
   let lease;
   try {

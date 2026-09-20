@@ -53,15 +53,14 @@ module.exports = function installRawResponseMethods(Db) {
             parser_version, payload, source_payload, request_metadata,
             response_metadata, build_version, diagnostic, archive_format)
          VALUES ($1, $2, $3, $4, $5::timestamptz,
-                  $5::timestamptz + make_interval(days => $6::int), $7, $8::jsonb,
-                  $9::jsonb, $10::jsonb, $11::jsonb, $12, $13::jsonb, $14)`,
+                  'infinity'::timestamptz, $6, $7::jsonb,
+                  $8::jsonb, $9::jsonb, $10::jsonb, $11, $12::jsonb, $13)`,
         [
           runId ?? null,
           articleId ?? null,
           requestKind,
           requestUrl,
           fetchedAt,
-          this.rawResponseRetentionDays,
           parserVersion,
           storedPayload == null ? null : JSON.stringify(storedPayload),
           storedSourcePayload == null
@@ -114,7 +113,7 @@ module.exports = function installRawResponseMethods(Db) {
          SELECT NULL, article_id, 'detail',
                 'https://olx.ba/api/listings/' || article_id::text,
                 fetched_at,
-                fetched_at + make_interval(days => $2::int),
+                'infinity'::timestamptz,
                  'detail-v1', COALESCE(payload, source_payload), NULL,
                  request_metadata, response_metadata, build_version, diagnostic,
                  CASE WHEN diagnostic IS NULL THEN 'canonical-v2' ELSE 'diagnostic-v2' END
@@ -138,7 +137,6 @@ module.exports = function installRawResponseMethods(Db) {
               diagnostic: row.diagnostic ?? null,
             })),
           ),
-          this.rawResponseRetentionDays,
         ],
       );
       return result.rowCount;

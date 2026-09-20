@@ -194,9 +194,9 @@ module.exports = {
     30,
     { min: 1, max: 24 * 60 },
   ),
-  rawResponseRetentionDays: integer(
-    "RAW_RESPONSE_RETENTION_DAYS",
-    process.env.RAW_RESPONSE_RETENTION_DAYS,
+  rawResponseRetentionCount: integer(
+    "RAW_RESPONSE_RETENTION_COUNT",
+    process.env.RAW_RESPONSE_RETENTION_COUNT,
     3,
     { min: 1 },
   ),

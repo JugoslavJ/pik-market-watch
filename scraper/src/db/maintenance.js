@@ -5,51 +5,6 @@ const { parseListingDetail } = require("../parser");
 
 module.exports = function installMaintenanceMethods(Db) {
   Object.assign(Db.prototype, {
-    /**
-     * Cap legacy expiry timestamps without putting a table-sized update in a
-     * migration transaction. Each call is safe to repeat after interruption.
-     */
-    async transitionRawResponseRetention(limit = 1000) {
-      const cap = Math.max(1, Math.floor(Number(limit) || 1));
-      const result = await this.pool.query(
-        `WITH candidates AS (
-           SELECT id
-             FROM raw_api_responses
-            WHERE expires_at > fetched_at + INTERVAL '3 days'
-            ORDER BY id
-            LIMIT $1
-         )
-         UPDATE raw_api_responses r
-            SET expires_at = r.fetched_at + INTERVAL '3 days'
-           FROM candidates c
-          WHERE r.id = c.id
-         RETURNING r.id`,
-        [cap],
-      );
-      const remaining = await this.pool.query(
-        `SELECT count(*)::bigint AS remaining
-           FROM raw_api_responses
-          WHERE expires_at > fetched_at + INTERVAL '3 days'`,
-      );
-      const count = Number(remaining.rows[0]?.remaining || 0);
-      await this.pool.query(
-        `INSERT INTO raw_retention_transition
-             (id, horizon_days, started_at, completed_at, updated_at, rows_capped)
-         VALUES (1, 3, now(), CASE WHEN $2 = 0 THEN now() END, now(), $1)
-         ON CONFLICT (id) DO UPDATE SET
-           started_at = COALESCE(raw_retention_transition.started_at, now()),
-           completed_at = CASE WHEN $2 = 0 THEN now() ELSE NULL END,
-           updated_at = now(),
-           rows_capped = raw_retention_transition.rows_capped + $1`,
-        [result.rowCount, count],
-      );
-      return {
-        updated: result.rowCount,
-        remaining: count,
-        complete: count === 0,
-      };
-    },
-
     /** Remove proven duplicate successful bodies in bounded, idempotent steps. */
     async compactDuplicateRawBodies(limit = 1000) {
       const cap = Math.max(1, Math.floor(Number(limit) || 1));
@@ -215,21 +170,30 @@ module.exports = function installMaintenanceMethods(Db) {
       };
     },
 
-    /** Delete expired raw records in bounded batches, independent of analytics. */
+    /** Keep only the newest raw records per request stream in bounded batches. */
     async purgeRawResponses(limit = 1000) {
       let deleted = 0;
       const cap = Math.max(1, Math.floor(Number(limit) || 1));
       for (;;) {
         const result = await this.pool.query(
-          `WITH doomed AS (
-           SELECT id FROM raw_api_responses
-            WHERE expires_at <= now()
-            ORDER BY expires_at, id
-           LIMIT $1
+          `WITH ranked AS (
+           SELECT id,
+                  row_number() OVER (
+                    PARTITION BY request_kind, request_url
+                    ORDER BY fetched_at DESC, id DESC
+                  ) AS response_rank
+             FROM raw_api_responses
+         ), doomed AS (
+           SELECT ranked.id
+             FROM ranked
+             JOIN raw_api_responses raw ON raw.id = ranked.id
+            WHERE ranked.response_rank > $1 OR raw.expires_at <= now()
+            ORDER BY ranked.id
+            LIMIT $2
          )
          DELETE FROM raw_api_responses r USING doomed
           WHERE r.id = doomed.id`,
-          [cap],
+          [this.rawResponseRetentionCount, cap],
         );
         deleted += result.rowCount;
         if (result.rowCount < cap) {
@@ -309,9 +273,6 @@ module.exports = function installMaintenanceMethods(Db) {
       );
       await run("rawPublicationEvidence", () =>
         this.backfillPublicationEvidenceFromRaw(),
-      );
-      await run("retentionTransition", () =>
-        this.transitionRawResponseRetention(),
       );
       await run("duplicateCompaction", () => this.compactDuplicateRawBodies());
       // Purge runs before the potentially expensive rebuild and is independent

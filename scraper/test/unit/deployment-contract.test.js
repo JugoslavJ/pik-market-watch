@@ -67,9 +67,14 @@ test("one-shot scraper closes healthcheck sockets before waiting for server clos
     "utf8",
   );
   const once = index.slice(index.indexOf("if (config.runOnce)"));
-  const destroySocketsAt = once.indexOf("healthServer.closeAllConnections?.();");
+  const destroySocketsAt = once.indexOf(
+    "healthServer.closeAllConnections?.();",
+  );
   const waitForCloseAt = once.indexOf("healthServer.close(resolve)");
-  assert.ok(destroySocketsAt >= 0, "one-shot shutdown must destroy open sockets");
+  assert.ok(
+    destroySocketsAt >= 0,
+    "one-shot shutdown must destroy open sockets",
+  );
   assert.ok(waitForCloseAt >= 0, "one-shot shutdown must await server close");
   assert.ok(
     destroySocketsAt < waitForCloseAt,

@@ -26,16 +26,23 @@ SELECT relname,
   FROM pg_stat_user_tables
  ORDER BY total_bytes DESC;
 
+WITH ranked AS (
+  SELECT r.*,
+         row_number() OVER (
+           PARTITION BY request_kind, request_url
+           ORDER BY fetched_at DESC, id DESC
+         ) AS response_rank
+    FROM raw_api_responses r
+)
 SELECT request_kind,
        count(*) AS rows,
-       count(*) FILTER (WHERE expires_at <= now()) AS expired,
-       count(*) FILTER (WHERE expires_at > fetched_at + INTERVAL '3 days')
-         AS over_horizon,
+       count(*) FILTER (WHERE expires_at <= now()) AS legacy_expired,
+       max(response_rank) AS largest_stream,
        count(*) FILTER (WHERE payload IS NOT DISTINCT FROM source_payload
                          AND payload IS NOT NULL) AS proven_duplicate_bodies,
        min(fetched_at) AS oldest_fetch,
        max(fetched_at) AS newest_fetch
-  FROM raw_api_responses
+  FROM ranked
  GROUP BY request_kind
  ORDER BY request_kind;
 

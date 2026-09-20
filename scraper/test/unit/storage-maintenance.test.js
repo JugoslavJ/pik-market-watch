@@ -20,17 +20,33 @@ test("raw archive v2 stores one canonical search body and keeps diagnostics body
   });
 
   assert.equal(
-    calls[0][1][7],
+    calls[0][1][6],
     null,
     "derived search adapter is not duplicated",
   );
   assert.deepEqual(
-    calls[0][1][8],
+    calls[0][1][7],
     JSON.stringify({ data: [{ id: 1 }], meta: { total: 1 } }),
   );
-  assert.equal(calls[0][1][13], "canonical-v2");
-  assert.equal(calls[1][1][7], null, "diagnostics do not retain an empty body");
-  assert.equal(calls[1][1][13], "diagnostic-v2");
+  assert.equal(calls[0][1][12], "canonical-v2");
+  assert.equal(calls[1][1][6], null, "diagnostics do not retain an empty body");
+  assert.equal(calls[1][1][12], "diagnostic-v2");
+});
+
+test("raw response purge ranks records per request stream", async () => {
+  const db = new Db("postgres://unused");
+  const calls = [];
+  db.rawResponseRetentionCount = 3;
+  db.pool = {
+    query: async (...args) => {
+      calls.push(args);
+      return { rowCount: 0, rows: [] };
+    },
+  };
+
+  assert.equal(await db.purgeRawResponses(), 0);
+  assert.match(calls[0][0], /PARTITION BY request_kind, request_url/);
+  assert.deepEqual(calls[0][1], [3, 1000]);
 });
 
 test("maintenance attempts purge and rebuild independently", async () => {

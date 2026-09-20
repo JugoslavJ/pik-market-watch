@@ -34,7 +34,7 @@ docker compose up -d --build
 | `SCRAPE_INTERVAL_MINUTES`                                        |                                      `720` | Scheduled scraper cadence when the `scrape` profile is enabled.                                                                        |
 | `DETAIL_REFRESH_DAYS`                                            |                                        `7` | Age at which successful detail evidence becomes eligible for refresh.                                                                  |
 | `DETAIL_JOB_LEASE_MINUTES`                                       |                                       `30` | Database lease duration for an in-flight durable detail job (maximum 24 hours).                                                        |
-| `RAW_RESPONSE_RETENTION_DAYS`                                    |                                        `3` | Live search/detail response retention in days (a rolling 72 hours from `fetched_at`). Existing rows are capped by maintenance.         |
+| `RAW_RESPONSE_RETENTION_COUNT`                                  |                                        `3` | Newest raw search/detail responses retained per request kind and URL. Maintenance removes older rows.                                  |
 | `ANALYTICS_REBUILD_MAX_DAYS`                                     |                                       `31` | Maximum Banja Luka days rebuilt per maintenance transaction.                                                                           |
 | `ABANDONED_RUN_AFTER_MINUTES`                                    |                                      `180` | Age after which startup marks an unfinished `running` scrape as abandoned.                                                             |
 | `RATE_LIMIT_COOLDOWN_MS`                                         |                                    `65000` | Fallback pause when the upstream rate-limit window is low and no reset is advertised.                                                  |
@@ -160,10 +160,10 @@ docker compose --profile scrape run --rm scraper node src/backfill-geo.js --max=
 
 The default backfill targets recently active rows; `--all` includes closed
 history. The maintenance profile rebuilds pending daily analytics, refreshes the
-current-market OLAP snapshot, applies retention, and purges expired raw
+current-market OLAP snapshot, applies retention, and trims excess raw
 responses without making OLX requests. Each operation has an independent
-outcome. The default raw-response horizon is 72 hours from `fetched_at`; run
-maintenance hourly on the host. To inspect a retained response offline, run
+outcome. The default raw-response retention is the newest three responses per
+request kind and URL; run maintenance hourly on the host. To inspect a retained response offline, run
 `docker compose --profile scrape run --rm scraper node
 src/replay-response.js --id=<raw-response-id>`.
 

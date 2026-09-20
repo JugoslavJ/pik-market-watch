@@ -19,7 +19,7 @@ retained response without writes.
 
 Searches come from `/config/searches.json`, unless `SEARCH_URLS` is set. Each URL is normalized to a stable search key. The scraper converts it to the OLX JSON search endpoint, fetches page 1 first, then fetches later pages in paced concurrent waves. A blank first page, failed page, or incomplete pagination marks the run unsuccessful; its prior result membership is retained. A cycle with no cards skips the closing pass. These guards prevent a blocked or changed upstream response from mass-closing listings.
 
-For a complete search, one ingestion transaction updates the current listing, search membership, run statistics, search observations, canonical price events, and reopen/close transitions caused by that search. A cycle-level closing pass then closes listings no longer returned by any configured search. Successful cycles rebuild pending daily inventory, atomically publish the current-market OLAP snapshot, and remove expired raw search responses.
+For a complete search, one ingestion transaction updates the current listing, search membership, run statistics, search observations, canonical price events, and reopen/close transitions caused by that search. A cycle-level closing pass then closes listings no longer returned by any configured search. Successful cycles rebuild pending daily inventory, atomically publish the current-market OLAP snapshot, and trim raw search responses beyond the configured count per request stream.
 
 Detail enrichment is a separate, bounded part of a successful search. The queue prioritizes active rows that have never had a successful detail fetch, are stale, have changed price, or still lack a pin or sale area. Search cards provide the inexpensive facts; detail requests fill richer attributes. `detail_jobs` keeps durable claim leases, retry timing and terminal outcomes alongside the scheduling hint on `listings`.
 
@@ -30,7 +30,7 @@ Detail enrichment is a separate, bounded part of a successful search. The queue 
 | `listings` | Current, one-row-per-article state and the latest known attributes. It retains closed listings. |
 | `search_results` and `saved_searches` | Current membership of each configured search and its identity/category. |
 | `scrape_runs` | Per-search execution outcome, page/card counts, completeness, and failure information. |
-| `raw_api_responses` | Retained search payloads with fetch time, parser version, and expiry. Retention is controlled by `RAW_RESPONSE_RETENTION_DAYS`; this is operational evidence, not an indefinite archive. |
+| `raw_api_responses` | Retained search/detail payloads with fetch time, parser version, and request metadata. Maintenance keeps the newest `RAW_RESPONSE_RETENTION_COUNT` responses per request kind and URL; this is operational evidence, not an indefinite archive. |
 | `listing_state_history` | Immutable search sightings, detail updates, closures, and reopenings. `effective_at` is evidence time; `ingested_at` is when this database learned it. |
 | `listing_price_events` | Canonical price boundaries with a value state (`valid`, `unpriced`, `invalid`, or `conflict`), observation/renewal timestamps, effective-time basis, and provenance. |
 | `listing_daily` | OLAP article/day facts used for historical analytics. |
