@@ -14,7 +14,7 @@ search. Each cycle holds a session-level PostgreSQL advisory lease so a second
 scraper process skips rather than fetching the same cycle. Without `--once`, it
 repeats at `SCRAPE_INTERVAL_MINUTES` and never overlaps cycles.
 `src/migrate-only.js` applies migrations without scraping, `src/maintenance-only.js`
-runs retention and analytics maintenance, and `src/replay-response.js` replays a
+runs operational cleanup and analytics maintenance, and `src/replay-response.js` replays a
 retained response without writes.
 
 Searches come from `/config/searches.json`, unless `SEARCH_URLS` is set. Each URL is normalized to a stable search key. The scraper converts it to the OLX JSON search endpoint, fetches page 1 first, then fetches later pages in paced concurrent waves. A blank first page, failed page, or incomplete pagination marks the run unsuccessful; its prior result membership is retained. A cycle with no cards skips the closing pass. These guards prevent a blocked or changed upstream response from mass-closing listings.

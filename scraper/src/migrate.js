@@ -24,6 +24,9 @@ async function applyMigrations(pool, dir, log = () => {}) {
     .readdirSync(dir)
     .filter((f) => f.endsWith(".sql"))
     .sort();
+  // Only the squashed 00..16 schema is represented by the fingerprint below.
+  // Later migrations must execute even when an existing volume adopts it.
+  const baselineFiles = files.filter((file) => /^(?:0\d|1[0-6])-/.test(file));
   const client = await pool.connect();
   const applied = [];
   let inTransaction = false;
@@ -97,7 +100,27 @@ async function applyMigrations(pool, dir, log = () => {}) {
                 AND column_name = 'marked_at'
            ) AS complete`);
       if (fingerprint.rows[0].complete) {
-        for (const file of files) {
+        // A Docker entrypoint executes every SQL file before the application
+        // migrator starts, so a brand-new volume may already have the latest
+        // forward migrations while its ledger is still empty. The absence of
+        // the legacy history-retention columns is the final-schema marker;
+        // adopt every file in that case instead of replaying non-idempotent
+        // intermediate migrations over the already-final schema.
+        const finalSchema = await client.query(`
+          SELECT NOT EXISTS (
+                   SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name = 'analytics_partition_policy'
+                      AND column_name IN ('action', 'retention_days')
+                 )
+             AND NOT EXISTS (
+                   SELECT 1 FROM public.analytics_retention_policy
+                    WHERE table_schema = 'public' AND table_name = 'scrape_runs'
+                 ) AS present`);
+        const adoptedFiles = finalSchema.rows[0].present
+          ? files
+          : baselineFiles;
+        for (const file of adoptedFiles) {
           const sql = fs.readFileSync(path.join(dir, file), "utf8");
           const checksum = migrationChecksum(sql);
           await client.query(

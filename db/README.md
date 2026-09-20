@@ -22,8 +22,10 @@ script because it needs environment-provided credentials.
 | `12-postgis.sql` | PostGIS boundaries and spatial indexes |
 | `13-olap-refresh.sql` | OLAP refresh source optimization and targeted publication |
 | `14-reporting-surface.sql` | Final private reporting surface and OLAP health |
-| `15-data-contracts.sql` | Evidence contracts, mart constraints, partitions, retention, and validation |
+| `15-data-contracts.sql` | Evidence contracts, mart constraints, partitions, and validation |
 | `16-evidence-integrity.sql` | Currency identity and operational evidence indexes |
+| `17-preserve-historical-data.sql` | Retain historical evidence, daily projections, and scrape runs without an age limit |
+| `32-remove-history-retention-periods.sql` | Remove age-based retention columns and history cleanup |
 | `zz-database-roles.sh` | Runtime ownership and reader permissions |
 
 Fresh volumes execute these files in order. The migrator records each filename
@@ -47,14 +49,17 @@ canonical transformations and support validation.
 
 `reporting.refresh_dashboard_olap()` publishes a consistent generation of all
 marts and records it in `olap.refresh_state`. The maintenance cycle rebuilds
-pending daily history, refreshes current-market marts, applies retention, and
-validates reporting contracts. Operational health panels read live run and
+pending daily history, refreshes current-market marts, runs operational cleanup,
+and validates reporting contracts. Operational health panels read live run and
 refresh-control state; analytical panels read published snapshots.
 
 Monthly partitions cover event and daily-history tables. Maintenance creates
-upcoming partitions, applies the retention policy, and records validation
-results. Evidence updates and deletes are rejected except through the audited
-retention path.
+partitions across all available history and upcoming months, and records
+validation results. Historical evidence, daily projections, OLAP marts, and
+scrape runs have no retention period and are never deleted because of age. Raw
+response bodies and maintenance-run logs keep their separate operational
+cleanup policies. Evidence updates and deletes are rejected except through the
+audited maintenance path.
 
 ## Geography
 

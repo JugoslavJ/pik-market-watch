@@ -115,7 +115,7 @@ services:
       OLAP_RECONCILE_TIMEOUT_MS: ${OLAP_RECONCILE_TIMEOUT_MS:-900000}
     entrypoint: ["node", "src/migrate-only.js"]
 
-  # Run retention and daily analytics independently from upstream scraping.
+  # Run operational cleanup and daily analytics independently from upstream scraping.
   # Invoke on a host scheduler with --profile maintenance.
   maintenance:
     <<: *scraper-runtime

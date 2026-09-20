@@ -197,11 +197,11 @@ module.exports = function installMaintenanceMethods(Db) {
         );
         deleted += result.rowCount;
         if (result.rowCount < cap) {
-          // Keep long-lived history on the same independent maintenance path
+          // Keep operational cleanup on the same independent maintenance path
           // as raw expiry; a failed analytics rebuild must not postpone it.
           await this.pool.query("SELECT public.ensure_analytics_partitions()");
           await this.pool.query(
-            "SELECT public.apply_history_retention($1)",
+            "SELECT public.apply_operational_cleanup($1)",
             [5000],
           );
           return deleted;
@@ -289,11 +289,11 @@ module.exports = function installMaintenanceMethods(Db) {
         "SELECT * FROM reporting.refresh_current_market()",
       );
       // OLAP publication is a contract boundary: provision the next date
-      // partitions, apply the bounded retention policy, and fail the refresh
-      // if a source produced a duplicate or malformed grain.
+      // partitions, run operational cleanup, and fail the refresh if a source
+      // produced a duplicate or malformed grain.
       await this.pool.query("SELECT public.ensure_analytics_partitions()");
       await this.pool.query(
-        "SELECT public.apply_history_retention($1)",
+        "SELECT public.apply_operational_cleanup($1)",
         [5000],
       );
       await this.pool.query("SELECT reporting.validate_olap_contracts()");

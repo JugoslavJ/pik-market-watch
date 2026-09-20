@@ -74,8 +74,46 @@ needsDb(
         VALUES (1, 'test', 'preserved', 44.77, 17.19);
       INSERT INTO scrape_runs (status, finished_at, is_complete)
         VALUES ('ok', now(), false);
+      ALTER TABLE analytics_partition_policy
+        ADD COLUMN retention_days integer NOT NULL DEFAULT 730,
+        ADD COLUMN action text NOT NULL DEFAULT 'retain';
+      ALTER TABLE analytics_partition_policy
+        ADD CONSTRAINT analytics_partition_policy_action_check
+        CHECK (action IN ('delete', 'archive', 'retain'));
+      INSERT INTO analytics_retention_policy
+        (table_schema, table_name, timestamp_column, retention_days, action)
+        VALUES ('public', 'scrape_runs', 'started_at', 730, 'delete');
+      UPDATE analytics_partition_policy SET action = 'delete';
     `);
       await applyMigrations(pool, FULL_DIR, log);
+      assert.equal(
+        (
+          await pool.query(
+            `SELECT count(*)::int AS n
+               FROM information_schema.columns
+              WHERE table_schema = 'public'
+                AND table_name = 'analytics_partition_policy'
+                AND column_name IN ('action', 'retention_days')`,
+          )
+        ).rows[0].n,
+        0,
+      );
+      assert.equal(
+        (
+          await pool.query(
+            "SELECT count(*)::int AS n FROM analytics_retention_policy WHERE table_name = 'scrape_runs'",
+          )
+        ).rows[0].n,
+        0,
+      );
+      assert.equal(
+        (
+          await pool.query(
+            "SELECT action FROM analytics_retention_policy WHERE table_name = 'maintenance_runs'",
+          )
+        ).rows[0].action,
+        "delete",
+      );
       assert.deepEqual(
         (await pool.query("SELECT title, location FROM listings")).rows,
         [{ title: "preserved", location: null }],

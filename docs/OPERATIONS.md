@@ -160,7 +160,7 @@ docker compose --profile scrape run --rm scraper node src/backfill-geo.js --max=
 
 The default backfill targets recently active rows; `--all` includes closed
 history. The maintenance profile rebuilds pending daily analytics, refreshes the
-current-market OLAP snapshot, applies retention, and trims excess raw
+current-market OLAP snapshot, runs operational cleanup, and trims excess raw
 responses without making OLX requests. Each operation has an independent
 outcome. The default raw-response retention is the newest three responses per
 request kind and URL; run maintenance hourly on the host. To inspect a retained response offline, run
@@ -243,8 +243,10 @@ overlap it deliberately with backup windows; locking cannot make competing I/O
 free. `OLAP_RECONCILE_TIMEOUT_MS` defaults to 15 minutes and bounds lock waits,
 refresh, and validation statements.
 
-OLAP facts are reproducible and currently retained for the same historical
-horizon as their OLTP sources; do not delete mart history independently. After
+Historical evidence, daily inventory, OLAP history, and scrape runs are retained
+without an age limit. Their partition metadata has no retention period, and the
+maintenance cycle cannot age-prune those tables. Maintenance still expires raw
+response bodies and prunes maintenance execution logs. Do not delete mart history independently. After
 a large full refresh or restore, run `ANALYZE` on the `olap` tables. Normal
 autovacuum handles incremental replacements; investigate dead tuples and index
 growth monthly with `pg_stat_user_tables` and `pg_total_relation_size`. Use

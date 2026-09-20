@@ -1,6 +1,6 @@
 "use strict";
 
-// Run retention and daily analytics maintenance without scraping. Schedule
+// Run operational cleanup and daily analytics maintenance without scraping. Schedule
 // this independently so an upstream outage cannot also stop housekeeping.
 const config = require("./config");
 const Db = require("./db");
@@ -23,7 +23,7 @@ async function main() {
         console.log(`[maintenance] ${message}`),
       );
     console.log(
-      "[maintenance] running independent retention and analytics tasks",
+      "[maintenance] running independent cleanup and analytics tasks",
     );
     const result = await db.runMaintenanceCycle({
       maxDays: config.analyticsRebuildMaxDays,
