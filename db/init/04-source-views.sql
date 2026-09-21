@@ -1,6 +1,69 @@
--- Canonical source views.
+-- Canonical source views baseline.
+
+-- Compatibility projections required by the source views below.
 --
--- OLTP-to-OLAP transformations used by reporting and refresh routines.
+-- Name: listing_state_history_state; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.listing_state_history_state AS
+ SELECT h.id,
+    h.article_id,
+    h.effective_at,
+    h.ingested_at,
+    h.source,
+    h.event_type,
+    h.run_id,
+    h.search_key,
+    v.category,
+    v.category_membership,
+    v.is_rent,
+    v.sqm,
+    v.rooms,
+    h.price,
+    h.ppm2,
+    v.filter_attributes,
+    h.last_seen_at,
+    h.closed_at,
+    h.is_closed,
+    v.membership_inferred,
+    v.attributes_inferred,
+    h.state_version_id,
+    h.detail_version_id
+   FROM (public.listing_state_history h
+     JOIN public.listing_state_versions v ON ((v.state_version_id = h.state_version_id)));
+
+
+--
+-- Name: listing_daily_state; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.listing_daily_state AS
+ SELECT d.day,
+    d.article_id,
+    d.price,
+    d.price_state,
+    d.ppm2,
+    v.is_rent,
+    v.sqm,
+    v.rooms,
+    v.category,
+    d.location,
+    d.state_effective_at,
+    d.price_effective_at,
+    v.membership_inferred,
+    v.attributes_inferred,
+    d.stale_observation,
+    d.provisional_day,
+    v.category_membership AS category_memberships,
+    v.filter_attributes,
+    d.neighborhood,
+    d.resolved_state_version,
+    d.state_version_id,
+    d.detail_version_id
+   FROM (public.listing_daily d
+     JOIN public.listing_state_versions v ON ((v.state_version_id = d.state_version_id)));
+
+
 --
 -- Name: v_listing_price_changes_source; Type: VIEW; Schema: public; Owner: -
 --
@@ -96,12 +159,12 @@ CREATE VIEW public.v_listing_price_changes_source AS
             h.sqm,
             h.rooms,
             h.filter_attributes
-           FROM public.listing_state_history h
+           FROM public.listing_state_history_state h
           WHERE ((h.article_id = t.article_id) AND (h.effective_at <= t.effective_at))
           ORDER BY h.effective_at DESC, h.id DESC
          LIMIT 1) s ON (true))
      LEFT JOIN LATERAL ( SELECT h.is_rent
-           FROM public.listing_state_history h
+           FROM public.listing_state_history_state h
           WHERE ((h.article_id = t.article_id) AND (h.effective_at <= t.prior_effective_at))
           ORDER BY h.effective_at DESC, h.id DESC
          LIMIT 1) previous ON (true))
@@ -114,12 +177,6 @@ CREATE VIEW public.v_listing_price_changes_source AS
             WHEN previous.is_rent THEN 'rent'::text
             ELSE 'sale'::text
         END);
-
---
--- Name: VIEW v_listing_price_changes_source; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON VIEW public.v_listing_price_changes_source IS 'Resolved price transitions; same-time evidence follows daily precedence and invalid/conflict/deal boundaries are suppressed.';
 
 --
 -- Name: v_listing_price_changes; Type: VIEW; Schema: public; Owner: -
@@ -147,6 +204,104 @@ CREATE VIEW public.v_listing_price_changes AS
    FROM public.v_listing_price_changes_source;
 
 --
+-- Name: resolved_price_evidence; Type: VIEW; Schema: reporting; Owner: -
+--
+
+CREATE VIEW reporting.resolved_price_evidence AS
+ SELECT e.id,
+    e.article_id,
+    e.effective_at,
+    e.ingested_at,
+    e.price,
+    e.price_state,
+    e.source,
+    e.provenance,
+    e.observed_at,
+    e.renewed_at,
+    e.effective_at_basis,
+    reporting.comparison_currency((e.provenance ->> 'currency'::text)) AS currency_normalized,
+        CASE
+            WHEN (e.provenance ? 'dealType'::text) THEN
+            CASE (e.provenance ->> 'dealType'::text)
+                WHEN 'sale'::text THEN false
+                WHEN 'rent'::text THEN true
+                ELSE NULL::boolean
+            END
+            ELSE s.is_rent
+        END AS evidence_is_rent
+   FROM (( SELECT DISTINCT ON (listing_price_events.article_id, listing_price_events.effective_at) listing_price_events.id,
+            listing_price_events.article_id,
+            listing_price_events.effective_at,
+            listing_price_events.ingested_at,
+            listing_price_events.price,
+            listing_price_events.price_state,
+            listing_price_events.source,
+            listing_price_events.provenance,
+            listing_price_events.observed_at,
+            listing_price_events.renewed_at,
+            listing_price_events.effective_at_basis
+           FROM public.listing_price_events
+          WHERE (listing_price_events.effective_at <= now())
+          ORDER BY listing_price_events.article_id, listing_price_events.effective_at,
+                CASE
+                    WHEN (listing_price_events.source = ANY (ARRAY['search'::text, 'detail'::text])) THEN 0
+                    ELSE 1
+                END,
+                CASE listing_price_events.price_state
+                    WHEN 'conflict'::text THEN 0
+                    WHEN 'invalid'::text THEN 1
+                    WHEN 'unpriced'::text THEN 2
+                    ELSE 3
+                END, listing_price_events.id DESC) e
+     LEFT JOIN LATERAL ( SELECT h.is_rent
+           FROM public.listing_state_history_state h
+          WHERE ((h.article_id = e.article_id) AND (h.effective_at <= e.effective_at) AND (h.is_rent IS NOT NULL))
+          ORDER BY h.effective_at DESC, h.id DESC
+         LIMIT 1) s ON (true));
+
+--
+-- The resolved evidence helper is needed by current_comparison_inputs below.
+--
+-- Name: latest_resolved_price_evidence(bigint); Type: FUNCTION; Schema: reporting; Owner: -
+--
+
+CREATE FUNCTION reporting.latest_resolved_price_evidence(p_article_id bigint) RETURNS SETOF reporting.resolved_price_evidence
+    LANGUAGE sql STABLE PARALLEL SAFE
+    AS $_$
+  SELECT e.id, e.article_id, e.effective_at, e.ingested_at, e.price,
+         e.price_state, e.source, e.provenance, e.observed_at, e.renewed_at,
+         e.effective_at_basis,
+         reporting.comparison_currency(e.provenance ->> 'currency'),
+         CASE
+           WHEN e.provenance ? 'dealType' THEN
+             CASE e.provenance ->> 'dealType'
+               WHEN 'sale' THEN false WHEN 'rent' THEN true ELSE NULL::boolean
+             END
+           ELSE state.is_rent
+         END
+    FROM (
+      SELECT DISTINCT ON (p.article_id, p.effective_at) p.*
+        FROM public.listing_price_events p
+       WHERE p.article_id = $1 AND p.effective_at <= now()
+       ORDER BY p.article_id, p.effective_at,
+                CASE WHEN p.source IN ('search', 'detail') THEN 0 ELSE 1 END,
+                CASE p.price_state
+                  WHEN 'conflict' THEN 0 WHEN 'invalid' THEN 1
+                  WHEN 'unpriced' THEN 2 ELSE 3 END,
+                p.id DESC
+    ) e
+    LEFT JOIN LATERAL (
+      SELECT h.is_rent FROM public.listing_state_history_state h
+       WHERE h.article_id=e.article_id AND h.effective_at<=e.effective_at
+         AND h.is_rent IS NOT NULL
+       ORDER BY h.effective_at DESC, h.id DESC LIMIT 1
+    ) state ON true
+   ORDER BY e.effective_at DESC, e.id DESC LIMIT 1
+$_$;
+
+
+
+
 -- Name: v_active_listings_source; Type: VIEW; Schema: public; Owner: -
 --
 
@@ -202,18 +357,18 @@ CREATE VIEW public.v_listing_lifecycle_cycles AS
          SELECT first_search.article_id,
             first_search.effective_at AS opened_at,
             first_search.id AS marker_id
-           FROM ( SELECT DISTINCT ON (listing_state_history.article_id) listing_state_history.article_id,
-                    listing_state_history.effective_at,
-                    listing_state_history.id
-                   FROM public.listing_state_history
-                  WHERE (listing_state_history.event_type = 'search_sighting'::text)
-                  ORDER BY listing_state_history.article_id, listing_state_history.effective_at, listing_state_history.id) first_search
+           FROM ( SELECT DISTINCT ON (listing_state_history_state.article_id) listing_state_history_state.article_id,
+                    listing_state_history_state.effective_at,
+                    listing_state_history_state.id
+                   FROM public.listing_state_history_state
+                  WHERE (listing_state_history_state.event_type = 'search_sighting'::text)
+                  ORDER BY listing_state_history_state.article_id, listing_state_history_state.effective_at, listing_state_history_state.id) first_search
         UNION ALL
-         SELECT listing_state_history.article_id,
-            listing_state_history.effective_at,
-            listing_state_history.id
-           FROM public.listing_state_history
-          WHERE (listing_state_history.event_type = 'reopened'::text)
+         SELECT listing_state_history_state.article_id,
+            listing_state_history_state.effective_at,
+            listing_state_history_state.id
+           FROM public.listing_state_history_state
+          WHERE (listing_state_history_state.event_type = 'reopened'::text)
         ), numbered AS (
          SELECT m.article_id,
             m.opened_at,
@@ -230,7 +385,7 @@ CREATE VIEW public.v_listing_lifecycle_cycles AS
             c_1.closed_at
            FROM (numbered n
              LEFT JOIN LATERAL ( SELECT s.effective_at AS closed_at
-                   FROM public.listing_state_history s
+                   FROM public.listing_state_history_state s
                   WHERE ((s.article_id = n.article_id) AND (s.event_type = 'closed'::text) AND (s.effective_at >= n.opened_at) AND ((n.next_opened_at IS NULL) OR (s.effective_at < n.next_opened_at)))
                   ORDER BY s.effective_at, s.id
                  LIMIT 1) c_1 ON (true))
@@ -299,108 +454,6 @@ CREATE VIEW reporting.current_listings AS
     last_seen,
     renewed_at
    FROM public.v_active_listings_source;
-
---
--- Name: resolved_price_evidence; Type: VIEW; Schema: reporting; Owner: -
---
-
-CREATE VIEW reporting.resolved_price_evidence AS
- SELECT e.id,
-    e.article_id,
-    e.effective_at,
-    e.ingested_at,
-    e.price,
-    e.price_state,
-    e.source,
-    e.provenance,
-    e.observed_at,
-    e.renewed_at,
-    e.effective_at_basis,
-    reporting.comparison_currency((e.provenance ->> 'currency'::text)) AS currency_normalized,
-        CASE
-            WHEN (e.provenance ? 'dealType'::text) THEN
-            CASE (e.provenance ->> 'dealType'::text)
-                WHEN 'sale'::text THEN false
-                WHEN 'rent'::text THEN true
-                ELSE NULL::boolean
-            END
-            ELSE s.is_rent
-        END AS evidence_is_rent
-   FROM (( SELECT DISTINCT ON (listing_price_events.article_id, listing_price_events.effective_at) listing_price_events.id,
-            listing_price_events.article_id,
-            listing_price_events.effective_at,
-            listing_price_events.ingested_at,
-            listing_price_events.price,
-            listing_price_events.price_state,
-            listing_price_events.source,
-            listing_price_events.provenance,
-            listing_price_events.observed_at,
-            listing_price_events.renewed_at,
-            listing_price_events.effective_at_basis
-           FROM public.listing_price_events
-          WHERE (listing_price_events.effective_at <= now())
-          ORDER BY listing_price_events.article_id, listing_price_events.effective_at,
-                CASE
-                    WHEN (listing_price_events.source = ANY (ARRAY['search'::text, 'detail'::text])) THEN 0
-                    ELSE 1
-                END,
-                CASE listing_price_events.price_state
-                    WHEN 'conflict'::text THEN 0
-                    WHEN 'invalid'::text THEN 1
-                    WHEN 'unpriced'::text THEN 2
-                    ELSE 3
-                END, listing_price_events.id DESC) e
-     LEFT JOIN LATERAL ( SELECT h.is_rent
-           FROM public.listing_state_history h
-          WHERE ((h.article_id = e.article_id) AND (h.effective_at <= e.effective_at) AND (h.is_rent IS NOT NULL))
-          ORDER BY h.effective_at DESC, h.id DESC
-         LIMIT 1) s ON (true));
-
--- Current-market callers need only the latest resolved event for one article.
--- Keep the article predicate inside DISTINCT ON so retained history is not
--- materialized for every current listing.
-CREATE FUNCTION reporting.latest_resolved_price_evidence(p_article_id bigint)
-RETURNS SETOF reporting.resolved_price_evidence
-LANGUAGE sql STABLE PARALLEL SAFE
-AS $$
-  SELECT e.id, e.article_id, e.effective_at, e.ingested_at, e.price,
-         e.price_state, e.source, e.provenance, e.observed_at, e.renewed_at,
-         e.effective_at_basis,
-         reporting.comparison_currency(e.provenance ->> 'currency') AS currency_normalized,
-         CASE
-           WHEN e.provenance ? 'dealType' THEN
-             CASE e.provenance ->> 'dealType'
-               WHEN 'sale' THEN false WHEN 'rent' THEN true ELSE NULL::boolean
-             END
-           ELSE state.is_rent
-         END AS evidence_is_rent
-    FROM (
-      SELECT DISTINCT ON (p.article_id, p.effective_at) p.*
-        FROM public.listing_price_events p
-       WHERE p.article_id = $1
-         AND p.effective_at <= now()
-       ORDER BY p.article_id, p.effective_at,
-                CASE WHEN p.source IN ('search', 'detail') THEN 0 ELSE 1 END,
-                CASE p.price_state
-                  WHEN 'conflict' THEN 0 WHEN 'invalid' THEN 1
-                  WHEN 'unpriced' THEN 2 ELSE 3 END,
-                p.id DESC
-    ) e
-    LEFT JOIN LATERAL (
-      SELECT h.is_rent
-        FROM public.listing_state_history h
-       WHERE h.article_id = e.article_id
-         AND h.effective_at <= e.effective_at
-         AND h.is_rent IS NOT NULL
-       ORDER BY h.effective_at DESC, h.id DESC
-       LIMIT 1
-    ) state ON true
-   ORDER BY e.effective_at DESC, e.id DESC
-   LIMIT 1
-$$;
-
-COMMENT ON FUNCTION reporting.latest_resolved_price_evidence(bigint) IS
-  'Article-scoped latest resolved price evidence for current-state reporting.';
 
 --
 -- Name: current_comparison_inputs; Type: VIEW; Schema: reporting; Owner: -
@@ -480,14 +533,14 @@ CREATE VIEW reporting.current_comparison_inputs AS
                     e.effective_at_basis,
                     e.currency_normalized,
                     e.evidence_is_rent
-                   FROM reporting.latest_resolved_price_evidence(l.article_id) e) p ON (true))
+                   FROM reporting.latest_resolved_price_evidence(l.article_id) e(id, article_id, effective_at, ingested_at, price, price_state, source, provenance, observed_at, renewed_at, effective_at_basis, currency_normalized, evidence_is_rent)) p ON (true))
              LEFT JOIN LATERAL ( SELECT true AS found,
                         CASE (h.filter_attributes ->> 'furnished'::text)
                             WHEN 'true'::text THEN true
                             WHEN 'false'::text THEN false
                             ELSE NULL::boolean
                         END AS value
-                   FROM public.listing_state_history h
+                   FROM public.listing_state_history_state h
                   WHERE ((h.article_id = l.article_id) AND (h.effective_at <= now()) AND (h.filter_attributes ? 'furnished'::text))
                   ORDER BY h.effective_at DESC, h.id DESC
                  LIMIT 1) furnishing ON (true))
@@ -548,7 +601,7 @@ CREATE VIEW reporting.current_comparison_inputs AS
                 END,
                 CASE
                     WHEN (EXISTS ( SELECT 1
-                       FROM public.listing_state_history h
+                       FROM public.listing_state_history_state h
                       WHERE ((h.article_id = e.article_id) AND (h.effective_at > e.price_effective_at) AND (h.effective_at <= now()) AND (h.is_rent IS DISTINCT FROM e.is_rent) AND (h.is_rent IS NOT NULL)))) THEN 'Price evidence predates a deal switch'::text
                     ELSE NULL::text
                 END, reporting.comparison_price_reason(e.resolved_price, e.price_state, e.currency, e.is_rent)) AS price_reason
@@ -654,288 +707,6 @@ CREATE VIEW reporting.current_comparison_inputs AS
    FROM eligible;
 
 --
--- Name: current_listings; Type: VIEW; Schema: dashboard_public; Owner: -
---
-
-CREATE VIEW dashboard_public.current_listings AS
- SELECT article_id,
-    url,
-    title,
-    category_memberships,
-    deal,
-    sqm,
-    rooms,
-    price,
-    ppm2,
-    neighborhood,
-    latitude,
-    longitude,
-    published_at,
-    first_seen,
-    renewed_at,
-    last_seen,
-    views
-   FROM olap.public_current_listings;
-
---
--- Name: current_listings_source; Type: VIEW; Schema: dashboard_public; Owner: -
---
-
-CREATE VIEW dashboard_public.current_listings_source AS
- SELECT l.article_id,
-        CASE
-            WHEN (l.url ~ '^https?://(www\.)?olx\.ba/artikal/[0-9]+/?$'::text) THEN l.url
-            ELSE NULL::text
-        END AS url,
-    l.title,
-    COALESCE(m.categories, '{}'::text[]) AS category_memberships,
-        CASE
-            WHEN l.is_rent THEN 'rent'::text
-            ELSE 'sale'::text
-        END AS deal,
-    l.sqm,
-    l.rooms,
-    l.price,
-    l.ppm2,
-    COALESCE(NULLIF(l.location, ''::text),
-        CASE
-            WHEN (l.latitude IS NULL) THEN '(no pin)'::text
-            ELSE '(unmapped)'::text
-        END) AS neighborhood,
-    l.latitude,
-    l.longitude,
-    l.published_at,
-    l.first_seen,
-    l.renewed_at,
-    l.last_seen,
-    l.views
-   FROM (public.listings l
-     LEFT JOIN LATERAL ( SELECT array_agg(DISTINCT ss.category ORDER BY ss.category) FILTER (WHERE (NULLIF(btrim(ss.category), ''::text) IS NOT NULL)) AS categories
-           FROM (public.search_results sr
-             JOIN public.saved_searches ss ON ((ss.search_key = sr.search_key)))
-          WHERE (sr.article_id = l.article_id)) m ON (true))
-  WHERE ((l.closed_at IS NULL) AND (l.last_seen > (now() - '14 days'::interval)));
-
---
--- Name: VIEW current_listings_source; Type: COMMENT; Schema: dashboard_public; Owner: -
---
-
-COMMENT ON VIEW dashboard_public.current_listings_source IS 'Observed active OLX article IDs, deduplicated at article grain; current market fields only.';
-
---
--- Name: daily_market_source; Type: VIEW; Schema: dashboard_public; Owner: -
---
-
-CREATE VIEW dashboard_public.daily_market_source AS
- SELECT day,
-    article_id,
-    COALESCE(NULLIF(category_memberships, '{}'::text[]),
-        CASE
-            WHEN (category IS NULL) THEN '{}'::text[]
-            ELSE ARRAY[category]
-        END) AS category_memberships,
-        CASE
-            WHEN (is_rent IS TRUE) THEN 'rent'::text
-            WHEN (is_rent IS FALSE) THEN 'sale'::text
-            ELSE 'unknown'::text
-        END AS deal,
-    sqm,
-    rooms,
-    price,
-    price_state,
-    ppm2,
-    COALESCE(NULLIF(neighborhood, ''::text),
-        CASE
-            WHEN (location IS NULL) THEN '(unmapped)'::text
-            ELSE location
-        END) AS neighborhood,
-    stale_observation,
-    provisional_day,
-    membership_inferred,
-    attributes_inferred
-   FROM public.listing_daily d;
-
---
--- Name: VIEW daily_market_source; Type: COMMENT; Schema: dashboard_public; Owner: -
---
-
-COMMENT ON VIEW dashboard_public.daily_market_source IS 'Reconstructed listing-day evidence with explicit deal and quality flags.';
-
---
--- Name: exit_cycles_source; Type: VIEW; Schema: dashboard_public; Owner: -
---
-
-CREATE VIEW dashboard_public.exit_cycles_source AS
- WITH closed AS (
-         SELECT c.article_id,
-            c.cycle_no,
-            c.opened_at,
-            c.closed_at,
-            c.days_listed,
-            l.title,
-                CASE
-                    WHEN (l.url ~ '^https?://(www\.)?olx\.ba/artikal/[0-9]+/?$'::text) THEN l.url
-                    ELSE NULL::text
-                END AS url
-           FROM (public.v_listing_lifecycle_cycles c
-             JOIN public.listings l ON ((l.article_id = c.article_id)))
-          WHERE c.is_closed
-        ), state_at_close AS (
-         SELECT c.article_id,
-            c.cycle_no,
-            c.opened_at,
-            c.closed_at,
-            c.days_listed,
-            c.title,
-            c.url,
-            s.category,
-            s.category_membership,
-            s.is_rent,
-            s.sqm,
-            s.rooms
-           FROM (closed c
-             LEFT JOIN LATERAL ( SELECT h.category,
-                    h.category_membership,
-                    h.is_rent,
-                    h.sqm,
-                    h.rooms
-                   FROM public.listing_state_history h
-                  WHERE ((h.article_id = c.article_id) AND (h.effective_at <= c.closed_at) AND (h.event_type = ANY (ARRAY['search_sighting'::text, 'detail_update'::text, 'reopened'::text])))
-                  ORDER BY h.effective_at DESC, h.id DESC
-                 LIMIT 1) s ON (true))
-        ), price_at_close AS (
-         SELECT s.article_id,
-            s.cycle_no,
-            s.opened_at,
-            s.closed_at,
-            s.days_listed,
-            s.title,
-            s.url,
-            s.category,
-            s.category_membership,
-            s.is_rent,
-            s.sqm,
-            s.rooms,
-            p.price_state,
-            p.price,
-                CASE
-                    WHEN ((p.price_state = 'valid'::text) AND (p.price IS NOT NULL) AND (s.is_rent = false) AND ((s.sqm >= (5)::numeric) AND (s.sqm <= (500)::numeric)) AND (((p.price / NULLIF(s.sqm, (0)::numeric)) >= (1)::numeric) AND ((p.price / NULLIF(s.sqm, (0)::numeric)) <= (15000)::numeric))) THEN (round((p.price / NULLIF(s.sqm, (0)::numeric))))::integer
-                    ELSE NULL::integer
-                END AS asking_ppm2
-           FROM (state_at_close s
-             LEFT JOIN LATERAL ( SELECT e.price_state,
-                    e.price
-                   FROM public.listing_price_events e
-                  WHERE ((e.article_id = s.article_id) AND (e.effective_at <= s.closed_at))
-                  ORDER BY e.effective_at DESC,
-                        CASE
-                            WHEN (e.source = ANY (ARRAY['search'::text, 'detail'::text])) THEN 0
-                            ELSE 1
-                        END,
-                        CASE e.price_state
-                            WHEN 'conflict'::text THEN 0
-                            WHEN 'invalid'::text THEN 1
-                            WHEN 'unpriced'::text THEN 2
-                            ELSE 3
-                        END, e.id DESC
-                 LIMIT 1) p ON (true))
-        )
- SELECT article_id,
-    cycle_no,
-    title,
-    url,
-    opened_at,
-    closed_at,
-    days_listed,
-    COALESCE(category_membership,
-        CASE
-            WHEN (category IS NULL) THEN '{}'::text[]
-            ELSE ARRAY[category]
-        END) AS category_memberships,
-    category,
-        CASE
-            WHEN (is_rent IS TRUE) THEN 'rent'::text
-            WHEN (is_rent IS FALSE) THEN 'sale'::text
-            ELSE 'unknown'::text
-        END AS deal,
-    sqm,
-    rooms,
-        CASE
-            WHEN (price_state = 'valid'::text) THEN price
-            ELSE NULL::numeric
-        END AS last_asking_price,
-    asking_ppm2 AS last_asking_ppm2,
-    (cycle_no > 1) AS reopened_cycle
-   FROM price_at_close;
-
---
--- Name: VIEW exit_cycles_source; Type: COMMENT; Schema: dashboard_public; Owner: -
---
-
-COMMENT ON VIEW dashboard_public.exit_cycles_source IS 'Observed closure cycles with attributes and asking price resolved at closure time; not confirmed transactions.';
-
---
--- Name: freshness_source; Type: VIEW; Schema: dashboard_public; Owner: -
---
-
-CREATE VIEW dashboard_public.freshness_source AS
- SELECT COALESCE(NULLIF(ss.category, ''::text), '(unclassified)'::text) AS category,
-    (count(*))::integer AS configured_searches,
-        CASE
-            WHEN (count(success.finished_at) = count(*)) THEN min(success.finished_at)
-            ELSE NULL::timestamp with time zone
-        END AS last_success_at
-   FROM (public.saved_searches ss
-     LEFT JOIN LATERAL ( SELECT max(r.finished_at) AS finished_at
-           FROM public.scrape_runs r
-          WHERE ((r.search_key = ss.search_key) AND (r.status = 'ok'::text) AND (r.is_complete = true) AND (r.finished_at IS NOT NULL))) success ON (true))
-  GROUP BY COALESCE(NULLIF(ss.category, ''::text), '(unclassified)'::text);
-
---
--- Name: VIEW freshness_source; Type: COMMENT; Schema: dashboard_public; Owner: -
---
-
-COMMENT ON VIEW dashboard_public.freshness_source IS 'Per-category oldest authoritative search success; any never-successful configured search makes the watermark unknown.';
-
---
--- Name: price_reductions_source; Type: VIEW; Schema: dashboard_public; Owner: -
---
-
-CREATE VIEW dashboard_public.price_reductions_source AS
- SELECT pc.article_id,
-        CASE
-            WHEN (l.url ~ '^https?://(www\.)?olx\.ba/artikal/[0-9]+/?$'::text) THEN l.url
-            ELSE NULL::text
-        END AS url,
-    l.title,
-    pc.category_memberships,
-    pc.category,
-    pc.deal,
-    pc.sqm,
-    pc.rooms,
-    COALESCE(NULLIF(l.location, ''::text),
-        CASE
-            WHEN (l.latitude IS NULL) THEN '(no pin)'::text
-            ELSE '(unmapped)'::text
-        END) AS neighborhood,
-    pc.prior_price,
-    pc.price AS new_price,
-    (- pc.delta) AS reduction_km,
-    (- pc.pct_change) AS reduction_pct,
-    pc.effective_at AS event_at,
-    ((l.closed_at IS NULL) AND (l.last_seen > (now() - '14 days'::interval))) AS currently_observed,
-    l.last_seen
-   FROM (public.v_listing_price_changes_source pc
-     JOIN public.listings l ON ((l.article_id = pc.article_id)))
-  WHERE (pc.delta < (0)::numeric);
-
---
--- Name: VIEW price_reductions_source; Type: COMMENT; Schema: dashboard_public; Owner: -
---
-
-COMMENT ON VIEW dashboard_public.price_reductions_source IS 'Resolved valid-to-valid asking-price reductions; historical events are retained separately from current availability.';
-
---
 -- Name: v_listing_daily; Type: VIEW; Schema: public; Owner: -
 --
 
@@ -965,7 +736,7 @@ CREATE VIEW public.v_listing_daily AS
     d.stale_observation,
     d.provisional_day,
     d.filter_attributes
-   FROM (public.listing_daily d
+   FROM (public.listing_daily_state d
      JOIN public.listings l ON ((l.article_id = d.article_id)));
 
 --
@@ -984,16 +755,16 @@ CREATE VIEW public.v_listing_evidence_timeline AS
     listing_price_events.provenance
    FROM public.listing_price_events
 UNION ALL
- SELECT listing_state_history.article_id,
-    listing_state_history.effective_at,
+ SELECT listing_state_history_state.article_id,
+    listing_state_history_state.effective_at,
     NULL::timestamp with time zone AS observed_at,
-    listing_state_history.ingested_at,
+    listing_state_history_state.ingested_at,
     'state'::text AS evidence_kind,
-    listing_state_history.event_type AS state,
-    listing_state_history.price,
-    listing_state_history.source,
-    listing_state_history.filter_attributes AS provenance
-   FROM public.listing_state_history
+    listing_state_history_state.event_type AS state,
+    listing_state_history_state.price,
+    listing_state_history_state.source,
+    listing_state_history_state.filter_attributes AS provenance
+   FROM public.listing_state_history_state
 UNION ALL
  SELECT listing_publication_evidence.article_id,
     listing_publication_evidence.published_at AS effective_at,
@@ -1005,12 +776,6 @@ UNION ALL
     listing_publication_evidence.source,
     '{}'::jsonb AS provenance
    FROM public.listing_publication_evidence;
-
---
--- Name: VIEW v_listing_evidence_timeline; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON VIEW public.v_listing_evidence_timeline IS 'Normalized evidence timeline retained after raw response expiry; no synthetic prices or availability are added.';
 
 --
 -- Name: v_listing_exit_economics_source; Type: VIEW; Schema: public; Owner: -
@@ -1029,13 +794,13 @@ CREATE VIEW public.v_listing_exit_economics_source AS
         END AS days_listed
    FROM (((public.listings l
      LEFT JOIN LATERAL ( SELECT h.effective_at
-           FROM public.listing_state_history h
+           FROM public.listing_state_history_state h
           WHERE ((h.article_id = l.article_id) AND (h.event_type = ANY (ARRAY['search_sighting'::text, 'reopened'::text])))
           ORDER BY h.effective_at, h.id
          LIMIT 1) fs ON (true))
      LEFT JOIN LATERAL ( SELECT h.event_type,
             h.effective_at
-           FROM public.listing_state_history h
+           FROM public.listing_state_history_state h
           WHERE ((h.article_id = l.article_id) AND (h.event_type = ANY (ARRAY['search_sighting'::text, 'closed'::text, 'reopened'::text])))
           ORDER BY h.effective_at DESC, h.id DESC
          LIMIT 1) ls ON (true))
@@ -1046,22 +811,16 @@ CREATE VIEW public.v_listing_exit_economics_source AS
          LIMIT 1) fp ON (true));
 
 --
--- Name: VIEW v_listing_exit_economics_source; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON VIEW public.v_listing_exit_economics_source IS 'Indexed per-listing subset of v_listing_lifecycle; preserves lifetime duration and first valid asking price, including legacy fallbacks.';
-
---
 -- Name: v_listing_history_contract; Type: VIEW; Schema: public; Owner: -
 --
 
 CREATE VIEW public.v_listing_history_contract AS
  WITH first_observation AS (
-         SELECT listing_state_history.article_id,
-            min(listing_state_history.effective_at) AS first_observed_at
-           FROM public.listing_state_history
-          WHERE (listing_state_history.event_type = ANY (ARRAY['search_sighting'::text, 'detail_update'::text, 'reopened'::text]))
-          GROUP BY listing_state_history.article_id
+         SELECT listing_state_history_state.article_id,
+            min(listing_state_history_state.effective_at) AS first_observed_at
+           FROM public.listing_state_history_state
+          WHERE (listing_state_history_state.event_type = ANY (ARRAY['search_sighting'::text, 'detail_update'::text, 'reopened'::text]))
+          GROUP BY listing_state_history_state.article_id
         ), first_price AS (
          SELECT listing_price_events.article_id,
             min(listing_price_events.effective_at) AS first_supported_price_at
@@ -1096,48 +855,42 @@ CREATE VIEW public.v_listing_history_contract AS
      LEFT JOIN first_price fp USING (article_id));
 
 --
--- Name: VIEW v_listing_history_contract; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON VIEW public.v_listing_history_contract IS 'Per-article publication, first observation, supported price boundary, and explicit pre-observation gap contract.';
-
---
 -- Name: v_listing_lifecycle; Type: VIEW; Schema: public; Owner: -
 --
 
 CREATE VIEW public.v_listing_lifecycle AS
  WITH first_state AS (
-         SELECT DISTINCT ON (listing_state_history.article_id) listing_state_history.id,
-            listing_state_history.article_id,
-            listing_state_history.effective_at,
-            listing_state_history.ingested_at,
-            listing_state_history.source,
-            listing_state_history.event_type,
-            listing_state_history.run_id,
-            listing_state_history.search_key,
-            listing_state_history.category,
-            listing_state_history.category_membership,
-            listing_state_history.is_rent,
-            listing_state_history.sqm,
-            listing_state_history.rooms,
-            listing_state_history.price,
-            listing_state_history.ppm2,
-            listing_state_history.filter_attributes,
-            listing_state_history.last_seen_at,
-            listing_state_history.closed_at,
-            listing_state_history.is_closed,
-            listing_state_history.membership_inferred,
-            listing_state_history.attributes_inferred
-           FROM public.listing_state_history
-          WHERE (listing_state_history.event_type = ANY (ARRAY['search_sighting'::text, 'reopened'::text]))
-          ORDER BY listing_state_history.article_id, listing_state_history.effective_at, listing_state_history.id
+         SELECT DISTINCT ON (listing_state_history_state.article_id) listing_state_history_state.id,
+            listing_state_history_state.article_id,
+            listing_state_history_state.effective_at,
+            listing_state_history_state.ingested_at,
+            listing_state_history_state.source,
+            listing_state_history_state.event_type,
+            listing_state_history_state.run_id,
+            listing_state_history_state.search_key,
+            listing_state_history_state.category,
+            listing_state_history_state.category_membership,
+            listing_state_history_state.is_rent,
+            listing_state_history_state.sqm,
+            listing_state_history_state.rooms,
+            listing_state_history_state.price,
+            listing_state_history_state.ppm2,
+            listing_state_history_state.filter_attributes,
+            listing_state_history_state.last_seen_at,
+            listing_state_history_state.closed_at,
+            listing_state_history_state.is_closed,
+            listing_state_history_state.membership_inferred,
+            listing_state_history_state.attributes_inferred
+           FROM public.listing_state_history_state
+          WHERE (listing_state_history_state.event_type = ANY (ARRAY['search_sighting'::text, 'reopened'::text]))
+          ORDER BY listing_state_history_state.article_id, listing_state_history_state.effective_at, listing_state_history_state.id
         ), last_state AS (
-         SELECT DISTINCT ON (listing_state_history.article_id) listing_state_history.article_id,
-            listing_state_history.event_type,
-            listing_state_history.effective_at
-           FROM public.listing_state_history
-          WHERE (listing_state_history.event_type = ANY (ARRAY['search_sighting'::text, 'closed'::text, 'reopened'::text]))
-          ORDER BY listing_state_history.article_id, listing_state_history.effective_at DESC, listing_state_history.id DESC
+         SELECT DISTINCT ON (listing_state_history_state.article_id) listing_state_history_state.article_id,
+            listing_state_history_state.event_type,
+            listing_state_history_state.effective_at
+           FROM public.listing_state_history_state
+          WHERE (listing_state_history_state.event_type = ANY (ARRAY['search_sighting'::text, 'closed'::text, 'reopened'::text]))
+          ORDER BY listing_state_history_state.article_id, listing_state_history_state.effective_at DESC, listing_state_history_state.id DESC
         ), prices AS (
          SELECT e.article_id,
             min(e.effective_at) AS first_price_at,
@@ -1188,7 +941,7 @@ CREATE VIEW public.v_listing_lifecycle AS
     l.closing_category,
     COALESCE((ls.event_type = 'closed'::text), (l.closed_at IS NOT NULL), false) AS is_closed,
     ( SELECT (count(*))::integer AS count
-           FROM public.listing_state_history r
+           FROM public.listing_state_history_state r
           WHERE ((r.article_id = l.article_id) AND (r.event_type = 'reopened'::text))) AS reopen_count,
     l.published_at,
     l.renewed_at,
@@ -1220,9 +973,9 @@ CREATE VIEW public.v_listing_lifecycle AS
 
 CREATE VIEW public.v_market_daily_source AS
  WITH bounds AS (
-         SELECT min(listing_daily.day) AS first_day,
+         SELECT min(listing_daily_state.day) AS first_day,
             ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date AS last_day
-           FROM public.listing_daily
+           FROM public.listing_daily_state
         ), grid AS (
          SELECT (s.d)::date AS day
            FROM (bounds b
@@ -1232,13 +985,13 @@ CREATE VIEW public.v_market_daily_source AS
             (sum(events.new_n))::integer AS new_n,
             (sum(events.closed_n))::integer AS closed_n,
             (sum(events.reopened_n))::integer AS reopened_n
-           FROM ( SELECT ((listing_state_history.effective_at AT TIME ZONE 'Europe/Sarajevo'::text))::date AS day,
+           FROM ( SELECT ((listing_state_history_state.effective_at AT TIME ZONE 'Europe/Sarajevo'::text))::date AS day,
                     0 AS new_n,
-                    (count(*) FILTER (WHERE (listing_state_history.event_type = 'closed'::text)))::integer AS closed_n,
-                    (count(*) FILTER (WHERE (listing_state_history.event_type = 'reopened'::text)))::integer AS reopened_n
-                   FROM public.listing_state_history
-                  WHERE (listing_state_history.event_type = ANY (ARRAY['closed'::text, 'reopened'::text]))
-                  GROUP BY (((listing_state_history.effective_at AT TIME ZONE 'Europe/Sarajevo'::text))::date)
+                    (count(*) FILTER (WHERE (listing_state_history_state.event_type = 'closed'::text)))::integer AS closed_n,
+                    (count(*) FILTER (WHERE (listing_state_history_state.event_type = 'reopened'::text)))::integer AS reopened_n
+                   FROM public.listing_state_history_state
+                  WHERE (listing_state_history_state.event_type = ANY (ARRAY['closed'::text, 'reopened'::text]))
+                  GROUP BY (((listing_state_history_state.effective_at AT TIME ZONE 'Europe/Sarajevo'::text))::date)
                 UNION ALL
                  SELECT ((l.first_seen AT TIME ZONE 'Europe/Sarajevo'::text))::date AS timezone,
                     1,
@@ -1252,16 +1005,16 @@ CREATE VIEW public.v_market_daily_source AS
                     0
                    FROM public.listings l
                   WHERE ((l.closed_at IS NOT NULL) AND (NOT (EXISTS ( SELECT 1
-                           FROM public.listing_state_history h
+                           FROM public.listing_state_history_state h
                           WHERE ((h.article_id = l.article_id) AND (h.event_type = 'closed'::text) AND (h.effective_at = l.closed_at))))))) events
           GROUP BY events.day
         ), inventory_raw AS (
-         SELECT listing_daily.day,
+         SELECT listing_daily_state.day,
             (count(*))::integer AS active_est,
-            (count(*) FILTER (WHERE listing_daily.stale_observation))::integer AS stale_n,
-            bool_or(listing_daily.provisional_day) AS provisional_day
-           FROM public.listing_daily
-          GROUP BY listing_daily.day
+            (count(*) FILTER (WHERE listing_daily_state.stale_observation))::integer AS stale_n,
+            bool_or(listing_daily_state.provisional_day) AS provisional_day
+           FROM public.listing_daily_state
+          GROUP BY listing_daily_state.day
         UNION ALL
          SELECT ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date AS timezone,
             (count(*))::integer AS count,
@@ -1269,7 +1022,7 @@ CREATE VIEW public.v_market_daily_source AS
             true
            FROM public.listings l
           WHERE ((l.closed_at IS NULL) AND (NOT (EXISTS ( SELECT 1
-                   FROM public.listing_state_history h
+                   FROM public.listing_state_history_state h
                   WHERE (h.article_id = l.article_id)))))
         ), inventory AS (
          SELECT inventory_raw.day,
@@ -1295,88 +1048,23 @@ CREATE VIEW public.v_market_daily_source AS
 -- Name: comparison_price_changes_source; Type: VIEW; Schema: reporting; Owner: -
 --
 
--- Article-scoped variants are used by current-state publication. The global
--- view below remains the canonical historical source for full reconciliation.
-CREATE FUNCTION reporting.resolved_price_evidence_for_articles(p_article_ids bigint[])
-RETURNS SETOF reporting.resolved_price_evidence
-LANGUAGE sql STABLE PARALLEL SAFE
-AS $$
-  WITH picked AS (
-    SELECT DISTINCT ON (p.article_id, p.effective_at)
-           p.id, p.article_id, p.effective_at, p.ingested_at, p.price,
-           p.price_state, p.source, p.provenance, p.observed_at,
-           p.renewed_at, p.effective_at_basis
-      FROM public.listing_price_events p
-     WHERE p.article_id = ANY(COALESCE($1, '{}'::bigint[]))
-       AND p.effective_at <= now()
-     ORDER BY p.article_id, p.effective_at,
-              CASE WHEN p.source IN ('search', 'detail') THEN 0 ELSE 1 END,
-              CASE p.price_state
-                WHEN 'conflict' THEN 0 WHEN 'invalid' THEN 1
-                WHEN 'unpriced' THEN 2 ELSE 3 END,
-              p.id DESC
-  )
-  SELECT p.id, p.article_id, p.effective_at, p.ingested_at, p.price,
-         p.price_state, p.source, p.provenance, p.observed_at,
-         p.renewed_at, p.effective_at_basis,
-         reporting.comparison_currency(p.provenance ->> 'currency'),
-         CASE
-           WHEN p.provenance ? 'dealType' THEN
-             CASE p.provenance ->> 'dealType'
-               WHEN 'sale' THEN false WHEN 'rent' THEN true ELSE NULL::boolean
-             END
-           ELSE state.is_rent
-         END
-    FROM picked p
-    LEFT JOIN LATERAL (
-      SELECT h.is_rent FROM public.listing_state_history h
-       WHERE h.article_id = p.article_id
-         AND h.effective_at <= p.effective_at AND h.is_rent IS NOT NULL
-       ORDER BY h.effective_at DESC, h.id DESC LIMIT 1
-    ) state ON true
-$$;
-
-CREATE FUNCTION reporting.comparison_price_changes_source_for_articles(p_article_ids bigint[])
-RETURNS SETOF olap.comparison_price_changes
-LANGUAGE sql STABLE PARALLEL SAFE
-AS $$
-  WITH evidence AS MATERIALIZED (
-    SELECT * FROM reporting.resolved_price_evidence_for_articles($1)
-  ), ordered AS (
-    SELECT e.*, lag(e.price) OVER w AS prior_price,
-      lag(e.price_state) OVER w AS prior_state,
-      lag(e.currency_normalized) OVER w AS prior_currency,
-      lag(e.evidence_is_rent) OVER w AS prior_is_rent,
-      lag(e.effective_at) OVER w AS prior_effective_at
-    FROM evidence e
-    WINDOW w AS (PARTITION BY e.article_id ORDER BY e.effective_at, e.id)
-  ), current_inputs AS MATERIALIZED (
-    SELECT article_id, cycle_opened_at, is_rent
-      FROM reporting.current_comparison_inputs
-     WHERE article_id = ANY(COALESCE($1, '{}'::bigint[]))
-  )
-  SELECT e.article_id, e.effective_at, e.prior_effective_at,
-    e.prior_price, e.price, e.price-e.prior_price,
-    (100::numeric*(e.price-e.prior_price))/e.prior_price,
-    CASE WHEN e.evidence_is_rent THEN 'rent'::text ELSE 'sale'::text END,
-    e.currency_normalized
-  FROM ordered e JOIN current_inputs l USING(article_id)
-  WHERE e.effective_at >= l.cycle_opened_at
-    AND e.prior_effective_at >= l.cycle_opened_at
-    AND e.evidence_is_rent = l.is_rent
-    AND e.prior_is_rent = e.evidence_is_rent
-    AND reporting.comparison_price_reason(e.price,e.price_state,e.currency_normalized,e.evidence_is_rent) IS NULL
-    AND reporting.comparison_price_reason(e.prior_price,e.prior_state,e.prior_currency,e.prior_is_rent) IS NULL
-    AND e.price <> e.prior_price
-    AND NOT EXISTS (
-      SELECT 1 FROM public.listing_state_history h
-       WHERE h.article_id=e.article_id AND h.effective_at>e.prior_effective_at
-         AND h.effective_at<=e.effective_at AND h.is_rent IS NOT NULL
-         AND h.is_rent<>e.evidence_is_rent)
-$$;
-
 CREATE VIEW reporting.comparison_price_changes_source AS
- WITH ordered AS (
+ WITH evidence AS MATERIALIZED (
+         SELECT e_1.id,
+            e_1.article_id,
+            e_1.effective_at,
+            e_1.ingested_at,
+            e_1.price,
+            e_1.price_state,
+            e_1.source,
+            e_1.provenance,
+            e_1.observed_at,
+            e_1.renewed_at,
+            e_1.effective_at_basis,
+            e_1.currency_normalized,
+            e_1.evidence_is_rent
+           FROM reporting.resolved_price_evidence e_1
+        ), ordered AS (
          SELECT e_1.id,
             e_1.article_id,
             e_1.effective_at,
@@ -1395,8 +1083,13 @@ CREATE VIEW reporting.comparison_price_changes_source AS
             lag(e_1.currency_normalized) OVER w AS prior_currency,
             lag(e_1.evidence_is_rent) OVER w AS prior_is_rent,
             lag(e_1.effective_at) OVER w AS prior_effective_at
-           FROM reporting.resolved_price_evidence e_1
+           FROM evidence e_1
           WINDOW w AS (PARTITION BY e_1.article_id ORDER BY e_1.effective_at, e_1.id)
+        ), current_inputs AS MATERIALIZED (
+         SELECT current_comparison_inputs.article_id,
+            current_comparison_inputs.cycle_opened_at,
+            current_comparison_inputs.is_rent
+           FROM reporting.current_comparison_inputs
         )
  SELECT e.article_id,
     e.effective_at,
@@ -1411,16 +1104,16 @@ CREATE VIEW reporting.comparison_price_changes_source AS
         END AS deal,
     e.currency_normalized AS currency
    FROM (ordered e
-     JOIN reporting.current_comparison_inputs l USING (article_id))
+     JOIN current_inputs l USING (article_id))
   WHERE ((e.effective_at >= l.cycle_opened_at) AND (e.prior_effective_at >= l.cycle_opened_at) AND (e.evidence_is_rent = l.is_rent) AND (e.prior_is_rent = e.evidence_is_rent) AND (reporting.comparison_price_reason(e.price, e.price_state, e.currency_normalized, e.evidence_is_rent) IS NULL) AND (reporting.comparison_price_reason(e.prior_price, e.prior_state, e.prior_currency, e.prior_is_rent) IS NULL) AND (e.price <> e.prior_price) AND (NOT (EXISTS ( SELECT 1
-           FROM public.listing_state_history h
+           FROM public.listing_state_history_state h
           WHERE ((h.article_id = e.article_id) AND (h.effective_at > e.prior_effective_at) AND (h.effective_at <= e.effective_at) AND (h.is_rent IS NOT NULL) AND (h.is_rent <> e.evidence_is_rent))))));
 
 --
--- Name: current_listing_scores_source; Type: VIEW; Schema: reporting; Owner: -
+-- Name: current_listing_scores_local_source; Type: VIEW; Schema: reporting; Owner: -
 --
 
-CREATE VIEW reporting.current_listing_scores_source AS
+CREATE VIEW reporting.current_listing_scores_local_source AS
  WITH inputs AS MATERIALIZED (
          SELECT current_comparison_inputs.article_id,
             current_comparison_inputs.url,
@@ -1474,8 +1167,16 @@ CREATE VIEW reporting.current_listing_scores_source AS
             comparison_price_changes_source.pct_change,
             comparison_price_changes_source.deal,
             comparison_price_changes_source.currency
-           FROM reporting.comparison_price_changes_source_for_articles(
-             ARRAY(SELECT article_id FROM inputs)) comparison_price_changes_source
+           FROM reporting.comparison_price_changes_source
+        ), benchmarks AS (
+         SELECT t.article_id,
+            (count(c.article_id))::integer AS comparable_count,
+            (percentile_cont((0.5)::double precision) WITHIN GROUP (ORDER BY ((c.asking_rate)::double precision)))::numeric AS median,
+            (percentile_cont((0.25)::double precision) WITHIN GROUP (ORDER BY ((c.asking_rate)::double precision)))::numeric AS p25,
+            (percentile_cont((0.75)::double precision) WITHIN GROUP (ORDER BY ((c.asking_rate)::double precision)))::numeric AS p75
+           FROM (inputs t
+             LEFT JOIN inputs c ON (((t.score_input_reason IS NULL) AND (c.score_input_reason IS NULL) AND (c.article_id <> t.article_id) AND (c.neighborhood = t.neighborhood) AND (c.property_type = t.property_type) AND (c.is_rent = t.is_rent) AND (c.room_bucket = t.room_bucket) AND (c.sqm >= (t.sqm * 0.8)) AND (c.sqm <= (t.sqm * 1.2)) AND ((NOT t.is_rent) OR (c.furnished = t.furnished)))))
+          GROUP BY t.article_id
         ), cohorts AS (
          SELECT t.article_id,
             t.url,
@@ -1532,12 +1233,7 @@ CREATE VIEW reporting.current_listing_scores_source AS
                     ELSE NULL::numeric
                 END AS benchmark_p75
            FROM (inputs t
-             LEFT JOIN LATERAL ( SELECT (count(*))::integer AS comparable_count,
-                    (percentile_cont((0.5)::double precision) WITHIN GROUP (ORDER BY ((c.asking_rate)::double precision)))::numeric AS median,
-                    (percentile_cont((0.25)::double precision) WITHIN GROUP (ORDER BY ((c.asking_rate)::double precision)))::numeric AS p25,
-                    (percentile_cont((0.75)::double precision) WITHIN GROUP (ORDER BY ((c.asking_rate)::double precision)))::numeric AS p75
-                   FROM inputs c
-                  WHERE ((t.score_input_reason IS NULL) AND (c.score_input_reason IS NULL) AND (c.article_id <> t.article_id) AND (c.neighborhood = t.neighborhood) AND (c.property_type = t.property_type) AND (c.is_rent = t.is_rent) AND (c.room_bucket = t.room_bucket) AND ((c.sqm >= (t.sqm * 0.8)) AND (c.sqm <= (t.sqm * 1.2))) AND ((NOT t.is_rent) OR (c.furnished = t.furnished)))) a ON (true))
+             JOIN benchmarks a USING (article_id))
         ), deviations AS (
          SELECT c.article_id,
             c.url,
@@ -1677,147 +1373,383 @@ CREATE VIEW reporting.current_listing_scores_source AS
             pc.currency
            FROM changes pc
           WHERE ((pc.article_id = d.article_id) AND (pc.delta < (0)::numeric) AND (pc.price = d.asking_price) AND (NOT (EXISTS ( SELECT 1
-                   FROM reporting.resolved_price_evidence_for_articles(ARRAY[d.article_id]) e
+                   FROM reporting.resolved_price_evidence e
                   WHERE ((e.article_id = d.article_id) AND (e.effective_at > pc.effective_at) AND ((e.price_state <> 'valid'::text) OR (e.price IS DISTINCT FROM pc.price) OR (e.currency_normalized IS DISTINCT FROM 'BAM'::text) OR (e.evidence_is_rent IS DISTINCT FROM d.is_rent)))))) AND (NOT (EXISTS ( SELECT 1
-                   FROM public.listing_state_history h
+                   FROM public.listing_state_history_state h
                   WHERE ((h.article_id = d.article_id) AND (h.effective_at > pc.effective_at) AND (h.effective_at <= now()) AND (h.is_rent IS NOT NULL) AND (h.is_rent <> d.is_rent))))))
           ORDER BY pc.effective_at DESC
          LIMIT 1) reduction ON (true));
 
 --
--- Name: VIEW current_listing_scores_source; Type: COMMENT; Schema: reporting; Owner: -
+-- Name: current_listing_scores_source; Type: VIEW; Schema: reporting; Owner: -
 --
-
-COMMENT ON VIEW reporting.current_listing_scores_source IS 'Canonical exact-local OLTP-to-OLAP transformation used as the input to the sparse-cohort fallback.';
-
-CREATE FUNCTION reporting.nearest_neighborhoods(p_name text, p_limit integer DEFAULT 3)
-RETURNS TABLE(neighborhood text, neighbor_rank integer)
-LANGUAGE sql STABLE STRICT
-AS $$
-  WITH subject AS (
-    SELECT avg(n.poly[i]) AS longitude, avg(n.poly[i + 1]) AS latitude
-      FROM public.neighborhoods n
-      CROSS JOIN LATERAL generate_series(1, array_length(n.poly, 1), 2) i
-     WHERE n.name = p_name
-  )
-  SELECT n.name,
-         row_number() OVER (
-           ORDER BY public.polygon_distance_m(s.latitude, s.longitude, n.poly), n.name
-         )::integer
-    FROM subject s
-    CROSS JOIN public.neighborhoods n
-   WHERE n.name <> p_name AND p_limit > 0
-   ORDER BY public.polygon_distance_m(s.latitude, s.longitude, n.poly), n.name
-   LIMIT p_limit
-$$;
-
-ALTER VIEW reporting.current_listing_scores_source
-  RENAME TO current_listing_scores_local_source;
 
 CREATE VIEW reporting.current_listing_scores_source AS
-WITH local AS MATERIALIZED (
-  SELECT * FROM reporting.current_listing_scores_local_source
-), nearest AS MATERIALIZED (
-  SELECT x.name AS subject_neighborhood, n.neighborhood
-    FROM public.neighborhoods x
-    CROSS JOIN LATERAL reporting.nearest_neighborhoods(x.name, 3) n
-), fallback AS MATERIALIZED (
-  SELECT t.article_id,
-         count(c.article_id)::integer AS comparable_count,
-         percentile_cont(0.5) WITHIN GROUP (ORDER BY c.asking_rate)::numeric AS median,
-         percentile_cont(0.25) WITHIN GROUP (ORDER BY c.asking_rate)::numeric AS p25,
-         percentile_cont(0.75) WITHIN GROUP (ORDER BY c.asking_rate)::numeric AS p75,
-         array_agg(DISTINCT c.neighborhood ORDER BY c.neighborhood)
-           FILTER (WHERE c.neighborhood <> t.neighborhood) AS neighborhoods
-    FROM local t
-    JOIN local c
-      ON c.score_input_reason IS NULL
-     AND c.article_id <> t.article_id
-     AND c.property_type = t.property_type
-     AND c.is_rent = t.is_rent
-     AND c.room_bucket = t.room_bucket
-     AND c.sqm BETWEEN t.sqm * 0.8 AND t.sqm * 1.2
-     AND (NOT t.is_rent OR c.furnished = t.furnished)
-     AND (
-       c.neighborhood = t.neighborhood
-       OR EXISTS (
-         SELECT 1 FROM nearest n
-          WHERE n.subject_neighborhood = t.neighborhood
-            AND n.neighborhood = c.neighborhood
-       )
-     )
-   WHERE t.score_input_reason IS NULL AND t.comparable_count < 5
-   GROUP BY t.article_id
-), effective AS (
-  SELECT t.*,
-         COALESCE(f.comparable_count, t.comparable_count) AS effective_count,
-         CASE WHEN f.comparable_count >= 5 THEN f.median ELSE t.benchmark_rate END AS effective_median,
-         CASE WHEN f.comparable_count >= 5 THEN f.p25 ELSE t.benchmark_p25 END AS effective_p25,
-         CASE WHEN f.comparable_count >= 5 THEN f.p75 ELSE t.benchmark_p75 END AS effective_p75,
-         COALESCE(f.comparable_count >= 5, false) AS uses_fallback,
-         f.neighborhoods AS fallback_neighborhoods
-    FROM local t
-    LEFT JOIN fallback f USING (article_id)
-), derived AS (
-  SELECT e.*,
-         CASE WHEN e.effective_median IS NOT NULL
-              THEN 100 * (e.asking_rate / e.effective_median - 1) END AS effective_deviation
-    FROM effective e
-)
-SELECT expanded.*
-FROM derived d
-CROSS JOIN LATERAL jsonb_populate_record(
-  NULL::olap.current_listing_scores,
-  to_jsonb(d) || jsonb_build_object(
-    'comparable_count', d.effective_count,
-    'benchmark_rate', d.effective_median,
-    'benchmark_p25', d.effective_p25,
-    'benchmark_p75', d.effective_p75,
-    'deviation_pct', d.effective_deviation,
-    'unscored_reason', COALESCE(
-      d.score_input_reason,
-      CASE WHEN d.effective_count < 5 THEN 'Insufficient comparables' END
-    ),
-    'confidence', CASE
-      WHEN d.uses_fallback THEN 'Nearby-area fallback · Higher variance'
-      WHEN d.effective_count >= 20 THEN 'Larger sample'
-      WHEN d.effective_count >= 10 THEN 'Limited sample'
-      WHEN d.effective_count >= 5 THEN 'Higher variance sample'
-      ELSE 'Insufficient comparables'
-    END,
-    'score', CASE WHEN d.effective_deviation IS NOT NULL THEN
-      round(greatest(0, least(100, 50 - d.effective_deviation)))::integer END,
-    'position_label', CASE
-      WHEN d.effective_deviation < -10 THEN 'Well below local asking benchmark'
-      WHEN d.effective_deviation < -5 THEN 'Below local asking benchmark'
-      WHEN d.effective_deviation <= 5 THEN 'Near local asking benchmark'
-      WHEN d.effective_deviation <= 10 THEN 'Above local asking benchmark'
-      WHEN d.effective_deviation > 10 THEN 'Well above local asking benchmark'
-    END,
-    'indicative_total', d.effective_median * d.sqm,
-    'indicative_low', d.effective_p25 * d.sqm,
-    'indicative_high', d.effective_p75 * d.sqm,
-    'asking_gap_km', d.asking_price - d.effective_median * d.sqm,
-    'local_comparable_count', d.comparable_count,
-    'benchmark_scope', CASE
-      WHEN d.score_input_reason IS NOT NULL THEN NULL
-      WHEN d.uses_fallback THEN 'nearest_3_neighborhoods'
-      WHEN d.effective_count >= 5 THEN 'local'
-    END,
-    'benchmark_neighborhoods', CASE
-      WHEN d.uses_fallback THEN d.fallback_neighborhoods
-      WHEN d.effective_count >= 5 THEN ARRAY[d.neighborhood]
-    END
-  )
-) expanded;
-
-COMMENT ON VIEW reporting.current_listing_scores_source IS 'Canonical current score source. Exact local inputs and the neighbourhood proximity map are materialized once; cohorts below five comparables may expand to the three nearest neighbourhood polygons.';
+ WITH local AS MATERIALIZED (
+         SELECT current_listing_scores_local_source.article_id,
+            current_listing_scores_local_source.url,
+            current_listing_scores_local_source.title,
+            current_listing_scores_local_source.sqm,
+            current_listing_scores_local_source.rooms,
+            current_listing_scores_local_source.is_rent,
+            current_listing_scores_local_source.deal,
+            current_listing_scores_local_source.latitude,
+            current_listing_scores_local_source.longitude,
+            current_listing_scores_local_source.first_seen,
+            current_listing_scores_local_source.last_seen,
+            current_listing_scores_local_source.seller_type,
+            current_listing_scores_local_source.condition,
+            current_listing_scores_local_source.parking,
+            current_listing_scores_local_source.garage,
+            current_listing_scores_local_source.elevator,
+            current_listing_scores_local_source.heating,
+            current_listing_scores_local_source.floor_num,
+            current_listing_scores_local_source.plot_sqm,
+            current_listing_scores_local_source.year_built,
+            current_listing_scores_local_source.bathrooms,
+            current_listing_scores_local_source.rooms_detail,
+            current_listing_scores_local_source.furnished,
+            current_listing_scores_local_source.category_memberships,
+            current_listing_scores_local_source.property_type,
+            current_listing_scores_local_source.neighborhood,
+            current_listing_scores_local_source.room_bucket,
+            current_listing_scores_local_source.resolved_price,
+            current_listing_scores_local_source.price_state,
+            current_listing_scores_local_source.currency,
+            current_listing_scores_local_source.price_effective_at,
+            current_listing_scores_local_source.evidence_is_rent,
+            current_listing_scores_local_source.cycle_opened_at,
+            current_listing_scores_local_source.current_cycle_age_days,
+            current_listing_scores_local_source.reopened,
+            current_listing_scores_local_source.benchmark_at,
+            current_listing_scores_local_source.score_version,
+            current_listing_scores_local_source.price_reason,
+            current_listing_scores_local_source.asking_price,
+            current_listing_scores_local_source.asking_rate,
+            current_listing_scores_local_source.score_input_reason,
+            current_listing_scores_local_source.comparable_count,
+            current_listing_scores_local_source.benchmark_rate,
+            current_listing_scores_local_source.benchmark_p25,
+            current_listing_scores_local_source.benchmark_p75,
+            current_listing_scores_local_source.deviation_pct,
+            current_listing_scores_local_source.unscored_reason,
+            current_listing_scores_local_source.confidence,
+            current_listing_scores_local_source.score,
+            current_listing_scores_local_source.position_label,
+            current_listing_scores_local_source.indicative_total,
+            current_listing_scores_local_source.indicative_low,
+            current_listing_scores_local_source.indicative_high,
+            current_listing_scores_local_source.asking_gap_km,
+            current_listing_scores_local_source.latest_reduction_at,
+            current_listing_scores_local_source.reduction_km,
+            current_listing_scores_local_source.reduction_pct
+           FROM reporting.current_listing_scores_local_source
+        ), nearest AS MATERIALIZED (
+         SELECT x.name AS subject_neighborhood,
+            n.neighborhood
+           FROM (public.neighborhoods x
+             CROSS JOIN LATERAL reporting.nearest_neighborhoods(x.name, 3) n(neighborhood, neighbor_rank))
+        ), fallback AS MATERIALIZED (
+         SELECT t.article_id,
+            (count(c.article_id))::integer AS comparable_count,
+            (percentile_cont((0.5)::double precision) WITHIN GROUP (ORDER BY ((c.asking_rate)::double precision)))::numeric AS median,
+            (percentile_cont((0.25)::double precision) WITHIN GROUP (ORDER BY ((c.asking_rate)::double precision)))::numeric AS p25,
+            (percentile_cont((0.75)::double precision) WITHIN GROUP (ORDER BY ((c.asking_rate)::double precision)))::numeric AS p75,
+            array_agg(DISTINCT c.neighborhood ORDER BY c.neighborhood) FILTER (WHERE (c.neighborhood <> t.neighborhood)) AS neighborhoods
+           FROM (local t
+             JOIN local c ON (((c.score_input_reason IS NULL) AND (c.article_id <> t.article_id) AND (c.property_type = t.property_type) AND (c.is_rent = t.is_rent) AND (c.room_bucket = t.room_bucket) AND (c.sqm >= (t.sqm * 0.8)) AND (c.sqm <= (t.sqm * 1.2)) AND ((NOT t.is_rent) OR (c.furnished = t.furnished)) AND ((c.neighborhood = t.neighborhood) OR (EXISTS ( SELECT 1
+                   FROM nearest n
+                  WHERE ((n.subject_neighborhood = t.neighborhood) AND (n.neighborhood = c.neighborhood))))))))
+          WHERE ((t.score_input_reason IS NULL) AND (t.comparable_count < 5))
+          GROUP BY t.article_id
+        ), effective AS (
+         SELECT t.article_id,
+            t.url,
+            t.title,
+            t.sqm,
+            t.rooms,
+            t.is_rent,
+            t.deal,
+            t.latitude,
+            t.longitude,
+            t.first_seen,
+            t.last_seen,
+            t.seller_type,
+            t.condition,
+            t.parking,
+            t.garage,
+            t.elevator,
+            t.heating,
+            t.floor_num,
+            t.plot_sqm,
+            t.year_built,
+            t.bathrooms,
+            t.rooms_detail,
+            t.furnished,
+            t.category_memberships,
+            t.property_type,
+            t.neighborhood,
+            t.room_bucket,
+            t.resolved_price,
+            t.price_state,
+            t.currency,
+            t.price_effective_at,
+            t.evidence_is_rent,
+            t.cycle_opened_at,
+            t.current_cycle_age_days,
+            t.reopened,
+            t.benchmark_at,
+            t.score_version,
+            t.price_reason,
+            t.asking_price,
+            t.asking_rate,
+            t.score_input_reason,
+            t.comparable_count,
+            t.benchmark_rate,
+            t.benchmark_p25,
+            t.benchmark_p75,
+            t.deviation_pct,
+            t.unscored_reason,
+            t.confidence,
+            t.score,
+            t.position_label,
+            t.indicative_total,
+            t.indicative_low,
+            t.indicative_high,
+            t.asking_gap_km,
+            t.latest_reduction_at,
+            t.reduction_km,
+            t.reduction_pct,
+            COALESCE(f.comparable_count, t.comparable_count) AS effective_count,
+                CASE
+                    WHEN (f.comparable_count >= 5) THEN f.median
+                    ELSE t.benchmark_rate
+                END AS effective_median,
+                CASE
+                    WHEN (f.comparable_count >= 5) THEN f.p25
+                    ELSE t.benchmark_p25
+                END AS effective_p25,
+                CASE
+                    WHEN (f.comparable_count >= 5) THEN f.p75
+                    ELSE t.benchmark_p75
+                END AS effective_p75,
+            COALESCE((f.comparable_count >= 5), false) AS uses_fallback,
+            f.neighborhoods AS fallback_neighborhoods
+           FROM (local t
+             LEFT JOIN fallback f USING (article_id))
+        ), derived AS (
+         SELECT e.article_id,
+            e.url,
+            e.title,
+            e.sqm,
+            e.rooms,
+            e.is_rent,
+            e.deal,
+            e.latitude,
+            e.longitude,
+            e.first_seen,
+            e.last_seen,
+            e.seller_type,
+            e.condition,
+            e.parking,
+            e.garage,
+            e.elevator,
+            e.heating,
+            e.floor_num,
+            e.plot_sqm,
+            e.year_built,
+            e.bathrooms,
+            e.rooms_detail,
+            e.furnished,
+            e.category_memberships,
+            e.property_type,
+            e.neighborhood,
+            e.room_bucket,
+            e.resolved_price,
+            e.price_state,
+            e.currency,
+            e.price_effective_at,
+            e.evidence_is_rent,
+            e.cycle_opened_at,
+            e.current_cycle_age_days,
+            e.reopened,
+            e.benchmark_at,
+            e.score_version,
+            e.price_reason,
+            e.asking_price,
+            e.asking_rate,
+            e.score_input_reason,
+            e.comparable_count,
+            e.benchmark_rate,
+            e.benchmark_p25,
+            e.benchmark_p75,
+            e.deviation_pct,
+            e.unscored_reason,
+            e.confidence,
+            e.score,
+            e.position_label,
+            e.indicative_total,
+            e.indicative_low,
+            e.indicative_high,
+            e.asking_gap_km,
+            e.latest_reduction_at,
+            e.reduction_km,
+            e.reduction_pct,
+            e.effective_count,
+            e.effective_median,
+            e.effective_p25,
+            e.effective_p75,
+            e.uses_fallback,
+            e.fallback_neighborhoods,
+                CASE
+                    WHEN (e.effective_median IS NOT NULL) THEN ((100)::numeric * ((e.asking_rate / e.effective_median) - (1)::numeric))
+                    ELSE NULL::numeric
+                END AS effective_deviation
+           FROM effective e
+        )
+ SELECT expanded.article_id,
+    expanded.url,
+    expanded.title,
+    expanded.sqm,
+    expanded.rooms,
+    expanded.is_rent,
+    expanded.deal,
+    expanded.latitude,
+    expanded.longitude,
+    expanded.first_seen,
+    expanded.last_seen,
+    expanded.seller_type,
+    expanded.condition,
+    expanded.parking,
+    expanded.garage,
+    expanded.elevator,
+    expanded.heating,
+    expanded.floor_num,
+    expanded.plot_sqm,
+    expanded.year_built,
+    expanded.bathrooms,
+    expanded.rooms_detail,
+    expanded.furnished,
+    expanded.category_memberships,
+    expanded.property_type,
+    expanded.neighborhood,
+    expanded.room_bucket,
+    expanded.resolved_price,
+    expanded.price_state,
+    expanded.currency,
+    expanded.price_effective_at,
+    expanded.evidence_is_rent,
+    expanded.cycle_opened_at,
+    expanded.current_cycle_age_days,
+    expanded.reopened,
+    expanded.benchmark_at,
+    expanded.score_version,
+    expanded.price_reason,
+    expanded.asking_price,
+    expanded.asking_rate,
+    expanded.score_input_reason,
+    expanded.comparable_count,
+    expanded.benchmark_rate,
+    expanded.benchmark_p25,
+    expanded.benchmark_p75,
+    expanded.deviation_pct,
+    expanded.unscored_reason,
+    expanded.confidence,
+    expanded.score,
+    expanded.position_label,
+    expanded.indicative_total,
+    expanded.indicative_low,
+    expanded.indicative_high,
+    expanded.asking_gap_km,
+    expanded.latest_reduction_at,
+    expanded.reduction_km,
+    expanded.reduction_pct,
+    expanded.local_comparable_count,
+    expanded.benchmark_scope,
+    expanded.benchmark_neighborhoods
+   FROM (derived d
+     CROSS JOIN LATERAL jsonb_populate_record(NULL::olap.current_listing_scores, (to_jsonb(d.*) || jsonb_build_object('comparable_count', d.effective_count, 'benchmark_rate', d.effective_median, 'benchmark_p25', d.effective_p25, 'benchmark_p75', d.effective_p75, 'deviation_pct', d.effective_deviation, 'unscored_reason', COALESCE(d.score_input_reason,
+        CASE
+            WHEN (d.effective_count < 5) THEN 'Insufficient comparables'::text
+            ELSE NULL::text
+        END), 'confidence',
+        CASE
+            WHEN d.uses_fallback THEN 'Nearby-area fallback · Higher variance'::text
+            WHEN (d.effective_count >= 20) THEN 'Larger sample'::text
+            WHEN (d.effective_count >= 10) THEN 'Limited sample'::text
+            WHEN (d.effective_count >= 5) THEN 'Higher variance sample'::text
+            ELSE 'Insufficient comparables'::text
+        END, 'score',
+        CASE
+            WHEN (d.effective_deviation IS NOT NULL) THEN (round(GREATEST((0)::numeric, LEAST((100)::numeric, ((50)::numeric - d.effective_deviation)))))::integer
+            ELSE NULL::integer
+        END, 'position_label',
+        CASE
+            WHEN (d.effective_deviation < ('-10'::integer)::numeric) THEN 'Well below local asking benchmark'::text
+            WHEN (d.effective_deviation < ('-5'::integer)::numeric) THEN 'Below local asking benchmark'::text
+            WHEN (d.effective_deviation <= (5)::numeric) THEN 'Near local asking benchmark'::text
+            WHEN (d.effective_deviation <= (10)::numeric) THEN 'Above local asking benchmark'::text
+            WHEN (d.effective_deviation > (10)::numeric) THEN 'Well above local asking benchmark'::text
+            ELSE NULL::text
+        END, 'indicative_total', (d.effective_median * d.sqm), 'indicative_low', (d.effective_p25 * d.sqm), 'indicative_high', (d.effective_p75 * d.sqm), 'asking_gap_km', (d.asking_price - (d.effective_median * d.sqm)), 'local_comparable_count', d.comparable_count, 'benchmark_scope',
+        CASE
+            WHEN (d.score_input_reason IS NOT NULL) THEN NULL::text
+            WHEN d.uses_fallback THEN 'nearest_3_neighborhoods'::text
+            WHEN (d.effective_count >= 5) THEN 'local'::text
+            ELSE NULL::text
+        END, 'benchmark_neighborhoods',
+        CASE
+            WHEN d.uses_fallback THEN d.fallback_neighborhoods
+            WHEN (d.effective_count >= 5) THEN ARRAY[d.neighborhood]
+            ELSE NULL::text[]
+        END))) expanded(article_id, url, title, sqm, rooms, is_rent, deal, latitude, longitude, first_seen, last_seen, seller_type, condition, parking, garage, elevator, heating, floor_num, plot_sqm, year_built, bathrooms, rooms_detail, furnished, category_memberships, property_type, neighborhood, room_bucket, resolved_price, price_state, currency, price_effective_at, evidence_is_rent, cycle_opened_at, current_cycle_age_days, reopened, benchmark_at, score_version, price_reason, asking_price, asking_rate, score_input_reason, comparable_count, benchmark_rate, benchmark_p25, benchmark_p75, deviation_pct, unscored_reason, confidence, score, position_label, indicative_total, indicative_low, indicative_high, asking_gap_km, latest_reduction_at, reduction_km, reduction_pct, local_comparable_count, benchmark_scope, benchmark_neighborhoods));
 
 --
--- Name: daily_listing_facts_source; Type: VIEW; Schema: reporting; Owner: -
+-- Name: current_listings_source; Type: VIEW; Schema: reporting; Owner: -
 --
 
-CREATE VIEW reporting.daily_listing_facts_source AS
+CREATE VIEW reporting.current_listings_source AS
+ SELECT l.article_id,
+        CASE
+            WHEN (l.url ~ '^https?://(www\.)?olx\.ba/artikal/[0-9]+/?$'::text) THEN l.url
+            ELSE NULL::text
+        END AS url,
+    l.title,
+    COALESCE(m.categories, '{}'::text[]) AS category_memberships,
+        CASE
+            WHEN l.is_rent THEN 'rent'::text
+            ELSE 'sale'::text
+        END AS deal,
+    l.sqm,
+    l.rooms,
+    l.price,
+    l.ppm2,
+    COALESCE(NULLIF(l.location, ''::text),
+        CASE
+            WHEN (l.latitude IS NULL) THEN '(no pin)'::text
+            ELSE '(unmapped)'::text
+        END) AS neighborhood,
+    l.latitude,
+    l.longitude,
+    l.published_at,
+    l.first_seen,
+    l.renewed_at,
+    l.last_seen,
+    l.views
+   FROM (public.listings l
+     LEFT JOIN LATERAL ( SELECT array_agg(DISTINCT ss.category ORDER BY ss.category) FILTER (WHERE (NULLIF(btrim(ss.category), ''::text) IS NOT NULL)) AS categories
+           FROM (public.search_results sr
+             JOIN public.saved_searches ss ON ((ss.search_key = sr.search_key)))
+          WHERE (sr.article_id = l.article_id)) m ON (true))
+  WHERE ((l.closed_at IS NULL) AND (l.last_seen > (now() - '14 days'::interval)));
+
+--
+-- Historical daily fact source contract and its canonical compatibility view.
+--
+-- Name: daily_listing_facts_source_legacy; Type: VIEW; Schema: reporting; Owner: -
+--
+
+CREATE VIEW reporting.daily_listing_facts_source_legacy AS
  WITH evidence AS (
          SELECT d.day,
             d.article_id,
@@ -1891,14 +1823,14 @@ CREATE VIEW reporting.daily_listing_facts_source AS
                 CASE
                     WHEN ((e.price_effective_at IS NOT NULL) AND (e.evidence_is_rent IS DISTINCT FROM e.is_rent)) THEN 'price evidence belongs to another deal'::text
                     WHEN ((e.price_effective_at IS NOT NULL) AND (EXISTS ( SELECT 1
-                       FROM public.listing_state_history h
+                       FROM public.listing_state_history_state h
                       WHERE ((h.article_id = e.article_id) AND (h.effective_at > e.price_effective_at) AND (h.effective_at < public.analytics_sarajevo_day_start((e.day + 1))) AND (h.is_rent IS NOT NULL) AND (h.is_rent IS DISTINCT FROM e.evidence_is_rent))))) THEN 'price evidence predates a deal switch'::text
                     ELSE reporting.comparison_price_reason(e.price, e.price_state, e.currency, e.is_rent)
                 END AS price_quality_reason,
                 CASE
                     WHEN ((e.price_effective_at IS NOT NULL) AND (e.evidence_is_rent IS DISTINCT FROM e.is_rent)) THEN 'price evidence belongs to another deal'::text
                     WHEN ((e.price_effective_at IS NOT NULL) AND (EXISTS ( SELECT 1
-                       FROM public.listing_state_history h
+                       FROM public.listing_state_history_state h
                       WHERE ((h.article_id = e.article_id) AND (h.effective_at > e.price_effective_at) AND (h.effective_at < public.analytics_sarajevo_day_start((e.day + 1))) AND (h.is_rent IS NOT NULL) AND (h.is_rent IS DISTINCT FROM e.evidence_is_rent))))) THEN 'price evidence predates a deal switch'::text
                     ELSE reporting.comparison_quality_reason(e.price, e.price_state, e.currency, e.sqm, e.is_rent)
                 END AS rate_quality_reason
@@ -1982,7 +1914,7 @@ CREATE VIEW reporting.daily_listing_facts_source AS
             ELSE NULL::boolean
         END AS historical_elevator,
         CASE
-            WHEN ((COALESCE((filter_attributes ->> 'floorNum'::text), ((filter_attributes -> 'searchAttributes'::text) ->> 'floorNum'::text)) ~ '^-?[0-9]{1,5}$'::text) AND (((COALESCE((filter_attributes ->> 'floorNum'::text), ((filter_attributes -> 'searchAttributes'::text) ->> 'floorNum'::text)))::numeric >= ('-32768'::integer)::numeric) AND ((COALESCE((filter_attributes ->> 'floorNum'::text), ((filter_attributes -> 'searchAttributes'::text) ->> 'floorNum'::text)))::numeric <= (32767)::numeric))) THEN (COALESCE((filter_attributes ->> 'floorNum'::text), ((filter_attributes -> 'searchAttributes'::text) ->> 'floorNum'::text)))::smallint
+            WHEN ((COALESCE((filter_attributes ->> 'floorNum'::text), ((filter_attributes -> 'searchAttributes'::text) ->> 'floorNum'::text)) ~ '^-?[0-9]{1,5}$'::text) AND ((COALESCE((filter_attributes ->> 'floorNum'::text), ((filter_attributes -> 'searchAttributes'::text) ->> 'floorNum'::text)))::numeric >= ('-32768'::integer)::numeric) AND ((COALESCE((filter_attributes ->> 'floorNum'::text), ((filter_attributes -> 'searchAttributes'::text) ->> 'floorNum'::text)))::numeric <= (32767)::numeric)) THEN (COALESCE((filter_attributes ->> 'floorNum'::text), ((filter_attributes -> 'searchAttributes'::text) ->> 'floorNum'::text)))::smallint
             ELSE NULL::smallint
         END AS historical_floor_num,
     price_quality_reason,
@@ -2009,11 +1941,245 @@ CREATE VIEW reporting.daily_listing_facts_source AS
         END AS asking_rate_unit
    FROM quality q;
 
+
 --
--- Name: VIEW daily_listing_facts_source; Type: COMMENT; Schema: reporting; Owner: -
+-- Name: daily_listing_facts_source_canonical; Type: VIEW; Schema: reporting; Owner: -
 --
 
-COMMENT ON VIEW reporting.daily_listing_facts_source IS 'One reconstructed Sarajevo listing-day per article. asking_price and asking_rate are separately eligible historical samples; historical_attributes and quality flags are recorded/inferred at that day, never copied from the current listing.';
+CREATE VIEW reporting.daily_listing_facts_source_canonical AS
+ SELECT day,
+    article_id,
+    category,
+    category_memberships,
+    is_rent,
+    deal,
+    rooms,
+    sqm,
+    location,
+    neighborhood,
+    price,
+    price_state,
+    ppm2,
+    state_effective_at,
+    price_effective_at,
+    membership_inferred,
+    attributes_inferred,
+    stale_observation,
+    provisional_day,
+    filter_attributes,
+    property_type,
+    room_bucket,
+    currency,
+    historical_attributes,
+    historical_seller_type,
+    historical_condition,
+    historical_furnished,
+    historical_heating,
+    historical_parking,
+    historical_garage,
+    historical_elevator,
+    historical_floor_num,
+    price_quality_reason,
+    rate_quality_reason,
+    price_eligible,
+    rate_eligible,
+    asking_price,
+    asking_rate,
+    asking_price_unit,
+    asking_rate_unit
+   FROM reporting.daily_listing_facts_source_legacy;
+
+
+-- Name: daily_listing_facts_source; Type: VIEW; Schema: reporting; Owner: -
+--
+
+CREATE VIEW reporting.daily_listing_facts_source AS
+ SELECT day,
+    article_id,
+    price,
+    price_state,
+    ppm2,
+    state_effective_at,
+    price_effective_at,
+    property_type,
+    room_bucket,
+    currency,
+    historical_seller_type,
+    historical_condition,
+    historical_furnished,
+    historical_heating,
+    historical_parking,
+    historical_garage,
+    historical_elevator,
+    historical_floor_num,
+    price_quality_reason,
+    rate_quality_reason,
+    price_eligible,
+    rate_eligible,
+    asking_price,
+    asking_rate,
+    asking_price_unit,
+    asking_rate_unit,
+    deal,
+    neighborhood
+   FROM reporting.daily_listing_facts_source_canonical s;
+
+--
+-- Name: daily_market_source; Type: VIEW; Schema: reporting; Owner: -
+--
+
+CREATE VIEW reporting.daily_market_source AS
+ SELECT day,
+    article_id,
+    COALESCE(NULLIF(category_memberships, '{}'::text[]),
+        CASE
+            WHEN (category IS NULL) THEN '{}'::text[]
+            ELSE ARRAY[category]
+        END) AS category_memberships,
+        CASE
+            WHEN (is_rent IS TRUE) THEN 'rent'::text
+            WHEN (is_rent IS FALSE) THEN 'sale'::text
+            ELSE 'unknown'::text
+        END AS deal,
+    sqm,
+    rooms,
+    price,
+    price_state,
+    ppm2,
+    COALESCE(NULLIF(neighborhood, ''::text),
+        CASE
+            WHEN (location IS NULL) THEN '(unmapped)'::text
+            ELSE location
+        END) AS neighborhood,
+    stale_observation,
+    provisional_day,
+    membership_inferred,
+    attributes_inferred
+   FROM public.listing_daily_state d;
+
+--
+-- Name: exit_cycles_source; Type: VIEW; Schema: reporting; Owner: -
+--
+
+CREATE VIEW reporting.exit_cycles_source AS
+ WITH closed AS (
+         SELECT c.article_id,
+            c.cycle_no,
+            c.opened_at,
+            c.closed_at,
+            c.days_listed,
+            l.title,
+                CASE
+                    WHEN (l.url ~ '^https?://(www\.)?olx\.ba/artikal/[0-9]+/?$'::text) THEN l.url
+                    ELSE NULL::text
+                END AS url
+           FROM (public.v_listing_lifecycle_cycles c
+             JOIN public.listings l ON ((l.article_id = c.article_id)))
+          WHERE c.is_closed
+        ), state_at_close AS (
+         SELECT c.article_id,
+            c.cycle_no,
+            c.opened_at,
+            c.closed_at,
+            c.days_listed,
+            c.title,
+            c.url,
+            s.category,
+            s.category_membership,
+            s.is_rent,
+            s.sqm,
+            s.rooms
+           FROM (closed c
+             LEFT JOIN LATERAL ( SELECT h.category,
+                    h.category_membership,
+                    h.is_rent,
+                    h.sqm,
+                    h.rooms
+                   FROM public.listing_state_history_state h
+                  WHERE ((h.article_id = c.article_id) AND (h.effective_at <= c.closed_at) AND (h.event_type = ANY (ARRAY['search_sighting'::text, 'detail_update'::text, 'reopened'::text])))
+                  ORDER BY h.effective_at DESC, h.id DESC
+                 LIMIT 1) s ON (true))
+        ), price_at_close AS (
+         SELECT s.article_id,
+            s.cycle_no,
+            s.opened_at,
+            s.closed_at,
+            s.days_listed,
+            s.title,
+            s.url,
+            s.category,
+            s.category_membership,
+            s.is_rent,
+            s.sqm,
+            s.rooms,
+            p.price_state,
+            p.price,
+                CASE
+                    WHEN ((p.price_state = 'valid'::text) AND (p.price IS NOT NULL) AND (s.is_rent = false) AND (s.sqm >= (5)::numeric) AND (s.sqm <= (500)::numeric) AND ((p.price / NULLIF(s.sqm, (0)::numeric)) >= (1)::numeric) AND ((p.price / NULLIF(s.sqm, (0)::numeric)) <= (15000)::numeric)) THEN (round((p.price / NULLIF(s.sqm, (0)::numeric))))::integer
+                    ELSE NULL::integer
+                END AS asking_ppm2
+           FROM (state_at_close s
+             LEFT JOIN LATERAL ( SELECT e.price_state,
+                    e.price
+                   FROM public.listing_price_events e
+                  WHERE ((e.article_id = s.article_id) AND (e.effective_at <= s.closed_at))
+                  ORDER BY e.effective_at DESC,
+                        CASE
+                            WHEN (e.source = ANY (ARRAY['search'::text, 'detail'::text])) THEN 0
+                            ELSE 1
+                        END,
+                        CASE e.price_state
+                            WHEN 'conflict'::text THEN 0
+                            WHEN 'invalid'::text THEN 1
+                            WHEN 'unpriced'::text THEN 2
+                            ELSE 3
+                        END, e.id DESC
+                 LIMIT 1) p ON (true))
+        )
+ SELECT article_id,
+    cycle_no,
+    title,
+    url,
+    opened_at,
+    closed_at,
+    days_listed,
+    COALESCE(category_membership,
+        CASE
+            WHEN (category IS NULL) THEN '{}'::text[]
+            ELSE ARRAY[category]
+        END) AS category_memberships,
+    category,
+        CASE
+            WHEN (is_rent IS TRUE) THEN 'rent'::text
+            WHEN (is_rent IS FALSE) THEN 'sale'::text
+            ELSE 'unknown'::text
+        END AS deal,
+    sqm,
+    rooms,
+        CASE
+            WHEN (price_state = 'valid'::text) THEN price
+            ELSE NULL::numeric
+        END AS last_asking_price,
+    asking_ppm2 AS last_asking_ppm2,
+    (cycle_no > 1) AS reopened_cycle
+   FROM price_at_close;
+
+--
+-- Name: freshness_source; Type: VIEW; Schema: reporting; Owner: -
+--
+
+CREATE VIEW reporting.freshness_source AS
+ SELECT COALESCE(NULLIF(ss.category, ''::text), '(unclassified)'::text) AS category,
+    (count(*))::integer AS configured_searches,
+        CASE
+            WHEN (count(success.finished_at) = count(*)) THEN min(success.finished_at)
+            ELSE NULL::timestamp with time zone
+        END AS last_success_at
+   FROM (public.saved_searches ss
+     LEFT JOIN LATERAL ( SELECT max(r.finished_at) AS finished_at
+           FROM public.scrape_runs r
+          WHERE ((r.search_key = ss.search_key) AND (r.status = 'ok'::text) AND (r.is_complete = true) AND (r.finished_at IS NOT NULL))) success ON (true))
+  GROUP BY COALESCE(NULLIF(ss.category, ''::text), '(unclassified)'::text);
 
 --
 -- Name: lifecycle_cycles_source; Type: VIEW; Schema: reporting; Owner: -
@@ -2077,7 +2243,7 @@ CREATE VIEW reporting.lifecycle_cycles_source AS
                     h.is_closed,
                     h.membership_inferred,
                     h.attributes_inferred
-                   FROM public.listing_state_history h
+                   FROM public.listing_state_history_state h
                   WHERE ((h.article_id = c.article_id) AND (h.effective_at = c.opened_at) AND (h.event_type = ANY (ARRAY['search_sighting'::text, 'reopened'::text])))
                   ORDER BY h.id DESC
                  LIMIT 1) od ON (true))
@@ -2091,16 +2257,16 @@ CREATE VIEW reporting.lifecycle_cycles_source AS
                             (array_agg(h.is_rent ORDER BY h.effective_at DESC, h.id DESC) FILTER (WHERE (h.is_rent IS NOT NULL)))[1] AS is_rent,
                             (array_agg(h.sqm ORDER BY h.effective_at DESC, h.id DESC) FILTER (WHERE (h.sqm IS NOT NULL)))[1] AS sqm,
                             (array_agg(h.rooms ORDER BY h.effective_at DESC, h.id DESC) FILTER (WHERE (h.rooms IS NOT NULL)))[1] AS rooms
-                           FROM public.listing_state_history h
+                           FROM public.listing_state_history_state h
                           WHERE ((h.article_id = c.article_id) AND (h.effective_at <= c.opened_at) AND (h.event_type = ANY (ARRAY['search_sighting'::text, 'detail_update'::text, 'reopened'::text])))) fields
                      CROSS JOIN LATERAL ( SELECT COALESCE(array_agg(DISTINCT members.member ORDER BY members.member), '{}'::text[]) AS memberships
-                           FROM (public.listing_state_history h
+                           FROM (public.listing_state_history_state h
                              CROSS JOIN LATERAL unnest(h.category_membership) members(member))
                           WHERE ((h.article_id = c.article_id) AND (h.effective_at <= c.opened_at) AND (h.event_type = ANY (ARRAY['search_sighting'::text, 'detail_update'::text, 'reopened'::text])) AND (members.member IS NOT NULL) AND (members.member <> ''::text))) memberships)
                      CROSS JOIN LATERAL ( SELECT COALESCE(jsonb_object_agg(a.key, a.value), '{}'::jsonb) AS attributes
                            FROM ( SELECT DISTINCT ON (attrs.key) attrs.key,
                                     attrs.value
-                                   FROM (public.listing_state_history h
+                                   FROM (public.listing_state_history_state h
                                      CROSS JOIN LATERAL jsonb_each(
 CASE
  WHEN (jsonb_typeof(h.filter_attributes) = 'object'::text) THEN h.filter_attributes
@@ -2129,7 +2295,7 @@ END) attrs(key, value))
                     h.is_closed,
                     h.membership_inferred,
                     h.attributes_inferred
-                   FROM public.listing_state_history h
+                   FROM public.listing_state_history_state h
                   WHERE ((h.article_id = c.article_id) AND (h.effective_at = c.closed_at) AND (h.event_type = 'closed'::text))
                   ORDER BY h.id DESC
                  LIMIT 1) cd ON (true))
@@ -2143,16 +2309,16 @@ END) attrs(key, value))
                             (array_agg(h.is_rent ORDER BY h.effective_at DESC, h.id DESC) FILTER (WHERE (h.is_rent IS NOT NULL)))[1] AS is_rent,
                             (array_agg(h.sqm ORDER BY h.effective_at DESC, h.id DESC) FILTER (WHERE (h.sqm IS NOT NULL)))[1] AS sqm,
                             (array_agg(h.rooms ORDER BY h.effective_at DESC, h.id DESC) FILTER (WHERE (h.rooms IS NOT NULL)))[1] AS rooms
-                           FROM public.listing_state_history h
+                           FROM public.listing_state_history_state h
                           WHERE ((h.article_id = c.article_id) AND (h.effective_at < c.closed_at) AND (h.event_type = ANY (ARRAY['search_sighting'::text, 'detail_update'::text, 'reopened'::text])))) fields
                      CROSS JOIN LATERAL ( SELECT COALESCE(array_agg(DISTINCT members.member ORDER BY members.member), '{}'::text[]) AS memberships
-                           FROM (public.listing_state_history h
+                           FROM (public.listing_state_history_state h
                              CROSS JOIN LATERAL unnest(h.category_membership) members(member))
                           WHERE ((h.article_id = c.article_id) AND (h.effective_at < c.closed_at) AND (h.event_type = ANY (ARRAY['search_sighting'::text, 'detail_update'::text, 'reopened'::text])) AND (members.member IS NOT NULL) AND (members.member <> ''::text))) memberships)
                      CROSS JOIN LATERAL ( SELECT COALESCE(jsonb_object_agg(a.key, a.value), '{}'::jsonb) AS attributes
                            FROM ( SELECT DISTINCT ON (attrs.key) attrs.key,
                                     attrs.value
-                                   FROM (public.listing_state_history h
+                                   FROM (public.listing_state_history_state h
                                      CROSS JOIN LATERAL jsonb_each(
 CASE
  WHEN (jsonb_typeof(h.filter_attributes) = 'object'::text) THEN h.filter_attributes
@@ -2211,7 +2377,7 @@ END) attrs(key, value))
             (COALESCE(s.opening_direct_membership_inferred, false) OR (EXISTS ( SELECT 1
                    FROM unnest(COALESCE(s.opening_history_memberships, '{}'::text[])) m(member)
                   WHERE (NOT (m.member = ANY (COALESCE(s.opening_direct_memberships, '{}'::text[]))))))) AS opening_membership_inferred,
-            (COALESCE(s.opening_direct_attributes_inferred, false) OR ((s.opening_direct_category IS NULL) AND (s.opening_history_category IS NOT NULL)) OR ((s.opening_direct_is_rent IS NULL) AND (s.opening_history_is_rent IS NOT NULL)) OR ((s.opening_direct_sqm IS NULL) AND (s.opening_history_sqm IS NOT NULL)) OR ((s.opening_direct_rooms IS NULL) AND (s.opening_history_rooms IS NOT NULL)) OR (EXISTS ( SELECT 1
+            (COALESCE(s.opening_direct_attributes_inferred, false) OR (EXISTS ( SELECT 1
                    FROM jsonb_object_keys(COALESCE(s.opening_history_attributes, '{}'::jsonb)) a(key)
                   WHERE (NOT (COALESCE(s.opening_direct_attributes, '{}'::jsonb) ? a.key))))) AS opening_attributes_inferred,
             public.analytics_state_neighborhood((COALESCE(s.opening_history_attributes, '{}'::jsonb) || COALESCE(s.opening_direct_attributes, '{}'::jsonb))) AS opening_neighborhood,
@@ -2231,7 +2397,7 @@ END) attrs(key, value))
             (COALESCE(s.closing_direct_membership_inferred, false) OR (EXISTS ( SELECT 1
                    FROM unnest(COALESCE(s.closing_history_memberships, '{}'::text[])) m(member)
                   WHERE (NOT (m.member = ANY (COALESCE(s.closing_direct_memberships, '{}'::text[]))))))) AS closing_membership_inferred,
-            (COALESCE(s.closing_direct_attributes_inferred, false) OR ((s.closing_direct_category IS NULL) AND (s.closing_history_category IS NOT NULL)) OR ((s.closing_direct_is_rent IS NULL) AND (s.closing_history_is_rent IS NOT NULL)) OR ((s.closing_direct_sqm IS NULL) AND (s.closing_history_sqm IS NOT NULL)) OR ((s.closing_direct_rooms IS NULL) AND (s.closing_history_rooms IS NOT NULL)) OR (EXISTS ( SELECT 1
+            (COALESCE(s.closing_direct_attributes_inferred, false) OR (EXISTS ( SELECT 1
                    FROM jsonb_object_keys(COALESCE(s.closing_history_attributes, '{}'::jsonb)) a(key)
                   WHERE (NOT (COALESCE(s.closing_direct_attributes, '{}'::jsonb) ? a.key))))) AS closing_attributes_inferred,
             public.analytics_state_neighborhood((COALESCE(s.closing_history_attributes, '{}'::jsonb) || COALESCE(s.closing_direct_attributes, '{}'::jsonb))) AS closing_neighborhood
@@ -2375,14 +2541,14 @@ END) attrs(key, value))
                 CASE
                     WHEN ((p.closing_price_effective_at IS NOT NULL) AND (p.closing_price_is_rent IS DISTINCT FROM p.closing_is_rent)) THEN 'price evidence belongs to another deal'::text
                     WHEN ((p.closing_price_effective_at IS NOT NULL) AND (EXISTS ( SELECT 1
-                       FROM public.listing_state_history h
+                       FROM public.listing_state_history_state h
                       WHERE ((h.article_id = p.article_id) AND (h.effective_at > p.closing_price_effective_at) AND (h.effective_at <= p.closed_at) AND (h.is_rent IS NOT NULL) AND (h.is_rent IS DISTINCT FROM p.closing_price_is_rent))))) THEN 'price evidence predates a deal switch'::text
                     ELSE reporting.comparison_price_reason(p.closing_observed_price, p.closing_price_state, p.closing_currency, p.closing_is_rent)
                 END AS closing_price_quality_reason,
                 CASE
                     WHEN ((p.closing_price_effective_at IS NOT NULL) AND (p.closing_price_is_rent IS DISTINCT FROM p.closing_is_rent)) THEN 'price evidence belongs to another deal'::text
                     WHEN ((p.closing_price_effective_at IS NOT NULL) AND (EXISTS ( SELECT 1
-                       FROM public.listing_state_history h
+                       FROM public.listing_state_history_state h
                       WHERE ((h.article_id = p.article_id) AND (h.effective_at > p.closing_price_effective_at) AND (h.effective_at <= p.closed_at) AND (h.is_rent IS NOT NULL) AND (h.is_rent IS DISTINCT FROM p.closing_price_is_rent))))) THEN 'price evidence predates a deal switch'::text
                     ELSE reporting.comparison_quality_reason(p.closing_observed_price, p.closing_price_state, p.closing_currency, p.closing_sqm, p.closing_is_rent)
                 END AS closing_rate_quality_reason
@@ -2463,12 +2629,6 @@ END) attrs(key, value))
    FROM quality q;
 
 --
--- Name: VIEW lifecycle_cycles_source; Type: COMMENT; Schema: reporting; Owner: -
---
-
-COMMENT ON VIEW reporting.lifecycle_cycles_source IS 'One row per observed opening/reopening cycle. Closure fields are frozen from evidence no later than closed_at; final asking values have independent eligibility and do not use current listing scores or attributes.';
-
---
 -- Name: lifecycle_movements_from_olap_cycles; Type: VIEW; Schema: reporting; Owner: -
 --
 
@@ -2503,7 +2663,7 @@ CREATE VIEW reporting.lifecycle_movements_from_olap_cycles AS
             NULL::boolean AS rate_eligible
            FROM olap.lifecycle_cycles c
         UNION ALL
-         SELECT 'closure'::text,
+         SELECT 'closure'::text AS text,
             c.closed_at,
             c.closed_day,
             c.article_id,
@@ -2600,7 +2760,7 @@ CREATE VIEW reporting.lifecycle_movements_from_olap_cycles AS
             ELSE NULL::boolean
         END AS historical_elevator,
         CASE
-            WHEN (((historical_attributes ->> 'floorNum'::text) ~ '^-?[0-9]{1,5}$'::text) AND ((((historical_attributes ->> 'floorNum'::text))::numeric >= ('-32768'::integer)::numeric) AND (((historical_attributes ->> 'floorNum'::text))::numeric <= (32767)::numeric))) THEN ((historical_attributes ->> 'floorNum'::text))::smallint
+            WHEN (((historical_attributes ->> 'floorNum'::text) ~ '^-?[0-9]{1,5}$'::text) AND (((historical_attributes ->> 'floorNum'::text))::numeric >= ('-32768'::integer)::numeric) AND (((historical_attributes ->> 'floorNum'::text))::numeric <= (32767)::numeric)) THEN ((historical_attributes ->> 'floorNum'::text))::smallint
             ELSE NULL::smallint
         END AS historical_floor_num
    FROM movement_rows m;
@@ -2610,7 +2770,53 @@ CREATE VIEW reporting.lifecycle_movements_from_olap_cycles AS
 --
 
 CREATE VIEW reporting.lifecycle_movements_source AS
- WITH movement_rows AS (
+ WITH cycles AS MATERIALIZED (
+         SELECT lifecycle_cycles_source.article_id,
+            lifecycle_cycles_source.cycle_no,
+            lifecycle_cycles_source.opened_at,
+            lifecycle_cycles_source.opened_day,
+            lifecycle_cycles_source.closed_at,
+            lifecycle_cycles_source.closed_day,
+            lifecycle_cycles_source.is_closed,
+            lifecycle_cycles_source.reopened_cycle,
+            lifecycle_cycles_source.observed_cycle_duration_days,
+            lifecycle_cycles_source.current_cycle_age_days,
+            lifecycle_cycles_source.opening_category,
+            lifecycle_cycles_source.opening_category_memberships,
+            lifecycle_cycles_source.opening_deal,
+            lifecycle_cycles_source.opening_property_type,
+            lifecycle_cycles_source.opening_sqm,
+            lifecycle_cycles_source.opening_rooms,
+            lifecycle_cycles_source.opening_room_bucket,
+            lifecycle_cycles_source.opening_neighborhood,
+            lifecycle_cycles_source.opening_attributes,
+            lifecycle_cycles_source.opening_membership_inferred,
+            lifecycle_cycles_source.opening_attributes_inferred,
+            lifecycle_cycles_source.closing_category,
+            lifecycle_cycles_source.closing_category_memberships,
+            lifecycle_cycles_source.closing_deal,
+            lifecycle_cycles_source.closing_property_type,
+            lifecycle_cycles_source.closing_sqm,
+            lifecycle_cycles_source.closing_rooms,
+            lifecycle_cycles_source.closing_room_bucket,
+            lifecycle_cycles_source.closing_neighborhood,
+            lifecycle_cycles_source.closing_attributes,
+            lifecycle_cycles_source.closing_membership_inferred,
+            lifecycle_cycles_source.closing_attributes_inferred,
+            lifecycle_cycles_source.closing_price_effective_at,
+            lifecycle_cycles_source.closing_price_state,
+            lifecycle_cycles_source.closing_currency,
+            lifecycle_cycles_source.closing_observed_price,
+            lifecycle_cycles_source.closing_price_quality_reason,
+            lifecycle_cycles_source.closing_rate_quality_reason,
+            lifecycle_cycles_source.closing_price_eligible,
+            lifecycle_cycles_source.closing_rate_eligible,
+            lifecycle_cycles_source.final_asking_price,
+            lifecycle_cycles_source.final_asking_rate,
+            lifecycle_cycles_source.final_asking_price_unit,
+            lifecycle_cycles_source.final_asking_rate_unit
+           FROM reporting.lifecycle_cycles_source
+        ), movement_rows AS (
          SELECT
                 CASE
                     WHEN c.reopened_cycle THEN 'reopening'::text
@@ -2638,9 +2844,9 @@ CREATE VIEW reporting.lifecycle_movements_source AS
             NULL::numeric AS asking_rate,
             NULL::boolean AS price_eligible,
             NULL::boolean AS rate_eligible
-           FROM reporting.lifecycle_cycles_source c
+           FROM cycles c
         UNION ALL
-         SELECT 'closure'::text,
+         SELECT 'closure'::text AS text,
             c.closed_at,
             c.closed_day,
             c.article_id,
@@ -2663,7 +2869,7 @@ CREATE VIEW reporting.lifecycle_movements_source AS
             c.final_asking_rate,
             c.closing_price_eligible,
             c.closing_rate_eligible
-           FROM reporting.lifecycle_cycles_source c
+           FROM cycles c
           WHERE c.is_closed
         )
  SELECT movement_type,
@@ -2737,265 +2943,39 @@ CREATE VIEW reporting.lifecycle_movements_source AS
             ELSE NULL::boolean
         END AS historical_elevator,
         CASE
-            WHEN (((historical_attributes ->> 'floorNum'::text) ~ '^-?[0-9]{1,5}$'::text) AND ((((historical_attributes ->> 'floorNum'::text))::numeric >= ('-32768'::integer)::numeric) AND (((historical_attributes ->> 'floorNum'::text))::numeric <= (32767)::numeric))) THEN ((historical_attributes ->> 'floorNum'::text))::smallint
+            WHEN (((historical_attributes ->> 'floorNum'::text) ~ '^-?[0-9]{1,5}$'::text) AND (((historical_attributes ->> 'floorNum'::text))::numeric >= ('-32768'::integer)::numeric) AND (((historical_attributes ->> 'floorNum'::text))::numeric <= (32767)::numeric)) THEN ((historical_attributes ->> 'floorNum'::text))::smallint
             ELSE NULL::smallint
         END AS historical_floor_num
-   FROM movement_rows m;
+   FROM movement_rows;
 
 --
--- Name: VIEW lifecycle_movements_source; Type: COMMENT; Schema: reporting; Owner: -
+-- Name: price_reductions_source; Type: VIEW; Schema: reporting; Owner: -
 --
 
-COMMENT ON VIEW reporting.lifecycle_movements_source IS 'Event-time supply movements at article-cycle grain. Closure rows come only from closed lifecycle cycles; score filters never select this historical population.';
-
-
--- Final current-state definitions folded from 20-current-comparison-inputs.sql.
--- Canonical article-scoped current-input view.
-
-
-CREATE OR REPLACE VIEW reporting.current_comparison_inputs AS
- WITH evidence AS (
-         SELECT l.article_id,
-            l.url,
-            l.title,
-            l.sqm,
-            l.rooms,
-            l.is_rent,
-                CASE
-                    WHEN l.is_rent THEN 'rent'::text
-                    ELSE 'sale'::text
-                END AS deal,
-            l.latitude,
-            l.longitude,
-            l.first_seen,
-            l.last_seen,
-            l.seller_type,
-            l.condition,
-            l.parking,
-            l.garage,
-            l.elevator,
-            l.heating,
-            l.floor_num,
-            l.plot_sqm,
-            l.year_built,
-            l.bathrooms,
-            l.rooms_detail,
-                CASE
-                    WHEN furnishing.found THEN furnishing.value
-                    ELSE l.furnished
-                END AS furnished,
-            types.category_memberships,
-            reporting.comparison_property_type(types.category_memberships) AS property_type,
-            n.name AS neighborhood,
-                CASE
-                    WHEN (l.rooms ~ '^[0-9]+[+]?$'::text) THEN
-                    CASE
-                        WHEN ((split_part(l.rooms, '+'::text, 1))::numeric >= (4)::numeric) THEN '4+'::text
-                        ELSE l.rooms
-                    END
-                    ELSE NULL::text
-                END AS room_bucket,
-            p.price AS resolved_price,
-            COALESCE(p.price_state, 'unknown'::text) AS price_state,
-            p.currency_normalized AS currency,
-            p.effective_at AS price_effective_at,
-            p.evidence_is_rent,
-            cycle.opened_at AS cycle_opened_at,
-                CASE
-                    WHEN (cycle.opened_at IS NOT NULL) THEN (floor((EXTRACT(epoch FROM (now() - cycle.opened_at)) / (86400)::numeric)))::integer
-                    ELSE NULL::integer
-                END AS current_cycle_age_days,
-            COALESCE((cycle.cycle_no > 1), false) AS reopened,
-            now() AS benchmark_at,
-            1 AS score_version
-           FROM (((((reporting.current_listings l
-             LEFT JOIN LATERAL ( SELECT array_agg(DISTINCT ss.category ORDER BY ss.category) AS category_memberships
-                   FROM (public.search_results sr
-                     JOIN public.saved_searches ss USING (search_key))
-                  WHERE (sr.article_id = l.article_id)) types ON (true))
-             LEFT JOIN public.neighborhoods n ON ((n.name = COALESCE(NULLIF(l.location, ''::text), public.neighborhood_of(l.latitude, l.longitude)))))
-             LEFT JOIN LATERAL ( SELECT e.id,
-                    e.article_id,
-                    e.effective_at,
-                    e.ingested_at,
-                    e.price,
-                    e.price_state,
-                    e.source,
-                    e.provenance,
-                    e.observed_at,
-                    e.renewed_at,
-                    e.effective_at_basis,
-                    e.currency_normalized,
-                    e.evidence_is_rent
-                   FROM reporting.latest_resolved_price_evidence(l.article_id) e) p ON (true))
-             LEFT JOIN LATERAL ( SELECT true AS found,
-                        CASE (h.filter_attributes ->> 'furnished'::text)
-                            WHEN 'true'::text THEN true
-                            WHEN 'false'::text THEN false
-                            ELSE NULL::boolean
-                        END AS value
-                   FROM public.listing_state_history h
-                  WHERE ((h.article_id = l.article_id) AND (h.effective_at <= now()) AND (h.filter_attributes ? 'furnished'::text))
-                  ORDER BY h.effective_at DESC, h.id DESC
-                 LIMIT 1) furnishing ON (true))
-             LEFT JOIN LATERAL ( SELECT c.article_id,
-                    c.cycle_no,
-                    c.opened_at,
-                    c.closed_at,
-                    c.first_price_at,
-                    c.opening_price,
-                    c.is_closed,
-                    c.days_listed
-                   FROM public.v_listing_lifecycle_cycles c
-                  WHERE ((c.article_id = l.article_id) AND (c.opened_at <= now()))
-                  ORDER BY c.opened_at DESC, c.cycle_no DESC
-                 LIMIT 1) cycle ON ((cycle.closed_at IS NULL)))
-        ), quality AS (
-         SELECT e.article_id,
-            e.url,
-            e.title,
-            e.sqm,
-            e.rooms,
-            e.is_rent,
-            e.deal,
-            e.latitude,
-            e.longitude,
-            e.first_seen,
-            e.last_seen,
-            e.seller_type,
-            e.condition,
-            e.parking,
-            e.garage,
-            e.elevator,
-            e.heating,
-            e.floor_num,
-            e.plot_sqm,
-            e.year_built,
-            e.bathrooms,
-            e.rooms_detail,
-            e.furnished,
-            e.category_memberships,
-            e.property_type,
-            e.neighborhood,
-            e.room_bucket,
-            e.resolved_price,
-            e.price_state,
-            e.currency,
-            e.price_effective_at,
-            e.evidence_is_rent,
-            e.cycle_opened_at,
-            e.current_cycle_age_days,
-            e.reopened,
-            e.benchmark_at,
-            e.score_version,
-            COALESCE(
-                CASE
-                    WHEN ((e.evidence_is_rent IS DISTINCT FROM e.is_rent) AND (e.price_state = 'valid'::text)) THEN 'Price evidence belongs to another or unknown deal segment'::text
-                    ELSE NULL::text
-                END,
-                CASE
-                    WHEN (EXISTS ( SELECT 1
-                       FROM public.listing_state_history h
-                      WHERE ((h.article_id = e.article_id) AND (h.effective_at > e.price_effective_at) AND (h.effective_at <= now()) AND (h.is_rent IS DISTINCT FROM e.is_rent) AND (h.is_rent IS NOT NULL)))) THEN 'Price evidence predates a deal switch'::text
-                    ELSE NULL::text
-                END, reporting.comparison_price_reason(e.resolved_price, e.price_state, e.currency, e.is_rent)) AS price_reason
-           FROM evidence e
-        ), eligible AS (
-         SELECT q.article_id,
-            q.url,
-            q.title,
-            q.sqm,
-            q.rooms,
-            q.is_rent,
-            q.deal,
-            q.latitude,
-            q.longitude,
-            q.first_seen,
-            q.last_seen,
-            q.seller_type,
-            q.condition,
-            q.parking,
-            q.garage,
-            q.elevator,
-            q.heating,
-            q.floor_num,
-            q.plot_sqm,
-            q.year_built,
-            q.bathrooms,
-            q.rooms_detail,
-            q.furnished,
-            q.category_memberships,
-            q.property_type,
-            q.neighborhood,
-            q.room_bucket,
-            q.resolved_price,
-            q.price_state,
-            q.currency,
-            q.price_effective_at,
-            q.evidence_is_rent,
-            q.cycle_opened_at,
-            q.current_cycle_age_days,
-            q.reopened,
-            q.benchmark_at,
-            q.score_version,
-            q.price_reason,
-                CASE
-                    WHEN (q.price_reason IS NULL) THEN q.resolved_price
-                    ELSE NULL::numeric
-                END AS asking_price,
-                CASE
-                    WHEN ((q.price_reason IS NULL) AND (reporting.comparison_quality_reason(q.resolved_price, q.price_state, q.currency, q.sqm, q.is_rent) IS NULL)) THEN (q.resolved_price / q.sqm)
-                    ELSE NULL::numeric
-                END AS asking_rate,
-            COALESCE(q.price_reason, reporting.comparison_quality_reason(q.resolved_price, q.price_state, q.currency, q.sqm, q.is_rent),
-                CASE
-                    WHEN (q.neighborhood IS NULL) THEN 'Missing mapped neighbourhood'::text
-                    WHEN (q.property_type IS NULL) THEN 'Unknown or ambiguous property type'::text
-                    WHEN (q.room_bucket IS NULL) THEN 'Missing or unsupported room bucket'::text
-                    WHEN (q.is_rent AND (q.furnished IS NULL)) THEN 'Unknown or partial furnishing'::text
-                    ELSE NULL::text
-                END) AS score_input_reason
-           FROM quality q
-        )
- SELECT article_id,
-    url,
-    title,
-    sqm,
-    rooms,
-    is_rent,
-    deal,
-    latitude,
-    longitude,
-    first_seen,
-    last_seen,
-    seller_type,
-    condition,
-    parking,
-    garage,
-    elevator,
-    heating,
-    floor_num,
-    plot_sqm,
-    year_built,
-    bathrooms,
-    rooms_detail,
-    furnished,
-    category_memberships,
-    property_type,
-    neighborhood,
-    room_bucket,
-    resolved_price,
-    price_state,
-    currency,
-    price_effective_at,
-    evidence_is_rent,
-    cycle_opened_at,
-    current_cycle_age_days,
-    reopened,
-    benchmark_at,
-    score_version,
-    price_reason,
-    asking_price,
-    asking_rate,
-    score_input_reason
-   FROM eligible;
+CREATE VIEW reporting.price_reductions_source AS
+ SELECT pc.article_id,
+        CASE
+            WHEN (l.url ~ '^https?://(www\.)?olx\.ba/artikal/[0-9]+/?$'::text) THEN l.url
+            ELSE NULL::text
+        END AS url,
+    l.title,
+    pc.category_memberships,
+    pc.category,
+    pc.deal,
+    pc.sqm,
+    pc.rooms,
+    COALESCE(NULLIF(l.location, ''::text),
+        CASE
+            WHEN (l.latitude IS NULL) THEN '(no pin)'::text
+            ELSE '(unmapped)'::text
+        END) AS neighborhood,
+    pc.prior_price,
+    pc.price AS new_price,
+    (- pc.delta) AS reduction_km,
+    (- pc.pct_change) AS reduction_pct,
+    pc.effective_at AS event_at,
+    ((l.closed_at IS NULL) AND (l.last_seen > (now() - '14 days'::interval))) AS currently_observed,
+    l.last_seen
+   FROM (public.v_listing_price_changes_source pc
+     JOIN public.listings l ON ((l.article_id = pc.article_id)))
+  WHERE (pc.delta < (0)::numeric);

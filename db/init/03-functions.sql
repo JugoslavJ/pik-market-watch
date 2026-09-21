@@ -1,7 +1,10 @@
--- Database functions.
+-- Canonical functions baseline.
 --
--- Ingestion helpers, analytics, geography, and trigger functions.
---
+-- Some SQL-language helpers refer to reporting views created later in the
+-- dependency order. PostgreSQL's dump format uses the same setting while
+-- restoring a complete schema.
+SET check_function_bodies = false;
+
 -- Name: analytics_daily_rebuild_window(date); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -9,69 +12,37 @@ CREATE FUNCTION public.analytics_daily_rebuild_window(p_as_of_day date DEFAULT N
     LANGUAGE plpgsql STABLE
     AS $$
 DECLARE
-  v_today DATE := LEAST(
-    COALESCE(p_as_of_day, (now() AT TIME ZONE 'Europe/Sarajevo')::date),
-    (now() AT TIME ZONE 'Europe/Sarajevo')::date
-  );
-  v_pending_from DATE;
-  v_pending_through DATE;
-  v_completed DATE;
-  v_first_evidence DATE;
-  v_first_daily DATE;
-  v_missing_day DATE;
-  v_from DATE;
+  v_today date := LEAST(COALESCE(p_as_of_day, (now() AT TIME ZONE 'Europe/Sarajevo')::date), (now() AT TIME ZONE 'Europe/Sarajevo')::date);
+  v_pending_from date; v_pending_through date; v_completed date;
+  v_first_evidence date; v_first_daily date; v_missing_day date; v_from date;
 BEGIN
   SELECT pending_from_day, pending_through_day, completed_through_day
     INTO v_pending_from, v_pending_through, v_completed
-    FROM analytics_refresh_state
-   WHERE scope = 'listing_daily';
-
+    FROM public.analytics_refresh_state WHERE scope = 'listing_daily';
   SELECT LEAST(
-           (SELECT min((effective_at AT TIME ZONE 'Europe/Sarajevo')::date)
-              FROM listing_state_history),
-           (SELECT min((effective_at AT TIME ZONE 'Europe/Sarajevo')::date)
-              FROM listing_price_events))
+           ((SELECT min(effective_at) FROM public.listing_state_history_state) AT TIME ZONE 'Europe/Sarajevo')::date,
+           ((SELECT min(effective_at) FROM public.listing_price_events) AT TIME ZONE 'Europe/Sarajevo')::date)
     INTO v_first_evidence;
-  SELECT min(day) INTO v_first_daily FROM listing_daily;
-
+  SELECT min(day) INTO v_first_daily FROM public.listing_daily_state;
   IF v_first_evidence IS NOT NULL AND v_today > v_first_evidence THEN
     SELECT min(days.day::date) INTO v_missing_day
       FROM generate_series(v_first_evidence, v_today - 1, interval '1 day') AS days(day)
-     WHERE NOT EXISTS (
-       SELECT 1 FROM analytics_daily_coverage c
-        WHERE c.day = days.day::date
-     );
+     WHERE NOT EXISTS (SELECT 1 FROM public.analytics_daily_coverage c WHERE c.day = days.day::date);
   END IF;
-
-  -- Do not include the first-ever evidence date once a contiguous watermark
-  -- exists: doing so would turn every maintenance tick into a full-history
-  -- rebuild. A new database (without a watermark) starts at its first
-  -- evidence; an existing database resumes from pending/missing days.
   SELECT min(candidate) INTO v_from
-    FROM (VALUES
-      (v_pending_from),
-      (v_missing_day),
-      (CASE WHEN v_completed IS NOT NULL THEN v_completed + 1 END),
-      (CASE WHEN v_completed IS NULL THEN COALESCE(v_first_evidence, v_first_daily) END),
-      (v_today)
-    ) AS candidates(candidate)
+    FROM (VALUES (v_pending_from), (v_missing_day),
+                 (CASE WHEN v_completed IS NOT NULL THEN v_completed + 1 END),
+                 (CASE WHEN v_completed IS NULL THEN COALESCE(v_first_evidence, v_first_daily) END),
+                 (v_today)) AS candidates(candidate)
    WHERE candidate IS NOT NULL;
-
-  -- A future pending bound can be created by a clock-skewed importer; the
-  -- rebuild function itself clamps it to today, so the helper does too.
   v_from := LEAST(COALESCE(v_from, v_today), v_today);
-  RETURN QUERY
-  SELECT v_from,
-         v_today,
-         CASE
-           WHEN v_missing_day IS NOT NULL THEN 'missing_day'
-           WHEN v_pending_from IS NOT NULL THEN 'pending_evidence'
-           WHEN v_completed IS NULL THEN 'no_completed_watermark'
-           WHEN v_completed < v_today - 1 THEN 'missing_or_unfinalized_days'
-           ELSE 'provisional_today'
-         END;
-END
-$$;
+  RETURN QUERY SELECT v_from, v_today,
+    CASE WHEN v_missing_day IS NOT NULL THEN 'missing_day'
+         WHEN v_pending_from IS NOT NULL THEN 'pending_evidence'
+         WHEN v_completed IS NULL THEN 'no_completed_watermark'
+         WHEN v_completed < v_today - 1 THEN 'missing_or_unfinalized_days'
+         ELSE 'provisional_today' END;
+END $$;
 
 --
 -- Name: analytics_sarajevo_day_start(date); Type: FUNCTION; Schema: public; Owner: -
@@ -113,6 +84,104 @@ END
 $$;
 
 --
+-- Name: apply_history_retention(integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.apply_history_retention(p_batch_size integer DEFAULT 5000) RETURNS bigint
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'public'
+    AS $$
+BEGIN
+  RETURN public.apply_operational_cleanup(p_batch_size);
+END
+$$;
+
+--
+-- Name: apply_operational_cleanup(integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.apply_operational_cleanup(p_batch_size integer DEFAULT 5000) RETURNS bigint
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'public'
+    AS $_$
+DECLARE p record; v_cutoff timestamptz; v_deleted bigint := 0; v_n bigint;
+BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended('pik-market-watch operational cleanup', 0));
+  PERFORM set_config('app.history_maintenance', 'cleanup', true);
+  FOR p IN SELECT * FROM public.analytics_retention_policy WHERE action = 'delete'
+           ORDER BY table_schema, table_name LOOP
+    v_cutoff := now() - make_interval(days => p.retention_days);
+    EXECUTE format('WITH doomed AS (SELECT ctid FROM ONLY %I.%I WHERE %I < $1 LIMIT $2)
+                    DELETE FROM ONLY %I.%I t USING doomed d WHERE t.ctid = d.ctid',
+      p.table_schema, p.table_name, p.timestamp_column,
+      p.table_schema, p.table_name)
+      USING v_cutoff, GREATEST(1, p_batch_size);
+    GET DIAGNOSTICS v_n = ROW_COUNT;
+    v_deleted := v_deleted + v_n;
+  END LOOP;
+  DELETE FROM public.raw_api_responses
+   WHERE id IN (SELECT id FROM public.raw_api_responses WHERE expires_at <= now()
+                ORDER BY expires_at, id LIMIT GREATEST(1, p_batch_size));
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  RETURN v_deleted + v_n;
+END
+$_$;
+
+--
+-- Name: attach_daily_version_refs(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.attach_daily_version_refs() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'public'
+    AS $$
+BEGIN
+  IF NEW.state_version_id IS NULL THEN
+    NEW.state_version_id := public.get_or_create_listing_state_version(
+      NULL, '{}'::text[], NULL, NULL, NULL, '{}'::jsonb, false, false);
+  END IF;
+  NEW.detail_version_id := public.ensure_listing_detail_version(
+    NEW.article_id, NEW.state_effective_at);
+  RETURN NEW;
+END
+$$;
+
+--
+-- Name: attach_history_version_refs(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.attach_history_version_refs() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'public'
+    AS $$
+BEGIN
+  IF NEW.state_version_id IS NULL THEN
+    NEW.state_version_id := public.get_or_create_listing_state_version(
+      NULL, '{}'::text[], NULL, NULL, NULL, '{}'::jsonb, false, false);
+  END IF;
+  NEW.detail_version_id := public.ensure_listing_detail_version(
+    NEW.article_id, NEW.effective_at);
+  RETURN NEW;
+END
+$$;
+
+--
+-- Name: capture_listing_detail_version(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.capture_listing_detail_version() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'public'
+    AS $$
+BEGIN
+  PERFORM public.ensure_listing_detail_version(
+    NEW.article_id,
+    COALESCE(NEW.details_fetched_at, NEW.last_seen, NEW.first_seen, now()));
+  RETURN NEW;
+END
+$$;
+
+--
 -- Name: dashboard_numeric(text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -139,10 +208,304 @@ EXCEPTION
 END
 $_$;
 
+--
+-- Name: ensure_analytics_partitions(integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.ensure_analytics_partitions(p_months_ahead integer DEFAULT NULL::integer) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'public'
+    AS $$
+DECLARE
+  p record;
+  v_min timestamptz;
+  v_start date;
+  v_stop date;
+  v_cursor date;
+  v_child text;
+  v_lower text;
+  v_upper text;
+  v_table regclass;
+  v_new boolean;
+  v_created integer := 0;
+BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended('pik-market-watch analytics partitions', 0));
+
+  FOR p IN
+    SELECT * FROM public.analytics_partition_policy
+     ORDER BY parent_schema, parent_table
+  LOOP
+    EXECUTE format('SELECT min(%I)::timestamptz FROM %I.%I',
+      p.partition_column, p.parent_schema, p.parent_table) INTO v_min;
+    v_start := date_trunc('month', COALESCE(v_min, now()))::date;
+    v_stop := (date_trunc('month', now()) +
+      make_interval(months => COALESCE(p_months_ahead, p.months_ahead) + 1))::date;
+    v_cursor := v_start;
+
+    WHILE v_cursor < v_stop LOOP
+      v_child := p.parent_table || '_' || to_char(v_cursor, 'YYYY_MM');
+      v_lower := CASE WHEN p.key_type = 'date'
+        THEN format('%L::date', v_cursor)
+        ELSE format('%L::timestamptz', v_cursor::timestamp AT TIME ZONE 'UTC') END;
+      v_upper := CASE WHEN p.key_type = 'date'
+        THEN format('%L::date', (v_cursor + interval '1 month')::date)
+        ELSE format('%L::timestamptz', (v_cursor + interval '1 month')::timestamp AT TIME ZONE 'UTC') END;
+      v_table := to_regclass(format('%I.%I', p.parent_schema, v_child));
+      v_new := v_table IS NULL;
+
+      IF v_new THEN
+        EXECUTE format(
+          'CREATE TABLE %I.%I (CHECK (%I >= %s AND %I < %s)) INHERITS (%I.%I)',
+          p.parent_schema, v_child, p.partition_column, v_lower,
+          p.partition_column, v_upper, p.parent_schema, p.parent_table);
+        v_table := to_regclass(format('%I.%I', p.parent_schema, v_child));
+        v_created := v_created + 1;
+      END IF;
+
+      IF v_new AND p.parent_table <> 'market_daily' THEN
+        EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON %I.%I (%I)',
+          v_child || '_key_idx', p.parent_schema, v_child, p.partition_column);
+      END IF;
+
+      IF p.parent_table = 'listing_state_history' THEN
+        EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON %I.%I (article_id, effective_at DESC, id DESC)',
+          v_child || '_article_effective_idx', p.parent_schema, v_child);
+        EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON %I.%I USING brin (ingested_at)',
+          v_child || '_ingested_brin', p.parent_schema, v_child);
+      ELSIF p.parent_table = 'listing_price_events' THEN
+        EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON %I.%I (article_id, effective_at, id)',
+          v_child || '_article_effective_idx', p.parent_schema, v_child);
+        EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON %I.%I (article_id, ingested_at DESC) WHERE source <> ''detail''',
+          v_child || '_article_ingested_non_detail_idx', p.parent_schema, v_child);
+        EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON %I.%I USING brin (ingested_at)',
+          v_child || '_ingested_brin', p.parent_schema, v_child);
+      ELSIF p.parent_table = 'price_history' THEN
+        EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON %I.%I (article_id, scraped_at DESC)',
+          v_child || '_article_scraped_idx', p.parent_schema, v_child);
+      ELSIF p.parent_table = 'listing_daily' THEN
+        EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON %I.%I (article_id, day DESC)',
+          v_child || '_article_day_idx', p.parent_schema, v_child);
+      ELSIF v_new AND p.parent_schema = 'olap'
+            AND p.parent_table = 'daily_listing_facts' THEN
+        EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON %I.%I
+                        (deal, property_type, neighborhood, room_bucket, day)',
+          v_child || '_cohort_day_idx', p.parent_schema, v_child);
+      END IF;
+
+      IF p.parent_table IN ('listing_state_history', 'listing_price_events', 'price_history') THEN
+        EXECUTE format('CREATE UNIQUE INDEX IF NOT EXISTS %I ON %I.%I (id)',
+          v_child || '_id_uq', p.parent_schema, v_child);
+        EXECUTE format('DROP TRIGGER IF EXISTS %I ON %I.%I',
+          v_child || '_append_only', p.parent_schema, v_child);
+        EXECUTE format('CREATE TRIGGER %I BEFORE UPDATE OR DELETE ON %I.%I FOR EACH ROW EXECUTE FUNCTION public.prevent_history_mutation()',
+          v_child || '_append_only', p.parent_schema, v_child);
+      ELSIF p.parent_table IN ('listing_daily', 'daily_listing_facts', 'public_daily_market') THEN
+        EXECUTE format('CREATE UNIQUE INDEX IF NOT EXISTS %I ON %I.%I (day, article_id)',
+          v_child || '_grain_uq', p.parent_schema, v_child);
+      ELSIF p.parent_table = 'market_daily' THEN
+        EXECUTE format('CREATE UNIQUE INDEX IF NOT EXISTS %I ON %I.%I (day)',
+          v_child || '_grain_uq', p.parent_schema, v_child);
+      END IF;
+
+      INSERT INTO public.analytics_partition_registry
+        (parent_schema, parent_table, child_table, from_at, through_at)
+      VALUES (p.parent_schema, p.parent_table, v_child,
+        v_cursor::timestamp AT TIME ZONE 'UTC',
+        (v_cursor + interval '1 month')::timestamp AT TIME ZONE 'UTC')
+      ON CONFLICT (parent_schema, child_table) DO NOTHING;
+
+      EXECUTE format('INSERT INTO %I.%I SELECT * FROM ONLY %I.%I WHERE %I >= %s AND %I < %s',
+        p.parent_schema, v_child, p.parent_schema, p.parent_table,
+        p.partition_column, v_lower, p.partition_column, v_upper);
+      PERFORM set_config('app.history_maintenance', 'migration', true);
+      EXECUTE format('DELETE FROM ONLY %I.%I WHERE %I >= %s AND %I < %s',
+        p.parent_schema, p.parent_table, p.partition_column, v_lower,
+        p.partition_column, v_upper);
+      v_cursor := (v_cursor + interval '1 month')::date;
+    END LOOP;
+
+    EXECUTE format('DROP TRIGGER IF EXISTS %I ON %I.%I',
+      p.parent_table || '_partition_route', p.parent_schema, p.parent_table);
+    EXECUTE format('CREATE TRIGGER %I BEFORE INSERT ON %I.%I FOR EACH ROW EXECUTE FUNCTION public.route_analytics_partition_insert()',
+      p.parent_table || '_partition_route', p.parent_schema, p.parent_table);
+  END LOOP;
+  RETURN v_created;
+END
+$$;
+
+--
+-- Name: ensure_listing_detail_version(bigint, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.ensure_listing_detail_version(p_article_id bigint, p_valid_from timestamp with time zone DEFAULT now()) RETURNS bigint
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'public'
+    AS $$
+DECLARE
+  v_listing public.listings;
+  v_hash text;
+  v_id bigint;
+  v_old_id bigint;
+  v_old_from timestamptz;
+  v_valid_from timestamptz := COALESCE(p_valid_from, now());
+BEGIN
+  PERFORM pg_advisory_xact_lock(
+    hashtextextended('pik-market-watch listing detail version', p_article_id));
+  SELECT * INTO v_listing
+    FROM public.listings
+   WHERE article_id = p_article_id;
+  IF NOT FOUND THEN RETURN NULL; END IF;
+
+  v_hash := public.listing_detail_hash(v_listing);
+  SELECT detail_version_id, valid_from, detail_hash
+    INTO v_id, v_old_from, v_hash
+    FROM public.listing_detail_versions
+   WHERE article_id = p_article_id AND valid_to IS NULL
+   ORDER BY valid_from DESC, detail_version_id DESC
+   LIMIT 1;
+
+  -- Reuse the current row when the detail content is unchanged.  The
+  -- trigger's WHEN clause normally makes this call unnecessary for card-only
+  -- updates, but history/daily reference triggers still use this function.
+  IF v_id IS NOT NULL AND v_hash = public.listing_detail_hash(v_listing) THEN
+    RETURN v_id;
+  END IF;
+  v_hash := public.listing_detail_hash(v_listing);
+
+  IF v_id IS NOT NULL THEN
+    v_old_id := v_id;
+    IF v_valid_from <= v_old_from THEN
+      v_valid_from := v_old_from + interval '1 microsecond';
+    END IF;
+    UPDATE public.listing_detail_versions
+       SET valid_to = v_valid_from
+     WHERE detail_version_id = v_old_id AND valid_to IS NULL;
+  END IF;
+
+  INSERT INTO public.listing_detail_versions (
+    article_id, detail_hash, valid_from, url, title, sqm, rooms, is_rent,
+    location, latitude, longitude, published_at, renewed_at, seller_type,
+    rooms_detail, bathrooms, floor_num, floors_total, unit_levels, heating,
+    furnished, condition, parking, garage, elevator, year_built, plot_sqm,
+    orientation, views, favorites, characteristics, api_status,
+    api_price_history)
+  VALUES (
+    v_listing.article_id, v_hash, v_valid_from, v_listing.url, v_listing.title,
+    v_listing.sqm, v_listing.rooms, v_listing.is_rent, v_listing.location,
+    v_listing.latitude, v_listing.longitude, v_listing.published_at,
+    v_listing.renewed_at, v_listing.seller_type, v_listing.rooms_detail,
+    v_listing.bathrooms, v_listing.floor_num, v_listing.floors_total,
+    v_listing.unit_levels, v_listing.heating, v_listing.furnished,
+    v_listing.condition, v_listing.parking, v_listing.garage, v_listing.elevator,
+    v_listing.year_built, v_listing.plot_sqm, v_listing.orientation,
+    v_listing.views, v_listing.favorites, COALESCE(v_listing.characteristics, '{}'::jsonb),
+    v_listing.api_status, v_listing.api_price_history)
+  RETURNING detail_version_id INTO v_id;
+  RETURN v_id;
+END
+$$;
+
+--
+-- Name: get_or_create_listing_state_version(text, text[], boolean, numeric, text, jsonb, boolean, boolean); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.get_or_create_listing_state_version(p_category text, p_category_membership text[], p_is_rent boolean, p_sqm numeric, p_rooms text, p_filter_attributes jsonb, p_membership_inferred boolean, p_attributes_inferred boolean) RETURNS bigint
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'public'
+    AS $$
+DECLARE
+  v_hash text := public.listing_state_version_hash(
+    p_category, p_category_membership, p_is_rent, p_sqm, p_rooms,
+    p_filter_attributes, p_membership_inferred, p_attributes_inferred);
+  v_id bigint;
+  v_membership text[] := COALESCE(p_category_membership, '{}'::text[]);
+  v_attributes jsonb := COALESCE(p_filter_attributes, '{}'::jsonb);
+BEGIN
+  -- The common path is a read.  The insert remains race-safe, but a hot
+  -- ingestion batch no longer burns an identity value for every known hash.
+  SELECT state_version_id INTO v_id
+    FROM public.listing_state_versions
+   WHERE state_hash = v_hash;
+  IF FOUND THEN RETURN v_id; END IF;
+
+  INSERT INTO public.listing_state_versions (
+    state_hash, category, category_membership, is_rent, sqm, rooms,
+    filter_attributes, membership_inferred, attributes_inferred)
+  VALUES (
+    v_hash, p_category, v_membership, p_is_rent, p_sqm, p_rooms,
+    v_attributes, COALESCE(p_membership_inferred, false),
+    COALESCE(p_attributes_inferred, false))
+  ON CONFLICT (state_hash) DO NOTHING;
+
+  SELECT state_version_id INTO v_id
+    FROM public.listing_state_versions
+   WHERE state_hash = v_hash;
+  RETURN v_id;
+END
+$$;
+
 
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
+
+--
+-- Name: listing_detail_hash(public.listings); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.listing_detail_hash(p_listing public.listings) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    AS $$
+  SELECT md5(jsonb_build_object(
+    'url', p_listing.url,
+    'title', p_listing.title,
+    'sqm', p_listing.sqm,
+    'rooms', p_listing.rooms,
+    'is_rent', p_listing.is_rent,
+    'location', p_listing.location,
+    'latitude', p_listing.latitude,
+    'longitude', p_listing.longitude,
+    'published_at', p_listing.published_at,
+    'renewed_at', p_listing.renewed_at,
+    'seller_type', p_listing.seller_type,
+    'rooms_detail', p_listing.rooms_detail,
+    'bathrooms', p_listing.bathrooms,
+    'floor_num', p_listing.floor_num,
+    'floors_total', p_listing.floors_total,
+    'unit_levels', p_listing.unit_levels,
+    'heating', p_listing.heating,
+    'furnished', p_listing.furnished,
+    'condition', p_listing.condition,
+    'parking', p_listing.parking,
+    'garage', p_listing.garage,
+    'elevator', p_listing.elevator,
+    'year_built', p_listing.year_built,
+    'plot_sqm', p_listing.plot_sqm,
+    'orientation', p_listing.orientation,
+    'characteristics', COALESCE(p_listing.characteristics, '{}'::jsonb),
+    'api_status', p_listing.api_status,
+    'api_price_history', p_listing.api_price_history
+  )::text)
+$$;
+
+--
+-- Name: listing_state_version_hash(text, text[], boolean, numeric, text, jsonb, boolean, boolean); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.listing_state_version_hash(p_category text, p_category_membership text[], p_is_rent boolean, p_sqm numeric, p_rooms text, p_filter_attributes jsonb, p_membership_inferred boolean, p_attributes_inferred boolean) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    AS $_$
+  SELECT md5(jsonb_build_object(
+    'category', $1,
+    'category_membership', to_jsonb(COALESCE($2, '{}'::text[])),
+    'is_rent', $3,
+    'sqm', $4,
+    'rooms', $5,
+    'filter_attributes', COALESCE($6, '{}'::jsonb),
+    'membership_inferred', COALESCE($7, false),
+    'attributes_inferred', COALESCE($8, false)
+  )::text)
+$_$;
 
 --
 -- Name: listings_closed_filtered(text[], numeric, numeric, text[]); Type: FUNCTION; Schema: public; Owner: -
@@ -184,6 +547,35 @@ CREATE FUNCTION public.listings_filtered(p_category text[], p_min_sqm numeric, p
 $$;
 
 --
+-- Name: mark_article_olap_dirty(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.mark_article_olap_dirty() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+BEGIN
+  INSERT INTO public.olap_article_dirty(article_id)
+  VALUES (COALESCE(NEW.article_id, OLD.article_id))
+  ON CONFLICT (article_id) DO UPDATE SET marked_at=now();
+  RETURN COALESCE(NEW, OLD);
+END
+$$;
+
+--
+-- Name: mark_daily_article_dirty(bigint); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.mark_daily_article_dirty(p_article_id bigint) RETURNS void
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'public'
+    AS $_$
+  INSERT INTO public.analytics_daily_dirty_articles(article_id, marked_at)
+  VALUES ($1, clock_timestamp())
+  ON CONFLICT (article_id) DO UPDATE SET marked_at = EXCLUDED.marked_at;
+$_$;
+
+--
 -- Name: mark_daily_olap_dirty(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -216,15 +608,20 @@ CREATE FUNCTION public.market_daily_filtered(p_from_day date, p_through_day date
     percentile_cont(0.75) WITHIN GROUP (ORDER BY d.ppm2)
       FILTER (WHERE d.price_state='valid' AND d.ppm2 IS NOT NULL),
     count(*) FILTER (WHERE d.membership_inferred OR d.attributes_inferred)::bigint,
-    count(*) FILTER (WHERE d.stale_observation)::bigint, bool_or(d.provisional_day)
-  FROM olap.daily_listing_facts d
-  WHERE d.day BETWEEN p_from_day AND least(p_through_day, (now() AT TIME ZONE 'Europe/Sarajevo')::date)
-    AND (coalesce(cardinality(p_category),0)=0 OR d.category_memberships && p_category OR d.category=ANY(p_category))
+    count(*) FILTER (WHERE d.stale_observation)::bigint,
+    bool_or(d.provisional_day)
+  FROM reporting.daily_listing_facts d
+  WHERE d.day BETWEEN p_from_day
+                    AND least(p_through_day, (now() AT TIME ZONE 'Europe/Sarajevo')::date)
+    AND (coalesce(cardinality(p_category),0)=0
+         OR d.category_memberships && p_category OR d.category=ANY(p_category))
     AND (p_min_sqm IS NULL OR d.sqm IS NULL OR d.sqm>=p_min_sqm)
     AND (p_max_sqm IS NULL OR d.sqm IS NULL OR d.sqm<=p_max_sqm)
-    AND (coalesce(cardinality(p_rooms),0)=0 OR d.rooms=ANY(p_rooms) OR d.room_bucket=ANY(p_rooms))
+    AND (coalesce(cardinality(p_rooms),0)=0
+         OR d.rooms=ANY(p_rooms) OR d.room_bucket=ANY(p_rooms))
     AND (coalesce(cardinality(p_deal),0)=0 OR d.deal=ANY(p_deal))
-    AND (coalesce(cardinality(p_neighborhood),0)=0 OR d.neighborhood=ANY(p_neighborhood) OR d.location=ANY(p_neighborhood))
+    AND (coalesce(cardinality(p_neighborhood),0)=0
+         OR d.neighborhood=ANY(p_neighborhood) OR d.location=ANY(p_neighborhood))
   GROUP BY d.day ORDER BY d.day
 $$;
 
@@ -233,34 +630,32 @@ $$;
 --
 
 CREATE FUNCTION public.neighborhood_of(p_lat double precision, p_lon double precision) RETURNS text
-    LANGUAGE plpgsql STABLE
+    LANGUAGE sql STABLE
     AS $$
-DECLARE
-  n_row     RECORD;
-  d         double precision;
-  best_name TEXT;
-  best_dist double precision;
-BEGIN
-  IF p_lat IS NULL OR p_lon IS NULL THEN
-    RETURN NULL;
-  END IF;
-  FOR n_row IN SELECT name, poly FROM neighborhoods ORDER BY priority, name LOOP
-    IF point_in_polygon(p_lat, p_lon, n_row.poly) THEN
-      RETURN n_row.name;
-    END IF;
-  END LOOP;
-  FOR n_row IN SELECT name, poly FROM neighborhoods ORDER BY priority, name LOOP
-    d := polygon_distance_m(p_lat, p_lon, n_row.poly);
-    IF d IS NOT NULL AND (best_dist IS NULL OR d < best_dist) THEN
-      best_dist := d;
-      best_name := n_row.name;
-    END IF;
-  END LOOP;
-  IF best_dist IS NOT NULL AND best_dist <= 5000 THEN
-    RETURN best_name;
-  END IF;
-  RETURN NULL;
-END;
+  WITH point AS (
+    SELECT ST_SetSRID(ST_MakePoint(p_lon, p_lat), 4326) AS geom,
+           ST_SetSRID(ST_MakePoint(p_lon, p_lat), 4326)::geography AS geog
+     WHERE p_lat IS NOT NULL AND p_lon IS NOT NULL
+  ), covered AS (
+    SELECT n.name
+      FROM point p
+      JOIN public.neighborhoods n
+        ON n.boundary && p.geom
+       AND ST_Covers(n.boundary, p.geom)
+     ORDER BY n.priority, n.name
+     LIMIT 1
+  ), nearby AS (
+    SELECT n.name
+      FROM point p
+      JOIN public.neighborhoods n
+        ON n.boundary && ST_Expand(p.geom, 0.07)
+       AND ST_DWithin(n.boundary, p.geom, 0.07)
+       AND ST_DWithin(n.boundary_geography, p.geog, 5000)
+     ORDER BY ST_Distance(n.boundary_geography, p.geog),
+              n.priority, n.name
+     LIMIT 1
+  )
+  SELECT COALESCE((SELECT name FROM covered), (SELECT name FROM nearby))
 $$;
 
 --
@@ -270,12 +665,18 @@ $$;
 CREATE FUNCTION public.normalize_listing_daily_flags() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
+DECLARE
+  v_neighborhood text;
 BEGIN
-  NEW.membership_inferred := COALESCE(NEW.membership_inferred, false);
-  NEW.attributes_inferred := COALESCE(NEW.attributes_inferred, false);
-  IF TG_OP = 'INSERT' OR NEW.neighborhood IS NULL
-     OR NEW.filter_attributes IS DISTINCT FROM OLD.filter_attributes THEN
-    NEW.location := analytics_state_neighborhood(NEW.filter_attributes);
+  SELECT public.analytics_state_neighborhood(v.filter_attributes)
+    INTO v_neighborhood
+    FROM public.listing_state_versions v
+   WHERE v.state_version_id = NEW.state_version_id;
+  IF TG_OP = 'INSERT' OR NEW.location IS NULL
+     OR NEW.state_version_id IS DISTINCT FROM OLD.state_version_id THEN
+    NEW.location := v_neighborhood;
+    NEW.neighborhood := v_neighborhood;
+  ELSIF NEW.neighborhood IS NULL THEN
     NEW.neighborhood := NEW.location;
   END IF;
   RETURN NEW;
@@ -363,6 +764,37 @@ END;
 $$;
 
 --
+-- Name: prevent_history_mutation(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.prevent_history_mutation() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+BEGIN
+  IF current_setting('app.history_maintenance', true) IN ('migration', 'retention') THEN
+    IF TG_OP = 'UPDATE'
+       AND (TG_TABLE_NAME LIKE 'listing_state_history%'
+            OR TG_TABLE_NAME LIKE 'listing_price_events%'
+            OR TG_TABLE_NAME LIKE 'price_history%'
+            OR TG_TABLE_NAME LIKE 'listing_publication_evidence%') THEN
+      NEW.ingested_at := now();
+      INSERT INTO public.olap_article_dirty(article_id)
+      VALUES (NEW.article_id)
+      ON CONFLICT (article_id) DO UPDATE SET marked_at=now();
+    ELSIF TG_OP = 'DELETE' THEN
+      INSERT INTO public.olap_article_dirty(article_id)
+      VALUES (OLD.article_id)
+      ON CONFLICT (article_id) DO UPDATE SET marked_at=now();
+    END IF;
+    RETURN COALESCE(NEW, OLD);
+  END IF;
+  RAISE EXCEPTION '% is append-only; % is not permitted', TG_TABLE_NAME, TG_OP
+    USING ERRCODE = 'restrict_violation';
+END
+$$;
+
+--
 -- Name: rebuild_listing_daily(date, date); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -436,8 +868,24 @@ DECLARE
   v_completed DATE;
   v_horizon DATE;
   v_new_completed DATE;
+
   v_rows BIGINT;
+
+  v_dirty_marked_at timestamptz := clock_timestamp();
+  v_full_rebuild boolean;
+
+
 BEGIN
+  SELECT (v_from < v_today AND NOT EXISTS (
+           SELECT 1 FROM public.analytics_daily_dirty_articles
+           WHERE article_id > 0
+         ))
+      OR EXISTS (
+           SELECT 1 FROM public.analytics_daily_dirty_articles
+           WHERE article_id = 0
+         )
+    INTO v_full_rebuild;
+
   IF v_from IS NULL OR v_through IS NULL OR v_from > v_through THEN
     RAISE EXCEPTION 'invalid listing_daily rebuild range: % through %', p_from_day, p_through_day;
   END IF;
@@ -449,7 +897,23 @@ BEGIN
    WHERE scope = 'listing_daily'
    FOR UPDATE;
 
-  DELETE FROM listing_daily WHERE day BETWEEN v_from AND v_through;
+
+  IF v_full_rebuild THEN
+    DELETE FROM public.listing_daily WHERE day BETWEEN v_from AND v_through;
+  ELSIF EXISTS (
+    SELECT 1 FROM public.analytics_daily_dirty_articles WHERE article_id > 0
+  ) THEN
+    DELETE FROM public.listing_daily
+     WHERE day BETWEEN v_from AND v_through
+       AND article_id IN (
+         SELECT article_id FROM public.analytics_daily_dirty_articles
+          WHERE article_id > 0
+       );
+  ELSE
+    RETURN QUERY SELECT v_from, v_through, 0::bigint;
+    RETURN;
+  END IF;
+
 
   WITH
   days AS MATERIALIZED (
@@ -463,16 +927,53 @@ BEGIN
            END AS endpoint
       FROM generate_series(v_from, v_through, interval '1 day') AS s(d)
   ),
-  articles AS (
-    SELECT article_id FROM listing_state_history
+
+  dirty_articles AS (
+    SELECT article_id FROM public.analytics_daily_dirty_articles
+     WHERE article_id > 0
+  ),
+  activity_windows AS (
+    SELECT h.article_id,
+           h.effective_at,
+           COALESCE(h.last_seen_at, h.effective_at) + interval '14 days' AS through_at
+      FROM public.listing_state_history_state h
+     WHERE h.event_type IN ('search_sighting', 'reopened')
+       AND (NOT EXISTS (SELECT 1 FROM dirty_articles)
+            OR EXISTS (SELECT 1 FROM dirty_articles d WHERE d.article_id = h.article_id))
+  ),
+  price_windows AS (
+    SELECT e.article_id, min(e.effective_at) AS from_at
+      FROM public.listing_price_events e
+     WHERE e.price_state = 'valid'
+       AND e.price IS NOT NULL
+       AND (NOT EXISTS (SELECT 1 FROM dirty_articles)
+            OR EXISTS (SELECT 1 FROM dirty_articles d WHERE d.article_id = e.article_id))
+     GROUP BY e.article_id
+  ),
+  candidate_grid AS (
+    SELECT DISTINCT w.article_id, d.day, d.endpoint
+      FROM activity_windows w
+      JOIN days d ON d.endpoint > w.effective_at
+                AND d.endpoint <= w.through_at
     UNION
-    SELECT article_id FROM listing_price_events
+    SELECT DISTINCT w.article_id, d.day, d.endpoint
+      FROM price_windows w
+      JOIN days d ON d.endpoint > w.from_at
   ),
   grid AS (
-    SELECT a.article_id, d.day, d.endpoint
-      FROM articles a CROSS JOIN days d
+    SELECT article_id, day, endpoint FROM candidate_grid
+  ),
+  price_first AS MATERIALIZED (
+    SELECT e.article_id, min(e.effective_at) AS first_valid_at
+      FROM listing_price_events e
+     WHERE e.price_state = 'valid'
+       AND e.price IS NOT NULL
+       AND (NOT EXISTS (SELECT 1 FROM dirty_articles)
+            OR EXISTS (SELECT 1 FROM dirty_articles d WHERE d.article_id = e.article_id))
+     GROUP BY e.article_id
   ),
   facts AS MATERIALIZED (
+
     SELECT g.*,
            op.effective_at AS observed_effective_at,
            op.id AS observed_id,
@@ -498,26 +999,20 @@ BEGIN
            lp.price AS event_price,
            lp.price_state AS event_price_state,
            lp.effective_at AS event_price_effective_at,
-           act.activity_at,
-           life.event_type AS latest_lifecycle_event
+           actlife.activity_at,
+           actlife.latest_lifecycle_event
       FROM grid g
       LEFT JOIN LATERAL (
-        SELECT s.* FROM listing_state_history s
+        SELECT s.* FROM public.listing_state_history_state s
          WHERE s.article_id = g.article_id AND s.effective_at < g.endpoint
          ORDER BY s.effective_at DESC, s.id DESC LIMIT 1
       ) op ON TRUE
       LEFT JOIN LATERAL (
-        SELECT s.* FROM listing_state_history s
+        SELECT s.* FROM public.listing_state_history_state s
          WHERE s.article_id = g.article_id AND s.effective_at >= g.endpoint
          ORDER BY s.effective_at ASC, s.id ASC LIMIT 1
       ) fp ON TRUE
-      LEFT JOIN LATERAL (
-        SELECT min(effective_at) AS first_valid_at
-          FROM listing_price_events e
-         WHERE e.article_id = g.article_id
-           AND e.price_state = 'valid'
-           AND e.price IS NOT NULL
-      ) ep ON TRUE
+      LEFT JOIN price_first ep ON ep.article_id = g.article_id
       LEFT JOIN LATERAL (
          SELECT e.price, e.price_state, e.effective_at
           FROM listing_price_events e
@@ -530,20 +1025,15 @@ BEGIN
          LIMIT 1
       ) lp ON TRUE
       LEFT JOIN LATERAL (
-        SELECT max(COALESCE(s.last_seen_at, s.effective_at)) AS activity_at
-          FROM listing_state_history s
+        SELECT max(COALESCE(s.last_seen_at, s.effective_at))
+                 FILTER (WHERE s.event_type IN ('search_sighting', 'reopened')) AS activity_at,
+               (array_agg(s.event_type ORDER BY s.effective_at DESC, s.id DESC)
+                 FILTER (WHERE s.event_type IN ('search_sighting', 'closed', 'reopened')))[1]
+                 AS latest_lifecycle_event
+          FROM public.listing_state_history_state s
          WHERE s.article_id = g.article_id
            AND s.effective_at < g.endpoint
-           AND s.event_type IN ('search_sighting', 'reopened')
-      ) act ON TRUE
-      LEFT JOIN LATERAL (
-        SELECT s.event_type
-          FROM listing_state_history s
-         WHERE s.article_id = g.article_id
-           AND s.effective_at < g.endpoint
-           AND s.event_type IN ('search_sighting', 'closed', 'reopened')
-         ORDER BY s.effective_at DESC, s.id DESC LIMIT 1
-      ) life ON TRUE
+      ) actlife ON TRUE
   ),
   resolved AS (
     SELECT f.*,
@@ -631,7 +1121,7 @@ BEGIN
             FILTER (WHERE h.sqm IS NOT NULL))[1] AS sqm,
           (array_agg(h.rooms ORDER BY h.effective_at DESC, h.id DESC)
             FILTER (WHERE h.rooms IS NOT NULL))[1] AS rooms
-          FROM listing_state_history h
+          FROM public.listing_state_history_state h
          WHERE h.article_id = c.article_id AND h.effective_at < c.endpoint
            AND h.event_type IN ('search_sighting', 'detail_update', 'reopened')
       ) s
@@ -639,7 +1129,7 @@ BEGIN
         SELECT COALESCE(jsonb_object_agg(a.key, a.value), '{}'::jsonb) AS attributes
           FROM (
             SELECT DISTINCT ON (kv.key) kv.key, kv.value
-              FROM listing_state_history h
+              FROM public.listing_state_history_state h
               CROSS JOIN LATERAL jsonb_each(
                 CASE WHEN jsonb_typeof(h.filter_attributes) = 'object'
                      THEN h.filter_attributes ELSE '{}'::jsonb END) kv
@@ -650,7 +1140,7 @@ BEGIN
       ) j
       CROSS JOIN LATERAL (
         SELECT COALESCE(array_agg(DISTINCT member ORDER BY member), '{}'::text[]) AS memberships
-          FROM listing_state_history h
+          FROM public.listing_state_history_state h
           CROSS JOIN LATERAL unnest(h.category_membership) u(member)
          WHERE h.article_id = c.article_id AND h.effective_at < c.endpoint
            AND h.event_type IN ('search_sighting', 'detail_update', 'reopened')
@@ -692,19 +1182,19 @@ BEGIN
     SELECT filter_attributes, analytics_state_neighborhood(filter_attributes) AS neighborhood
       FROM inputs
   )
-  INSERT INTO listing_daily (
-    day, article_id, price, price_state, ppm2, is_rent, sqm, rooms,
-    category, category_memberships, location, filter_attributes,
-    state_effective_at, price_effective_at, membership_inferred,
-    attributes_inferred, stale_observation, provisional_day, neighborhood,
-    resolved_state_version
-  )
-  SELECT f.day, f.article_id, f.price, f.price_state, f.ppm2, f.is_rent, f.sqm, f.rooms,
-         f.category, f.category_memberships, l.neighborhood, f.filter_attributes,
-         f.state_effective_at, f.price_effective_at, f.membership_inferred,
-         f.attributes_inferred, f.stale_observation, f.provisional_day, l.neighborhood, 1
-    FROM filled f JOIN locations l USING (filter_attributes);
 
+  INSERT INTO listing_daily (
+    day, article_id, price, price_state, ppm2, state_version_id,
+    location, state_effective_at, price_effective_at, stale_observation,
+    provisional_day, neighborhood, resolved_state_version
+  )
+  SELECT f.day, f.article_id, f.price, f.price_state, f.ppm2,
+         public.get_or_create_listing_state_version(
+           f.category, f.category_memberships, f.is_rent, f.sqm, f.rooms,
+           f.filter_attributes, f.membership_inferred, f.attributes_inferred),
+         l.neighborhood, f.state_effective_at, f.price_effective_at,
+         f.stale_observation, f.provisional_day, l.neighborhood, 1
+    FROM filled f JOIN locations l USING (filter_attributes);
 
   GET DIAGNOSTICS v_rows = ROW_COUNT;
 
@@ -741,7 +1231,15 @@ BEGIN
      WHERE scope = 'listing_daily';
   END IF;
 
+
+  IF v_pending_from IS NULL
+     OR (v_from <= v_pending_from AND v_through >= COALESCE(v_pending_through, v_through)) THEN
+    DELETE FROM public.analytics_daily_dirty_articles
+     WHERE marked_at <= v_dirty_marked_at;
+  END IF;
+
   RETURN QUERY SELECT v_from, v_through, v_rows;
+
 END
 $$;
 
@@ -753,150 +1251,85 @@ CREATE FUNCTION public.resolve_listing_daily_sparse_state() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 DECLARE
-  v_endpoint       TIMESTAMPTZ;
-  v_category       TEXT;
-  v_is_rent        BOOLEAN;
-  v_sqm            NUMERIC(8,2);
-  v_rooms          TEXT;
-  v_attributes     JSONB := '{}'::jsonb;
-  v_memberships    TEXT[] := '{}'::text[];
-  v_merged         TEXT[] := '{}'::text[];
-  v_attributes_inferred BOOLEAN := false;
-  v_membership_inferred BOOLEAN := false;
+  v_endpoint timestamptz;
+  v_category text;
+  v_memberships text[] := '{}'::text[];
+  v_is_rent boolean;
+  v_sqm numeric;
+  v_rooms text;
+  v_attributes jsonb := '{}'::jsonb;
 BEGIN
-  -- Historical days end at the next Sarajevo midnight. Today's provisional
-  -- row has the same small clock-skew allowance as the rebuild function.
-  v_endpoint := CASE
-    WHEN NEW.provisional_day
+  IF NEW.state_version_id IS NULL THEN
+    v_endpoint := CASE WHEN NEW.provisional_day
       THEN clock_timestamp() + interval '5 minutes'
-    ELSE analytics_sarajevo_day_start(NEW.day + 1)
-  END;
+      ELSE public.analytics_sarajevo_day_start(NEW.day + 1)
+    END;
 
-  SELECT s.category
-    INTO v_category
-    FROM listing_state_history s
-   WHERE s.article_id = NEW.article_id
-     AND s.effective_at < v_endpoint
-     AND s.event_type IN ('search_sighting', 'detail_update', 'reopened')
-     AND NULLIF(btrim(s.category), '') IS NOT NULL
-   ORDER BY s.effective_at DESC, s.id DESC
-   LIMIT 1;
+    SELECT
+      (array_agg(h.category ORDER BY h.effective_at DESC, h.id DESC)
+        FILTER (WHERE NULLIF(btrim(h.category), '') IS NOT NULL))[1],
+      (array_agg(h.is_rent ORDER BY h.effective_at DESC, h.id DESC)
+        FILTER (WHERE h.is_rent IS NOT NULL))[1],
+      (array_agg(h.sqm ORDER BY h.effective_at DESC, h.id DESC)
+        FILTER (WHERE h.sqm IS NOT NULL))[1],
+      (array_agg(h.rooms ORDER BY h.effective_at DESC, h.id DESC)
+        FILTER (WHERE h.rooms IS NOT NULL))[1]
+      INTO v_category, v_is_rent, v_sqm, v_rooms
+      FROM public.listing_state_history_state h
+     WHERE h.article_id = NEW.article_id
+       AND h.effective_at < v_endpoint
+       AND h.event_type IN ('search_sighting', 'detail_update', 'reopened');
 
-  SELECT s.is_rent
-    INTO v_is_rent
-    FROM listing_state_history s
-   WHERE s.article_id = NEW.article_id
-     AND s.effective_at < v_endpoint
-     AND s.event_type IN ('search_sighting', 'detail_update', 'reopened')
-     AND s.is_rent IS NOT NULL
-   ORDER BY s.effective_at DESC, s.id DESC
-   LIMIT 1;
+    SELECT COALESCE(array_agg(DISTINCT member ORDER BY member), '{}'::text[])
+      INTO v_memberships
+      FROM public.listing_state_history_state h
+      CROSS JOIN LATERAL unnest(h.category_membership) u(member)
+     WHERE h.article_id = NEW.article_id
+       AND h.effective_at < v_endpoint
+       AND h.event_type IN ('search_sighting', 'detail_update', 'reopened')
+       AND member IS NOT NULL AND member <> '';
 
-  SELECT s.sqm
-    INTO v_sqm
-    FROM listing_state_history s
-   WHERE s.article_id = NEW.article_id
-     AND s.effective_at < v_endpoint
-     AND s.event_type IN ('search_sighting', 'detail_update', 'reopened')
-     AND s.sqm IS NOT NULL
-   ORDER BY s.effective_at DESC, s.id DESC
-   LIMIT 1;
+    SELECT COALESCE(jsonb_object_agg(a.key, a.value), '{}'::jsonb)
+      INTO v_attributes
+      FROM (
+        SELECT DISTINCT ON (kv.key) kv.key, kv.value
+          FROM public.listing_state_history_state h
+          CROSS JOIN LATERAL jsonb_each(
+            CASE WHEN jsonb_typeof(h.filter_attributes) = 'object'
+                 THEN h.filter_attributes ELSE '{}'::jsonb END) kv
+         WHERE h.article_id = NEW.article_id
+           AND h.effective_at < v_endpoint
+           AND h.event_type IN ('search_sighting', 'detail_update', 'reopened')
+         ORDER BY kv.key, h.effective_at DESC, h.id DESC
+      ) a;
 
-  SELECT s.rooms
-    INTO v_rooms
-    FROM listing_state_history s
-   WHERE s.article_id = NEW.article_id
-     AND s.effective_at < v_endpoint
-     AND s.event_type IN ('search_sighting', 'detail_update', 'reopened')
-     AND s.rooms IS NOT NULL
-   ORDER BY s.effective_at DESC, s.id DESC
-   LIMIT 1;
+    v_memberships := ARRAY(
+      SELECT DISTINCT member
+        FROM unnest(
+          COALESCE(v_memberships, '{}'::text[])
+          || CASE WHEN v_category IS NULL THEN '{}'::text[]
+                  ELSE ARRAY[v_category] END) u(member)
+       WHERE member IS NOT NULL AND member <> ''
+       ORDER BY member);
 
-  -- Fold JSON fields independently. DISTINCT ON makes the newest observation
-  -- for each key win while retaining unrelated keys from richer detail rows.
-  SELECT COALESCE(jsonb_object_agg(a.key, a.value), '{}'::jsonb)
-    INTO v_attributes
-    FROM (
-      SELECT DISTINCT ON (kv.key) kv.key, kv.value
-        FROM listing_state_history s
-        CROSS JOIN LATERAL jsonb_each(
-          CASE WHEN jsonb_typeof(s.filter_attributes) = 'object'
-               THEN s.filter_attributes ELSE '{}'::jsonb END
-        ) AS kv(key, value)
-       WHERE s.article_id = NEW.article_id
-         AND s.effective_at < v_endpoint
-         AND s.event_type IN ('search_sighting', 'detail_update', 'reopened')
-       ORDER BY kv.key, s.effective_at DESC, s.id DESC
-    ) AS a;
+    NEW.state_version_id := public.get_or_create_listing_state_version(
+      v_category, v_memberships, v_is_rent, v_sqm, v_rooms, v_attributes,
+      true, true);
 
-  SELECT COALESCE(array_agg(DISTINCT member ORDER BY member), '{}'::text[])
-    INTO v_memberships
-    FROM listing_state_history s
-    CROSS JOIN LATERAL unnest(s.category_membership) AS u(member)
-   WHERE s.article_id = NEW.article_id
-     AND s.effective_at < v_endpoint
-     AND s.event_type IN ('search_sighting', 'detail_update', 'reopened')
-     AND member IS NOT NULL
-     AND member <> '';
-
-  IF NEW.category IS NULL AND v_category IS NOT NULL THEN
-    NEW.category := v_category;
-    v_attributes_inferred := true;
-  END IF;
-  IF NEW.is_rent IS NULL AND v_is_rent IS NOT NULL THEN
-    NEW.is_rent := v_is_rent;
-    v_attributes_inferred := true;
-  END IF;
-  IF NEW.sqm IS NULL AND v_sqm IS NOT NULL THEN
-    NEW.sqm := v_sqm;
-    v_attributes_inferred := true;
-  END IF;
-  IF NEW.rooms IS NULL AND v_rooms IS NOT NULL THEN
-    NEW.rooms := v_rooms;
-    v_attributes_inferred := true;
-  END IF;
-
-  -- Newer search/detail keys take precedence, while older rich keys remain
-  -- available when a sparse observation omitted them.
-  IF v_attributes <> '{}'::jsonb THEN
-    IF EXISTS (
-      SELECT 1
-        FROM jsonb_object_keys(v_attributes) AS k(key)
-       WHERE NOT (COALESCE(NEW.filter_attributes, '{}'::jsonb) ? k.key)
-    ) THEN
-      v_attributes_inferred := true;
+    IF NEW.state_version_id IS NULL THEN
+      SELECT h.state_version_id INTO NEW.state_version_id
+        FROM public.listing_state_history_state h
+       WHERE h.article_id = NEW.article_id
+         AND h.effective_at < v_endpoint
+         AND h.event_type IN ('search_sighting', 'detail_update', 'reopened')
+       ORDER BY h.effective_at DESC, h.id DESC
+       LIMIT 1;
     END IF;
-    NEW.filter_attributes := v_attributes || COALESCE(NEW.filter_attributes, '{}'::jsonb);
-  ELSE
-    NEW.filter_attributes := COALESCE(NEW.filter_attributes, '{}'::jsonb);
+    IF NEW.state_version_id IS NULL THEN
+      NEW.state_version_id := public.get_or_create_listing_state_version(
+        NULL, '{}'::text[], NULL, NULL, NULL, '{}'::jsonb, false, false);
+    END IF;
   END IF;
-
-  -- Include the row's category as a membership when it has one, then merge
-  -- all observed memberships. The union is useful for overlapping searches;
-  -- adding an older membership to a sparse row is explicitly estimated.
-  v_merged := ARRAY(
-    SELECT DISTINCT member
-      FROM unnest(
-        COALESCE(NEW.category_memberships, '{}'::text[])
-        || v_memberships
-        || CASE WHEN NEW.category IS NULL THEN '{}'::text[]
-                ELSE ARRAY[NEW.category] END
-      ) AS u(member)
-     WHERE member IS NOT NULL AND member <> ''
-     ORDER BY member
-  );
-  IF EXISTS (
-    SELECT 1
-      FROM unnest(v_memberships) AS u(member)
-     WHERE NOT (member = ANY(COALESCE(NEW.category_memberships, '{}'::text[])))
-  ) THEN
-    v_membership_inferred := true;
-  END IF;
-  NEW.category_memberships := v_merged;
-  NEW.membership_inferred := COALESCE(NEW.membership_inferred, false)
-                             OR v_membership_inferred;
-  NEW.attributes_inferred := COALESCE(NEW.attributes_inferred, false)
-                             OR v_attributes_inferred;
   RETURN NEW;
 END
 $$;
@@ -915,6 +1348,224 @@ CREATE FUNCTION public.room_bucket(rooms text) RETURNS text
 $$;
 
 --
+-- Name: route_analytics_partition_insert(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.route_analytics_partition_insert() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'public'
+    AS $_$
+DECLARE
+  p record;
+  v_value text;
+  v_suffix text;
+  v_child text;
+  v_reg regclass;
+  v_json jsonb;
+  v_article_id bigint;
+  v_day date;
+  v_mark boolean := false;
+BEGIN
+  SELECT * INTO p
+    FROM public.analytics_partition_policy
+   WHERE parent_schema = TG_TABLE_SCHEMA
+     AND parent_table = TG_TABLE_NAME;
+  IF NOT FOUND THEN RETURN NEW; END IF;
+
+  v_json := to_jsonb(NEW);
+  IF TG_TABLE_NAME = 'listing_state_history' THEN
+    SELECT v_json || jsonb_build_object(
+             'category', v.category,
+             'category_membership', to_jsonb(v.category_membership),
+             'is_rent', v.is_rent,
+             'sqm', v.sqm,
+             'rooms', v.rooms,
+             'filter_attributes', v.filter_attributes,
+             'membership_inferred', v.membership_inferred,
+             'attributes_inferred', v.attributes_inferred)
+      INTO v_json
+      FROM public.listing_state_versions v
+     WHERE v.state_version_id = NEW.state_version_id;
+  ELSIF TG_TABLE_NAME = 'listing_daily' THEN
+    SELECT v_json || jsonb_build_object(
+             'category', v.category,
+             'category_memberships', to_jsonb(v.category_membership),
+             'is_rent', v.is_rent,
+             'sqm', v.sqm,
+             'rooms', v.rooms,
+             'filter_attributes', v.filter_attributes,
+             'membership_inferred', v.membership_inferred,
+             'attributes_inferred', v.attributes_inferred)
+      INTO v_json
+      FROM public.listing_state_versions v
+     WHERE v.state_version_id = NEW.state_version_id;
+  END IF;
+
+  IF TG_TABLE_NAME IN ('listing_state_history', 'listing_price_events')
+     AND v_json->>'article_id' IS NOT NULL THEN
+    v_article_id := (v_json->>'article_id')::bigint;
+    IF TG_TABLE_NAME = 'listing_price_events'
+       OR COALESCE(v_json->>'event_type', '') <> 'search_sighting' THEN
+      v_mark := true;
+    ELSE
+      v_day := ((v_json->>'effective_at')::timestamptz
+                AT TIME ZONE 'Europe/Sarajevo')::date;
+      SELECT NOT EXISTS (
+               SELECT 1
+                 FROM public.listing_daily_state d
+                WHERE d.day = v_day AND d.article_id = v_article_id
+             )
+          OR EXISTS (
+               SELECT 1
+                 FROM public.listing_daily_state d
+                WHERE d.day = v_day AND d.article_id = v_article_id
+                  AND (
+                    (v_json->>'category' IS NOT NULL
+                     AND d.category IS DISTINCT FROM v_json->>'category')
+                    OR (v_json->>'is_rent' IS NOT NULL
+                        AND d.is_rent IS DISTINCT FROM (v_json->>'is_rent')::boolean)
+                    OR (v_json->>'sqm' IS NOT NULL
+                        AND d.sqm IS DISTINCT FROM (v_json->>'sqm')::numeric)
+                    OR (v_json->>'rooms' IS NOT NULL
+                        AND d.rooms IS DISTINCT FROM v_json->>'rooms')
+                    OR (COALESCE(v_json->'filter_attributes', '{}'::jsonb)
+                          <> '{}'::jsonb
+                        AND NOT (d.filter_attributes @>
+                                 COALESCE(v_json->'filter_attributes', '{}'::jsonb)))
+                    OR (COALESCE(v_json->'category_membership', '[]'::jsonb)
+                          <> '[]'::jsonb
+                        AND NOT (to_jsonb(d.category_memberships) @>
+                                 COALESCE(v_json->'category_membership', '[]'::jsonb)))
+                  )
+             )
+        INTO v_mark;
+    END IF;
+    IF v_mark THEN
+      PERFORM public.mark_daily_article_dirty(v_article_id);
+    END IF;
+  END IF;
+
+  v_value := v_json ->> p.partition_column;
+  IF v_value IS NULL THEN RETURN NEW; END IF;
+  v_suffix := CASE WHEN p.key_type = 'date'
+    THEN to_char(v_value::date, 'YYYY_MM')
+    ELSE to_char((v_value::timestamptz AT TIME ZONE 'UTC')::date, 'YYYY_MM') END;
+  v_child := TG_TABLE_NAME || '_' || v_suffix;
+  v_reg := to_regclass(format('%I.%I', TG_TABLE_SCHEMA, v_child));
+  IF v_reg IS NULL THEN RETURN NEW; END IF;
+
+  EXECUTE format(
+    'INSERT INTO %I.%I SELECT (jsonb_populate_record(NULL::%I.%I, $1)).*',
+    TG_TABLE_SCHEMA, v_child, TG_TABLE_SCHEMA, v_child)
+    USING v_json;
+  RETURN NULL;
+END
+$_$;
+
+--
+-- Name: agent_listing_scope(text, text, text[], text[], text, text, text[], text[], text[], text[], text, text, text, text, text, text, text, text, text[], text, boolean); Type: FUNCTION; Schema: reporting; Owner: -
+--
+
+CREATE FUNCTION reporting.agent_listing_scope(p_deal text, p_property_type text, p_neighborhoods text[], p_rooms text[], p_min_area text, p_max_area text, p_conditions text[], p_furnishing text[], p_parking text[], p_seller_types text[], p_min_price text, p_max_price text, p_min_rate text, p_max_rate text, p_min_score text, p_max_score text, p_view text, p_pricing_position text, p_review_signals text[], p_analysis_days text, p_apply_result_filters boolean DEFAULT true) RETURNS SETOF olap.current_listing_scores
+    LANGUAGE sql STABLE SECURITY DEFINER PARALLEL SAFE
+    SET search_path TO 'pg_catalog', 'reporting', 'olap'
+    AS $$
+  WITH validation AS MATERIALIZED (
+    SELECT reporting.within_bounds(NULL::numeric, p_min_price, p_max_price, 'asking price for selected deal') AS min_price_ok,
+           reporting.within_bounds(NULL::numeric, p_min_rate, p_max_rate, 'asking rate for selected deal') AS min_rate_ok,
+           reporting.within_bounds(NULL::numeric, p_min_area, p_max_area, 'area') AS min_area_ok,
+           reporting.within_bounds(NULL::numeric, p_min_score, p_max_score, 'score', 100) AS min_score_ok,
+           reporting.numeric_bound(p_analysis_days, 'analysis window', 90) AS analysis_days
+  )
+  SELECT s.*
+    FROM olap.current_listing_scores s
+    CROSS JOIN validation v
+   WHERE s.deal = p_deal
+     AND COALESCE(s.property_type, 'unknown') = p_property_type
+     AND (('__mapped__' = ANY (p_neighborhoods) AND s.neighborhood IS NOT NULL)
+          OR COALESCE(s.neighborhood, 'unknown') = ANY (p_neighborhoods))
+     AND ('__any__' = ANY (p_rooms)
+          OR COALESCE(s.room_bucket, 'unknown') = ANY (p_rooms))
+     AND reporting.within_bounds(s.sqm, p_min_area, p_max_area, 'area')
+     AND ('__any__' = ANY (p_conditions)
+          OR COALESCE(s.condition::text, 'unknown') = ANY (p_conditions))
+     AND ('__any__' = ANY (p_furnishing)
+          OR COALESCE(s.furnished::text, 'unknown') = ANY (p_furnishing))
+     AND ('__any__' = ANY (p_parking)
+          OR COALESCE(s.parking::text, 'unknown') = ANY (p_parking))
+     AND ('__any__' = ANY (p_seller_types)
+          OR COALESCE(s.seller_type::text, 'unknown') = ANY (p_seller_types))
+     AND (
+       NOT p_apply_result_filters
+       OR (
+         reporting.within_bounds(s.asking_price, p_min_price, p_max_price, 'asking price for selected deal')
+         AND reporting.within_bounds(s.asking_rate, p_min_rate, p_max_rate, 'asking rate for selected deal')
+         AND reporting.within_bounds(s.score, p_min_score, p_max_score, 'score', 100)
+         AND CASE p_view
+               WHEN 'below' THEN s.deviation_pct < -5
+               WHEN 'above' THEN s.deviation_pct > 5
+               WHEN 'long_above' THEN s.current_cycle_age_days >= 60 AND s.deviation_pct > 5
+               WHEN 'reductions' THEN s.latest_reduction_at >= now() - make_interval(days => v.analysis_days::int)
+               WHEN 'new' THEN s.first_seen >= now() - INTERVAL '7 days'
+               WHEN 'evidence' THEN s.score IS NULL
+               ELSE TRUE
+             END
+         AND CASE p_pricing_position
+               WHEN 'below' THEN s.deviation_pct < -5
+               WHEN 'near' THEN s.deviation_pct BETWEEN -5 AND 5
+               WHEN 'above' THEN s.deviation_pct > 5
+               WHEN 'unscored' THEN s.score IS NULL
+               ELSE TRUE
+             END
+         AND ('__any__' = ANY (p_review_signals)
+              OR ('new' = ANY (p_review_signals) AND s.first_seen >= now() - INTERVAL '7 days')
+              OR ('reduced' = ANY (p_review_signals) AND s.latest_reduction_at >= now() - make_interval(days => v.analysis_days::int))
+              OR ('long' = ANY (p_review_signals) AND s.current_cycle_age_days >= 60))
+       )
+     )
+$$;
+
+--
+-- Name: buyer_listing_scope(text, text[], text[], text, text, text[], text[], text[], text[], text[], text[], text, text, text, text, text, text, text, boolean); Type: FUNCTION; Schema: reporting; Owner: -
+--
+
+CREATE FUNCTION reporting.buyer_listing_scope(p_property_type text, p_neighborhoods text[], p_rooms text[], p_min_area text, p_max_area text, p_conditions text[], p_parking text[], p_garage text[], p_elevator text[], p_floors text[], p_seller_types text[], p_min_price text, p_max_price text, p_min_rate text, p_max_rate text, p_min_score text, p_max_score text, p_listing_selection text, p_apply_result_filters boolean DEFAULT true) RETURNS SETOF olap.current_listing_scores
+    LANGUAGE sql STABLE SECURITY DEFINER PARALLEL SAFE
+    SET search_path TO 'pg_catalog', 'reporting', 'olap'
+    AS $$
+  WITH validation AS MATERIALIZED (
+    SELECT reporting.within_bounds(NULL::numeric, p_min_price, p_max_price, 'asking price'),
+           reporting.within_bounds(NULL::numeric, p_min_rate, p_max_rate, 'asking price per m²'),
+           reporting.within_bounds(NULL::numeric, p_min_area, p_max_area, 'area'),
+           reporting.within_bounds(NULL::numeric, p_min_score, p_max_score, 'score', 100)
+  )
+  SELECT s.* FROM olap.current_listing_scores s CROSS JOIN validation
+   WHERE s.deal = 'sale'
+     AND COALESCE(s.property_type, 'unknown') = p_property_type
+     AND (('__mapped__' = ANY (p_neighborhoods) AND s.neighborhood IS NOT NULL)
+          OR COALESCE(s.neighborhood, 'unknown') = ANY (p_neighborhoods))
+     AND ('__any__' = ANY (p_rooms) OR COALESCE(s.room_bucket, 'unknown') = ANY (p_rooms))
+     AND reporting.within_bounds(s.sqm, p_min_area, p_max_area, 'area')
+     AND ('__any__' = ANY (p_conditions) OR COALESCE(s.condition::text, 'unknown') = ANY (p_conditions))
+     AND ('__any__' = ANY (p_parking) OR COALESCE(s.parking::text, 'unknown') = ANY (p_parking))
+     AND ('__any__' = ANY (p_garage) OR COALESCE(s.garage::text, 'unknown') = ANY (p_garage))
+     AND ('__any__' = ANY (p_elevator) OR COALESCE(s.elevator::text, 'unknown') = ANY (p_elevator))
+     AND ('__any__' = ANY (p_floors) OR COALESCE(s.floor_num::text, 'unknown') = ANY (p_floors))
+     AND ('__any__' = ANY (p_seller_types) OR COALESCE(s.seller_type::text, 'unknown') = ANY (p_seller_types))
+     AND (NOT p_apply_result_filters OR (
+       reporting.within_bounds(s.asking_price, p_min_price, p_max_price, 'asking price')
+       AND reporting.within_bounds(s.asking_rate, p_min_rate, p_max_rate, 'asking price per m²')
+       AND reporting.within_bounds(s.score, p_min_score, p_max_score, 'score', 100)
+       AND CASE p_listing_selection
+             WHEN 'new' THEN s.first_seen >= now() - INTERVAL '7 days'
+             WHEN 'reduced' THEN s.latest_reduction_at >= now() - INTERVAL '30 days'
+             WHEN 'below' THEN s.deviation_pct < -5
+             ELSE TRUE
+           END
+     ))
+$$;
+
+--
 -- Name: comparison_currency(text); Type: FUNCTION; Schema: reporting; Owner: -
 --
 
@@ -923,6 +1574,57 @@ CREATE FUNCTION reporting.comparison_currency(p_currency text) RETURNS text
     AS $$
   SELECT CASE WHEN upper(btrim(p_currency)) IN ('KM', 'BAM') THEN 'BAM' END
 $$;
+
+--
+-- Name: comparison_price_changes_source_for_articles(bigint[]); Type: FUNCTION; Schema: reporting; Owner: -
+--
+
+CREATE FUNCTION reporting.comparison_price_changes_source_for_articles(p_article_ids bigint[]) RETURNS SETOF olap.comparison_price_changes
+    LANGUAGE sql STABLE PARALLEL SAFE
+    AS $_$
+  WITH evidence AS MATERIALIZED (
+    SELECT *
+      FROM reporting.resolved_price_evidence_for_articles($1)
+  ), ordered AS (
+    SELECT e.*,
+           lag(e.price) OVER w AS prior_price,
+           lag(e.price_state) OVER w AS prior_state,
+           lag(e.currency_normalized) OVER w AS prior_currency,
+           lag(e.evidence_is_rent) OVER w AS prior_is_rent,
+           lag(e.effective_at) OVER w AS prior_effective_at
+      FROM evidence e
+     WINDOW w AS (PARTITION BY e.article_id ORDER BY e.effective_at, e.id)
+  ), current_inputs AS MATERIALIZED (
+    SELECT article_id, cycle_opened_at, is_rent
+      FROM reporting.current_comparison_inputs
+     WHERE article_id = ANY(COALESCE($1, '{}'::bigint[]))
+  )
+  SELECT e.article_id, e.effective_at, e.prior_effective_at,
+         e.prior_price, e.price, e.price - e.prior_price AS delta,
+         (100::numeric * (e.price - e.prior_price)) / e.prior_price AS pct_change,
+         CASE WHEN e.evidence_is_rent THEN 'rent'::text ELSE 'sale'::text END,
+         e.currency_normalized
+    FROM ordered e
+    JOIN current_inputs l USING (article_id)
+   WHERE e.effective_at >= l.cycle_opened_at
+     AND e.prior_effective_at >= l.cycle_opened_at
+     AND e.evidence_is_rent = l.is_rent
+     AND e.prior_is_rent = e.evidence_is_rent
+     AND reporting.comparison_price_reason(
+           e.price, e.price_state, e.currency_normalized, e.evidence_is_rent) IS NULL
+     AND reporting.comparison_price_reason(
+           e.prior_price, e.prior_state, e.prior_currency, e.prior_is_rent) IS NULL
+     AND e.price <> e.prior_price
+     AND NOT EXISTS (
+       SELECT 1
+         FROM public.listing_state_history_state h
+        WHERE h.article_id = e.article_id
+          AND h.effective_at > e.prior_effective_at
+          AND h.effective_at <= e.effective_at
+          AND h.is_rent IS NOT NULL
+          AND h.is_rent <> e.evidence_is_rent
+     )
+$_$;
 
 --
 -- Name: comparison_price_reason(numeric, text, text, boolean); Type: FUNCTION; Schema: reporting; Owner: -
@@ -970,4 +1672,173 @@ CREATE FUNCTION reporting.comparison_quality_reason(p_price numeric, p_state tex
            THEN 'Invalid area'
          WHEN NOT p_is_rent AND round(p_price / nullif(p_sqm,0)) NOT BETWEEN 1 AND 15000
            THEN 'Implausible sale asking rate' END)
+$$;
+
+--
+-- Name: daily_listing_facts_source_for_days(date[]); Type: FUNCTION; Schema: reporting; Owner: -
+--
+
+CREATE FUNCTION reporting.daily_listing_facts_source_for_days(p_days date[]) RETURNS SETOF olap.daily_listing_facts
+    LANGUAGE sql STABLE PARALLEL SAFE
+    AS $$
+  SELECT s.*
+    FROM reporting.daily_listing_facts_source s
+   WHERE s.day = ANY (p_days)
+$$;
+
+--
+-- Name: dashboard_numeric(text); Type: FUNCTION; Schema: reporting; Owner: -
+--
+
+CREATE FUNCTION reporting.dashboard_numeric(p_value text) RETURNS numeric
+    LANGUAGE sql IMMUTABLE STRICT SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'public', 'pg_temp'
+    AS $$ SELECT public.dashboard_numeric(p_value) $$;
+
+--
+-- Name: lifecycle_cycles_source_for_articles(bigint[]); Type: FUNCTION; Schema: reporting; Owner: -
+--
+
+CREATE FUNCTION reporting.lifecycle_cycles_source_for_articles(p_article_ids bigint[]) RETURNS SETOF olap.lifecycle_cycles
+    LANGUAGE sql STABLE PARALLEL SAFE
+    AS $$
+  SELECT s.*
+    FROM reporting.lifecycle_cycles_source s
+   WHERE s.article_id = ANY (p_article_ids)
+$$;
+
+--
+-- Name: market_daily_filtered(date, date, text[], numeric, numeric, text[], text[], text[]); Type: FUNCTION; Schema: reporting; Owner: -
+--
+
+CREATE FUNCTION reporting.market_daily_filtered(p_from_day date, p_through_day date, p_category text[] DEFAULT '{}'::text[], p_min_sqm numeric DEFAULT NULL::numeric, p_max_sqm numeric DEFAULT NULL::numeric, p_rooms text[] DEFAULT '{}'::text[], p_deal text[] DEFAULT '{}'::text[], p_neighborhood text[] DEFAULT '{}'::text[]) RETURNS TABLE(day date, inventory_count bigint, priced_count bigint, p25 numeric, median numeric, p75 numeric, estimated_count bigint, stale_count bigint, provisional_day boolean)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'public', 'pg_temp'
+    AS $$
+  SELECT * FROM public.market_daily_filtered(
+    p_from_day, p_through_day, p_category, p_min_sqm, p_max_sqm,
+    p_rooms, p_deal, p_neighborhood)
+$$;
+
+--
+-- Name: nearest_neighborhoods(text, integer); Type: FUNCTION; Schema: reporting; Owner: -
+--
+
+CREATE FUNCTION reporting.nearest_neighborhoods(p_name text, p_limit integer DEFAULT 3) RETURNS TABLE(neighborhood text, neighbor_rank integer)
+    LANGUAGE sql STABLE STRICT
+    AS $$
+  WITH subject AS MATERIALIZED (
+    SELECT boundary, boundary_geography
+      FROM public.neighborhoods
+     WHERE name = p_name
+  ), candidates AS MATERIALIZED (
+    SELECT n.name, n.boundary, n.boundary_geography
+      FROM subject s
+      JOIN public.neighborhoods n
+           ON n.name <> p_name
+       AND n.boundary && ST_Expand(s.boundary, 0.25)
+  ), ranked AS (
+    SELECT c.name,
+           ST_Distance(s.boundary_geography, c.boundary_geography) AS distance_m
+      FROM subject s
+      JOIN candidates c ON true
+    WHERE p_limit > 0
+  )
+  SELECT name,
+         row_number() OVER (ORDER BY distance_m, name)::integer
+    FROM ranked
+   ORDER BY distance_m, name
+   LIMIT p_limit
+$$;
+
+--
+-- Name: renter_listing_scope(text, text[], text[], text, text, text[], text[], text[], text[], text[], text[], text, text, text, text, text, text, text, boolean); Type: FUNCTION; Schema: reporting; Owner: -
+--
+
+CREATE FUNCTION reporting.renter_listing_scope(p_property_type text, p_neighborhoods text[], p_rooms text[], p_min_area text, p_max_area text, p_furnishing text[], p_heating text[], p_parking text[], p_elevator text[], p_floors text[], p_seller_types text[], p_min_price text, p_max_price text, p_min_rate text, p_max_rate text, p_min_score text, p_max_score text, p_listing_selection text, p_apply_result_filters boolean DEFAULT true) RETURNS SETOF olap.current_listing_scores
+    LANGUAGE sql STABLE SECURITY DEFINER PARALLEL SAFE
+    SET search_path TO 'pg_catalog', 'reporting', 'olap'
+    AS $$
+  WITH validation AS MATERIALIZED (
+    SELECT reporting.within_bounds(NULL::numeric, p_min_price, p_max_price, 'monthly asking rent'),
+           reporting.within_bounds(NULL::numeric, p_min_rate, p_max_rate, 'monthly rent per m²'),
+           reporting.within_bounds(NULL::numeric, p_min_area, p_max_area, 'area'),
+           reporting.within_bounds(NULL::numeric, p_min_score, p_max_score, 'score', 100)
+  )
+  SELECT s.* FROM olap.current_listing_scores s CROSS JOIN validation
+   WHERE s.deal = 'rent'
+     AND COALESCE(s.property_type, 'unknown') = p_property_type
+     AND (('__mapped__' = ANY (p_neighborhoods) AND s.neighborhood IS NOT NULL)
+          OR COALESCE(s.neighborhood, 'unknown') = ANY (p_neighborhoods))
+     AND ('__any__' = ANY (p_rooms) OR COALESCE(s.room_bucket, 'unknown') = ANY (p_rooms))
+     AND reporting.within_bounds(s.sqm, p_min_area, p_max_area, 'area')
+     AND ('__any__' = ANY (p_furnishing) OR COALESCE(s.furnished::text, 'unknown') = ANY (p_furnishing))
+     AND ('__any__' = ANY (p_heating) OR COALESCE(s.heating::text, 'unknown') = ANY (p_heating))
+     AND ('__any__' = ANY (p_parking) OR COALESCE(s.parking::text, 'unknown') = ANY (p_parking))
+     AND ('__any__' = ANY (p_elevator) OR COALESCE(s.elevator::text, 'unknown') = ANY (p_elevator))
+     AND ('__any__' = ANY (p_floors) OR COALESCE(s.floor_num::text, 'unknown') = ANY (p_floors))
+     AND ('__any__' = ANY (p_seller_types) OR COALESCE(s.seller_type::text, 'unknown') = ANY (p_seller_types))
+     AND (NOT p_apply_result_filters OR (
+       reporting.within_bounds(s.asking_price, p_min_price, p_max_price, 'monthly asking rent')
+       AND reporting.within_bounds(s.asking_rate, p_min_rate, p_max_rate, 'monthly rent per m²')
+       AND reporting.within_bounds(s.score, p_min_score, p_max_score, 'score', 100)
+       AND CASE p_listing_selection
+             WHEN 'new' THEN s.first_seen >= now() - INTERVAL '7 days'
+             WHEN 'reduced' THEN s.latest_reduction_at >= now() - INTERVAL '30 days'
+             WHEN 'below' THEN s.deviation_pct < -5
+             ELSE TRUE
+           END
+     ))
+$$;
+
+--
+-- Name: room_bucket(text); Type: FUNCTION; Schema: reporting; Owner: -
+--
+
+CREATE FUNCTION reporting.room_bucket(rooms text) RETURNS text
+    LANGUAGE sql IMMUTABLE SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'public', 'pg_temp'
+    AS $$ SELECT public.room_bucket(rooms) $$;
+
+--
+-- Name: validate_olap_contracts(); Type: FUNCTION; Schema: reporting; Owner: -
+--
+
+CREATE FUNCTION reporting.validate_olap_contracts() RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'public', 'olap'
+    AS $$
+DECLARE v jsonb := '{}'::jsonb; n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM olap.public_daily_market
+   WHERE day IS NULL OR article_id IS NULL OR price_state IS NULL;
+  IF n <> 0 THEN RAISE EXCEPTION 'OLAP contract public_daily_market has % malformed rows', n; END IF;
+  SELECT count(*) INTO n FROM olap.daily_listing_facts
+   WHERE day IS NULL OR article_id IS NULL OR price_state IS NULL;
+  IF n <> 0 THEN RAISE EXCEPTION 'OLAP contract daily_listing_facts has % malformed rows', n; END IF;
+  SELECT count(*) INTO n FROM olap.listing_categories
+   WHERE article_id IS NULL OR category IS NULL OR btrim(category) = '';
+  IF n <> 0 THEN RAISE EXCEPTION 'OLAP contract listing_categories has % malformed rows', n; END IF;
+  SELECT count(*) INTO n FROM olap.market_daily
+   WHERE day IS NULL OR new_n < 0 OR closed_n < 0 OR reopened_n < 0 OR active_est < 0 OR stale_n < 0;
+  IF n <> 0 THEN RAISE EXCEPTION 'OLAP contract market_daily has % malformed rows', n; END IF;
+  SELECT count(*) INTO n FROM olap.public_exit_cycles
+   WHERE article_id IS NULL OR cycle_no IS NULL OR opened_at IS NULL
+      OR (closed_at IS NOT NULL AND closed_at < opened_at);
+  IF n <> 0 THEN RAISE EXCEPTION 'OLAP contract public_exit_cycles has % malformed rows', n; END IF;
+  SELECT count(*) INTO n FROM public.scrape_runs
+   WHERE (status = 'running' AND finished_at IS NOT NULL)
+      OR (status <> 'running' AND finished_at IS NULL);
+  IF n <> 0 THEN RAISE EXCEPTION 'OLTP contract scrape_runs has % malformed rows', n; END IF;
+  v := jsonb_build_object('checked_at', now(), 'ok', true,
+                          'daily_market_rows', (SELECT count(*) FROM olap.public_daily_market),
+                          'daily_fact_rows', (SELECT count(*) FROM olap.daily_listing_facts),
+                          'market_days', (SELECT count(*) FROM olap.market_daily));
+  INSERT INTO public.analytics_contract_validation (ok, details) VALUES (true, v);
+  RETURN v;
+EXCEPTION WHEN OTHERS THEN
+  INSERT INTO public.analytics_contract_validation (ok, details)
+  VALUES (false, jsonb_build_object('checked_at', now(), 'error', SQLERRM));
+  RAISE;
+END
 $$;

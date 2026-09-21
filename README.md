@@ -26,7 +26,7 @@ changes on a dashboard-only host, run `docker compose --profile migrate run
 Retention and daily analytics can run independently of scraping with
 `docker compose --profile maintenance run --build --rm maintenance`.
 
-After applying the dashboard-fact migration, build existing fact-child cohort
+After changing the canonical schema, build any existing fact-child cohort
 indexes in a separate maintenance invocation so readers are not blocked by an
 index build:
 
@@ -45,16 +45,13 @@ skips children that cannot acquire the lock.
 Phase 0’s disposable benchmark is available as
 `npm run benchmark:regressions`. It seeds 10,000 listings, six state cycles,
 200,000 daily rows, and 1.2 million price events. Set
-`BENCHMARK_REFERENCE_DATABASE_URL` to print current and pre-change results in
-one JSON report; the reference database is built from `f60b5d1` before the
-forward migrations are applied.
+`BENCHMARK_REFERENCE_DATABASE_URL` to print current and reference results in
+one JSON report.
 
-Migration hygiene is checked with `npm run check:schema-parity` in CI after it
-provisions a fresh HEAD database and a database upgraded from `f60b5d1`.
-Migrations 20, 24, 25, and 28 have known allowlisted checksum transitions in
-`scraper/src/migration-baseline.js`; 30–32 provide the forward helper, state,
-and reporting corrections, so no additional edit to an applied migration is
-needed.
+The database init directory is a complete canonical schema, split into
+dependency-ordered SQL files. The application runner records their checksums
+and adopts an already initialized current schema without replaying the DDL;
+there is no chain of forward migrations to maintain.
 
 Grafana is at `http://localhost:3000` for local development. In production the
 topology is `Cloudflare → Cloudflare Tunnel → cloudflared → Grafana

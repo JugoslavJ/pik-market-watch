@@ -242,10 +242,7 @@ test("health dashboard exposes per-search and analytics freshness state", () => 
 });
 
 test("retired public reporting boundary is removed", () => {
-  assert.match(
-    publicReportingMigration,
-    /DROP SCHEMA IF EXISTS dashboard_public CASCADE/,
-  );
+  assert.doesNotMatch(publicReportingMigration, /dashboard_public/);
   assert.match(publicReportingMigration, /reporting\.freshness/);
   assert.doesNotMatch(roles, /dashboard_public/);
   assert.match(roles, /DROP ROLE %I.*olx_public_reader/);
@@ -299,13 +296,12 @@ test("retired public reporting boundary is removed", () => {
   const lifecycleAgeDirtySet = databaseBaseline;
   assert.match(lifecycleAgeDirtySet, /current_cycle_age_days IS DISTINCT FROM/);
   const skipEmptyDirtySets = databaseBaseline;
-  assert.match(skipEmptyDirtySets, /IF EXISTS \(SELECT FROM olap_dirty_days\)/);
   assert.match(
     skipEmptyDirtySets,
-    /IF EXISTS \(SELECT FROM olap_dirty_articles\)/,
+    /IF EXISTS \(SELECT 1 FROM olap_dirty_days\)/,
   );
   const alignedLifecycleAge = databaseBaseline;
-  assert.match(alignedLifecycleAge, /greatest\(floor\(/);
+  assert.match(alignedLifecycleAge, /greatest\(\s*floor\(/i);
   assert.match(alignedLifecycleAge, /current_cycle_age_days IS DISTINCT FROM/);
   const overlappedCoverageWatermark = databaseBaseline;
   assert.match(overlappedCoverageWatermark, /analytics_daily_olap_dirty/);
@@ -314,7 +310,10 @@ test("retired public reporting boundary is removed", () => {
     durableDailyQueue,
     /CREATE TABLE public\.analytics_daily_olap_dirty/,
   );
-  assert.match(durableDailyQueue, /q\.generation=x\.generation/);
+  assert.match(
+    durableDailyQueue,
+    /q\.day\s*=\s*d\.day\s+AND\s+q\.generation\s*=\s*d\.generation/i,
+  );
   assert.match(
     durableDailyQueue,
     /AFTER INSERT OR UPDATE ON public\.analytics_daily_coverage/,

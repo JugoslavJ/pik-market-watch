@@ -1,14 +1,16 @@
 #!/usr/bin/env node
 "use strict";
-// Runs the DB-backed integration tests against a throwaway PostgreSQL
+// Runs the DB-backed integration tests against a throwaway canonical PostGIS
 // container. Requires Docker. Usage: npm run test:integration
 //
 //   1. removes any stale olx-pg-test container
-//   2. starts the pinned PostGIS/PostgreSQL 16 image on TEST_DB_PORT
+//   2. starts the pinned PostGIS/PostgreSQL 16 image with db/init mounted
+//      as Docker's canonical bootstrap on TEST_DB_PORT
 //      (default 55432)
 //   3. waits until it accepts connections
-//   4. runs each `node --test test/integration/<file>` child with TEST_DATABASE_URL set
-//   5. always removes the container again
+//   4. verifies the canonical bootstrap contract
+//   5. runs each `node --test test/integration/<file>` child with TEST_DATABASE_URL set
+//   6. always removes the container again
 
 const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
@@ -16,6 +18,7 @@ const path = require("node:path");
 
 const NAME = "olx-pg-test";
 const PORT = process.env.TEST_DB_PORT || "55432";
+const INIT_DIR = path.resolve(__dirname, "..", "..", "db", "init");
 const IMAGE =
   process.env.TEST_POSTGRES_IMAGE ||
   "ghcr.io/baosystems/postgis:16-3.5@sha256:0f1c5c0f70f03d4d19ad1d7308d86e6162dff5429c491002298a7b5e46d2f2e8";
@@ -60,8 +63,18 @@ const up = docker([
   "POSTGRES_PASSWORD=olx",
   "-e",
   "POSTGRES_DB=olx",
+  "-e",
+  "POSTGRES_MIGRATOR_PASSWORD=integration-migrator",
+  "-e",
+  "POSTGRES_APP_PASSWORD=integration-app",
+  "-e",
+  "POSTGRES_REPORTING_PASSWORD=integration-reporting",
+  "-e",
+  "POSTGRES_BACKUP_PASSWORD=integration-backup",
   "-p",
   `${PORT}:5432`,
+  "-v",
+  `${INIT_DIR}:/docker-entrypoint-initdb.d:ro`,
   IMAGE,
 ]);
 if (up.status !== 0) {
@@ -71,6 +84,26 @@ if (up.status !== 0) {
 
 try {
   waitUntilReady();
+  const contract = docker([
+    "exec",
+    NAME,
+    "psql",
+    "-Atq",
+    "-U",
+    "olx",
+    "-d",
+    "olx",
+    "-c",
+    "SELECT to_regclass('public.listing_state_versions') IS NOT NULL " +
+      "AND to_regclass('reporting.current_comparison_inputs') IS NOT NULL " +
+      "AND to_regprocedure('reporting.refresh_dashboard_olap(boolean)') IS NOT NULL;",
+  ]);
+  if (contract.status !== 0 || contract.stdout.trim() !== "t") {
+    throw new Error(
+      `canonical database bootstrap contract failed: ${contract.stderr || contract.stdout}`,
+    );
+  }
+
   // Keep each file in its own process. Node's test-concurrency flag limits
   // worker scheduling but does not prevent independent files from sharing a
   // database while their beforeEach resets are running. A fresh child per

@@ -20,6 +20,10 @@ needsDb(
     const client = await db.pool.connect();
     try {
       await client.query("BEGIN");
+      // Canonical Docker bootstrap gives schema objects to the migrator role;
+      // create the fixture with the same owner so SECURITY DEFINER cleanup
+      // exercises the production ownership boundary.
+      await client.query("SET LOCAL ROLE olx_migrator");
       await client.query(`
         INSERT INTO listings(article_id, url, title)
           VALUES (9201, 'https://olx.ba/artikal/9201', 'Recovered history');

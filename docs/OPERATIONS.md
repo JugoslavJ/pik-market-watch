@@ -382,10 +382,9 @@ tunnel path.
 - **Dashboard filters fail and panels report `cannot determine type of empty array`:**
   older dashboard queries accessed private tables/functions after the Grafana
   login moved to `olx_reporting`. Failed category/room queries then produced
-  untyped empty arrays in panels. Deploy the updated dashboards and migration
-  `17-upgrade-to-current.sql` together. The migration exposes the
-  required read-only reporting contract; dashboard arrays use explicit
-  `text[]` casts. From the instance checkout containing these changes, run:
+  untyped empty arrays in panels. Deploy the current canonical init SQL and
+  updated dashboards together; dashboard arrays use explicit `text[]` casts.
+  From the instance checkout containing these changes, run:
 
   ```bash
   docker compose up -d --wait db

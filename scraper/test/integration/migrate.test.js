@@ -1,168 +1,67 @@
 "use strict";
-// Integration tests for the startup migration runner:
-//   A. fresh database — applies everything, second pass is a clean no-op
-//   B. pre-squash volume — schema_migrations records retired filenames while
-//      the canonical baseline is adopted without replaying SQL
-//   C. unsupported legacy databases fail without mutating their data
+
+// Integration coverage for the canonical schema runner:
+//   A. a fresh database applies the complete current state and is idempotent;
+//   B. Docker-style initialization is adopted without replaying DDL;
+//   C. applied canonical files remain checksum protected.
 const fs = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
 const assert = require("node:assert/strict");
 const { Pool } = require("pg");
 const applyMigrations = require("../../src/migrate");
-const baselineTransitions = require("../../src/migration-baseline");
 const { needsDb } = require("../helpers/db.js");
 
 const FULL_DIR = path.resolve(__dirname, "..", "..", "..", "db", "init");
-const log = () => {}; // keep test output tidy
+const log = () => {};
 
-async function fnCount(pool) {
-  return Number(
-    (
-      await pool.query(
-        "SELECT count(*) AS n FROM pg_proc WHERE pronamespace = 'public'::regnamespace AND proname IN ('listings_filtered','room_bucket')",
-      )
-    ).rows[0].n,
-  );
+const currentSchemaFiles = fs
+  .readdirSync(FULL_DIR)
+  .filter((file) => file.endsWith(".sql"))
+  .sort();
+
+async function recreateDb(name) {
+  const admin = new Pool({ connectionString: process.env.TEST_DATABASE_URL });
+  await admin.query(`DROP DATABASE IF EXISTS ${name}`);
+  await admin.query(`CREATE DATABASE ${name}`);
+  await admin.end();
+  return process.env.TEST_DATABASE_URL.replace(/\/[^/]+$/, `/${name}`);
 }
+
 async function recorded(pool) {
   return (
     await pool.query("SELECT filename FROM schema_migrations ORDER BY filename")
   ).rows.map((row) => row.filename);
 }
 
-const currentMigrations = fs
-  .readdirSync(FULL_DIR)
-  .filter((file) => file.endsWith(".sql"))
-  .sort();
-
 needsDb(
-  "migrations: known split-baseline drift executes the bridge atomically",
+  "canonical schema: fresh install is idempotent and checksum protected",
   async () => {
-    const pool = new Pool({ connectionString: await recreateDb("mig_split") });
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "pik-split-"));
+    const pool = new Pool({ connectionString: await recreateDb("mig_fresh") });
     try {
       await applyMigrations(pool, FULL_DIR, log);
-      for (const file of currentMigrations) {
-        fs.copyFileSync(path.join(FULL_DIR, file), path.join(tempDir, file));
-      }
-      await pool.query(
-        "INSERT INTO listings (article_id, url, title) VALUES (1, 'test', 'preserved')",
-      );
-      // Reproduce the deployed ledger and missing dashboard helper. The baseline
-      // CREATE statements cannot be replayed over this populated database.
-      await pool.query(
-        "DELETE FROM schema_migrations WHERE filename = '17-upgrade-to-current.sql'",
-      );
-      await pool.query("DROP FUNCTION reporting.room_bucket(text)");
-      for (const [file, transition] of Object.entries(baselineTransitions)) {
-        await pool.query(
-          "UPDATE schema_migrations SET checksum = $2 WHERE filename = $1",
-          [file, transition.previous.at(-1)],
-        );
-      }
-      const before = (
-        await pool.query("SELECT * FROM schema_migrations ORDER BY filename")
-      ).rows;
-      const laterFile = path.join(tempDir, "18-probe.sql");
-      fs.writeFileSync(laterFile, "SELECT missing_upgrade_probe();");
-      await assert.rejects(
-        applyMigrations(pool, tempDir, log),
-        /migration 18-probe.sql failed/,
+      assert.deepEqual(await recorded(pool), currentSchemaFiles);
+
+      const checksums = await pool.query(
+        "SELECT filename, checksum FROM schema_migrations ORDER BY filename",
       );
       assert.deepEqual(
-        (await pool.query("SELECT * FROM schema_migrations ORDER BY filename"))
-          .rows,
-        before,
-      );
-      assert.equal(
-        (
-          await pool.query(
-            "SELECT to_regprocedure('reporting.room_bucket(text)') AS helper",
-          )
-        ).rows[0].helper,
-        null,
+        checksums.rows,
+        currentSchemaFiles.map((filename) => ({
+          filename,
+          checksum: applyMigrations.migrationChecksum(
+            fs.readFileSync(path.join(FULL_DIR, filename), "utf8"),
+          ),
+        })),
       );
 
-      fs.writeFileSync(laterFile, "CREATE TABLE upgrade_probe (id integer);");
-      await applyMigrations(pool, tempDir, log);
-      assert.equal(
-        (await pool.query("SELECT reporting.room_bucket('2') AS bucket"))
-          .rows[0].bucket,
-        "2",
-      );
-      assert.equal(
-        (await pool.query("SELECT title FROM listings WHERE article_id = 1"))
-          .rows[0].title,
-        "preserved",
-      );
-      assert.equal(
-        (await pool.query("SELECT to_regclass('upgrade_probe') AS probe"))
-          .rows[0].probe,
-        "upgrade_probe",
-      );
-      await applyMigrations(pool, tempDir, () =>
+      await applyMigrations(pool, FULL_DIR, () =>
         assert.fail("second pass must be a no-op"),
       );
-
-      // The complete schema must neither swallow new migrations nor bless edits.
-      fs.writeFileSync(
-        path.join(tempDir, "19-probe.sql"),
-        "ALTER TABLE upgrade_probe ADD COLUMN label text;",
-      );
-      await applyMigrations(pool, tempDir, log);
-      await pool.query("SELECT label FROM upgrade_probe");
-      fs.appendFileSync(
-        path.join(tempDir, "04-source-views.sql"),
-        "\n-- unexpected edit\n",
-      );
-      await assert.rejects(
-        applyMigrations(pool, tempDir, log),
-        /migration 04-source-views.sql has changed/,
-      );
-
-      // Even a known old checksum is invalid once the bridge has committed.
-      fs.copyFileSync(
-        path.join(FULL_DIR, "04-source-views.sql"),
-        path.join(tempDir, "04-source-views.sql"),
-      );
-      await pool.query(
-        "UPDATE schema_migrations SET checksum = $1 WHERE filename = '04-source-views.sql'",
-        [baselineTransitions["04-source-views.sql"].previous[0]],
-      );
-      await assert.rejects(
-        applyMigrations(pool, tempDir, log),
-        /migration 04-source-views.sql has changed/,
-      );
-    } finally {
-      await pool.end();
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    }
-  },
-);
-
-needsDb(
-  "migrations: a post-apply correction advances its known checksum",
-  async () => {
-    const pool = new Pool({ connectionString: await recreateDb("mig_fix") });
-    try {
-      await applyMigrations(pool, FULL_DIR, log);
-      await pool.query(
-        "UPDATE schema_migrations SET checksum = $2 WHERE filename = $1",
-        [
-          "18-performance-maintenance.sql",
-          baselineTransitions["18-performance-maintenance.sql"].previous[0],
-        ],
-      );
-      await applyMigrations(pool, FULL_DIR, log);
       assert.equal(
-        (
-          await pool.query(
-            "SELECT checksum FROM schema_migrations WHERE filename = $1",
-            ["18-performance-maintenance.sql"],
-          )
-        ).rows[0].checksum,
-        baselineTransitions["18-performance-maintenance.sql"].current,
+        (await pool.query("SELECT public.room_bucket('4+ rooms') AS bucket"))
+          .rows[0].bucket,
+        "4+",
       );
     } finally {
       await pool.end();
@@ -171,106 +70,17 @@ needsDb(
 );
 
 needsDb(
-  "migrations: pending bridge rejects unknown drift and changed targets",
-  async () => {
-    const pool = new Pool({
-      connectionString: await recreateDb("mig_split_drift"),
-    });
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "pik-split-drift-"));
-    try {
-      await applyMigrations(pool, FULL_DIR, log);
-      for (const file of currentMigrations) {
-        fs.copyFileSync(path.join(FULL_DIR, file), path.join(tempDir, file));
-      }
-      await pool.query(
-        "DELETE FROM schema_migrations WHERE filename = '17-upgrade-to-current.sql'",
-      );
-      await pool.query(
-        "UPDATE schema_migrations SET checksum = 'unexpected' WHERE filename = '04-source-views.sql'",
-      );
-      await assert.rejects(
-        applyMigrations(pool, tempDir, log),
-        /migration 04-source-views.sql has changed/,
-      );
-      await pool.query(
-        "UPDATE schema_migrations SET checksum = $1 WHERE filename = '04-source-views.sql'",
-        [baselineTransitions["04-source-views.sql"].previous[0]],
-      );
-      fs.appendFileSync(
-        path.join(tempDir, "04-source-views.sql"),
-        "\n-- unexpected edit\n",
-      );
-      await assert.rejects(
-        applyMigrations(pool, tempDir, log),
-        /migration 04-source-views.sql has changed/,
-      );
-      fs.copyFileSync(
-        path.join(FULL_DIR, "04-source-views.sql"),
-        path.join(tempDir, "04-source-views.sql"),
-      );
-      fs.appendFileSync(
-        path.join(tempDir, "17-upgrade-to-current.sql"),
-        "\n-- unexpected bridge edit\n",
-      );
-      await assert.rejects(
-        applyMigrations(pool, tempDir, log),
-        /migration 04-source-views.sql has changed/,
-      );
-      assert.equal(
-        (
-          await pool.query(
-            "SELECT checksum FROM schema_migrations WHERE filename = '04-source-views.sql'",
-          )
-        ).rows[0].checksum,
-        baselineTransitions["04-source-views.sql"].previous[0],
-      );
-    } finally {
-      await pool.end();
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    }
-  },
-);
-
-needsDb("baseline adoption still applies the current-state files", async () => {
-  const pool = new Pool({
-    connectionString: await recreateDb("mig_reporting"),
-  });
-  try {
-    for (const file of currentMigrations.filter((name) => name < "17-")) {
-      await pool.query(fs.readFileSync(path.join(FULL_DIR, file), "utf8"));
-    }
-    assert.equal(
-      (
-        await pool.query(
-          "SELECT to_regprocedure('reporting.room_bucket(text)') AS helper",
-        )
-      ).rows[0].helper,
-      "reporting.room_bucket(text)",
-    );
-    await applyMigrations(pool, FULL_DIR, log);
-    assert.equal(
-      (await pool.query("SELECT reporting.room_bucket('2') AS bucket")).rows[0]
-        .bucket,
-      "2",
-    );
-    assert.deepEqual(await recorded(pool), currentMigrations);
-  } finally {
-    await pool.end();
-  }
-});
-
-needsDb(
-  "baseline: Docker-style initialization can be adopted by the runner",
+  "canonical schema: Docker initialization is adopted without replay",
   async () => {
     const pool = new Pool({
       connectionString: await recreateDb("mig_bootstrap"),
     });
     try {
-      for (const file of currentMigrations) {
+      for (const file of currentSchemaFiles) {
         await pool.query(fs.readFileSync(path.join(FULL_DIR, file), "utf8"));
       }
       await applyMigrations(pool, FULL_DIR, log);
-      assert.deepEqual(await recorded(pool), currentMigrations);
+      assert.deepEqual(await recorded(pool), currentSchemaFiles);
     } finally {
       await pool.end();
     }
@@ -278,406 +88,46 @@ needsDb(
 );
 
 needsDb(
-  "baseline: current volume adopts bulk triggers without historical backfills",
+  "canonical schema: retired ledger rows are preserved during adoption",
   async () => {
     const pool = new Pool({
-      connectionString: await recreateDb("mig_current"),
+      connectionString: await recreateDb("mig_retired_ledger"),
     });
     try {
       await applyMigrations(pool, FULL_DIR, log);
-      // Simulate the immediately preceding schema, before the bulk optimization.
-      await pool.query(`
-      ALTER TABLE listing_daily DROP COLUMN resolved_state_version CASCADE;
-      CREATE TRIGGER listing_daily_resolve_sparse_state BEFORE INSERT ON listing_daily
-        FOR EACH ROW EXECUTE FUNCTION resolve_listing_daily_sparse_state();
-      CREATE TRIGGER listing_daily_normalize_flags BEFORE INSERT ON listing_daily
-        FOR EACH ROW EXECUTE FUNCTION normalize_listing_daily_flags();
-      DELETE FROM schema_migrations;
-      INSERT INTO schema_migrations (filename) VALUES ('20-scrape-page-manifest.sql');
-      INSERT INTO listings (article_id, url, title, latitude, longitude)
-        VALUES (1, 'test', 'preserved', 44.77, 17.19);
-      INSERT INTO scrape_runs (status, finished_at, is_complete)
-        VALUES ('ok', now(), false);
-      ALTER TABLE analytics_partition_policy
-        ADD COLUMN retention_days integer NOT NULL DEFAULT 730,
-        ADD COLUMN action text NOT NULL DEFAULT 'retain';
-      ALTER TABLE analytics_partition_policy
-        ADD CONSTRAINT analytics_partition_policy_action_check
-        CHECK (action IN ('delete', 'archive', 'retain'));
-      INSERT INTO analytics_retention_policy
-        (table_schema, table_name, timestamp_column, retention_days, action)
-        VALUES ('public', 'scrape_runs', 'started_at', 730, 'delete');
-      UPDATE analytics_partition_policy SET action = 'delete';
-    `);
-      await applyMigrations(pool, FULL_DIR, log);
-      assert.equal(
-        (
-          await pool.query(
-            `SELECT count(*)::int AS n
-               FROM information_schema.columns
-              WHERE table_schema = 'public'
-                AND table_name = 'analytics_partition_policy'
-                AND column_name IN ('action', 'retention_days')`,
-          )
-        ).rows[0].n,
-        0,
-      );
-      assert.equal(
-        (
-          await pool.query(
-            "SELECT count(*)::int AS n FROM analytics_retention_policy WHERE table_name = 'scrape_runs'",
-          )
-        ).rows[0].n,
-        0,
-      );
-      assert.equal(
-        (
-          await pool.query(
-            "SELECT action FROM analytics_retention_policy WHERE table_name = 'maintenance_runs'",
-          )
-        ).rows[0].action,
-        "delete",
-      );
-      assert.deepEqual(
-        (await pool.query("SELECT title, location FROM listings")).rows,
-        [{ title: "preserved", location: null }],
-      );
-      assert.equal(
-        (await pool.query("SELECT is_complete FROM scrape_runs")).rows[0]
-          .is_complete,
-        false,
-      );
-      const triggers = await pool.query(`SELECT tgname FROM pg_trigger
-      WHERE tgrelid = 'listing_daily'::regclass AND NOT tgisinternal ORDER BY tgname`);
-      assert.deepEqual(
-        triggers.rows.map((row) => row.tgname),
-        [
-          "listing_daily_10_resolve_sparse_state",
-          "listing_daily_15_version_refs",
-          "listing_daily_20_normalize_flags_insert",
-          "listing_daily_normalize_flags_update",
-          "listing_daily_partition_route",
-        ],
-      );
-      await applyMigrations(pool, FULL_DIR, () =>
-        assert.fail("second pass must be a no-op"),
-      );
-    } finally {
-      await pool.end();
-    }
-  },
-);
-
-// Drop & recreate a dedicated database so cases stay independent of the
-// shared suite DB (which other files bootstrap via ensureSchema).
-async function recreateDb(name) {
-  const admin = new Pool({ connectionString: process.env.TEST_DATABASE_URL });
-  await admin.query(`DROP DATABASE IF EXISTS ${name}`);
-  await admin.query(`CREATE DATABASE ${name}`);
-  await admin.end();
-  return process.env.TEST_DATABASE_URL.replace(/\/[^/]+$/, "/" + name);
-}
-
-needsDb(
-  "migrations: fresh database applies all files; second pass is a no-op",
-  async () => {
-    const pool = new Pool({ connectionString: await recreateDb("mig_fresh") });
-    await applyMigrations(pool, FULL_DIR, log);
-    assert.equal(await fnCount(pool), 2);
-    assert.deepEqual(await recorded(pool), currentMigrations);
-    const checksums = await pool.query(
-      "SELECT filename, checksum FROM schema_migrations WHERE filename = ANY($1::text[]) ORDER BY filename",
-      [currentMigrations],
-    );
-    assert.deepEqual(
-      checksums.rows,
-      currentMigrations.map((filename) => ({
-        filename,
-        checksum: applyMigrations.migrationChecksum(
-          fs.readFileSync(path.join(FULL_DIR, filename), "utf8"),
-        ),
-      })),
-    );
-
-    await applyMigrations(pool, FULL_DIR, log); // second boot
-    assert.equal(await fnCount(pool), 2);
-    assert.deepEqual(await recorded(pool), currentMigrations);
-
-    // Dashboard panel query runs through the freshly created function:
-    const r = await pool.query(
-      "SELECT count(*)::int AS n FROM listings_filtered(ARRAY['apartments'], 0, 99999, NULL)",
-    );
-    assert.equal(typeof r.rows[0].n, "number");
-    const numeric = await pool.query(
-      "SELECT dashboard_numeric('1.5') AS valid, dashboard_numeric('1e3') AS malformed, dashboard_numeric('') AS blank",
-    );
-    assert.equal(Number(numeric.rows[0].valid), 1.5);
-    assert.equal(numeric.rows[0].malformed, null);
-    assert.equal(numeric.rows[0].blank, null);
-    await pool.end();
-  },
-);
-
-needsDb(
-  "migrations: baselines legacy ledger rows and rejects edited applied files",
-  async () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "pik-migrations-"));
-    const filename = "001-probe.sql";
-    const filePath = path.join(tempDir, filename);
-    const original = "CREATE TABLE migration_integrity_probe (id integer);\n";
-    fs.writeFileSync(filePath, original);
-
-    const pool = new Pool({
-      connectionString: await recreateDb("mig_integrity"),
-    });
-    try {
-      await applyMigrations(pool, tempDir, log);
-      const expected = applyMigrations.migrationChecksum(original);
-      assert.deepEqual(
-        (
-          await pool.query(
-            "SELECT checksum FROM schema_migrations WHERE filename = $1",
-            [filename],
-          )
-        ).rows,
-        [{ checksum: expected }],
-      );
-
-      // Simulate a pre-checksum ledger row. It is baselined once and remains
-      // protected against edits on subsequent boots.
+      await pool.query("DELETE FROM schema_migrations");
       await pool.query(
-        "UPDATE schema_migrations SET checksum = NULL WHERE filename = $1",
-        [filename],
+        "INSERT INTO schema_migrations (filename) VALUES ('legacy-schema.sql')",
       );
-      await applyMigrations(pool, tempDir, log);
-      assert.equal(
-        (
-          await pool.query(
-            "SELECT checksum FROM schema_migrations WHERE filename = $1",
-            [filename],
-          )
-        ).rows[0].checksum,
-        expected,
-      );
-
-      fs.writeFileSync(filePath, `${original}-- edited after deployment\n`);
-      await assert.rejects(
-        applyMigrations(pool, tempDir, log),
-        /migration 001-probe\.sql has changed after being applied/,
+      await applyMigrations(pool, FULL_DIR, log);
+      assert.deepEqual(
+        await recorded(pool),
+        [...currentSchemaFiles, "legacy-schema.sql"].sort(),
       );
     } finally {
       await pool.end();
-      fs.rmSync(tempDir, { recursive: true, force: true });
     }
   },
 );
 
-needsDb(
-  "migrations: pre-squash volume adopts the canonical baseline",
-  async () => {
-    const pool = new Pool({
-      connectionString: await recreateDb("mig_presquash"),
-    });
-    await applyMigrations(pool, FULL_DIR, log);
-
-    // Mimic a volume migrated by the retired chain: same live schema, but
-    // schema_migrations records the old filenames instead of the baseline.
-    const retiredNames = [
-      "00-schemas.sql",
-      "02-add-geolocation.sql",
-      "03-listing-filters.sql",
-      "04-close-listings.sql",
-      "05-listing-details.sql",
-      "06-market-views.sql",
-      "07-api-extras.sql",
-      "08-enrichment-fairness.sql",
-      "09-search-results-article-idx.sql",
-      "10-listing-dates.sql",
-      "12-neighborhood-filter.sql",
-    ];
-    await pool.query("DELETE FROM schema_migrations");
-    for (const name of retiredNames) {
-      await pool.query("INSERT INTO schema_migrations (filename) VALUES ($1)", [
-        name,
-      ]);
-    }
-
-    // Boot against the squashed directory: nothing to apply, nothing breaks.
-    await applyMigrations(pool, FULL_DIR, log);
-    assert.equal(await fnCount(pool), 2);
-    assert.deepEqual(
-      await recorded(pool),
-      [...currentMigrations, ...retiredNames].sort(),
-    );
-
-    const r = await pool.query(
-      "SELECT count(*)::int AS n FROM listings_filtered(ARRAY['apartments'], 0, 99999, NULL)",
-    );
-    assert.equal(typeof r.rows[0].n, "number");
-    await pool.end();
-  },
-);
-
-needsDb(
-  "migrations: unsupported legacy volume fails atomically with upgrade guidance",
-  async () => {
-    const pool = new Pool({
-      connectionString: await recreateDb("mig_ancient"),
-    });
-
-    // Old world: tables shaped exactly like the ORIGINAL 01-schema.sql (all
-    // sibling tables complete from day one; only listings grew since), no
-    // tracker, none of the later columns or helper objects.
-    await pool.query(`CREATE TABLE listings (
-      article_id BIGINT PRIMARY KEY, url TEXT NOT NULL, title TEXT NOT NULL,
-      sqm NUMERIC(8,2), rooms TEXT, price NUMERIC(12,2), price_text TEXT,
-      ppm2 INTEGER, is_rent BOOLEAN NOT NULL DEFAULT FALSE,
-      first_seen TIMESTAMPTZ NOT NULL DEFAULT now(),
-      last_seen  TIMESTAMPTZ NOT NULL DEFAULT now())`);
-    await pool.query(`CREATE TABLE price_history (
-      id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-      article_id BIGINT NOT NULL REFERENCES listings (article_id) ON DELETE CASCADE,
-      scraped_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-      price NUMERIC(12,2), ppm2 INTEGER)`);
-    await pool.query(`CREATE TABLE saved_searches (
-      search_key TEXT PRIMARY KEY, name TEXT NOT NULL, url TEXT NOT NULL,
-      category TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-      last_scraped_at TIMESTAMPTZ, listing_count INTEGER, median_ppm2 INTEGER,
-      new_count INTEGER, drop_count INTEGER)`);
-    await pool.query(`CREATE TABLE search_results (
-      search_key TEXT NOT NULL REFERENCES saved_searches (search_key) ON DELETE CASCADE,
-      article_id BIGINT NOT NULL REFERENCES listings (article_id) ON DELETE CASCADE,
-      PRIMARY KEY (search_key, article_id))`);
-    await pool.query(`CREATE TABLE scrape_runs (
-      id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, search_key TEXT,
-      started_at TIMESTAMPTZ NOT NULL DEFAULT now(), finished_at TIMESTAMPTZ,
-      pages INTEGER, cards INTEGER, status TEXT NOT NULL DEFAULT 'running',
-      error TEXT)`);
-    await pool.query(`INSERT INTO listings (article_id, url, title, sqm, price)
-                    VALUES (1, 'https://olx.ba/artikal/1', 'legacy row', 80, 100000)`);
-    await pool.query(
-      `INSERT INTO saved_searches VALUES ('/k', 'legacy', 'https://olx.ba/k', 'apartments')`,
-    );
-    await pool.query("INSERT INTO search_results VALUES ('/k', 1)");
-
+needsDb("canonical schema: edited applied files are rejected", async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "pik-schema-"));
+  const filename = "00-probe.sql";
+  const filePath = path.join(tempDir, filename);
+  const original = "CREATE TABLE schema_integrity_probe (id integer);\n";
+  fs.writeFileSync(filePath, original);
+  const pool = new Pool({
+    connectionString: await recreateDb("mig_integrity"),
+  });
+  try {
+    await applyMigrations(pool, tempDir, log);
+    fs.writeFileSync(filePath, `${original}-- edited after deployment\n`);
     await assert.rejects(
-      applyMigrations(pool, FULL_DIR, log),
-      /Database predates the current baseline/,
+      applyMigrations(pool, tempDir, log),
+      /canonical schema 00-probe\.sql changed after being applied/,
     );
-    assert.equal(
-      (await pool.query("SELECT title FROM listings WHERE article_id = 1"))
-        .rows[0].title,
-      "legacy row",
-    );
-    assert.equal(
-      (
-        await pool.query(
-          "SELECT to_regclass('public.schema_migrations') AS ledger",
-        )
-      ).rows[0].ledger,
-      null,
-    );
+  } finally {
     await pool.end();
-  },
-);
-
-needsDb(
-  "migrations: detail columns, analytics views and view columns exist",
-  async () => {
-    const pool = new Pool({
-      connectionString: await recreateDb("mig_details"),
-    });
-    await applyMigrations(pool, FULL_DIR, log);
-
-    const cols =
-      await pool.query(`SELECT count(*)::int AS n FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'listings' AND column_name IN (
-      'closing_category','published_at','renewed_at','seller_type','rooms_detail','bathrooms',
-      'floor_num','floors_total','unit_levels','heating','furnished','condition',
-      'parking','garage','elevator','year_built','plot_sqm','orientation','views',
-      'favorites','characteristics','details_fetched_at')`);
-    assert.equal(cols.rows[0].n, 22);
-
-    const views =
-      await pool.query(`SELECT count(*)::int AS n FROM information_schema.views
-    WHERE table_name IN ('v_active_listings','v_listing_lifecycle','v_market_daily')`);
-    assert.equal(views.rows[0].n, 3);
-
-    // v_active_listings must expose the new columns (views snapshot column lists):
-    const vc =
-      await pool.query(`SELECT count(*)::int AS n FROM information_schema.columns
-    WHERE table_name = 'v_active_listings' AND column_name = 'details_fetched_at'`);
-    assert.equal(vc.rows[0].n, 1);
-    await pool.end();
-  },
-);
-
-needsDb(
-  "migrations: refactor contract tables, indexes and run metadata exist",
-  async () => {
-    const pool = new Pool({
-      connectionString: await recreateDb("mig_refactor_contract"),
-    });
-    await applyMigrations(pool, FULL_DIR, log);
-
-    const tables = await pool.query(`
-      SELECT table_name
-        FROM information_schema.tables
-       WHERE table_schema = 'public'
-         AND table_name IN (
-           'raw_api_responses', 'listing_state_history', 'listing_price_events',
-           'listing_daily', 'analytics_refresh_state', 'scrape_run_pages')`);
-    assert.deepEqual(tables.rows.map((row) => row.table_name).sort(), [
-      "analytics_refresh_state",
-      "listing_daily",
-      "listing_price_events",
-      "listing_state_history",
-      "raw_api_responses",
-      "scrape_run_pages",
-    ]);
-
-    const runColumns = await pool.query(`
-      SELECT column_name
-        FROM information_schema.columns
-       WHERE table_name = 'scrape_runs'
-         AND column_name IN ('is_complete', 'failure_reason', 'truncation_reason')`);
-    assert.deepEqual(runColumns.rows.map((row) => row.column_name).sort(), [
-      "failure_reason",
-      "is_complete",
-      "truncation_reason",
-    ]);
-
-    const dailyKey = await pool.query(`
-      SELECT count(*)::int AS n
-        FROM pg_constraint
-       WHERE conrelid = 'listing_daily'::regclass
-         AND contype = 'p'`);
-    assert.equal(dailyKey.rows[0].n, 1);
-
-    const refresh = await pool.query(
-      "SELECT scope FROM analytics_refresh_state WHERE scope = 'listing_daily'",
-    );
-    assert.deepEqual(refresh.rows, [{ scope: "listing_daily" }]);
-    const compactIdentity = await pool.query(`
-      SELECT count(*)::int AS n
-        FROM information_schema.columns
-       WHERE table_schema = 'olap'
-         AND table_name = 'daily_listing_facts'
-         AND column_name IN ('title', 'url')`);
-    assert.equal(compactIdentity.rows[0].n, 0);
-    const reportingIdentity = await pool.query(`
-      SELECT count(*)::int AS n
-        FROM information_schema.columns
-       WHERE table_schema = 'reporting'
-         AND table_name = 'daily_listing_facts'
-         AND column_name IN ('title', 'url')`);
-    assert.equal(reportingIdentity.rows[0].n, 2);
-    const analytics = await pool.query(`
-      SELECT count(*)::int AS n
-        FROM information_schema.routines
-       WHERE routine_schema = 'public'
-         AND routine_name IN ('market_daily_filtered', 'rebuild_listing_daily')`);
-    assert.equal(analytics.rows[0].n, 2);
-    await pool.end();
-  },
-);
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});

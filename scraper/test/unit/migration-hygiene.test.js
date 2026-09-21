@@ -6,20 +6,29 @@ const path = require("node:path");
 const test = require("node:test");
 
 const init = path.resolve(__dirname, "../../../db/init");
-const allowlistedHistoryBackfills = new Set();
 
-test("forward migrations do not UPDATE append-only history or daily tables", () => {
-  const violations = [];
-  for (const file of fs
+test("init contains only the canonical schema files", () => {
+  const sqlFiles = fs
     .readdirSync(init)
-    .filter((name) => /^3\d-.*\.sql$/.test(name))) {
-    const sql = fs.readFileSync(path.join(init, file), "utf8");
-    for (const match of sql.matchAll(
-      /\bUPDATE\s+(?:public\.)?(listing_state_history|listing_daily)\b/gi,
-    )) {
-      if (!allowlistedHistoryBackfills.has(file))
-        violations.push(`${file}: ${match[0]}`);
-    }
-  }
-  assert.deepEqual(violations, []);
+    .filter((name) => name.endsWith(".sql"))
+    .sort();
+  assert.deepEqual(sqlFiles, [
+    "00-core-schemas.sql",
+    "01-tables.sql",
+    "02-constraints.sql",
+    "03-functions.sql",
+    "04-source-views.sql",
+    "05-reporting-functions.sql",
+    "06-reporting-views.sql",
+    "07-indexes.sql",
+    "08-triggers.sql",
+    "09-neighborhood-data.sql",
+    "10-seed-and-access.sql",
+    "11-postgis.sql",
+  ]);
+
+  const migrationFiles = fs
+    .readdirSync(init)
+    .filter((name) => /^1[2-9]-|^2\d-|^3\d-/.test(name));
+  assert.deepEqual(migrationFiles, []);
 });

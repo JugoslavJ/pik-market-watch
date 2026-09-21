@@ -1,7 +1,6 @@
 "use strict";
 
-// CI schema contract check. CI provisions one database from the current
-// checkout and another by upgrading f60b5d1, then supplies both URLs here.
+// Schema contract check. Callers provide two database URLs to compare.
 // pg_dump is used instead of information_schema so routines, views, indexes,
 // and constraints are included in the comparison.
 const { execFileSync } = require("node:child_process");
@@ -46,7 +45,7 @@ try {
   const right = normalize(forwardFile);
   if (left !== right) {
     console.error(
-      "schema parity failed: fresh HEAD differs from f60b5d1 + forward migrations",
+      "schema parity failed: the two canonical schema installations differ",
     );
     process.exitCode = 1;
   } else {

@@ -1,81 +1,89 @@
--- Reporting views.
+-- Canonical reporting views baseline.
 --
--- Stable views exposed to Grafana and other read-only clients.
---
--- Name: daily_market; Type: VIEW; Schema: dashboard_public; Owner: -
+-- Name: VIEW listing_state_history_state; Type: COMMENT; Schema: public; Owner: -
 --
 
-CREATE VIEW dashboard_public.daily_market AS
- SELECT day,
-    article_id,
-    category_memberships,
-    deal,
+COMMENT ON VIEW public.listing_state_history_state IS 'Compatibility projection of listing_state_history joined to its canonical state version.';
+
+--
+-- Name: dashboard_listings; Type: VIEW; Schema: reporting; Owner: -
+--
+
+CREATE VIEW reporting.dashboard_listings AS
+ SELECT article_id,
+    url,
+    title,
     sqm,
     rooms,
     price,
-    price_state,
+    price_text,
     ppm2,
-    neighborhood,
-    stale_observation,
-    provisional_day,
-    membership_inferred,
-    attributes_inferred
-   FROM olap.public_daily_market;
-
---
--- Name: exit_cycles; Type: VIEW; Schema: dashboard_public; Owner: -
---
-
-CREATE VIEW dashboard_public.exit_cycles AS
- SELECT article_id,
-    cycle_no,
-    title,
-    url,
-    opened_at,
+    is_rent,
+    first_seen,
+    last_seen,
+    location,
+    latitude,
+    longitude,
     closed_at,
-    days_listed,
-    category_memberships,
-    category,
-    deal,
-    sqm,
-    rooms,
-    last_asking_price,
-    last_asking_ppm2,
-    reopened_cycle
-   FROM olap.public_exit_cycles;
+    closing_price,
+    closing_ppm2,
+    published_at,
+    closing_category,
+    seller_type,
+    rooms_detail,
+    bathrooms,
+    floor_num,
+    floors_total,
+    unit_levels,
+    heating,
+    furnished,
+    condition,
+    parking,
+    garage,
+    elevator,
+    year_built,
+    plot_sqm,
+    orientation,
+    views,
+    favorites,
+    characteristics,
+    details_fetched_at,
+    api_price_history,
+    api_status,
+    last_enrichment_attempted_at,
+    renewed_at
+   FROM olap.listings;
 
 --
--- Name: freshness; Type: VIEW; Schema: dashboard_public; Owner: -
+-- Name: price_changes; Type: VIEW; Schema: reporting; Owner: -
 --
 
-CREATE VIEW dashboard_public.freshness AS
- SELECT category,
-    configured_searches,
-    last_success_at
-   FROM olap.public_freshness;
-
---
--- Name: price_reductions; Type: VIEW; Schema: dashboard_public; Owner: -
---
-
-CREATE VIEW dashboard_public.price_reductions AS
+CREATE VIEW reporting.price_changes AS
  SELECT article_id,
-    url,
-    title,
-    category_memberships,
-    category,
+    effective_at,
+    ingested_at,
+    source,
+    price,
+    price_state,
     deal,
+    prior_price,
+    delta,
+    pct_change,
+    prior_effective_at,
+    current_effective_at,
+    category,
+    category_memberships,
     sqm,
     rooms,
-    neighborhood,
-    prior_price,
-    new_price,
-    reduction_km,
-    reduction_pct,
-    event_at,
-    currently_observed,
-    last_seen
-   FROM olap.public_price_reductions;
+    provenance,
+    null_boundary
+   FROM olap.listing_price_changes;
+
+--
+-- Name: VIEW listing_daily_state; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.listing_daily_state IS 'Compatibility projection of listing_daily joined to its canonical state version.';
 
 --
 -- Name: v_active_listings; Type: VIEW; Schema: public; Owner: -
@@ -146,6 +154,19 @@ CREATE VIEW public.v_market_daily AS
     stale_n,
     provisional_day
    FROM public.v_market_daily_source;
+
+--
+-- Name: analytics_refresh_state; Type: VIEW; Schema: reporting; Owner: -
+--
+
+CREATE VIEW reporting.analytics_refresh_state AS
+ SELECT scope,
+    pending_from_day,
+    pending_through_day,
+    completed_through_day,
+    last_successful_refresh_at,
+    updated_at
+   FROM public.analytics_refresh_state;
 
 --
 -- Name: comparison_price_changes; Type: VIEW; Schema: reporting; Owner: -
@@ -228,111 +249,58 @@ CREATE VIEW reporting.current_listing_scores AS
     local_comparable_count,
     benchmark_scope,
     benchmark_neighborhoods
-   FROM olap.current_listing_scores;
-
---
--- Name: VIEW current_listing_scores; Type: COMMENT; Schema: reporting; Owner: -
---
-
-COMMENT ON VIEW reporting.current_listing_scores IS 'Stable Grafana contract backed only by the current market OLAP snapshot.';
+   FROM olap.current_listing_scores s;
 
 --
 -- Name: daily_listing_facts; Type: VIEW; Schema: reporting; Owner: -
 --
 
 CREATE VIEW reporting.daily_listing_facts AS
- SELECT day,
-    article_id,
-    title,
-    url,
-    category,
-    category_memberships,
-    is_rent,
-    deal,
-    rooms,
-    sqm,
-    location,
-    neighborhood,
-    price,
-    price_state,
-    ppm2,
-    state_effective_at,
-    price_effective_at,
-    membership_inferred,
-    attributes_inferred,
-    stale_observation,
-    provisional_day,
-    filter_attributes,
-    property_type,
-    room_bucket,
-    currency,
-    historical_attributes,
-    historical_seller_type,
-    historical_condition,
-    historical_furnished,
-    historical_heating,
-    historical_parking,
-    historical_garage,
-    historical_elevator,
-    historical_floor_num,
-    price_quality_reason,
-    rate_quality_reason,
-    price_eligible,
-    rate_eligible,
-    asking_price,
-    asking_rate,
-    asking_price_unit,
-    asking_rate_unit
-   FROM olap.daily_listing_facts;
-
---
--- Name: dashboard_listings; Type: VIEW; Schema: reporting; Owner: -
---
-
-CREATE VIEW reporting.dashboard_listings AS
- SELECT article_id,
-    url,
-    title,
-    sqm,
-    rooms,
-    price,
-    price_text,
-    ppm2,
-    is_rent,
-    location,
-    latitude,
-    longitude,
-    closed_at,
-    closing_price,
-    closing_ppm2,
-    closing_category,
-    published_at,
-    renewed_at,
-    seller_type,
-    rooms_detail,
-    bathrooms,
-    floor_num,
-    floors_total,
-    unit_levels,
-    heating,
-    furnished,
-    condition,
-    parking,
-    garage,
-    elevator,
-    year_built,
-    plot_sqm,
-    orientation,
-    views,
-    favorites,
-    characteristics,
-    api_price_history,
-    api_status,
-    details_fetched_at,
-    last_enrichment_attempted_at,
-    first_seen,
-    last_seen
-   FROM olap.listings;
+ SELECT d.day,
+    d.article_id,
+    l.title,
+    l.url,
+    d.category,
+    d.category_memberships,
+    d.is_rent,
+    f.deal,
+    d.rooms,
+    d.sqm,
+    d.location,
+    f.neighborhood,
+    f.price,
+    f.price_state,
+    f.ppm2,
+    f.state_effective_at,
+    f.price_effective_at,
+    d.membership_inferred,
+    d.attributes_inferred,
+    d.stale_observation,
+    d.provisional_day,
+    d.filter_attributes,
+    f.property_type,
+    f.room_bucket,
+    f.currency,
+    d.filter_attributes AS historical_attributes,
+    f.historical_seller_type,
+    f.historical_condition,
+    f.historical_furnished,
+    f.historical_heating,
+    f.historical_parking,
+    f.historical_garage,
+    f.historical_elevator,
+    f.historical_floor_num,
+    f.price_quality_reason,
+    f.rate_quality_reason,
+    f.price_eligible,
+    f.rate_eligible,
+    f.asking_price,
+    f.asking_rate,
+    f.asking_price_unit,
+    f.asking_rate_unit
+   FROM ((olap.daily_listing_facts f
+     LEFT JOIN public.listing_daily_state d ON (((d.day = f.day) AND (d.article_id = f.article_id))))
+     LEFT JOIN public.listings l ON ((l.article_id = f.article_id)));
 
 --
 -- Name: evidence_timeline; Type: VIEW; Schema: reporting; Owner: -
@@ -359,6 +327,16 @@ CREATE VIEW reporting.exit_economics AS
     opening_price,
     days_listed
    FROM olap.listing_exit_economics;
+
+--
+-- Name: freshness; Type: VIEW; Schema: reporting; Owner: -
+--
+
+CREATE VIEW reporting.freshness AS
+ SELECT category,
+    configured_searches,
+    last_success_at
+   FROM olap.public_freshness;
 
 --
 -- Name: history_contract; Type: VIEW; Schema: reporting; Owner: -
@@ -465,6 +443,25 @@ CREATE VIEW reporting.lifecycle_movements AS
    FROM olap.lifecycle_movements;
 
 --
+-- Name: listing_health; Type: VIEW; Schema: reporting; Owner: -
+--
+
+CREATE VIEW reporting.listing_health AS
+ SELECT article_id,
+    closed_at,
+    last_seen,
+    latitude,
+    longitude,
+    sqm,
+    price,
+    ppm2,
+    is_rent,
+    api_status,
+    details_fetched_at,
+    last_enrichment_attempted_at
+   FROM public.listings;
+
+--
 -- Name: market_daily; Type: VIEW; Schema: reporting; Owner: -
 --
 
@@ -494,12 +491,6 @@ CREATE VIEW reporting.olap_health AS
    FROM olap.refresh_state;
 
 --
--- Name: VIEW olap_health; Type: COMMENT; Schema: reporting; Owner: -
---
-
-COMMENT ON VIEW reporting.olap_health IS 'Stable dashboard mart generation, age, and row-count monitoring contract.';
-
---
 -- Name: olap_queue_health; Type: VIEW; Schema: reporting; Owner: -
 --
 
@@ -512,35 +503,31 @@ CREATE VIEW reporting.olap_queue_health AS
    FROM public.analytics_daily_olap_dirty;
 
 --
--- Name: VIEW olap_queue_health; Type: COMMENT; Schema: reporting; Owner: -
+-- Name: price_event_health; Type: VIEW; Schema: reporting; Owner: -
 --
 
-COMMENT ON VIEW reporting.olap_queue_health IS 'Pending daily-publication queue depth and age monitoring contract.';
-
---
--- Name: price_changes; Type: VIEW; Schema: reporting; Owner: -
---
-
-CREATE VIEW reporting.price_changes AS
+CREATE VIEW reporting.price_event_health AS
  SELECT article_id,
-    effective_at,
-    ingested_at,
     source,
-    price,
-    price_state,
-    deal,
-    prior_price,
-    delta,
-    pct_change,
-    prior_effective_at,
-    current_effective_at,
+    ingested_at,
+    price_state
+   FROM public.listing_price_events;
+
+--
+-- Name: saved_searches; Type: VIEW; Schema: reporting; Owner: -
+--
+
+CREATE VIEW reporting.saved_searches AS
+ SELECT search_key,
+    name,
+    url,
     category,
-    category_memberships,
-    sqm,
-    rooms,
-    provenance,
-    null_boundary
-   FROM olap.listing_price_changes;
+    last_scraped_at,
+    listing_count,
+    median_ppm2,
+    new_count,
+    drop_count
+   FROM public.saved_searches;
 
 --
 -- Name: scrape_health; Type: VIEW; Schema: reporting; Owner: -
@@ -559,3 +546,88 @@ CREATE VIEW reporting.scrape_health AS
     truncation_reason,
     error
    FROM public.scrape_runs r;
+
+-- Helpers whose return types are canonical reporting views above.
+--
+-- Name: listings_closed_filtered(text[], numeric, numeric, text[]); Type: FUNCTION; Schema: reporting; Owner: -
+--
+
+CREATE FUNCTION reporting.listings_closed_filtered(p_category text[], p_min_sqm numeric, p_max_sqm numeric, p_neighborhood text[]) RETURNS SETOF reporting.dashboard_listings
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'public', 'pg_temp'
+    AS $$
+  SELECT l.* FROM public.listings_closed_filtered(
+    p_category, p_min_sqm, p_max_sqm, p_neighborhood) l
+$$;
+--
+-- Name: listings_filtered(text[], numeric, numeric, text[], boolean); Type: FUNCTION; Schema: reporting; Owner: -
+--
+
+CREATE FUNCTION reporting.listings_filtered(p_category text[], p_min_sqm numeric, p_max_sqm numeric, p_neighborhood text[], p_active_only boolean DEFAULT true) RETURNS SETOF reporting.dashboard_listings
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'public', 'pg_temp'
+    AS $$
+  SELECT l.* FROM public.listings_filtered(
+    p_category, p_min_sqm, p_max_sqm, p_neighborhood, p_active_only) l
+$$;
+
+
+
+--
+-- Name: resolved_price_evidence_for_articles(bigint[]); Type: FUNCTION; Schema: reporting; Owner: -
+--
+
+CREATE FUNCTION reporting.resolved_price_evidence_for_articles(p_article_ids bigint[]) RETURNS SETOF reporting.resolved_price_evidence
+    LANGUAGE sql STABLE PARALLEL SAFE
+    AS $_$
+  WITH picked AS (
+    SELECT DISTINCT ON (p.article_id, p.effective_at)
+           p.id, p.article_id, p.effective_at, p.ingested_at, p.price,
+           p.price_state, p.source, p.provenance, p.observed_at,
+           p.renewed_at, p.effective_at_basis
+      FROM public.listing_price_events p
+     WHERE p.article_id = ANY(COALESCE($1, '{}'::bigint[]))
+       AND p.effective_at <= now()
+     ORDER BY p.article_id, p.effective_at,
+              CASE WHEN p.source IN ('search', 'detail') THEN 0 ELSE 1 END,
+              CASE p.price_state
+                WHEN 'conflict' THEN 0 WHEN 'invalid' THEN 1
+                WHEN 'unpriced' THEN 2 ELSE 3 END,
+              p.id DESC
+  )
+  SELECT p.id, p.article_id, p.effective_at, p.ingested_at, p.price,
+         p.price_state, p.source, p.provenance, p.observed_at,
+         p.renewed_at, p.effective_at_basis,
+         reporting.comparison_currency(p.provenance ->> 'currency') AS currency_normalized,
+         CASE
+           WHEN p.provenance ? 'dealType' THEN
+             CASE p.provenance ->> 'dealType'
+               WHEN 'sale' THEN false WHEN 'rent' THEN true ELSE NULL::boolean
+             END
+           ELSE state.is_rent
+         END AS evidence_is_rent
+    FROM picked p
+    LEFT JOIN LATERAL (
+      SELECT h.is_rent
+        FROM public.listing_state_history_state h
+       WHERE h.article_id = p.article_id
+         AND h.effective_at <= p.effective_at
+         AND h.is_rent IS NOT NULL
+       ORDER BY h.effective_at DESC, h.id DESC
+       LIMIT 1
+    ) state ON true
+$_$;
+
+-- Filter helper over the canonical price_changes view.
+--
+-- Name: price_changes_filtered(timestamp with time zone, timestamp with time zone, text[], numeric, numeric, text[], text[], text[]); Type: FUNCTION; Schema: reporting; Owner: -
+--
+
+CREATE FUNCTION reporting.price_changes_filtered(p_from timestamp with time zone, p_through timestamp with time zone, p_category text[] DEFAULT '{}'::text[], p_min_sqm numeric DEFAULT NULL::numeric, p_max_sqm numeric DEFAULT NULL::numeric, p_rooms text[] DEFAULT '{}'::text[], p_deal text[] DEFAULT '{}'::text[], p_neighborhood text[] DEFAULT '{}'::text[]) RETURNS SETOF reporting.price_changes
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'public', 'pg_temp'
+    AS $$
+  SELECT pc.* FROM public.price_changes_filtered(
+    p_from, p_through, p_category, p_min_sqm, p_max_sqm,
+    p_rooms, p_deal, p_neighborhood) pc
+$$;
