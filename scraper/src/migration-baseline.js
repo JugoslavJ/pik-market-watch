@@ -12,8 +12,7 @@ module.exports = {
     previous: [
       "60d346e2bad6077f79699342afaec6171578887847f968e80204e0722ffbf528",
     ],
-    current:
-      "89d5ef375ad7193d081a665c093018183589014cae2ea248a9007dd20b441c42",
+    current: "89d5ef375ad7193d081a665c093018183589014cae2ea248a9007dd20b441c42",
     allowAfterApply: true,
   },
   "20-child-indexes.sql": {

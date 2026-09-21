@@ -191,10 +191,12 @@ async function applyMigrations(pool, dir, log = () => {}) {
       }
       if (
         advancedSchema.rows[0].present &&
-        (await client.query(
-          "SELECT count(*)::int AS n FROM schema_migrations WHERE filename = ANY($1::text[])",
-          [files],
-        )).rows[0].n === 0
+        (
+          await client.query(
+            "SELECT count(*)::int AS n FROM schema_migrations WHERE filename = ANY($1::text[])",
+            [files],
+          )
+        ).rows[0].n === 0
       ) {
         const fingerprint = await client.query(`
           SELECT to_regclass('olap.refresh_state') IS NOT NULL

@@ -288,10 +288,9 @@ needsDb(
     await commit([card({ articleId: 3010 })], {
       observedAt: samePriceLater,
     });
-    await commit(
-      [card({ articleId: 3010, price: 99000, ppm2: 1980 })],
-      { observedAt: samePriceLater },
-    );
+    await commit([card({ articleId: 3010, price: 99000, ppm2: 1980 })], {
+      observedAt: samePriceLater,
+    });
     await commit([card({ articleId: 3010, price: 99000, ppm2: 1980 })], {
       observedAt: nextDay,
     });
