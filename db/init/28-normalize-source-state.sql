@@ -3,7 +3,10 @@
 -- reporting surface continues to expose the old state fields through the
 -- *_state compatibility views below.
 
-CREATE TEMP TABLE _state_normalization_views ON COMMIT DROP AS
+-- Keep these snapshots for the duration of this SQL session. The application
+-- migrator wraps the file in one transaction, while Docker's init runner does
+-- not; ON COMMIT DROP would erase them between the CREATE and UPDATE below.
+CREATE TEMP TABLE _state_normalization_views AS
 SELECT c.oid,
        n.nspname AS schema_name,
        c.relname AS view_name,
@@ -28,7 +31,7 @@ SELECT c.oid,
         AND d.deptype = 'e'
    );
 
-CREATE TEMP TABLE _state_normalization_functions ON COMMIT DROP AS
+CREATE TEMP TABLE _state_normalization_functions AS
 SELECT p.oid,
        n.nspname AS schema_name,
        p.proname,

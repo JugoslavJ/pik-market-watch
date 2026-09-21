@@ -87,16 +87,30 @@ jobs:
           docker run -d --name schema-head \
             -p 55433:5432 \
             -e POSTGRES_USER=olx -e POSTGRES_PASSWORD=olx -e POSTGRES_DB=olx \
+            -e POSTGRES_MIGRATOR_PASSWORD=ci-migrator \
+            -e POSTGRES_APP_PASSWORD=ci-app \
+            -e POSTGRES_REPORTING_PASSWORD=ci-reporting \
+            -e POSTGRES_BACKUP_PASSWORD=ci-backup \
             -v "$GITHUB_WORKSPACE/db/init:/docker-entrypoint-initdb.d:ro" \
             "$POSTGIS_IMAGE"
           docker run -d --name schema-forward \
             -p 55434:5432 \
             -e POSTGRES_USER=olx -e POSTGRES_PASSWORD=olx -e POSTGRES_DB=olx \
+            -e POSTGRES_MIGRATOR_PASSWORD=ci-migrator \
+            -e POSTGRES_APP_PASSWORD=ci-app \
+            -e POSTGRES_REPORTING_PASSWORD=ci-reporting \
+            -e POSTGRES_BACKUP_PASSWORD=ci-backup \
             -v "$RUNNER_TEMP/pik-market-watch-f60b5d1/db/init:/docker-entrypoint-initdb.d:ro" \
             "$POSTGIS_IMAGE"
           for container in schema-head schema-forward; do
             for attempt in $(seq 1 90); do
-              if docker exec "$container" pg_isready -U olx -d olx >/dev/null 2>&1; then break; fi
+              # pg_isready succeeds against the temporary postmaster that the
+              # Docker entrypoint uses while it runs initdb scripts. Wait for
+              # the entrypoint's completion marker and the final postmaster,
+              # so forward files cannot race any baseline script.
+              if docker logs "$container" 2>&1 \
+                | grep -q 'PostgreSQL init process complete; ready for start up.' \
+                && docker exec "$container" pg_isready -U olx -d olx >/dev/null 2>&1; then break; fi
               if [ "$attempt" = 90 ]; then exit 1; fi
               sleep 1
             done

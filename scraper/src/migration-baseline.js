@@ -45,8 +45,9 @@ module.exports = {
   "28-normalize-source-state.sql": {
     previous: [
       "f6f9fd4342dc4d732018d67240246972f4d8c9a911b65891b9cefd61ff356a63",
+      "053f0d6caff0bfffd6a8948da9ffdf6372261ef5badf578a4aa4dd133b0917e1",
     ],
-    current: "053f0d6caff0bfffd6a8948da9ffdf6372261ef5badf578a4aa4dd133b0917e1",
+    current: "5b2f28f149e898c1b79c1b4697cae7cb3274dfacc88a212cba868fd279412517",
     allowAfterApply: true,
   },
   "04-source-views.sql": {
