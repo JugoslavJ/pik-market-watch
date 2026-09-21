@@ -36,10 +36,10 @@ async function listing(articleId, current = {}) {
 async function state(articleId, at, values = {}) {
   await db.pool.query(
     `INSERT INTO listing_state_history
-       (article_id, effective_at, source, event_type, category,
-        category_membership, is_rent, sqm, rooms, filter_attributes,
-        membership_inferred, attributes_inferred)
-     VALUES ($1, $2, 'fixture', $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11)`,
+       (article_id, effective_at, source, event_type, state_version_id)
+     VALUES ($1, $2, 'fixture', $3,
+             get_or_create_listing_state_version(
+               $4, $5, $6, $7, $8, $9::jsonb, $10, $11))`,
     [
       articleId,
       at,

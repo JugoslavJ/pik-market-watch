@@ -42,7 +42,7 @@ needsDb(
       { source: "detail", currency: "BAM" },
     ]);
     const state = await db.pool.query(
-      "SELECT filter_attributes->>'currency' AS currency FROM listing_state_history WHERE event_type='detail_update'",
+      "SELECT filter_attributes->>'currency' AS currency FROM listing_state_history_state WHERE event_type='detail_update'",
     );
     assert.equal(state.rows[0].currency, "BAM");
   },

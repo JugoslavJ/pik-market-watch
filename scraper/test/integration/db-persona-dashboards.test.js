@@ -25,9 +25,12 @@ test.beforeEach(async () => {
       id>100,CASE WHEN id BETWEEN 101 AND 111 THEN true END,'Centar 1',now()-interval '2 days',now()
     FROM (SELECT generate_series(1,12) AS id UNION ALL SELECT generate_series(101,112)) x;
     INSERT INTO search_results SELECT 'apartments',article_id FROM listings;
-    INSERT INTO listing_state_history(article_id,effective_at,source,event_type,category,category_membership,is_rent,sqm,rooms,filter_attributes)
-    SELECT article_id,now()-interval '2 days','search','search_sighting','apartments',ARRAY['apartments'],is_rent,sqm,rooms,
-      jsonb_build_object('location','Centar 1','furnished',furnished,'currency','BAM') FROM listings;
+    INSERT INTO listing_state_history(article_id,effective_at,source,event_type,state_version_id)
+    SELECT article_id,now()-interval '2 days','search','search_sighting',
+      get_or_create_listing_state_version(
+        'apartments',ARRAY['apartments'],is_rent,sqm,rooms,
+        jsonb_build_object('location','Centar 1','furnished',furnished,'currency','BAM'),false,false)
+      FROM listings;
     INSERT INTO listing_price_events(article_id,effective_at,source,price,price_state,provenance)
     SELECT article_id,now()-interval '1 hour','search',price,CASE WHEN price IS NULL THEN 'unpriced' ELSE 'valid' END,
       '{"currency":"BAM"}'::jsonb FROM listings;

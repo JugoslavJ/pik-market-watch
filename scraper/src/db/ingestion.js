@@ -117,14 +117,13 @@ module.exports = function installIngestionMethods(Db) {
           await client.query(
             `INSERT INTO listing_state_history
              (article_id, effective_at, ingested_at, source, event_type, run_id,
-              search_key, category, category_membership, is_rent, sqm, rooms,
-              price, ppm2, filter_attributes, last_seen_at, is_closed,
-              membership_inferred, attributes_inferred)
+              search_key, state_version_id, price, ppm2, last_seen_at, is_closed)
            SELECT article_id, effective_at, COALESCE(ingested_at, now()), source,
-                  event_type, run_id, search_key, category, category_membership,
-                  is_rent, sqm, rooms, price, ppm2, filter_attributes,
-                  COALESCE(last_seen_at, effective_at), is_closed,
-                  membership_inferred, attributes_inferred
+                  event_type, run_id, search_key,
+                  get_or_create_listing_state_version(
+                    category, category_membership, is_rent, sqm, rooms,
+                    filter_attributes, membership_inferred, attributes_inferred),
+                  price, ppm2, COALESCE(last_seen_at, effective_at), is_closed
              FROM jsonb_to_recordset($1::jsonb) AS o(
                article_id bigint, effective_at timestamptz, ingested_at timestamptz,
                source text, event_type text, run_id bigint, search_key text,
@@ -191,9 +190,15 @@ module.exports = function installIngestionMethods(Db) {
           await client.query(
             `INSERT INTO listing_state_history
              (article_id, effective_at, ingested_at, source, event_type,
-              run_id, search_key, is_closed, closed_at)
-           SELECT id, now(), now(), 'search', 'reopened', $2, $3, false, NULL
-             FROM unnest($1::bigint[]) AS id`,
+              run_id, search_key, state_version_id, is_closed, closed_at)
+           SELECT id, now(), now(), 'search', 'reopened', $2, $3,
+                  state.state_version_id, false, NULL
+             FROM unnest($1::bigint[]) AS id
+             CROSS JOIN LATERAL (
+               SELECT get_or_create_listing_state_version(
+                        NULL, '{}'::text[], NULL, NULL, NULL, '{}'::jsonb, false, false)
+                 AS state_version_id
+             ) state`,
             [reopenedIds, payload.runId, payload.membership.searchKey],
           );
         }
@@ -214,9 +219,15 @@ module.exports = function installIngestionMethods(Db) {
            )
            INSERT INTO listing_state_history
              (article_id, effective_at, ingested_at, source, event_type,
-              run_id, search_key, is_closed, closed_at)
-           SELECT article_id, now(), now(), 'search', 'closed', $3, $4, true, now()
-             FROM closed`,
+              run_id, search_key, state_version_id, is_closed, closed_at)
+           SELECT c.article_id, now(), now(), 'search', 'closed', $3, $4,
+                  state.state_version_id, true, now()
+             FROM closed c
+             CROSS JOIN LATERAL (
+               SELECT get_or_create_listing_state_version(
+                        NULL, '{}'::text[], NULL, NULL, NULL, '{}'::jsonb, false, false)
+                        AS state_version_id
+             ) state`,
             [
               removedIds,
               payload.search.category ?? null,

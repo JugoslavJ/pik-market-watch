@@ -447,10 +447,12 @@ needsDb("daily rebuild normalizes nullable inferred flags", async () => {
   await seed(7010);
   await db.pool.query(
     `INSERT INTO listing_state_history
-         (article_id, effective_at, source, event_type, category_membership,
-          filter_attributes, last_seen_at, membership_inferred, attributes_inferred)
-       VALUES ($1, now(), 'search', 'search_sighting', '{}', '{}'::jsonb,
-               now(), false, false)`,
+         (article_id, effective_at, source, event_type, state_version_id,
+          last_seen_at)
+       VALUES ($1, now(), 'search', 'search_sighting',
+               get_or_create_listing_state_version(
+                 NULL, '{}'::text[], NULL, NULL, NULL, '{}'::jsonb, false, false),
+               now())`,
     [7010],
   );
 
@@ -458,7 +460,7 @@ needsDb("daily rebuild normalizes nullable inferred flags", async () => {
   const daily = (
     await db.pool.query(
       `SELECT membership_inferred, attributes_inferred
-           FROM listing_daily WHERE article_id = 7010`,
+           FROM listing_daily_state WHERE article_id = 7010`,
     )
   ).rows[0];
 
@@ -492,7 +494,7 @@ needsDb(
     );
     const daily = await db.pool.query(
       `SELECT price_state, price, ppm2
-         FROM listing_daily WHERE article_id = 7011 AND day = '2026-02-10'`,
+         FROM listing_daily_state WHERE article_id = 7011 AND day = '2026-02-10'`,
     );
     assert.equal(daily.rows[0].price_state, "conflict");
     assert.equal(daily.rows[0].price, null);
@@ -522,7 +524,7 @@ needsDb(
       `SELECT source, event_type, sqm, price, ppm2,
             filter_attributes->>'sellerType' AS seller_type,
             filter_attributes->>'latitude' AS latitude
-       FROM listing_state_history
+       FROM listing_state_history_state
       WHERE article_id = 7012 AND event_type = 'detail_update'`,
     );
     assert.equal(history.rows.length, 1);

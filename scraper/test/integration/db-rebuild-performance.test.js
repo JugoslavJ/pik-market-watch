@@ -29,9 +29,10 @@ needsDb(
       SELECT id, 'https://olx.ba/artikal/' || id, 'fixture', '2026-03-01', '2026-04-02'
       FROM generate_series(9101, 9105) id;
       INSERT INTO listing_state_history
-        (article_id, effective_at, source, event_type, category, category_membership,
-         sqm, rooms, is_rent, filter_attributes, last_seen_at)
-      SELECT id, at, 'fixture', kind, category, members, sqm, rooms, rent, attrs, at
+        (article_id, effective_at, source, event_type, state_version_id, last_seen_at)
+      SELECT id, at, 'fixture', kind,
+             get_or_create_listing_state_version(
+               category, members, rent, sqm, rooms, attrs, false, false), at
       FROM generate_series(9101,9105) id CROSS JOIN (VALUES
         ('2026-03-01 12:00Z'::timestamptz, 'search_sighting', 'apartments', ARRAY['apartments'], 55, '2', false, '{"location":"Center"}'::jsonb),
         ('2026-03-20 12:00Z', 'search_sighting', 'houses', ARRAY['houses'], NULL, NULL, NULL, '{"location":"Center"}'),
@@ -72,7 +73,7 @@ needsDb(
       );
       const legacy = (
         await client.query(
-          "SELECT to_jsonb(d) - 'resolved_state_version' - 'location' - 'neighborhood' AS row FROM listing_daily d ORDER BY article_id,day",
+          "SELECT to_jsonb(d) - 'resolved_state_version' - 'location' - 'neighborhood' AS row FROM listing_daily_state d ORDER BY article_id,day",
         )
       ).rows;
       await client.query(
@@ -83,7 +84,7 @@ needsDb(
       );
       const bulk = (
         await client.query(
-          "SELECT to_jsonb(d) - 'resolved_state_version' - 'location' - 'neighborhood' AS row FROM listing_daily d ORDER BY article_id,day",
+          "SELECT to_jsonb(d) - 'resolved_state_version' - 'location' - 'neighborhood' AS row FROM listing_daily_state d ORDER BY article_id,day",
         )
       ).rows;
       assert.ok(bulk.length > 100);
@@ -117,7 +118,7 @@ needsDb(
       );
       const direct = (
         await client.query(
-          "SELECT sqm,neighborhood,resolved_state_version FROM listing_daily WHERE day='2026-03-28' AND article_id=9101",
+          "SELECT sqm,neighborhood,resolved_state_version FROM listing_daily_state WHERE day='2026-03-28' AND article_id=9101",
         )
       ).rows[0];
       assert.equal(direct.sqm, "55.00");

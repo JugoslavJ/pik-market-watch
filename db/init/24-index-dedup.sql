@@ -1,7 +1,35 @@
--- Forward performance migration: inheritance children do not inherit indexes.
--- Keep the parent tables as the stable routing surface, but give every child
--- the narrow indexes used by the article/day reconstruction and OLAP queries.
+-- Remove redundant indexes introduced by the original OLAP/index baseline.
+-- Constraint-backed indexes remain the uniqueness enforcement surface.
 
+DROP INDEX IF EXISTS olap.comparison_price_changes_article_time_idx;
+DROP INDEX IF EXISTS olap.current_listing_scores_olap_article_idx;
+DROP INDEX IF EXISTS olap.daily_listing_facts_grain_idx;
+DROP INDEX IF EXISTS olap.lifecycle_cycles_grain_idx;
+DROP INDEX IF EXISTS olap.lifecycle_movements_grain_idx;
+DROP INDEX IF EXISTS olap.listing_exit_economics_article_idx;
+DROP INDEX IF EXISTS olap.listings_article_idx;
+DROP INDEX IF EXISTS olap.market_daily_day_idx;
+
+-- market_daily child grain indexes already begin with day, so the extra
+-- child-local day-only indexes add write amplification without a distinct
+-- access path.  Drop only the exact generated names, not arbitrary indexes.
+DO $$
+DECLARE
+  r record;
+BEGIN
+  FOR r IN
+    SELECT n.nspname AS schema_name, c.relname AS index_name
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+     WHERE n.nspname = 'olap'
+       AND c.relkind = 'i'
+       AND c.relname ~ '^market_daily_[0-9]{4}_[0-9]{2}_key_idx$'
+  LOOP
+    EXECUTE format('DROP INDEX IF EXISTS %I.%I', r.schema_name, r.index_name);
+  END LOOP;
+END $$;
+
+-- Keep future partition creation from recreating market_daily_*_key_idx.
 CREATE OR REPLACE FUNCTION public.ensure_analytics_partitions(p_months_ahead integer DEFAULT NULL)
 RETURNS integer
 LANGUAGE plpgsql
@@ -52,11 +80,12 @@ BEGIN
         v_created := v_created + 1;
       END IF;
 
-      -- Preserve the original routing/uniqueness indexes and add only the
-      -- child-local access paths required by the workload.  Do not copy the
-      -- parent's wide INCLUDE/jsonb indexes onto every child.
-      EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON %I.%I (%I)',
-        v_child || '_key_idx', p.parent_schema, v_child, p.partition_column);
+      -- market_daily's child grain index already covers day.  The other
+      -- inheritance children retain their existing narrow routing index.
+      IF p.parent_table <> 'market_daily' THEN
+        EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON %I.%I (%I)',
+          v_child || '_key_idx', p.parent_schema, v_child, p.partition_column);
+      END IF;
 
       IF p.parent_table = 'listing_state_history' THEN
         EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON %I.%I (article_id, effective_at DESC, id DESC)',
@@ -115,8 +144,6 @@ BEGIN
         (v_cursor + interval '1 month')::timestamp AT TIME ZONE 'UTC')
       ON CONFLICT (parent_schema, child_table) DO NOTHING;
 
-      -- Move only rows that still live in the inheritance parent. This is
-      -- safe to repeat and keeps the migration transactional.
       EXECUTE format('INSERT INTO %I.%I SELECT * FROM ONLY %I.%I WHERE %I >= %s AND %I < %s',
         p.parent_schema, v_child, p.parent_schema, p.parent_table,
         p.partition_column, v_lower, p.partition_column, v_upper);
@@ -138,5 +165,16 @@ $$;
 
 SELECT public.ensure_analytics_partitions();
 
-COMMENT ON FUNCTION public.ensure_analytics_partitions(integer) IS
-  'Creates inheritance children and repairs their workload-specific indexes.';
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+     WHERE n.nspname = 'olap'
+       AND c.relkind = 'i'
+       AND c.relname ~ '^market_daily_[0-9]{4}_[0-9]{2}_key_idx$'
+  ) THEN
+    RAISE EXCEPTION 'market_daily child key indexes remain after dedup migration';
+  END IF;
+END $$;

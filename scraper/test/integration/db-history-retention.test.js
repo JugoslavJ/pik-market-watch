@@ -23,14 +23,16 @@ needsDb(
       await client.query(`
         INSERT INTO listings(article_id, url, title)
           VALUES (9201, 'https://olx.ba/artikal/9201', 'Recovered history');
-        INSERT INTO listing_daily(day, article_id, resolved_state_version)
-          VALUES ('2020-11-09', 9201, 1);
+        INSERT INTO listing_daily(day, article_id, state_version_id, resolved_state_version)
+          VALUES ('2020-11-09', 9201,
+                  get_or_create_listing_state_version(NULL,'{}'::text[],NULL,NULL,NULL,'{}'::jsonb,false,false), 1);
         INSERT INTO listing_price_events
           (article_id, effective_at, price, price_state, source)
           VALUES (9201, '2020-11-09 12:00Z', 100000, 'valid', 'fixture');
         INSERT INTO listing_state_history
-          (article_id, effective_at, source, event_type)
-          VALUES (9201, '2020-11-09 12:00Z', 'fixture', 'search_sighting');
+          (article_id, effective_at, source, event_type, state_version_id)
+          VALUES (9201, '2020-11-09 12:00Z', 'fixture', 'search_sighting',
+                  get_or_create_listing_state_version(NULL,'{}'::text[],NULL,NULL,NULL,'{}'::jsonb,false,false));
         INSERT INTO scrape_runs(started_at, finished_at, status)
           VALUES ('2020-11-09 12:00Z', '2020-11-09 12:01Z', 'ok');
         CREATE TABLE public.retention_test_operational(at timestamptz);

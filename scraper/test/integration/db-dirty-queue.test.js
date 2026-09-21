@@ -34,12 +34,12 @@ needsDb(
     const insertSighting = (sqm) =>
       db.pool.query(
         `INSERT INTO listing_state_history
-           (article_id, effective_at, source, event_type, category,
-            category_membership, is_rent, sqm, rooms, filter_attributes,
+           (article_id, effective_at, source, event_type, state_version_id,
             last_seen_at)
-         VALUES ($1, now(), 'fixture', 'search_sighting', 'apartments',
-                 ARRAY['apartments'], false, $2, '2',
-                 '{"location":"Center"}'::jsonb, now())`,
+         VALUES ($1, now(), 'fixture', 'search_sighting',
+                 get_or_create_listing_state_version(
+                   'apartments', ARRAY['apartments'], false, $2, '2',
+                   '{"location":"Center"}'::jsonb, false, false), now())`,
         [articleId, sqm],
       );
 

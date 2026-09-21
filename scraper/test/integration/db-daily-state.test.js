@@ -68,10 +68,11 @@ needsDb(
     for (const row of history) {
       await db.pool.query(
         `INSERT INTO listing_state_history
-           (article_id, effective_at, source, event_type, category,
-            category_membership, sqm, rooms, filter_attributes,
+           (article_id, effective_at, source, event_type, state_version_id,
             last_seen_at, is_closed)
-         VALUES ($1, $2, 'fixture', $3, $4, $5, $6, $7, $8::jsonb,
+         VALUES ($1, $2, 'fixture', $3,
+                 get_or_create_listing_state_version(
+                   $4, $5, NULL, $6, $7, $8::jsonb, false, false),
                  $2, $9)`,
         [
           articleId,
@@ -103,7 +104,7 @@ needsDb(
       await db.pool.query(
         `SELECT day, category, category_memberships, sqm, rooms,
                 filter_attributes, membership_inferred, attributes_inferred
-           FROM listing_daily
+           FROM listing_daily_state
           WHERE article_id = $1
           ORDER BY day`,
         [articleId],

@@ -35,11 +35,12 @@ async function listing(articleId) {
 async function state(articleId, at, isRent = false) {
   await db.pool.query(
     `INSERT INTO listing_state_history
-       (article_id, effective_at, source, event_type, is_rent,
-        category, category_membership, sqm, rooms, filter_attributes,
+       (article_id, effective_at, source, event_type, state_version_id,
         last_seen_at)
-     VALUES ($1, $2, 'search', 'search_sighting', $3,
-             'apartments', ARRAY['apartments'], 50, '2', '{}'::jsonb, $2)`,
+     VALUES ($1, $2, 'search', 'search_sighting',
+             get_or_create_listing_state_version(
+               'apartments', ARRAY['apartments'], $3, 50, '2', '{}'::jsonb, false, false),
+             $2)`,
     [articleId, at, isRent],
   );
 }

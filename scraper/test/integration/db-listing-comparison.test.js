@@ -56,10 +56,12 @@ async function seed(entries) {
     [input],
   );
   await db.pool.query(
-    `INSERT INTO listing_state_history(article_id,effective_at,source,event_type,is_rent,sqm,rooms,
-       category,category_membership,filter_attributes,last_seen_at)
-     SELECT article_id,now()-interval '70 days','search','search_sighting',is_rent,sqm,rooms,
-       category,ARRAY[category],jsonb_build_object('furnished',furnished),now()
+    `INSERT INTO listing_state_history(article_id,effective_at,source,event_type,state_version_id,
+       last_seen_at)
+     SELECT article_id,now()-interval '70 days','search','search_sighting',
+       get_or_create_listing_state_version(
+         category,ARRAY[category],is_rent,sqm,rooms,
+         jsonb_build_object('furnished',furnished),false,false),now()
      FROM jsonb_to_recordset($1) AS x(article_id bigint,is_rent boolean,sqm numeric,rooms text,
        category text,furnished boolean)`,
     [input],
@@ -382,8 +384,10 @@ needsDb(
       "Unknown or partial furnishing",
     );
     await db.pool
-      .query(`INSERT INTO listing_state_history(article_id,effective_at,source,event_type,filter_attributes)
-    VALUES(1,now()-interval '1 hour','detail','detail_update','{"furnished":null}')`);
+      .query(`INSERT INTO listing_state_history(article_id,effective_at,source,event_type,state_version_id)
+    VALUES(1,now()-interval '1 hour','detail','detail_update',
+      get_or_create_listing_state_version(NULL,'{}'::text[],NULL,NULL,NULL,
+        '{"furnished":null}'::jsonb,false,false))`);
     const partial = await scores(1);
     assert.equal(partial.furnished, null);
     assert.equal(partial.score, null);
@@ -460,10 +464,13 @@ needsDb(
     await event(4, 10, 140000, "valid", "EUR");
     await event(4, 5, 140000);
     await db.pool
-      .query(`INSERT INTO listing_state_history(article_id,effective_at,source,event_type,is_rent)
-    VALUES(5,now()-interval '12 hours','search','search_sighting',true),
-          (5,now()-interval '6 hours','search','search_sighting',false),
-          (6,now()-interval '10 hours','search','reopened',NULL)`);
+      .query(`INSERT INTO listing_state_history(article_id,effective_at,source,event_type,state_version_id)
+    VALUES(5,now()-interval '12 hours','search','search_sighting',
+            get_or_create_listing_state_version(NULL,'{}'::text[],true,NULL,NULL,'{}'::jsonb,false,false)),
+          (5,now()-interval '6 hours','search','search_sighting',
+            get_or_create_listing_state_version(NULL,'{}'::text[],false,NULL,NULL,'{}'::jsonb,false,false)),
+          (6,now()-interval '10 hours','search','reopened',
+            get_or_create_listing_state_version(NULL,'{}'::text[],NULL,NULL,NULL,'{}'::jsonb,false,false))`);
     await event(5, 5, 140000);
     const good = await scores(1);
     assert.equal(Number(good.reduction_km), 10000);

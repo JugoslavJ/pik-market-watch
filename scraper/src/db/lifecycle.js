@@ -69,12 +69,13 @@ module.exports = function installLifecycleMethods(Db) {
           await client.query(
             `INSERT INTO listing_state_history
                (article_id, effective_at, ingested_at, source, event_type,
-                category, category_membership, is_rent, sqm, rooms, price, ppm2,
-                filter_attributes, last_seen_at, closed_at, is_closed)
-             SELECT article_id, $2, $2, 'lifecycle', 'closed', category,
-                    CASE WHEN category IS NULL THEN '{}'::text[] ELSE ARRAY[category] END,
-                    is_rent, sqm, rooms, price, ppm2, '{}'::jsonb, last_seen,
-                    $2, true
+                state_version_id, price, ppm2, last_seen_at, closed_at, is_closed)
+             SELECT article_id, $2, $2, 'lifecycle', 'closed',
+                    get_or_create_listing_state_version(
+                      category,
+                      CASE WHEN category IS NULL THEN '{}'::text[] ELSE ARRAY[category] END,
+                      is_rent, sqm, rooms, '{}'::jsonb, false, false),
+                    price, ppm2, last_seen, $2, true
                FROM jsonb_to_recordset($1::jsonb) AS c(
                  article_id bigint, category text, is_rent boolean,
                  sqm numeric, rooms text, price numeric, ppm2 integer,

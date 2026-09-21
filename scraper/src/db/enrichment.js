@@ -188,13 +188,15 @@ module.exports = function installEnrichmentMethods(Db) {
         await client.query(
           `INSERT INTO listing_state_history
              (article_id, effective_at, ingested_at, source, event_type,
-              is_rent, sqm, price, ppm2, filter_attributes,
-              membership_inferred, attributes_inferred)
-           SELECT d.article_id, $2, $2, 'detail', 'detail_update', d.is_rent,
-                  d.sqm, d.price, d.ppm2, d.attributes, false, false
+              state_version_id, price, ppm2)
+           SELECT d.article_id, $2, $2, 'detail', 'detail_update',
+                  get_or_create_listing_state_version(
+                    d.category, '{}'::text[], d.is_rent, d.sqm, d.rooms,
+                    d.attributes, false, false),
+                  d.price, d.ppm2
              FROM jsonb_to_recordset($1::jsonb) AS d(
-               article_id bigint, is_rent boolean, sqm numeric, price numeric,
-               ppm2 integer, attributes jsonb)
+                article_id bigint, is_rent boolean, sqm numeric, price numeric,
+                ppm2 integer, category text, rooms text, attributes jsonb)
             WHERE EXISTS (
               SELECT 1 FROM listings l WHERE l.article_id = d.article_id)`,
           [

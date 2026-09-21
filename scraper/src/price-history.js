@@ -251,6 +251,13 @@ async function recordPriceEvents(pool, events, options = {}) {
     const effectiveTimes = [
       ...new Set(normalized.map((event) => event.effectiveAt.toISOString())),
     ];
+    const searchArticleIds = [
+      ...new Set(
+        normalized
+          .filter((event) => event.source === "search")
+          .map((event) => event.articleId),
+      ),
+    ];
     // Lock the parent rows so two importers cannot classify the same article's
     // timestamp range differently while both are importing.
     const parents = await client.query(
@@ -264,6 +271,26 @@ async function recordPriceEvents(pool, events, options = {}) {
     if (!usable.length) {
       if (ownsTransaction) await client.query("COMMIT");
       return result;
+    }
+
+    // Search runs are periodic observations, not price-history assertions.
+    // Keep at most one unchanged search price per Sarajevo day, while still
+    // appending a new row for a new day or a changed canonical value. The
+    // article/effective-time index makes this one batched latest-row lookup.
+    const latestSearch = new Map();
+    if (searchArticleIds.length) {
+      const latestResult = await client.query(
+        `SELECT DISTINCT ON (article_id)
+                article_id, effective_at, price, price_state, provenance
+           FROM listing_price_events
+          WHERE article_id = ANY($1::bigint[])
+            AND source = 'search'
+          ORDER BY article_id, effective_at DESC, id DESC`,
+        [searchArticleIds],
+      );
+      for (const row of latestResult.rows) {
+        latestSearch.set(Number(row.article_id), row);
+      }
     }
 
     const existingResult = await client.query(
@@ -287,6 +314,21 @@ async function recordPriceEvents(pool, events, options = {}) {
     const insertedEvents = [];
     const pending = new Map();
     for (const event of usable) {
+      const latest =
+        event.source === "search" ? latestSearch.get(event.articleId) : null;
+      if (
+        latest &&
+        dayInBanjaLuka(new Date(latest.effective_at)) ===
+          dayInBanjaLuka(event.effectiveAt) &&
+        signature({
+          price: latest.price,
+          priceState: latest.price_state,
+          provenance: latest.provenance,
+        }) === signature(event)
+      ) {
+        result.duplicate++;
+        continue;
+      }
       const exact = eventKey(event);
       const time = timeKey(event);
       const rows = existing.get(time) || [];

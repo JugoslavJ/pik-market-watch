@@ -353,6 +353,7 @@ needsDb(
         triggers.rows.map((row) => row.tgname),
         [
           "listing_daily_10_resolve_sparse_state",
+          "listing_daily_15_version_refs",
           "listing_daily_20_normalize_flags_insert",
           "listing_daily_normalize_flags_update",
           "listing_daily_partition_route",
@@ -657,6 +658,20 @@ needsDb(
       "SELECT scope FROM analytics_refresh_state WHERE scope = 'listing_daily'",
     );
     assert.deepEqual(refresh.rows, [{ scope: "listing_daily" }]);
+    const compactIdentity = await pool.query(`
+      SELECT count(*)::int AS n
+        FROM information_schema.columns
+       WHERE table_schema = 'olap'
+         AND table_name = 'daily_listing_facts'
+         AND column_name IN ('title', 'url')`);
+    assert.equal(compactIdentity.rows[0].n, 0);
+    const reportingIdentity = await pool.query(`
+      SELECT count(*)::int AS n
+        FROM information_schema.columns
+       WHERE table_schema = 'reporting'
+         AND table_name = 'daily_listing_facts'
+         AND column_name IN ('title', 'url')`);
+    assert.equal(reportingIdentity.rows[0].n, 2);
     const analytics = await pool.query(`
       SELECT count(*)::int AS n
         FROM information_schema.routines

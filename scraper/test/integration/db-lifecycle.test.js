@@ -210,9 +210,10 @@ needsDb(
   async () => {
     await seed(6001);
     await db.pool.query(`INSERT INTO listing_state_history
-    (article_id, effective_at, source, event_type, filter_attributes)
+    (article_id, effective_at, source, event_type, state_version_id)
     VALUES (6001, now() - interval '1 hour', 'search', 'search_sighting',
-      '{"latitude":44.78,"longitude":17.2}')`);
+      get_or_create_listing_state_version(NULL, '{}'::text[], NULL, NULL, NULL,
+        '{"latitude":44.78,"longitude":17.2}'::jsonb, false, false))`);
     await db.pool.query(`SELECT * FROM rebuild_listing_daily(
     (now() AT TIME ZONE 'Europe/Sarajevo')::date,
     (now() AT TIME ZONE 'Europe/Sarajevo')::date)`);
@@ -231,10 +232,13 @@ needsDb(
   async () => {
     await seed(6002);
     await db.pool.query(`INSERT INTO listing_state_history
-    (article_id, effective_at, source, event_type)
-    VALUES (6002, now() - interval '30 days', 'search', 'search_sighting'),
-           (6002, now(), 'search', 'search_sighting'),
-           (6002, now(), 'search', 'search_sighting')`);
+    (article_id, effective_at, source, event_type, state_version_id)
+    VALUES (6002, now() - interval '30 days', 'search', 'search_sighting',
+             get_or_create_listing_state_version(NULL, '{}'::text[], NULL, NULL, NULL, '{}'::jsonb, false, false)),
+           (6002, now(), 'search', 'search_sighting',
+             get_or_create_listing_state_version(NULL, '{}'::text[], NULL, NULL, NULL, '{}'::jsonb, false, false)),
+           (6002, now(), 'search', 'search_sighting',
+             get_or_create_listing_state_version(NULL, '{}'::text[], NULL, NULL, NULL, '{}'::jsonb, false, false))`);
     const {
       rows: [row],
     } = await db.pool.query(`SELECT new_n FROM v_market_daily
@@ -248,8 +252,10 @@ needsDb(
     WHERE day=(now() AT TIME ZONE 'Europe/Sarajevo')::date`);
     assert.equal(result.rows[0].closed_n, 1);
     await db.pool.query(`INSERT INTO listing_state_history
-    (article_id, effective_at, source, event_type)
-    SELECT article_id, closed_at, 'search', 'closed' FROM listings WHERE article_id=6002`);
+    (article_id, effective_at, source, event_type, state_version_id)
+    SELECT article_id, closed_at, 'search', 'closed',
+      get_or_create_listing_state_version(NULL, '{}'::text[], NULL, NULL, NULL, '{}'::jsonb, false, false)
+      FROM listings WHERE article_id=6002`);
     result = await db.pool.query(`SELECT closed_n FROM v_market_daily
     WHERE day=(now() AT TIME ZONE 'Europe/Sarajevo')::date`);
     assert.equal(result.rows[0].closed_n, 1);

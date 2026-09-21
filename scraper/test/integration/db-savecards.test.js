@@ -278,6 +278,39 @@ needsDb(
 );
 
 needsDb(
+  "search prices are append-only but deduplicated by article and Sarajevo day",
+  async () => {
+    const firstDay = new Date("2026-09-05T08:00:00Z");
+    const samePriceLater = new Date("2026-09-05T18:00:00Z");
+    const nextDay = new Date("2026-09-06T08:00:00Z");
+
+    await commit([card({ articleId: 3010 })], { observedAt: firstDay });
+    await commit([card({ articleId: 3010 })], {
+      observedAt: samePriceLater,
+    });
+    await commit(
+      [card({ articleId: 3010, price: 99000, ppm2: 1980 })],
+      { observedAt: samePriceLater },
+    );
+    await commit([card({ articleId: 3010, price: 99000, ppm2: 1980 })], {
+      observedAt: nextDay,
+    });
+
+    const rows = await db.pool.query(
+      `SELECT effective_at, price
+         FROM listing_price_events
+        WHERE article_id = 3010 AND source = 'search'
+        ORDER BY effective_at, id`,
+    );
+    assert.deepEqual(rows.rows, [
+      { effective_at: firstDay, price: "100000.00" },
+      { effective_at: samePriceLater, price: "99000.00" },
+      { effective_at: nextDay, price: "99000.00" },
+    ]);
+  },
+);
+
+needsDb(
   "an existing listing joining a second search is not a new discovery",
   async () => {
     const observedAt = new Date("2026-09-05T08:15:00Z");

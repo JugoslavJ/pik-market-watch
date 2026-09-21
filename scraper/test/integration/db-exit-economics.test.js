@@ -22,16 +22,25 @@ needsDb(
            '2026-01-01'::timestamptz, '2026-01-31'::timestamptz
     FROM generate_series(1, 5) id;
 
-    INSERT INTO listing_state_history (article_id, effective_at, source, event_type)
-    VALUES (1, '2026-01-02', 'search', 'search_sighting'),
-           (1, '2026-01-20', 'search', 'closed'),
-           (1, '2026-01-25', 'search', 'reopened'),
-           (1, '2026-02-01', 'search', 'closed'),
-           (2, '2026-01-10', 'detail', 'detail_update'),
-           (3, '2026-01-02', 'search', 'search_sighting'),
-           (3, '2026-01-15', 'search', 'closed'),
-           (3, '2026-01-15', 'search', 'reopened'),
-           (4, '2026-02-10', 'search', 'search_sighting');
+    INSERT INTO listing_state_history (article_id, effective_at, source, event_type, state_version_id)
+    VALUES (1, '2026-01-02', 'search', 'search_sighting',
+             get_or_create_listing_state_version(NULL,'{}'::text[],NULL,NULL,NULL,'{}'::jsonb,false,false)),
+           (1, '2026-01-20', 'search', 'closed',
+             get_or_create_listing_state_version(NULL,'{}'::text[],NULL,NULL,NULL,'{}'::jsonb,false,false)),
+           (1, '2026-01-25', 'search', 'reopened',
+             get_or_create_listing_state_version(NULL,'{}'::text[],NULL,NULL,NULL,'{}'::jsonb,false,false)),
+           (1, '2026-02-01', 'search', 'closed',
+             get_or_create_listing_state_version(NULL,'{}'::text[],NULL,NULL,NULL,'{}'::jsonb,false,false)),
+           (2, '2026-01-10', 'detail', 'detail_update',
+             get_or_create_listing_state_version(NULL,'{}'::text[],NULL,NULL,NULL,'{}'::jsonb,false,false)),
+           (3, '2026-01-02', 'search', 'search_sighting',
+             get_or_create_listing_state_version(NULL,'{}'::text[],NULL,NULL,NULL,'{}'::jsonb,false,false)),
+           (3, '2026-01-15', 'search', 'closed',
+             get_or_create_listing_state_version(NULL,'{}'::text[],NULL,NULL,NULL,'{}'::jsonb,false,false)),
+           (3, '2026-01-15', 'search', 'reopened',
+             get_or_create_listing_state_version(NULL,'{}'::text[],NULL,NULL,NULL,'{}'::jsonb,false,false)),
+           (4, '2026-02-10', 'search', 'search_sighting',
+             get_or_create_listing_state_version(NULL,'{}'::text[],NULL,NULL,NULL,'{}'::jsonb,false,false));
 
     INSERT INTO listing_price_events (article_id, effective_at, price, price_state, source)
     VALUES (1, '2026-01-01', NULL, 'unpriced', 'search'),

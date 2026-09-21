@@ -30,10 +30,9 @@ BEGIN
   DELETE FROM listing_daily WHERE day BETWEEN v_from AND v_through;
 
   INSERT INTO listing_daily (
-    day, article_id, price, price_state, ppm2, is_rent, sqm, rooms,
-    category, category_memberships, location, filter_attributes,
-    state_effective_at, price_effective_at, membership_inferred,
-    attributes_inferred, stale_observation, provisional_day
+    day, article_id, price, price_state, ppm2, state_version_id,
+    location, state_effective_at, price_effective_at,
+    stale_observation, provisional_day, neighborhood, resolved_state_version
   )
   WITH
   days AS (
@@ -48,7 +47,7 @@ BEGIN
       FROM generate_series(v_from, v_through, interval '1 day') AS s(d)
   ),
   articles AS (
-    SELECT article_id FROM listing_state_history
+    SELECT article_id FROM listing_state_history_state
     UNION
     SELECT article_id FROM listing_price_events
   ),
@@ -86,12 +85,12 @@ BEGIN
            life.event_type AS latest_lifecycle_event
       FROM grid g
       LEFT JOIN LATERAL (
-        SELECT s.* FROM listing_state_history s
+        SELECT s.* FROM listing_state_history_state s
          WHERE s.article_id = g.article_id AND s.effective_at < g.endpoint
          ORDER BY s.effective_at DESC, s.id DESC LIMIT 1
       ) op ON TRUE
       LEFT JOIN LATERAL (
-        SELECT s.* FROM listing_state_history s
+        SELECT s.* FROM listing_state_history_state s
          WHERE s.article_id = g.article_id AND s.effective_at >= g.endpoint
          ORDER BY s.effective_at ASC, s.id ASC LIMIT 1
       ) fp ON TRUE
@@ -115,14 +114,14 @@ BEGIN
       ) lp ON TRUE
       LEFT JOIN LATERAL (
         SELECT max(COALESCE(s.last_seen_at, s.effective_at)) AS activity_at
-          FROM listing_state_history s
+          FROM listing_state_history_state s
          WHERE s.article_id = g.article_id
            AND s.effective_at < g.endpoint
            AND s.event_type IN ('search_sighting', 'reopened')
       ) act ON TRUE
       LEFT JOIN LATERAL (
         SELECT s.event_type
-          FROM listing_state_history s
+          FROM listing_state_history_state s
          WHERE s.article_id = g.article_id
            AND s.effective_at < g.endpoint
            AND s.event_type IN ('search_sighting', 'closed', 'reopened')
@@ -175,18 +174,20 @@ BEGIN
                    AND e.state_sqm BETWEEN 5 AND 500
                    AND e.event_price / NULLIF(e.state_sqm, 0) BETWEEN 1 AND 15000
               THEN round(e.event_price / NULLIF(e.state_sqm, 0))::int END,
-         e.state_is_rent, e.state_sqm, e.state_rooms,
-         COALESCE(e.state_category, e.state_membership[1]), e.state_membership,
-         analytics_state_neighborhood(e.state_attributes), e.state_attributes,
+          get_or_create_listing_state_version(
+            COALESCE(e.state_category, e.state_membership[1]), e.state_membership,
+            e.state_is_rent, e.state_sqm, e.state_rooms, e.state_attributes,
+            COALESCE(e.observed_membership_inferred, false)
+              OR e.state_estimated OR COALESCE(e.attrs_estimated, false),
+            COALESCE(e.observed_attributes_inferred, false)
+              OR e.state_estimated OR COALESCE(e.attrs_estimated, false)),
+          analytics_state_neighborhood(e.state_attributes),
          COALESCE(e.observed_effective_at, e.future_effective_at),
          e.event_price_effective_at,
-         COALESCE(e.observed_membership_inferred, false)
-           OR e.state_estimated OR COALESCE(e.attrs_estimated, false),
-         COALESCE(e.observed_attributes_inferred, false)
-           OR e.state_estimated OR COALESCE(e.attrs_estimated, false),
-         (e.activity_at IS NOT NULL
-           AND (e.activity_at AT TIME ZONE 'Europe/Sarajevo')::date < e.day),
-         e.day = v_today
+          (e.activity_at IS NOT NULL
+            AND (e.activity_at AT TIME ZONE 'Europe/Sarajevo')::date < e.day),
+          e.day = v_today,
+          analytics_state_neighborhood(e.state_attributes), 1
     FROM eligible e
    WHERE e.is_active
      AND (e.observed_id IS NOT NULL OR (e.first_valid_at IS NOT NULL AND e.first_valid_at < e.endpoint));

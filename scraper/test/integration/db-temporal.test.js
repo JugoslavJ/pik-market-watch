@@ -46,11 +46,12 @@ async function insertEvidence(articleId, at) {
   );
   await db.pool.query(
     `INSERT INTO listing_state_history
-       (article_id, effective_at, source, event_type, category,
-        category_membership, sqm, rooms, price, filter_attributes,
-        last_seen_at)
-     VALUES ($1, $2, 'search', 'search_sighting', 'apartments',
-             ARRAY['apartments'], 50, '2', 100000, '{}'::jsonb, $2)`,
+       (article_id, effective_at, source, event_type, state_version_id,
+        price, last_seen_at)
+     VALUES ($1, $2, 'search', 'search_sighting',
+             get_or_create_listing_state_version(
+               'apartments', ARRAY['apartments'], false, 50, '2', '{}'::jsonb, false, false),
+             100000, $2)`,
     [articleId, at],
   );
   await db.pool.query(
