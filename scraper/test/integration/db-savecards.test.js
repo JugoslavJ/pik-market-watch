@@ -310,6 +310,53 @@ needsDb(
 );
 
 needsDb(
+  "a same-day detail event does not hide the later search observation",
+  async () => {
+    const first = new Date("2026-09-05T08:00:00Z");
+    const detail = new Date("2026-09-05T12:00:00Z");
+    const second = new Date("2026-09-05T18:00:00Z");
+
+    await commit([card({ articleId: 3012, price: 100000 })], {
+      observedAt: first,
+    });
+    await commit([card({ articleId: 3012, price: 90000 })], {
+      observedAt: detail,
+      priceEvents: [
+        {
+          articleId: 3012,
+          effectiveAt: detail,
+          observedAt: detail,
+          price: 90000,
+          priceState: "valid",
+          dealType: "sale",
+          source: "detail",
+          isCurrent: true,
+          provenance: { observation: "detail" },
+        },
+      ],
+    });
+    await commit([card({ articleId: 3012, price: 100000 })], {
+      observedAt: second,
+    });
+
+    const rows = await db.pool.query(
+      `SELECT source, effective_at, price
+         FROM listing_price_events
+        WHERE article_id = 3012
+        ORDER BY effective_at, id`,
+    );
+    assert.deepEqual(
+      rows.rows.map((row) => [row.source, row.effective_at, row.price]),
+      [
+        ["search", first, "100000.00"],
+        ["detail", detail, "90000.00"],
+        ["search", second, "100000.00"],
+      ],
+    );
+  },
+);
+
+needsDb(
   "an existing listing joining a second search is not a new discovery",
   async () => {
     const observedAt = new Date("2026-09-05T08:15:00Z");

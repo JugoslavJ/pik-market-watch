@@ -440,10 +440,9 @@ module.exports = function installMaintenanceMethods(Db) {
       });
       const sqlDay = (day) =>
         day instanceof Date
-          ? // node-postgres parses PostgreSQL DATE values at local midnight.
-            // Formatting through UTC can therefore move Sarajevo's date back by
-            // one day on a Budapest/UTC-offset process.
-            [day.getFullYear(), day.getMonth() + 1, day.getDate()]
+          ? // node-postgres parses PostgreSQL DATE values as a Date whose UTC
+            // components preserve the database calendar date.
+            [day.getUTCFullYear(), day.getUTCMonth() + 1, day.getUTCDate()]
               .map((part, index) =>
                 index === 0 ? String(part) : String(part).padStart(2, "0"),
               )
@@ -480,14 +479,25 @@ module.exports = function installMaintenanceMethods(Db) {
         starts.push(historicalStart);
 
       const from = plannedFrom || starts.sort()[0] || today;
+      const yesterday = (() => {
+        const date = new Date(`${today}T00:00:00Z`);
+        date.setUTCDate(date.getUTCDate() - 1);
+        return date.toISOString().slice(0, 10);
+      })();
+      // The coverage window intentionally closes historical days at the
+      // previous Sarajevo midnight, but this public maintenance method also
+      // owns the current provisional day. Extend only a live window; an old
+      // bounded replay must retain its explicit through-day.
       const through =
-        plannedThrough ||
-        [today, state.pending_through_day]
-          .filter(Boolean)
-          .map(sqlDay)
-          .sort()
-          .at(-1) ||
-        today;
+        plannedThrough && plannedThrough >= yesterday
+          ? today
+          : plannedThrough ||
+            [today, state.pending_through_day]
+              .filter(Boolean)
+              .map(sqlDay)
+              .sort()
+              .at(-1) ||
+            today;
 
       const cap = Number.isFinite(maxDays)
         ? Math.max(1, Math.floor(Number(maxDays)))

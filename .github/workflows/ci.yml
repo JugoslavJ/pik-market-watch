@@ -53,6 +53,62 @@ jobs:
           ignore-unfixed: true
           exit-code: "0"
 
+  schema-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: scraper
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: scraper/package-lock.json
+      - run: npm ci
+      - name: Prepare the f60b5d1 database files
+        working-directory: .
+        run: git worktree add --detach "$RUNNER_TEMP/pik-market-watch-f60b5d1" f60b5d1
+      - name: Start fresh and upgraded databases
+        working-directory: .
+        env:
+          POSTGIS_IMAGE: ghcr.io/baosystems/postgis:16-3.5@sha256:0f1c5c0f70f03d4d19ad1d7308d86e6162dff5429c491002298a7b5e46d2f2e8
+        run: |
+          set -euo pipefail
+          cleanup() {
+            docker rm -f schema-head schema-forward >/dev/null 2>&1 || true
+            git worktree remove --force "$RUNNER_TEMP/pik-market-watch-f60b5d1" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          docker run -d --name schema-head \
+            -p 55433:5432 \
+            -e POSTGRES_USER=olx -e POSTGRES_PASSWORD=olx -e POSTGRES_DB=olx \
+            -v "$GITHUB_WORKSPACE/db/init:/docker-entrypoint-initdb.d:ro" \
+            "$POSTGIS_IMAGE"
+          docker run -d --name schema-forward \
+            -p 55434:5432 \
+            -e POSTGRES_USER=olx -e POSTGRES_PASSWORD=olx -e POSTGRES_DB=olx \
+            -v "$RUNNER_TEMP/pik-market-watch-f60b5d1/db/init:/docker-entrypoint-initdb.d:ro" \
+            "$POSTGIS_IMAGE"
+          for container in schema-head schema-forward; do
+            for attempt in $(seq 1 90); do
+              if docker exec "$container" pg_isready -U olx -d olx >/dev/null 2>&1; then break; fi
+              if [ "$attempt" = 90 ]; then exit 1; fi
+              sleep 1
+            done
+          done
+          mkdir -p "$RUNNER_TEMP/pik-market-watch-forward"
+          cp db/init/{24-index-dedup.sql,25-versioned-listing-state.sql,26-compact-daily-fact-identity.sql,27-compact-daily-state.sql,28-normalize-source-state.sql,29-sparse-state-corrections.sql,30-restore-daily-facts-cohort.sql,31-write-path-regressions.sql,32-retire-reporting-legacy.sql} "$RUNNER_TEMP/pik-market-watch-forward/"
+          docker cp "$RUNNER_TEMP/pik-market-watch-forward/." schema-forward:/tmp/forward
+          docker exec schema-forward bash -euc 'for f in /tmp/forward/*.sql; do psql -v ON_ERROR_STOP=1 -1 -U olx -d olx -f "$f"; done'
+          SCHEMA_PARITY_FRESH_DATABASE_URL=postgres://olx:olx@localhost:55433/olx \
+          SCHEMA_PARITY_FORWARD_DATABASE_URL=postgres://olx:olx@localhost:55434/olx \
+            npm --prefix scraper run check:schema-parity
+
   # ── CD: deploy to the Oracle Compute instance ──────────────────────────────
   # Only runs after the suite passed for THIS exact commit, and only for pushes
   # to main (or a manual dispatch). The tracked files are shipped with
@@ -61,7 +117,7 @@ jobs:
   # `docker compose up -d --build`. Building on the instance means native CPU
   # arch (no amd64/arm64 mismatch with GH runners) and no registry / PAT.
   deploy:
-    needs: test
+    needs: [test, schema-parity]
     if: >-
       github.ref == 'refs/heads/main' &&
       (github.event_name == 'workflow_dispatch' || github.event_name == 'push')

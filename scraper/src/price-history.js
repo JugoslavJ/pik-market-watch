@@ -275,21 +275,28 @@ async function recordPriceEvents(pool, events, options = {}) {
 
     // Search runs are periodic observations, not price-history assertions.
     // Keep at most one unchanged search price per Sarajevo day, while still
-    // appending a new row for a new day or a changed canonical value. The
-    // article/effective-time index makes this one batched latest-row lookup.
-    const latestSearch = new Map();
+    // appending a new row for a new day or a changed canonical value. Compare
+    // with the latest event from any source: a detail event between two
+    // same-day search observations must not make the second search look like
+    // an unchanged search price. One lateral lookup per requested article
+    // avoids sorting the entire history relation for DISTINCT ON.
+    const latestAnySource = new Map();
     if (searchArticleIds.length) {
       const latestResult = await client.query(
-        `SELECT DISTINCT ON (article_id)
-                article_id, effective_at, price, price_state, provenance
-           FROM listing_price_events
-          WHERE article_id = ANY($1::bigint[])
-            AND source = 'search'
-          ORDER BY article_id, effective_at DESC, id DESC`,
+        `SELECT ids.article_id, latest.effective_at, latest.price,
+                latest.price_state, latest.provenance
+           FROM unnest($1::bigint[]) AS ids(article_id)
+          CROSS JOIN LATERAL (
+            SELECT e.effective_at, e.price, e.price_state, e.provenance
+              FROM listing_price_events e
+             WHERE e.article_id = ids.article_id
+             ORDER BY e.effective_at DESC, e.id DESC
+             LIMIT 1
+          ) latest`,
         [searchArticleIds],
       );
       for (const row of latestResult.rows) {
-        latestSearch.set(Number(row.article_id), row);
+        latestAnySource.set(Number(row.article_id), row);
       }
     }
 
@@ -315,7 +322,7 @@ async function recordPriceEvents(pool, events, options = {}) {
     const pending = new Map();
     for (const event of usable) {
       const latest =
-        event.source === "search" ? latestSearch.get(event.articleId) : null;
+        event.source === "search" ? latestAnySource.get(event.articleId) : null;
       if (
         latest &&
         dayInBanjaLuka(new Date(latest.effective_at)) ===

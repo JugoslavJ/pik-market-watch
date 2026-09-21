@@ -26,6 +26,36 @@ changes on a dashboard-only host, run `docker compose --profile migrate run
 Retention and daily analytics can run independently of scraping with
 `docker compose --profile maintenance run --build --rm maintenance`.
 
+After applying the dashboard-fact migration, build existing fact-child cohort
+indexes in a separate maintenance invocation so readers are not blocked by an
+index build:
+
+```bash
+cd scraper
+DATABASE_URL=postgres://... npm run db:reindex-dashboard-facts
+npm run db:reclaim-history
+```
+
+`db:reclaim-history` checks that free disk is at least 1.5 times the largest
+eligible history/daily child, skips the current month, and runs `VACUUM FULL`
+one child at a time with a lock timeout. It takes an exclusive lock per child;
+pause the scraper and run it off-hours. It reports before/after sizes and
+skips children that cannot acquire the lock.
+
+Phase 0’s disposable benchmark is available as
+`npm run benchmark:regressions`. It seeds 10,000 listings, six state cycles,
+200,000 daily rows, and 1.2 million price events. Set
+`BENCHMARK_REFERENCE_DATABASE_URL` to print current and pre-change results in
+one JSON report; the reference database is built from `f60b5d1` before the
+forward migrations are applied.
+
+Migration hygiene is checked with `npm run check:schema-parity` in CI after it
+provisions a fresh HEAD database and a database upgraded from `f60b5d1`.
+Migrations 20, 24, 25, and 28 have known allowlisted checksum transitions in
+`scraper/src/migration-baseline.js`; 30–32 provide the forward helper, state,
+and reporting corrections, so no additional edit to an applied migration is
+needed.
+
 Grafana is at `http://localhost:3000` for local development. In production the
 topology is `Cloudflare → Cloudflare Tunnel → cloudflared → Grafana
 127.0.0.1:3000`; Cloudflare terminates public TLS and the tunnel forwards HTTP
