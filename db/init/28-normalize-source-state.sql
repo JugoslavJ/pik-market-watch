@@ -270,6 +270,17 @@ BEGIN
    ORDER BY f.oid DESC LIMIT 1;
   IF definition IS NULL THEN RETURN; END IF;
 
+  -- The dependency rewrite above intentionally points reads at the
+  -- compatibility view, but it also matches the FROM token in DELETE FROM.
+  -- Restore the rebuild's write target to the normalized base table: the
+  -- compatibility view joins state versions and is not automatically
+  -- updatable.
+  definition := regexp_replace(
+    definition,
+    $re$(\mDELETE\s+FROM\s+)(?:public\.)?listing_daily_state\M$re$,
+    $rep$\1public.listing_daily$rep$,
+    'gi');
+
   insert_at := position('INSERT INTO listing_daily' IN definition);
   diagnostics_at := position('GET DIAGNOSTICS' IN definition);
   IF insert_at = 0 OR diagnostics_at <= insert_at THEN
