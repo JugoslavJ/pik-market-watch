@@ -61,7 +61,30 @@ SELECT p.oid,
      'attach_daily_version_refs',
      'normalize_listing_daily_flags',
      'resolve_listing_daily_sparse_state'
-   );
+    );
+
+-- After payload normalization, the partition queue trigger still receives the
+-- base history row, whose rich state is represented only by state_version_id.
+-- Restore the fields that its targeted-change comparison expects before the
+-- captured function definition is recreated below.
+UPDATE _state_normalization_functions
+   SET definition = replace(
+     definition,
+     $old$    v_json := to_jsonb(NEW);$old$,
+     $new$    v_json := to_jsonb(NEW);
+    IF TG_TABLE_NAME = 'listing_state_history' THEN
+      SELECT v_json || jsonb_build_object(
+               'category', v.category,
+               'category_membership', to_jsonb(v.category_membership),
+               'is_rent', v.is_rent,
+               'sqm', v.sqm,
+               'rooms', v.rooms,
+               'filter_attributes', v.filter_attributes)
+        INTO v_json
+        FROM public.listing_state_versions v
+       WHERE v.state_version_id = NEW.state_version_id;
+    END IF;$new$)
+ WHERE proname = 'route_analytics_partition_insert';
 
 -- These triggers depend on the payload columns and are recreated below with
 -- state-version-aware definitions.
@@ -368,19 +391,79 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
   v_endpoint timestamptz;
+  v_category text;
+  v_memberships text[] := '{}'::text[];
+  v_is_rent boolean;
+  v_sqm numeric;
+  v_rooms text;
+  v_attributes jsonb := '{}'::jsonb;
 BEGIN
   IF NEW.state_version_id IS NULL THEN
     v_endpoint := CASE WHEN NEW.provisional_day
       THEN clock_timestamp() + interval '5 minutes'
       ELSE public.analytics_sarajevo_day_start(NEW.day + 1)
     END;
-    SELECT h.state_version_id INTO NEW.state_version_id
+
+    SELECT
+      (array_agg(h.category ORDER BY h.effective_at DESC, h.id DESC)
+        FILTER (WHERE NULLIF(btrim(h.category), '') IS NOT NULL))[1],
+      (array_agg(h.is_rent ORDER BY h.effective_at DESC, h.id DESC)
+        FILTER (WHERE h.is_rent IS NOT NULL))[1],
+      (array_agg(h.sqm ORDER BY h.effective_at DESC, h.id DESC)
+        FILTER (WHERE h.sqm IS NOT NULL))[1],
+      (array_agg(h.rooms ORDER BY h.effective_at DESC, h.id DESC)
+        FILTER (WHERE h.rooms IS NOT NULL))[1]
+      INTO v_category, v_is_rent, v_sqm, v_rooms
+      FROM public.listing_state_history_state h
+     WHERE h.article_id = NEW.article_id
+       AND h.effective_at < v_endpoint
+       AND h.event_type IN ('search_sighting', 'detail_update', 'reopened');
+
+    SELECT COALESCE(array_agg(DISTINCT member ORDER BY member), '{}'::text[])
+      INTO v_memberships
+      FROM public.listing_state_history_state h
+      CROSS JOIN LATERAL unnest(h.category_membership) u(member)
+     WHERE h.article_id = NEW.article_id
+       AND h.effective_at < v_endpoint
+       AND h.event_type IN ('search_sighting', 'detail_update', 'reopened')
+       AND member IS NOT NULL AND member <> '';
+
+    SELECT COALESCE(jsonb_object_agg(a.key, a.value), '{}'::jsonb)
+      INTO v_attributes
+      FROM (
+        SELECT DISTINCT ON (kv.key) kv.key, kv.value
+          FROM public.listing_state_history_state h
+          CROSS JOIN LATERAL jsonb_each(
+            CASE WHEN jsonb_typeof(h.filter_attributes) = 'object'
+                 THEN h.filter_attributes ELSE '{}'::jsonb END) kv
+         WHERE h.article_id = NEW.article_id
+           AND h.effective_at < v_endpoint
+           AND h.event_type IN ('search_sighting', 'detail_update', 'reopened')
+         ORDER BY kv.key, h.effective_at DESC, h.id DESC
+      ) a;
+
+    v_memberships := ARRAY(
+      SELECT DISTINCT member
+        FROM unnest(
+          COALESCE(v_memberships, '{}'::text[])
+          || CASE WHEN v_category IS NULL THEN '{}'::text[]
+                  ELSE ARRAY[v_category] END) u(member)
+       WHERE member IS NOT NULL AND member <> ''
+       ORDER BY member);
+
+    NEW.state_version_id := public.get_or_create_listing_state_version(
+      v_category, v_memberships, v_is_rent, v_sqm, v_rooms, v_attributes,
+      true, true);
+
+    IF NEW.state_version_id IS NULL THEN
+      SELECT h.state_version_id INTO NEW.state_version_id
       FROM public.listing_state_history_state h
      WHERE h.article_id = NEW.article_id
        AND h.effective_at < v_endpoint
        AND h.event_type IN ('search_sighting', 'detail_update', 'reopened')
-     ORDER BY h.effective_at DESC, h.id DESC
-     LIMIT 1;
+      ORDER BY h.effective_at DESC, h.id DESC
+      LIMIT 1;
+    END IF;
     IF NEW.state_version_id IS NULL THEN
       NEW.state_version_id := public.get_or_create_listing_state_version(
         NULL, '{}'::text[], NULL, NULL, NULL, '{}'::jsonb, false, false);

@@ -164,7 +164,11 @@ BEGIN
              ELSE FALSE
            END AS is_active
       FROM resolved r
-  )
+  ),
+  base (day, article_id, price, price_state, ppm2, is_rent, sqm, rooms,
+    category, category_memberships, location, filter_attributes,
+    state_effective_at, price_effective_at, membership_inferred,
+    attributes_inferred, stale_observation, provisional_day, observed_id, endpoint) AS MATERIALIZED (
   SELECT e.day, e.article_id,
          CASE WHEN e.event_price_state = 'valid' THEN e.event_price END,
          COALESCE(e.event_price_state, 'unknown'),
@@ -174,23 +178,107 @@ BEGIN
                    AND e.state_sqm BETWEEN 5 AND 500
                    AND e.event_price / NULLIF(e.state_sqm, 0) BETWEEN 1 AND 15000
               THEN round(e.event_price / NULLIF(e.state_sqm, 0))::int END,
-          get_or_create_listing_state_version(
-            COALESCE(e.state_category, e.state_membership[1]), e.state_membership,
-            e.state_is_rent, e.state_sqm, e.state_rooms, e.state_attributes,
-            COALESCE(e.observed_membership_inferred, false)
-              OR e.state_estimated OR COALESCE(e.attrs_estimated, false),
-            COALESCE(e.observed_attributes_inferred, false)
-              OR e.state_estimated OR COALESCE(e.attrs_estimated, false)),
-          analytics_state_neighborhood(e.state_attributes),
+         e.state_is_rent, e.state_sqm, e.state_rooms,
+         COALESCE(e.state_category, e.state_membership[1]), e.state_membership,
+         NULL::text, e.state_attributes,
          COALESCE(e.observed_effective_at, e.future_effective_at),
          e.event_price_effective_at,
-          (e.activity_at IS NOT NULL
-            AND (e.activity_at AT TIME ZONE 'Europe/Sarajevo')::date < e.day),
-          e.day = v_today,
-          analytics_state_neighborhood(e.state_attributes), 1
+         COALESCE(e.observed_membership_inferred, false)
+           OR e.state_estimated OR COALESCE(e.attrs_estimated, false),
+         COALESCE(e.observed_attributes_inferred, false)
+           OR e.state_estimated OR COALESCE(e.attrs_estimated, false),
+         (e.activity_at IS NOT NULL
+           AND (e.activity_at AT TIME ZONE 'Europe/Sarajevo')::date < e.day),
+         e.day = v_today, e.observed_id, e.endpoint
     FROM eligible e
    WHERE e.is_active
-     AND (e.observed_id IS NOT NULL OR (e.first_valid_at IS NOT NULL AND e.first_valid_at < e.endpoint));
+     AND (e.observed_id IS NOT NULL OR (e.first_valid_at IS NOT NULL AND e.first_valid_at < e.endpoint))
+  ),
+  cutoffs AS MATERIALIZED (
+    SELECT article_id, observed_id, max(endpoint) AS endpoint
+      FROM base WHERE observed_id IS NOT NULL GROUP BY article_id, observed_id
+  ),
+  sparse AS MATERIALIZED (
+    SELECT c.article_id, c.observed_id, s.*, j.attributes, m.memberships
+      FROM cutoffs c
+      CROSS JOIN LATERAL (
+        SELECT
+          (array_agg(h.category ORDER BY h.effective_at DESC, h.id DESC)
+            FILTER (WHERE NULLIF(btrim(h.category), '') IS NOT NULL))[1] AS category,
+          (array_agg(h.is_rent ORDER BY h.effective_at DESC, h.id DESC)
+            FILTER (WHERE h.is_rent IS NOT NULL))[1] AS is_rent,
+          (array_agg(h.sqm ORDER BY h.effective_at DESC, h.id DESC)
+            FILTER (WHERE h.sqm IS NOT NULL))[1] AS sqm,
+          (array_agg(h.rooms ORDER BY h.effective_at DESC, h.id DESC)
+            FILTER (WHERE h.rooms IS NOT NULL))[1] AS rooms
+          FROM listing_state_history_state h
+         WHERE h.article_id = c.article_id AND h.effective_at < c.endpoint
+           AND h.event_type IN ('search_sighting', 'detail_update', 'reopened')
+      ) s
+      CROSS JOIN LATERAL (
+        SELECT COALESCE(jsonb_object_agg(a.key, a.value), '{}'::jsonb) AS attributes
+          FROM (
+            SELECT DISTINCT ON (kv.key) kv.key, kv.value
+              FROM listing_state_history_state h
+              CROSS JOIN LATERAL jsonb_each(
+                CASE WHEN jsonb_typeof(h.filter_attributes) = 'object'
+                     THEN h.filter_attributes ELSE '{}'::jsonb END) kv
+             WHERE h.article_id = c.article_id AND h.effective_at < c.endpoint
+               AND h.event_type IN ('search_sighting', 'detail_update', 'reopened')
+             ORDER BY kv.key, h.effective_at DESC, h.id DESC
+          ) a
+      ) j
+      CROSS JOIN LATERAL (
+        SELECT COALESCE(array_agg(DISTINCT member ORDER BY member), '{}'::text[]) AS memberships
+          FROM listing_state_history_state h
+          CROSS JOIN LATERAL unnest(h.category_membership) u(member)
+         WHERE h.article_id = c.article_id AND h.effective_at < c.endpoint
+           AND h.event_type IN ('search_sighting', 'detail_update', 'reopened')
+           AND member IS NOT NULL AND member <> ''
+      ) m
+  ),
+  filled AS MATERIALIZED (
+    SELECT b.day, b.article_id, b.price, b.price_state, b.ppm2,
+           COALESCE(b.is_rent, s.is_rent) AS is_rent,
+           COALESCE(b.sqm, s.sqm) AS sqm,
+           COALESCE(b.rooms, s.rooms) AS rooms,
+           COALESCE(b.category, s.category) AS category,
+           ARRAY(SELECT DISTINCT member FROM unnest(
+             COALESCE(b.category_memberships, '{}'::text[])
+             || COALESCE(s.memberships, '{}'::text[])
+             || CASE WHEN COALESCE(b.category, s.category) IS NULL THEN '{}'::text[]
+                     ELSE ARRAY[COALESCE(b.category, s.category)] END) u(member)
+             WHERE member IS NOT NULL AND member <> '' ORDER BY member) AS category_memberships,
+           COALESCE(s.attributes, '{}'::jsonb) || b.filter_attributes AS filter_attributes,
+           b.state_effective_at, b.price_effective_at,
+           b.membership_inferred OR EXISTS (
+             SELECT 1 FROM unnest(s.memberships) u(member)
+              WHERE NOT (member = ANY(b.category_memberships))) AS membership_inferred,
+           b.attributes_inferred
+             OR (b.category IS NULL AND s.category IS NOT NULL)
+             OR (b.is_rent IS NULL AND s.is_rent IS NOT NULL)
+             OR (b.sqm IS NULL AND s.sqm IS NOT NULL)
+             OR (b.rooms IS NULL AND s.rooms IS NOT NULL)
+             OR EXISTS (SELECT 1 FROM jsonb_object_keys(s.attributes) k(key)
+                         WHERE NOT (b.filter_attributes ? k.key)) AS attributes_inferred,
+           b.stale_observation, b.provisional_day
+      FROM base b LEFT JOIN sparse s
+        ON s.article_id = b.article_id AND s.observed_id = b.observed_id
+  ),
+  inputs AS MATERIALIZED (
+    SELECT DISTINCT filter_attributes FROM filled
+  ),
+  locations AS MATERIALIZED (
+    SELECT filter_attributes, analytics_state_neighborhood(filter_attributes) AS neighborhood
+      FROM inputs
+  )
+  SELECT f.day, f.article_id, f.price, f.price_state, f.ppm2,
+         get_or_create_listing_state_version(
+           f.category, f.category_memberships, f.is_rent, f.sqm, f.rooms,
+           f.filter_attributes, f.membership_inferred, f.attributes_inferred),
+         l.neighborhood, f.state_effective_at, f.price_effective_at,
+         f.stale_observation, f.provisional_day, l.neighborhood, 1
+    FROM filled f JOIN locations l USING (filter_attributes);
 
   GET DIAGNOSTICS v_rows = ROW_COUNT;
 
