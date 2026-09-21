@@ -39,6 +39,16 @@ module.exports = {
     current: "61fcf6ed8b20d077cdab9b89291d6388becc67f354c7fec7e8ccb1e20ac6c109",
     allowAfterApply: true,
   },
+  // Migration 28 gained post-normalization fixes after deployment. Existing
+  // normalized volumes receive the executable corrections through migration
+  // 29; this transition only advances the ledger without replaying DDL.
+  "28-normalize-source-state.sql": {
+    previous: [
+      "f6f9fd4342dc4d732018d67240246972f4d8c9a911b65891b9cefd61ff356a63",
+    ],
+    current: "053f0d6caff0bfffd6a8948da9ffdf6372261ef5badf578a4aa4dd133b0917e1",
+    allowAfterApply: true,
+  },
   "04-source-views.sql": {
     previous: [
       "2e651714943ef45b0868bf9eb7c749ecfab2dc57ec6b4f6cebafb9d050f73647",
