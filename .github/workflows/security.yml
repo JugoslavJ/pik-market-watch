@@ -16,9 +16,9 @@ jobs:
   npm-audit:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    defaults:
-      run:
-        working-directory: scraper
+    concurrency:
+      group: security-audit
+      cancel-in-progress: true   # a manual re-run supersedes any run already in flight
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -28,5 +28,8 @@ jobs:
           node-version: 26
           cache: npm
           cache-dependency-path: scraper/package-lock.json
-      - run: npm ci --omit=dev
-      - run: npm audit --omit=dev --audit-level=high
+      - name: Audit production dependencies
+        working-directory: scraper
+        run: |
+          npm ci --omit=dev --ignore-scripts
+          npm audit --omit=dev --audit-level=high

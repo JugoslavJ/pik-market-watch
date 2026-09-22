@@ -2,17 +2,14 @@ name: Documentation checks
 
 on:
   push:
-    paths:
+    branches: [main]
+    paths: &doc_paths
       - "README.md"
       - "**/*.md"
       - ".github/workflows/docs.yml"
       - "scraper/scripts/check-markdown-links.js"
   pull_request:
-    paths:
-      - "README.md"
-      - "**/*.md"
-      - ".github/workflows/docs.yml"
-      - "scraper/scripts/check-markdown-links.js"
+    paths: *doc_paths
   workflow_dispatch:
 
 permissions:
@@ -21,6 +18,10 @@ permissions:
 jobs:
   markdown-links:
     runs-on: ubuntu-latest
+    timeout-minutes: 10   # a link checker has no business running anywhere near the 6 h default
+    concurrency:
+      group: docs-${{ github.ref }}
+      cancel-in-progress: true   # a new push supersedes an in-flight run on the same branch/PR
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

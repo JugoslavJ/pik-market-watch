@@ -11,7 +11,7 @@ on:
   workflow_dispatch:   # manual run → full test suite + redeploy of main
 
 permissions:
-  contents: read       # workflow-wide least privilege; jobs inherit unless overridden
+  contents: read
 
 jobs:
   test:

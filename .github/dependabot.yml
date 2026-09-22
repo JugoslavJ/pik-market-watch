@@ -1,23 +1,49 @@
 # Dependabot: weekly bump PRs for CI actions, npm deps and image pins
-# (Dockerfile + docker-compose.yml). Personal-scale cadence.
+# (Dockerfile + docker-compose.yml). Personal-scale cadence: minor/patch
+# bumps land as one grouped PR per ecosystem; majors stay separate since
+# those are the ones actually worth a careful look.
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+      day: monday
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
 
   - package-ecosystem: npm
     directory: /scraper
     schedule:
       interval: weekly
+      day: monday
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
 
   - package-ecosystem: docker
-    directory: /scraper
+    directory: /scraper   # Dockerfile
     schedule:
       interval: weekly
+      day: monday
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
 
-  - package-ecosystem: docker
-    directory: /          # picks up postgres/grafana pins in docker-compose.yml
+  - package-ecosystem: docker-compose
+    directory: /          # docker-compose.yml image pins
     schedule:
       interval: weekly
+      day: monday
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
