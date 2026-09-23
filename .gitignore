@@ -23,6 +23,7 @@ Thumbs.db
 desktop.ini
 .vscode/
 .idea/
+.codex/
 
 # ── Geo pipeline intermediates (offline tooling, see geo/README.md) ───
 geo/debug/

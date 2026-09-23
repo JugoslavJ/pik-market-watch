@@ -273,6 +273,7 @@ test("a supplied rate budget can be shared across searches", async () => {
   const waits = [];
   const shared = new RateBudget({
     cooldownMs: 100,
+    now: () => 0,
     wait: async (ms) => waits.push(ms),
   });
   const fetchPage = async () => ({
