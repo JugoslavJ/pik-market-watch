@@ -1,0 +1,556 @@
+GroupAggregate  (cost=41.74..27312.18 rows=1770 width=133) (actual time=33.810..192.988 rows=91.00 loops=1)
+  Group Key: d.day
+  Buffers: shared hit=58581
+  ->  Merge Join  (cost=41.74..23488.16 rows=151191 width=18) (actual time=32.844..179.370 rows=69664.00 loops=1)
+        Merge Cond: ((d.day = f.day) AND (d.article_id = f.article_id))
+        Buffers: shared hit=58573
+        ->  Nested Loop  (cost=21.71..9065.70 rows=69735 width=16) (actual time=1.093..83.755 rows=69664.00 loops=1)
+              Buffers: shared hit=53662
+              ->  Merge Append  (cost=21.42..5831.60 rows=69735 width=22) (actual time=0.885..33.347 rows=69664.00 loops=1)
+                    Sort Key: d.day, d.article_id
+                    Buffers: shared hit=31606
+                    ->  Index Scan using listing_daily_day_article_idx on listing_daily d_1  (cost=0.15..2.37 rows=1 width=22) (actual time=0.013..0.013 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2020_11_grain_uq on listing_daily_2020_11 d_2  (cost=0.17..2.38 rows=1 width=22) (actual time=0.010..0.010 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=1
+                    ->  Index Scan using listing_daily_2020_12_grain_uq on listing_daily_2020_12 d_3  (cost=0.17..2.38 rows=1 width=22) (actual time=0.006..0.006 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=1
+                    ->  Index Scan using listing_daily_2021_01_grain_uq on listing_daily_2021_01 d_4  (cost=0.17..2.38 rows=1 width=22) (actual time=0.006..0.006 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=1
+                    ->  Index Scan using listing_daily_2021_02_grain_uq on listing_daily_2021_02 d_5  (cost=0.17..2.38 rows=1 width=22) (actual time=0.006..0.006 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=1
+                    ->  Index Scan using listing_daily_2021_03_grain_uq on listing_daily_2021_03 d_6  (cost=0.17..2.39 rows=1 width=22) (actual time=0.005..0.005 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=1
+                    ->  Index Scan using listing_daily_2021_04_grain_uq on listing_daily_2021_04 d_7  (cost=0.17..2.39 rows=1 width=22) (actual time=0.010..0.010 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=1
+                    ->  Index Scan using listing_daily_2021_05_grain_uq on listing_daily_2021_05 d_8  (cost=0.17..2.39 rows=1 width=22) (actual time=0.010..0.010 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=1
+                    ->  Index Scan using listing_daily_2021_06_grain_uq on listing_daily_2021_06 d_9  (cost=0.17..2.39 rows=1 width=22) (actual time=0.007..0.007 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=1
+                    ->  Index Scan using listing_daily_2021_07_grain_uq on listing_daily_2021_07 d_10  (cost=0.17..2.39 rows=1 width=22) (actual time=0.006..0.006 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=1
+                    ->  Index Scan using listing_daily_2021_08_grain_uq on listing_daily_2021_08 d_11  (cost=0.17..2.39 rows=1 width=22) (actual time=0.006..0.006 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=1
+                    ->  Index Scan using listing_daily_2021_09_grain_uq on listing_daily_2021_09 d_12  (cost=0.17..2.39 rows=1 width=22) (actual time=0.021..0.021 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=1
+                    ->  Index Scan using listing_daily_2021_10_grain_uq on listing_daily_2021_10 d_13  (cost=0.17..2.39 rows=1 width=22) (actual time=0.006..0.006 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=1
+                    ->  Index Scan using listing_daily_2021_11_grain_uq on listing_daily_2021_11 d_14  (cost=0.17..2.39 rows=1 width=22) (actual time=0.006..0.006 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=1
+                    ->  Index Scan using listing_daily_2021_12_grain_uq on listing_daily_2021_12 d_15  (cost=0.17..2.39 rows=1 width=22) (actual time=0.007..0.007 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=1
+                    ->  Index Scan using listing_daily_2022_01_grain_uq on listing_daily_2022_01 d_16  (cost=0.17..2.39 rows=1 width=22) (actual time=0.009..0.009 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=1
+                    ->  Index Scan using listing_daily_2022_02_grain_uq on listing_daily_2022_02 d_17  (cost=0.17..2.39 rows=1 width=22) (actual time=0.008..0.009 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=1
+                    ->  Index Scan using listing_daily_2022_03_grain_uq on listing_daily_2022_03 d_18  (cost=0.17..2.39 rows=1 width=22) (actual time=0.006..0.006 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=1
+                    ->  Index Scan using listing_daily_2022_04_grain_uq on listing_daily_2022_04 d_19  (cost=0.17..2.39 rows=1 width=22) (actual time=0.007..0.007 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=1
+                    ->  Index Scan using listing_daily_2022_05_grain_uq on listing_daily_2022_05 d_20  (cost=0.17..2.39 rows=1 width=22) (actual time=0.018..0.018 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=1
+                    ->  Index Scan using listing_daily_2022_06_grain_uq on listing_daily_2022_06 d_21  (cost=0.17..2.39 rows=1 width=22) (actual time=0.007..0.007 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=1
+                    ->  Index Scan using listing_daily_2022_07_grain_uq on listing_daily_2022_07 d_22  (cost=0.17..2.39 rows=1 width=22) (actual time=0.027..0.027 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=1
+                    ->  Index Scan using listing_daily_2022_08_grain_uq on listing_daily_2022_08 d_23  (cost=0.17..2.39 rows=1 width=22) (actual time=0.009..0.009 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=1
+                    ->  Index Scan using listing_daily_2022_09_grain_uq on listing_daily_2022_09 d_24  (cost=0.30..2.52 rows=1 width=22) (actual time=0.018..0.018 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2022_10_grain_uq on listing_daily_2022_10 d_25  (cost=0.30..2.52 rows=1 width=22) (actual time=0.010..0.010 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2022_11_grain_uq on listing_daily_2022_11 d_26  (cost=0.30..2.52 rows=1 width=22) (actual time=0.008..0.008 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2022_12_grain_uq on listing_daily_2022_12 d_27  (cost=0.30..2.52 rows=1 width=22) (actual time=0.013..0.013 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2023_01_grain_uq on listing_daily_2023_01 d_28  (cost=0.30..2.52 rows=1 width=22) (actual time=0.010..0.011 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2023_02_grain_uq on listing_daily_2023_02 d_29  (cost=0.17..2.39 rows=1 width=22) (actual time=0.008..0.008 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=1
+                    ->  Index Scan using listing_daily_2023_03_grain_uq on listing_daily_2023_03 d_30  (cost=0.30..2.52 rows=1 width=22) (actual time=0.009..0.009 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2023_04_grain_uq on listing_daily_2023_04 d_31  (cost=0.30..2.52 rows=1 width=22) (actual time=0.008..0.008 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2023_05_grain_uq on listing_daily_2023_05 d_32  (cost=0.30..2.52 rows=1 width=22) (actual time=0.013..0.013 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2023_06_grain_uq on listing_daily_2023_06 d_33  (cost=0.30..2.52 rows=1 width=22) (actual time=0.009..0.009 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2023_07_grain_uq on listing_daily_2023_07 d_34  (cost=0.30..2.52 rows=1 width=22) (actual time=0.009..0.009 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2023_08_grain_uq on listing_daily_2023_08 d_35  (cost=0.30..2.52 rows=1 width=22) (actual time=0.011..0.011 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2023_09_grain_uq on listing_daily_2023_09 d_36  (cost=0.30..2.52 rows=1 width=22) (actual time=0.009..0.009 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2023_10_grain_uq on listing_daily_2023_10 d_37  (cost=0.30..2.52 rows=1 width=22) (actual time=0.011..0.011 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2023_11_grain_uq on listing_daily_2023_11 d_38  (cost=0.30..2.52 rows=1 width=22) (actual time=0.010..0.011 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2023_12_grain_uq on listing_daily_2023_12 d_39  (cost=0.30..2.52 rows=1 width=22) (actual time=0.008..0.008 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2024_01_grain_uq on listing_daily_2024_01 d_40  (cost=0.30..2.52 rows=1 width=22) (actual time=0.011..0.011 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2024_02_grain_uq on listing_daily_2024_02 d_41  (cost=0.30..2.52 rows=1 width=22) (actual time=0.008..0.008 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2024_03_grain_uq on listing_daily_2024_03 d_42  (cost=0.30..2.52 rows=1 width=22) (actual time=0.011..0.011 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2024_04_grain_uq on listing_daily_2024_04 d_43  (cost=0.30..2.52 rows=1 width=22) (actual time=0.070..0.070 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2024_05_grain_uq on listing_daily_2024_05 d_44  (cost=0.30..2.52 rows=1 width=22) (actual time=0.009..0.009 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2024_06_grain_uq on listing_daily_2024_06 d_45  (cost=0.30..2.52 rows=1 width=22) (actual time=0.009..0.009 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2024_07_grain_uq on listing_daily_2024_07 d_46  (cost=0.30..2.52 rows=1 width=22) (actual time=0.011..0.011 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2024_08_grain_uq on listing_daily_2024_08 d_47  (cost=0.30..2.52 rows=1 width=22) (actual time=0.011..0.011 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2024_09_grain_uq on listing_daily_2024_09 d_48  (cost=0.30..2.52 rows=1 width=22) (actual time=0.011..0.011 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2024_10_grain_uq on listing_daily_2024_10 d_49  (cost=0.30..2.52 rows=1 width=22) (actual time=0.010..0.010 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2024_11_grain_uq on listing_daily_2024_11 d_50  (cost=0.30..2.52 rows=1 width=22) (actual time=0.011..0.011 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2024_12_grain_uq on listing_daily_2024_12 d_51  (cost=0.30..2.52 rows=1 width=22) (actual time=0.012..0.012 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2025_01_grain_uq on listing_daily_2025_01 d_52  (cost=0.30..2.52 rows=1 width=22) (actual time=0.010..0.010 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2025_02_grain_uq on listing_daily_2025_02 d_53  (cost=0.30..2.52 rows=1 width=22) (actual time=0.008..0.008 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2025_03_grain_uq on listing_daily_2025_03 d_54  (cost=0.30..2.53 rows=1 width=22) (actual time=0.010..0.010 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2025_04_grain_uq on listing_daily_2025_04 d_55  (cost=0.30..2.53 rows=1 width=22) (actual time=0.014..0.014 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2025_05_grain_uq on listing_daily_2025_05 d_56  (cost=0.30..2.53 rows=1 width=22) (actual time=0.016..0.017 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2025_06_grain_uq on listing_daily_2025_06 d_57  (cost=0.30..2.53 rows=1 width=22) (actual time=0.010..0.011 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2025_07_grain_uq on listing_daily_2025_07 d_58  (cost=0.30..2.53 rows=1 width=22) (actual time=0.010..0.010 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2025_08_grain_uq on listing_daily_2025_08 d_59  (cost=0.30..2.53 rows=1 width=22) (actual time=0.011..0.012 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2025_09_grain_uq on listing_daily_2025_09 d_60  (cost=0.30..2.53 rows=1 width=22) (actual time=0.009..0.009 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2025_10_grain_uq on listing_daily_2025_10 d_61  (cost=0.31..2.53 rows=1 width=22) (actual time=0.009..0.009 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2025_11_grain_uq on listing_daily_2025_11 d_62  (cost=0.31..2.53 rows=1 width=22) (actual time=0.014..0.014 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2025_12_grain_uq on listing_daily_2025_12 d_63  (cost=0.31..2.53 rows=1 width=22) (actual time=0.009..0.009 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2026_01_grain_uq on listing_daily_2026_01 d_64  (cost=0.31..2.53 rows=1 width=22) (actual time=0.011..0.011 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2026_02_grain_uq on listing_daily_2026_02 d_65  (cost=0.31..2.53 rows=1 width=22) (actual time=0.012..0.012 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2026_03_grain_uq on listing_daily_2026_03 d_66  (cost=0.31..2.53 rows=1 width=22) (actual time=0.010..0.010 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2026_04_grain_uq on listing_daily_2026_04 d_67  (cost=0.31..2.53 rows=1 width=22) (actual time=0.014..0.014 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2026_05_grain_uq on listing_daily_2026_05 d_68  (cost=0.31..2.53 rows=1 width=22) (actual time=0.014..0.014 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2026_06_grain_uq on listing_daily_2026_06 d_69  (cost=0.31..181.27 rows=1260 width=22) (actual time=0.024..0.493 rows=1260.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=595
+                    ->  Index Scan using listing_daily_2026_07_grain_uq on listing_daily_2026_07 d_70  (cost=0.31..366.32 rows=8465 width=22) (actual time=0.016..2.602 rows=8465.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=4363
+                    ->  Index Scan using listing_daily_2026_08_grain_uq on listing_daily_2026_08 d_71  (cost=0.32..980.57 rows=22627 width=22) (actual time=0.014..7.440 rows=22627.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=10058
+                    ->  Index Scan using listing_daily_2026_09_grain_uq on listing_daily_2026_09 d_72  (cost=0.32..1605.15 rows=37312 width=22) (actual time=0.041..15.817 rows=37312.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=16471
+                    ->  Index Scan using listing_daily_2026_10_grain_uq on listing_daily_2026_10 d_73  (cost=0.15..2.37 rows=1 width=22) (actual time=0.007..0.007 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2026_11_grain_uq on listing_daily_2026_11 d_74  (cost=0.15..2.37 rows=1 width=22) (actual time=0.007..0.007 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using listing_daily_2026_12_grain_uq on listing_daily_2026_12 d_75  (cost=0.15..2.37 rows=1 width=22) (actual time=0.007..0.007 rows=0.00 loops=1)
+                          Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 90)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+                          Index Searches: 1
+                          Buffers: shared hit=2
+              ->  Memoize  (cost=0.30..0.34 rows=1 width=10) (actual time=0.000..0.000 rows=1.00 loops=69664)
+                    Cache Key: d.state_version_id
+                    Cache Mode: logical
+                    Hits: 62312  Misses: 7352  Evictions: 0  Overflows: 0  Memory Usage: 862kB
+                    Buffers: shared hit=22056
+                    ->  Index Scan using listing_state_versions_pkey on listing_state_versions v  (cost=0.29..0.33 rows=1 width=10) (actual time=0.003..0.003 rows=1.00 loops=7352)
+                          Index Cond: (state_version_id = d.state_version_id)
+                          Index Searches: 7352
+                          Buffers: shared hit=22056
+        ->  Materialize  (cost=19.36..11747.41 rows=127517 width=22) (actual time=0.699..67.416 rows=127513.00 loops=1)
+              Storage: Memory  Maximum Storage: 17kB
+              Buffers: shared hit=4911
+              ->  Merge Append  (cost=19.36..11428.62 rows=127517 width=22) (actual time=0.695..37.297 rows=127513.00 loops=1)
+                    Sort Key: f.day, f.article_id
+                    Buffers: shared hit=4911
+                    ->  Index Scan using daily_listing_facts_grain_uq on daily_listing_facts f_1  (cost=0.12..2.34 rows=1 width=48) (actual time=0.006..0.006 rows=0.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=1
+                    ->  Index Scan using daily_listing_facts_2020_11_grain_uq on daily_listing_facts_2020_11 f_2  (cost=0.14..3.77 rows=22 width=22) (actual time=0.010..0.015 rows=22.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using daily_listing_facts_2020_12_grain_uq on daily_listing_facts_2020_12 f_3  (cost=0.14..3.90 rows=31 width=22) (actual time=0.006..0.010 rows=31.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using daily_listing_facts_2021_01_grain_uq on daily_listing_facts_2021_01 f_4  (cost=0.14..3.90 rows=31 width=22) (actual time=0.006..0.011 rows=31.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using daily_listing_facts_2021_02_grain_uq on daily_listing_facts_2021_02 f_5  (cost=0.14..3.86 rows=28 width=22) (actual time=0.007..0.011 rows=28.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=2
+                    ->  Index Scan using daily_listing_facts_2021_03_grain_uq on daily_listing_facts_2021_03 f_6  (cost=0.14..5.10 rows=41 width=22) (actual time=0.007..0.018 rows=41.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=3
+                    ->  Index Scan using daily_listing_facts_2021_04_grain_uq on daily_listing_facts_2021_04 f_7  (cost=0.14..5.38 rows=60 width=22) (actual time=0.008..0.019 rows=60.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=3
+                    ->  Index Scan using daily_listing_facts_2021_05_grain_uq on daily_listing_facts_2021_05 f_8  (cost=0.14..5.41 rows=62 width=22) (actual time=0.007..0.017 rows=62.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=3
+                    ->  Index Scan using daily_listing_facts_2021_06_grain_uq on daily_listing_facts_2021_06 f_9  (cost=0.14..5.38 rows=60 width=22) (actual time=0.007..0.017 rows=60.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=3
+                    ->  Index Scan using daily_listing_facts_2021_07_grain_uq on daily_listing_facts_2021_07 f_10  (cost=0.14..5.41 rows=62 width=22) (actual time=0.008..0.019 rows=62.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=3
+                    ->  Index Scan using daily_listing_facts_2021_08_grain_uq on daily_listing_facts_2021_08 f_11  (cost=0.14..5.41 rows=62 width=22) (actual time=0.006..0.015 rows=62.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=3
+                    ->  Index Scan using daily_listing_facts_2021_09_grain_uq on daily_listing_facts_2021_09 f_12  (cost=0.14..5.38 rows=60 width=22) (actual time=0.007..0.017 rows=60.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=3
+                    ->  Index Scan using daily_listing_facts_2021_10_grain_uq on daily_listing_facts_2021_10 f_13  (cost=0.14..5.41 rows=62 width=22) (actual time=0.007..0.016 rows=62.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=3
+                    ->  Index Scan using daily_listing_facts_2021_11_grain_uq on daily_listing_facts_2021_11 f_14  (cost=0.14..5.38 rows=60 width=22) (actual time=0.007..0.049 rows=60.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=3
+                    ->  Index Scan using daily_listing_facts_2021_12_grain_uq on daily_listing_facts_2021_12 f_15  (cost=0.14..5.46 rows=65 width=22) (actual time=0.008..0.018 rows=65.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=3
+                    ->  Index Scan using daily_listing_facts_2022_01_grain_uq on daily_listing_facts_2022_01 f_16  (cost=0.14..7.09 rows=104 width=22) (actual time=0.008..0.030 rows=104.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=4
+                    ->  Index Scan using daily_listing_facts_2022_02_grain_uq on daily_listing_facts_2022_02 f_17  (cost=0.14..10.10 rows=165 width=22) (actual time=0.007..0.035 rows=165.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=6
+                    ->  Index Scan using daily_listing_facts_2022_03_grain_uq on daily_listing_facts_2022_03 f_18  (cost=0.14..10.41 rows=186 width=22) (actual time=0.009..0.057 rows=186.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=6
+                    ->  Index Scan using daily_listing_facts_2022_04_grain_uq on daily_listing_facts_2022_04 f_19  (cost=0.14..10.32 rows=180 width=22) (actual time=0.008..0.036 rows=180.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=6
+                    ->  Index Scan using daily_listing_facts_2022_05_grain_uq on daily_listing_facts_2022_05 f_20  (cost=0.14..10.41 rows=186 width=22) (actual time=0.010..0.044 rows=186.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=6
+                    ->  Index Scan using daily_listing_facts_2022_06_grain_uq on daily_listing_facts_2022_06 f_21  (cost=0.14..11.85 rows=212 width=22) (actual time=0.007..0.045 rows=212.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=9
+                    ->  Index Scan using daily_listing_facts_2022_07_grain_uq on daily_listing_facts_2022_07 f_22  (cost=0.14..13.43 rows=248 width=22) (actual time=0.010..0.050 rows=248.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=8
+                    ->  Index Scan using daily_listing_facts_2022_08_grain_uq on daily_listing_facts_2022_08 f_23  (cost=0.14..13.46 rows=250 width=22) (actual time=0.009..0.053 rows=250.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=8
+                    ->  Index Scan using daily_listing_facts_2022_09_grain_uq on daily_listing_facts_2022_09 f_24  (cost=0.27..17.13 rows=270 width=22) (actual time=0.008..0.054 rows=270.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=11
+                    ->  Index Scan using daily_listing_facts_2022_10_grain_uq on daily_listing_facts_2022_10 f_25  (cost=0.27..17.26 rows=279 width=22) (actual time=0.011..0.054 rows=279.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=11
+                    ->  Index Scan using daily_listing_facts_2022_11_grain_uq on daily_listing_facts_2022_11 f_26  (cost=0.27..17.13 rows=270 width=22) (actual time=0.009..0.054 rows=270.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=11
+                    ->  Index Scan using daily_listing_facts_2022_12_grain_uq on daily_listing_facts_2022_12 f_27  (cost=0.27..17.26 rows=279 width=22) (actual time=0.009..0.067 rows=279.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=11
+                    ->  Index Scan using daily_listing_facts_2023_01_grain_uq on daily_listing_facts_2023_01 f_28  (cost=0.27..17.26 rows=279 width=22) (actual time=0.011..0.054 rows=279.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=11
+                    ->  Index Scan using daily_listing_facts_2023_02_grain_uq on daily_listing_facts_2023_02 f_29  (cost=0.15..13.60 rows=259 width=22) (actual time=0.010..0.068 rows=259.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=8
+                    ->  Index Scan using daily_listing_facts_2023_03_grain_uq on daily_listing_facts_2023_03 f_30  (cost=0.27..17.73 rows=310 width=22) (actual time=0.010..0.062 rows=310.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=11
+                    ->  Index Scan using daily_listing_facts_2023_04_grain_uq on daily_listing_facts_2023_04 f_31  (cost=0.27..17.58 rows=300 width=22) (actual time=0.012..0.062 rows=300.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=11
+                    ->  Index Scan using daily_listing_facts_2023_05_grain_uq on daily_listing_facts_2023_05 f_32  (cost=0.27..17.73 rows=310 width=22) (actual time=0.009..0.058 rows=310.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=11
+                    ->  Index Scan using daily_listing_facts_2023_06_grain_uq on daily_listing_facts_2023_06 f_33  (cost=0.27..17.58 rows=300 width=22) (actual time=0.010..0.057 rows=300.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=11
+                    ->  Index Scan using daily_listing_facts_2023_07_grain_uq on daily_listing_facts_2023_07 f_34  (cost=0.27..26.48 rows=337 width=22) (actual time=0.010..0.066 rows=337.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=12
+                    ->  Index Scan using daily_listing_facts_2023_08_grain_uq on daily_listing_facts_2023_08 f_35  (cost=0.27..26.54 rows=341 width=22) (actual time=0.010..0.066 rows=341.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=12
+                    ->  Index Scan using daily_listing_facts_2023_09_grain_uq on daily_listing_facts_2023_09 f_36  (cost=0.27..26.63 rows=347 width=22) (actual time=0.012..0.066 rows=347.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=12
+                    ->  Index Scan using daily_listing_facts_2023_10_grain_uq on daily_listing_facts_2023_10 f_37  (cost=0.27..27.31 rows=392 width=22) (actual time=0.008..0.066 rows=392.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=14
+                    ->  Index Scan using daily_listing_facts_2023_11_grain_uq on daily_listing_facts_2023_11 f_38  (cost=0.27..27.28 rows=390 width=22) (actual time=0.009..0.068 rows=390.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=13
+                    ->  Index Scan using daily_listing_facts_2023_12_grain_uq on daily_listing_facts_2023_12 f_39  (cost=0.27..27.47 rows=403 width=22) (actual time=0.011..0.073 rows=403.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=14
+                    ->  Index Scan using daily_listing_facts_2024_01_grain_uq on daily_listing_facts_2024_01 f_40  (cost=0.27..27.47 rows=403 width=22) (actual time=0.010..0.079 rows=403.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=14
+                    ->  Index Scan using daily_listing_facts_2024_02_grain_uq on daily_listing_facts_2024_02 f_41  (cost=0.27..27.34 rows=394 width=22) (actual time=0.008..0.073 rows=394.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=14
+                    ->  Index Scan using daily_listing_facts_2024_03_grain_uq on daily_listing_facts_2024_03 f_42  (cost=0.27..28.60 rows=478 width=22) (actual time=0.012..0.091 rows=478.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=16
+                    ->  Index Scan using daily_listing_facts_2024_04_grain_uq on daily_listing_facts_2024_04 f_43  (cost=0.28..30.41 rows=525 width=22) (actual time=0.012..0.096 rows=525.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=18
+                    ->  Index Scan using daily_listing_facts_2024_05_grain_uq on daily_listing_facts_2024_05 f_44  (cost=0.28..31.41 rows=592 width=22) (actual time=0.010..0.109 rows=592.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=22
+                    ->  Index Scan using daily_listing_facts_2024_06_grain_uq on daily_listing_facts_2024_06 f_45  (cost=0.28..49.08 rows=656 width=22) (actual time=0.011..0.116 rows=656.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=24
+                    ->  Index Scan using daily_listing_facts_2024_07_grain_uq on daily_listing_facts_2024_07 f_46  (cost=0.28..50.99 rows=784 width=22) (actual time=0.009..0.136 rows=784.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=29
+                    ->  Index Scan using daily_listing_facts_2024_08_grain_uq on daily_listing_facts_2024_08 f_47  (cost=0.28..52.42 rows=806 width=22) (actual time=0.010..0.146 rows=806.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=31
+                    ->  Index Scan using daily_listing_facts_2024_09_grain_uq on daily_listing_facts_2024_09 f_48  (cost=0.28..52.32 rows=799 width=22) (actual time=0.010..0.140 rows=799.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=30
+                    ->  Index Scan using daily_listing_facts_2024_10_grain_uq on daily_listing_facts_2024_10 f_49  (cost=0.28..52.92 rows=838 width=22) (actual time=0.009..0.150 rows=838.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=32
+                    ->  Index Scan using daily_listing_facts_2024_11_grain_uq on daily_listing_facts_2024_11 f_50  (cost=0.28..53.35 rows=868 width=22) (actual time=0.011..0.150 rows=868.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=32
+                    ->  Index Scan using daily_listing_facts_2024_12_grain_uq on daily_listing_facts_2024_12 f_51  (cost=0.28..54.28 rows=930 width=22) (actual time=0.009..0.170 rows=930.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=30
+                    ->  Index Scan using daily_listing_facts_2025_01_grain_uq on daily_listing_facts_2025_01 f_52  (cost=0.28..54.46 rows=942 width=22) (actual time=0.012..0.173 rows=942.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=32
+                    ->  Index Scan using daily_listing_facts_2025_02_grain_uq on daily_listing_facts_2025_02 f_53  (cost=0.28..54.43 rows=940 width=22) (actual time=0.010..0.166 rows=940.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=30
+                    ->  Index Scan using daily_listing_facts_2025_03_grain_uq on daily_listing_facts_2025_03 f_54  (cost=0.28..59.06 rows=1175 width=22) (actual time=0.008..0.201 rows=1175.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=37
+                    ->  Index Scan using daily_listing_facts_2025_04_grain_uq on daily_listing_facts_2025_04 f_55  (cost=0.28..93.58 rows=1250 width=22) (actual time=0.013..0.227 rows=1250.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=39
+                    ->  Index Scan using daily_listing_facts_2025_05_grain_uq on daily_listing_facts_2025_05 f_56  (cost=0.28..96.82 rows=1392 width=22) (actual time=0.009..0.233 rows=1392.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=52
+                    ->  Index Scan using daily_listing_facts_2025_06_grain_uq on daily_listing_facts_2025_06 f_57  (cost=0.28..97.75 rows=1454 width=22) (actual time=0.008..0.256 rows=1454.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=51
+                    ->  Index Scan using daily_listing_facts_2025_07_grain_uq on daily_listing_facts_2025_07 f_58  (cost=0.28..101.35 rows=1620 width=22) (actual time=0.012..0.302 rows=1620.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=61
+                    ->  Index Scan using daily_listing_facts_2025_08_grain_uq on daily_listing_facts_2025_08 f_59  (cost=0.28..103.49 rows=1763 width=22) (actual time=0.009..0.298 rows=1763.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=63
+                    ->  Index Scan using daily_listing_facts_2025_09_grain_uq on daily_listing_facts_2025_09 f_60  (cost=0.28..106.25 rows=1874 width=22) (actual time=0.010..0.332 rows=1874.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=63
+                    ->  Index Scan using daily_listing_facts_2025_10_grain_uq on daily_listing_facts_2025_10 f_61  (cost=0.28..110.75 rows=2101 width=22) (actual time=0.009..0.355 rows=2101.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=68
+                    ->  Index Scan using daily_listing_facts_2025_11_grain_uq on daily_listing_facts_2025_11 f_62  (cost=0.28..113.33 rows=2273 width=22) (actual time=0.011..0.390 rows=2273.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=72
+                    ->  Index Scan using daily_listing_facts_2025_12_grain_uq on daily_listing_facts_2025_12 f_63  (cost=0.28..188.46 rows=2681 width=22) (actual time=0.010..0.478 rows=2681.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=93
+                    ->  Index Scan using daily_listing_facts_2026_01_grain_uq on daily_listing_facts_2026_01 f_64  (cost=0.28..192.88 rows=2903 width=22) (actual time=0.011..0.500 rows=2903.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=90
+                    ->  Index Scan using daily_listing_facts_2026_02_grain_uq on daily_listing_facts_2026_02 f_65  (cost=0.28..192.69 rows=2890 width=22) (actual time=0.009..0.522 rows=2890.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=91
+                    ->  Index Scan using daily_listing_facts_2026_03_grain_uq on daily_listing_facts_2026_03 f_66  (cost=0.28..206.30 rows=3651 width=22) (actual time=0.011..0.626 rows=3651.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=121
+                    ->  Index Scan using daily_listing_facts_2026_04_grain_uq on daily_listing_facts_2026_04 f_67  (cost=0.28..215.71 rows=4131 width=22) (actual time=0.008..0.811 rows=4131.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=136
+                    ->  Index Scan using daily_listing_facts_2026_05_grain_uq on daily_listing_facts_2026_05 f_68  (cost=0.28..298.13 rows=4953 width=22) (actual time=0.011..0.846 rows=4953.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=171
+                    ->  Index Scan using daily_listing_facts_2026_06_grain_uq on daily_listing_facts_2026_06 f_69  (cost=0.28..313.24 rows=5740 width=22) (actual time=0.010..1.008 rows=5740.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=198
+                    ->  Index Scan using daily_listing_facts_2026_07_grain_uq on daily_listing_facts_2026_07 f_70  (cost=0.29..433.03 rows=8465 width=22) (actual time=0.009..1.627 rows=8465.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=268
+                    ->  Index Scan using daily_listing_facts_2026_08_grain_uq on daily_listing_facts_2026_08 f_71  (cost=0.29..1038.85 rows=22627 width=22) (actual time=0.009..4.402 rows=22627.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=677
+                    ->  Index Scan using daily_listing_facts_2026_09_grain_uq on daily_listing_facts_2026_09 f_72  (cost=0.29..1738.56 rows=37312 width=22) (actual time=0.011..9.628 rows=37312.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=1927
+                    ->  Index Scan using daily_listing_facts_2026_10_grain_uq on daily_listing_facts_2026_10 f_73  (cost=0.12..2.34 rows=1 width=48) (actual time=0.005..0.005 rows=0.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=1
+                    ->  Index Scan using daily_listing_facts_2026_11_grain_uq on daily_listing_facts_2026_11 f_74  (cost=0.12..2.34 rows=1 width=48) (actual time=0.004..0.004 rows=0.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=1
+                    ->  Index Scan using daily_listing_facts_2026_12_grain_uq on daily_listing_facts_2026_12 f_75  (cost=0.12..2.34 rows=1 width=48) (actual time=0.004..0.004 rows=0.00 loops=1)
+                          Index Searches: 1
+                          Buffers: shared hit=1
+Settings: effective_cache_size = '1536MB', work_mem = '8MB', random_page_cost = '1.1', effective_io_concurrency = '200', search_path = '"$user", public, topology, tiger'
+Planning:
+  Buffers: shared hit=12833
+Planning Time: 24.837 ms
+Execution Time: 194.960 ms

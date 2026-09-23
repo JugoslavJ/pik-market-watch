@@ -111,9 +111,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -137,9 +135,7 @@
           "id": "filterFieldsByName",
           "options": {
             "include": {
-              "names": [
-                "active"
-              ]
+              "names": ["active"]
             }
           }
         }
@@ -186,9 +182,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -212,9 +206,7 @@
           "id": "filterFieldsByName",
           "options": {
             "include": {
-              "names": [
-                "new_7d"
-              ]
+              "names": ["new_7d"]
             }
           }
         },
@@ -268,9 +260,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -331,9 +321,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -357,9 +345,7 @@
           "id": "filterFieldsByName",
           "options": {
             "include": {
-              "names": [
-                "median_sale_ppm2"
-              ]
+              "names": ["median_sale_ppm2"]
             }
           }
         },
@@ -413,9 +399,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -439,9 +423,7 @@
           "id": "filterFieldsByName",
           "options": {
             "include": {
-              "names": [
-                "median_rent"
-              ]
+              "names": ["median_rent"]
             }
           }
         },
@@ -638,9 +620,7 @@
         "namePlacement": "auto",
         "orientation": "horizontal",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": true
         },
@@ -922,9 +902,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -1021,9 +999,7 @@
           "id": "filterFieldsByName",
           "options": {
             "exclude": {
-              "names": [
-                "last_seen"
-              ]
+              "names": ["last_seen"]
             }
           }
         }
@@ -1174,9 +1150,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -1323,9 +1297,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -1435,9 +1407,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -1505,10 +1475,7 @@
                 "id": "custom.lineStyle",
                 "value": {
                   "fill": "dash",
-                  "dash": [
-                    5,
-                    5
-                  ]
+                  "dash": [5, 5]
                 }
               },
               {
@@ -1600,9 +1567,7 @@
         {
           "id": "partitionByValues",
           "options": {
-            "fields": [
-              "series"
-            ],
+            "fields": ["series"],
             "keepFields": false,
             "naming": {
               "asLabels": false
@@ -1663,9 +1628,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -1689,9 +1652,7 @@
           "id": "filterFieldsByName",
           "options": {
             "include": {
-              "names": [
-                "actives"
-              ]
+              "names": ["actives"]
             }
           }
         }
@@ -1738,9 +1699,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -1764,9 +1723,7 @@
           "id": "filterFieldsByName",
           "options": {
             "include": {
-              "names": [
-                "median_biggest"
-              ]
+              "names": ["median_biggest"]
             }
           }
         },
@@ -1819,9 +1776,7 @@
         "namePlacement": "auto",
         "orientation": "horizontal",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": true
         },
@@ -1919,9 +1874,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -2030,9 +1983,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -2122,9 +2073,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -2139,7 +2088,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH pooled AS (\n  SELECT d.day, d.ppm2\n  FROM reporting.daily_listing_facts d\n  WHERE d.price_state = 'valid' AND d.ppm2 IS NOT NULL AND NOT d.is_rent\n    AND d.day >= date_trunc('week', now() AT TIME ZONE 'Europe/Sarajevo')::date - 7\n    AND d.day < date_trunc('week', now() AT TIME ZONE 'Europe/Sarajevo')::date + 7\n\n  AND (COALESCE(cardinality(ARRAY[${category:sqlstring}]::text[]), 0) = 0\n    OR d.category_memberships && ARRAY[${category:sqlstring}]::text[]\n    OR d.category = ANY (ARRAY[${category:sqlstring}]::text[]))\n  AND (reporting.dashboard_numeric(${min_sqm:sqlstring}) IS NULL OR d.sqm IS NULL OR d.sqm >= reporting.dashboard_numeric(${min_sqm:sqlstring}))\n  AND (reporting.dashboard_numeric(${max_sqm:sqlstring}) IS NULL OR d.sqm IS NULL OR d.sqm <= reporting.dashboard_numeric(${max_sqm:sqlstring}))\n  AND (COALESCE(cardinality(ARRAY[${rooms:sqlstring}]::text[]), 0) = 0\n    OR d.rooms = ANY (ARRAY[${rooms:sqlstring}]::text[])\n    OR reporting.room_bucket(d.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[]))\n  AND (CASE WHEN d.is_rent THEN 'rent' ELSE 'sale' END) = ANY (ARRAY(SELECT CASE WHEN selected = 'sell' THEN 'sale' ELSE selected END FROM unnest(ARRAY[${deal:sqlstring}]::text[]) AS t(selected)))\n  AND (COALESCE(cardinality(ARRAY[${neighborhood:sqlstring}]::text[]), 0) = 0\n    OR d.neighborhood = ANY (ARRAY[${neighborhood:sqlstring}]::text[])\n    OR d.location = ANY (ARRAY[${neighborhood:sqlstring}]::text[]))\n), weeks AS (\n  SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)\n           FILTER (WHERE day >= date_trunc('week', now() AT TIME ZONE 'Europe/Sarajevo')::date) AS \"this wk\",\n         percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)\n           FILTER (WHERE day >= date_trunc('week', now() AT TIME ZONE 'Europe/Sarajevo')::date - 7\n                   AND day < date_trunc('week', now() AT TIME ZONE 'Europe/Sarajevo')::date) AS \"last wk\"\n  FROM pooled\n)\nSELECT \"this wk\"::int AS \"this wk\",\n       \"last wk\"::int AS \"last wk\",\n       round((100.0 * (\"this wk\" - \"last wk\") / NULLIF(\"last wk\", 0))::numeric, 1)::double precision AS \"Δ %\"\nFROM weeks",
+          "rawSql": "WITH pooled AS (\n  SELECT d.day, d.ppm2\n  FROM reporting.daily_listing_facts_olap d\n  WHERE d.price_state = 'valid' AND d.ppm2 IS NOT NULL AND d.deal = 'sale'\n    AND d.day >= date_trunc('week', now() AT TIME ZONE 'Europe/Sarajevo')::date - 7\n    AND d.day < date_trunc('week', now() AT TIME ZONE 'Europe/Sarajevo')::date + 7\n\n  AND (COALESCE(cardinality(ARRAY[${category:sqlstring}]::text[]), 0) = 0\n    OR d.category_memberships && ARRAY[${category:sqlstring}]::text[]\n    OR d.category = ANY (ARRAY[${category:sqlstring}]::text[]))\n  AND (reporting.dashboard_numeric(${min_sqm:sqlstring}) IS NULL OR d.sqm IS NULL OR d.sqm >= reporting.dashboard_numeric(${min_sqm:sqlstring}))\n  AND (reporting.dashboard_numeric(${max_sqm:sqlstring}) IS NULL OR d.sqm IS NULL OR d.sqm <= reporting.dashboard_numeric(${max_sqm:sqlstring}))\n  AND (COALESCE(cardinality(ARRAY[${rooms:sqlstring}]::text[]), 0) = 0\n    OR d.rooms = ANY (ARRAY[${rooms:sqlstring}]::text[])\n    OR d.room_bucket = ANY (ARRAY[${rooms:sqlstring}]::text[]))\n  AND (CASE WHEN d.deal = 'rent' THEN 'rent' ELSE 'sale' END) = ANY (ARRAY(SELECT CASE WHEN selected = 'sell' THEN 'sale' ELSE selected END FROM unnest(ARRAY[${deal:sqlstring}]::text[]) AS t(selected)))\n  AND (COALESCE(cardinality(ARRAY[${neighborhood:sqlstring}]::text[]), 0) = 0\n    OR d.neighborhood = ANY (ARRAY[${neighborhood:sqlstring}]::text[])\n    OR d.location = ANY (ARRAY[${neighborhood:sqlstring}]::text[]))\n), weeks AS (\n  SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)\n           FILTER (WHERE day >= date_trunc('week', now() AT TIME ZONE 'Europe/Sarajevo')::date) AS \"this wk\",\n         percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)\n           FILTER (WHERE day >= date_trunc('week', now() AT TIME ZONE 'Europe/Sarajevo')::date - 7\n                   AND day < date_trunc('week', now() AT TIME ZONE 'Europe/Sarajevo')::date) AS \"last wk\"\n  FROM pooled\n)\nSELECT \"this wk\"::int AS \"this wk\",\n       \"last wk\"::int AS \"last wk\",\n       round((100.0 * (\"this wk\" - \"last wk\") / NULLIF(\"last wk\", 0))::numeric, 1)::double precision AS \"Δ %\"\nFROM weeks",
           "refId": "A"
         }
       ],
@@ -2184,9 +2133,7 @@
         "namePlacement": "auto",
         "orientation": "horizontal",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": true
         },
@@ -2272,9 +2219,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -2375,9 +2320,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -2479,9 +2422,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -2581,9 +2522,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -2605,11 +2544,7 @@
   ],
   "refresh": "2h",
   "schemaVersion": 39,
-  "tags": [
-    "olx",
-    "real-estate",
-    "responsive"
-  ],
+  "tags": ["olx", "real-estate", "responsive"],
   "templating": {
     "list": [
       {

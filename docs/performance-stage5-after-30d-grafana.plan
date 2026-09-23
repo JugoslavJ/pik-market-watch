@@ -1,0 +1,5 @@
+Function Scan on market_daily_filtered  (cost=0.27..10.27 rows=1000 width=133) (actual time=39.215..39.335 rows=31.00 loops=1)
+  Buffers: shared hit=7530
+Settings: effective_cache_size = '1536MB', work_mem = '8MB', random_page_cost = '1.1', effective_io_concurrency = '200', search_path = '"$user", public, topology, tiger'
+Planning Time: 0.057 ms
+Execution Time: 39.380 ms

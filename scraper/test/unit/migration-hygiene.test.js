@@ -7,7 +7,7 @@ const test = require("node:test");
 
 const init = path.resolve(__dirname, "../../../db/init");
 
-test("init contains only the canonical schema files", () => {
+test("init contains the canonical schema and additive Stage 5 migration", () => {
   const sqlFiles = fs
     .readdirSync(init)
     .filter((name) => name.endsWith(".sql"))
@@ -26,10 +26,11 @@ test("init contains only the canonical schema files", () => {
     "10-seed-and-access.sql",
     "11-postgis.sql",
     "12-pg-stat-statements.sql",
+    "13-stage5-historical-olap-facts.sql",
   ]);
 
   const migrationFiles = fs
     .readdirSync(init)
     .filter((name) => /^(1[3-9]|[2-9]\d)-/.test(name));
-  assert.deepEqual(migrationFiles, []);
+  assert.deepEqual(migrationFiles, ["13-stage5-historical-olap-facts.sql"]);
 });

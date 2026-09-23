@@ -1,26 +1,27 @@
 # Database schema
 
 `init/` is the canonical current schema. The SQL is split by dependency and
-responsibility for readability, but every file describes the same installable
-state; there are no forward migrations or later override files in this
-directory.
+responsibility for readability. File `13-stage5-historical-olap-facts.sql`
+is an additive, idempotent change required to upgrade existing volumes; it
+also runs on fresh volumes so they finish at the same schema state.
 
-| File | Responsibility |
-|---|---|
-| `00-core-schemas.sql` | Required extensions and application schemas |
-| `01-tables.sql` | OLTP tables, OLAP marts, control tables, and sequences |
-| `02-constraints.sql` | Keys, foreign keys, and table constraints |
-| `03-functions.sql` | Ingestion, analytics, geography, partition routing, and trigger helpers |
-| `04-source-views.sql` | Canonical OLTP-to-OLAP source transformations |
-| `05-reporting-functions.sql` | Dashboard refresh, filtering, comparison, and validation functions |
-| `06-reporting-views.sql` | Stable reporting views used by Grafana |
-| `07-indexes.sql` | Operational, spatial, and dashboard indexes |
-| `08-triggers.sql` | Evidence normalization and analytics invalidation |
-| `09-neighborhood-data.sql` | Generated neighborhood seed data |
-| `10-seed-and-access.sql` | Initial control rows and reporting grants |
-| `11-postgis.sql` | Derived neighborhood geometry validation and finalization |
-| `12-pg-stat-statements.sql` | Performance instrumentation extension (also applied to existing volumes) |
-| `zz-database-roles.sh` | Runtime ownership and reader permissions |
+| File                                  | Responsibility                                                                      |
+| ------------------------------------- | ----------------------------------------------------------------------------------- |
+| `00-core-schemas.sql`                 | Required extensions and application schemas                                         |
+| `01-tables.sql`                       | OLTP tables, OLAP marts, control tables, and sequences                              |
+| `02-constraints.sql`                  | Keys, foreign keys, and table constraints                                           |
+| `03-functions.sql`                    | Ingestion, analytics, geography, partition routing, and trigger helpers             |
+| `04-source-views.sql`                 | Canonical OLTP-to-OLAP source transformations                                       |
+| `05-reporting-functions.sql`          | Dashboard refresh, filtering, comparison, and validation functions                  |
+| `06-reporting-views.sql`              | Stable reporting views used by Grafana                                              |
+| `07-indexes.sql`                      | Operational, spatial, and dashboard indexes                                         |
+| `08-triggers.sql`                     | Evidence normalization and analytics invalidation                                   |
+| `09-neighborhood-data.sql`            | Generated neighborhood seed data                                                    |
+| `10-seed-and-access.sql`              | Initial control rows and reporting grants                                           |
+| `11-postgis.sql`                      | Derived neighborhood geometry validation and finalization                           |
+| `12-pg-stat-statements.sql`           | Performance instrumentation extension (also applied to existing volumes)            |
+| `13-stage5-historical-olap-facts.sql` | Additive historical fact columns, source publication, and direct physical filtering |
+| `zz-database-roles.sh`                | Runtime ownership and reader permissions                                            |
 
 Fresh volumes execute these files in lexical order. The application runner
 records each filename and checksum in `schema_migrations`, applies missing

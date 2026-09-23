@@ -1,0 +1,311 @@
+GroupAggregate  (cost=18.93..7012.16 rows=1827 width=133) (actual time=1.560..23.346 rows=31.00 loops=1)
+  Group Key: d.day
+  Buffers: shared hit=1866
+  ->  Merge Append  (cost=18.93..5759.84 rows=48266 width=18) (actual time=0.812..16.522 rows=48193.00 loops=1)
+        Sort Key: d.day
+        Buffers: shared hit=1858
+        ->  Index Scan using daily_listing_facts_grain_uq on daily_listing_facts d_1  (cost=0.15..2.37 rows=1 width=44) (actual time=0.009..0.009 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=2
+        ->  Index Scan using daily_listing_facts_2020_11_key_idx on daily_listing_facts_2020_11 d_2  (cost=0.17..2.39 rows=1 width=18) (actual time=0.006..0.007 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2020_12_key_idx on daily_listing_facts_2020_12 d_3  (cost=0.17..2.39 rows=1 width=18) (actual time=0.007..0.007 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2021_01_key_idx on daily_listing_facts_2021_01 d_4  (cost=0.17..2.39 rows=1 width=18) (actual time=0.005..0.005 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2021_02_key_idx on daily_listing_facts_2021_02 d_5  (cost=0.17..2.39 rows=1 width=18) (actual time=0.005..0.006 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2021_03_key_idx on daily_listing_facts_2021_03 d_6  (cost=0.17..2.39 rows=1 width=18) (actual time=0.005..0.006 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2021_04_key_idx on daily_listing_facts_2021_04 d_7  (cost=0.17..2.39 rows=1 width=18) (actual time=0.012..0.012 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2021_05_key_idx on daily_listing_facts_2021_05 d_8  (cost=0.17..2.39 rows=1 width=18) (actual time=0.016..0.016 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2021_06_key_idx on daily_listing_facts_2021_06 d_9  (cost=0.17..2.39 rows=1 width=18) (actual time=0.005..0.006 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2021_07_key_idx on daily_listing_facts_2021_07 d_10  (cost=0.17..2.39 rows=1 width=18) (actual time=0.007..0.007 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2021_08_key_idx on daily_listing_facts_2021_08 d_11  (cost=0.17..2.39 rows=1 width=18) (actual time=0.006..0.006 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2021_09_key_idx on daily_listing_facts_2021_09 d_12  (cost=0.17..2.39 rows=1 width=18) (actual time=0.005..0.005 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2021_10_key_idx on daily_listing_facts_2021_10 d_13  (cost=0.17..2.39 rows=1 width=18) (actual time=0.007..0.007 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2021_11_key_idx on daily_listing_facts_2021_11 d_14  (cost=0.17..2.39 rows=1 width=18) (actual time=0.005..0.005 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2021_12_key_idx on daily_listing_facts_2021_12 d_15  (cost=0.17..2.39 rows=1 width=18) (actual time=0.006..0.006 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2022_01_key_idx on daily_listing_facts_2022_01 d_16  (cost=0.17..2.39 rows=1 width=18) (actual time=0.013..0.013 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2022_02_key_idx on daily_listing_facts_2022_02 d_17  (cost=0.17..2.39 rows=1 width=18) (actual time=0.005..0.005 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2022_03_key_idx on daily_listing_facts_2022_03 d_18  (cost=0.17..2.39 rows=1 width=18) (actual time=0.006..0.006 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2022_04_key_idx on daily_listing_facts_2022_04 d_19  (cost=0.17..2.39 rows=1 width=18) (actual time=0.005..0.005 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2022_05_key_idx on daily_listing_facts_2022_05 d_20  (cost=0.17..2.39 rows=1 width=18) (actual time=0.005..0.005 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2022_06_key_idx on daily_listing_facts_2022_06 d_21  (cost=0.17..2.39 rows=1 width=18) (actual time=0.005..0.005 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2022_07_key_idx on daily_listing_facts_2022_07 d_22  (cost=0.17..2.39 rows=1 width=18) (actual time=0.006..0.007 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2022_08_key_idx on daily_listing_facts_2022_08 d_23  (cost=0.17..2.39 rows=1 width=18) (actual time=0.007..0.007 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2022_09_key_idx on daily_listing_facts_2022_09 d_24  (cost=0.17..2.39 rows=1 width=18) (actual time=0.013..0.013 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2022_10_key_idx on daily_listing_facts_2022_10 d_25  (cost=0.17..2.39 rows=1 width=18) (actual time=0.005..0.005 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2022_11_key_idx on daily_listing_facts_2022_11 d_26  (cost=0.17..2.39 rows=1 width=18) (actual time=0.006..0.006 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2022_12_key_idx on daily_listing_facts_2022_12 d_27  (cost=0.17..2.39 rows=1 width=18) (actual time=0.005..0.005 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2023_01_key_idx on daily_listing_facts_2023_01 d_28  (cost=0.17..2.39 rows=1 width=18) (actual time=0.009..0.009 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2023_02_key_idx on daily_listing_facts_2023_02 d_29  (cost=0.17..2.39 rows=1 width=18) (actual time=0.006..0.006 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2023_03_key_idx on daily_listing_facts_2023_03 d_30  (cost=0.17..2.39 rows=1 width=18) (actual time=0.005..0.005 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2023_04_key_idx on daily_listing_facts_2023_04 d_31  (cost=0.17..2.39 rows=1 width=18) (actual time=0.005..0.005 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2023_05_key_idx on daily_listing_facts_2023_05 d_32  (cost=0.17..2.39 rows=1 width=18) (actual time=0.012..0.012 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2023_06_key_idx on daily_listing_facts_2023_06 d_33  (cost=0.17..2.39 rows=1 width=18) (actual time=0.005..0.005 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2023_07_key_idx on daily_listing_facts_2023_07 d_34  (cost=0.17..2.39 rows=1 width=18) (actual time=0.005..0.006 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2023_08_key_idx on daily_listing_facts_2023_08 d_35  (cost=0.17..2.39 rows=1 width=18) (actual time=0.006..0.006 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2023_09_key_idx on daily_listing_facts_2023_09 d_36  (cost=0.17..2.39 rows=1 width=18) (actual time=0.008..0.008 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2023_10_key_idx on daily_listing_facts_2023_10 d_37  (cost=0.17..2.39 rows=1 width=18) (actual time=0.006..0.006 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2023_11_key_idx on daily_listing_facts_2023_11 d_38  (cost=0.17..2.39 rows=1 width=18) (actual time=0.005..0.005 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2023_12_key_idx on daily_listing_facts_2023_12 d_39  (cost=0.17..2.39 rows=1 width=18) (actual time=0.005..0.005 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2024_01_key_idx on daily_listing_facts_2024_01 d_40  (cost=0.17..2.39 rows=1 width=18) (actual time=0.012..0.012 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2024_02_key_idx on daily_listing_facts_2024_02 d_41  (cost=0.17..2.39 rows=1 width=18) (actual time=0.005..0.005 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2024_03_key_idx on daily_listing_facts_2024_03 d_42  (cost=0.17..2.39 rows=1 width=18) (actual time=0.006..0.006 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2024_04_key_idx on daily_listing_facts_2024_04 d_43  (cost=0.18..2.40 rows=1 width=18) (actual time=0.005..0.005 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2024_05_key_idx on daily_listing_facts_2024_05 d_44  (cost=0.18..2.40 rows=1 width=18) (actual time=0.005..0.005 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1
+        ->  Index Scan using daily_listing_facts_2024_06_key_idx on daily_listing_facts_2024_06 d_45  (cost=0.30..2.52 rows=1 width=18) (actual time=0.013..0.013 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=2
+        ->  Index Scan using daily_listing_facts_2024_07_key_idx on daily_listing_facts_2024_07 d_46  (cost=0.30..2.52 rows=1 width=18) (actual time=0.013..0.013 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=2
+        ->  Index Scan using daily_listing_facts_2024_08_key_idx on daily_listing_facts_2024_08 d_47  (cost=0.30..2.52 rows=1 width=18) (actual time=0.012..0.012 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=2
+        ->  Index Scan using daily_listing_facts_2024_09_key_idx on daily_listing_facts_2024_09 d_48  (cost=0.30..2.52 rows=1 width=18) (actual time=0.010..0.010 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=2
+        ->  Index Scan using daily_listing_facts_2024_10_key_idx on daily_listing_facts_2024_10 d_49  (cost=0.30..2.52 rows=1 width=18) (actual time=0.013..0.013 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=2
+        ->  Index Scan using daily_listing_facts_2024_11_key_idx on daily_listing_facts_2024_11 d_50  (cost=0.30..2.52 rows=1 width=18) (actual time=0.014..0.014 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=2
+        ->  Index Scan using daily_listing_facts_2024_12_key_idx on daily_listing_facts_2024_12 d_51  (cost=0.30..2.52 rows=1 width=18) (actual time=0.010..0.010 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=2
+        ->  Index Scan using daily_listing_facts_2025_01_key_idx on daily_listing_facts_2025_01 d_52  (cost=0.30..2.52 rows=1 width=18) (actual time=0.015..0.015 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=2
+        ->  Index Scan using daily_listing_facts_2025_02_key_idx on daily_listing_facts_2025_02 d_53  (cost=0.30..2.52 rows=1 width=18) (actual time=0.016..0.016 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=2
+        ->  Index Scan using daily_listing_facts_2025_03_key_idx on daily_listing_facts_2025_03 d_54  (cost=0.30..2.53 rows=1 width=18) (actual time=0.065..0.065 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=2
+        ->  Index Scan using daily_listing_facts_2025_04_key_idx on daily_listing_facts_2025_04 d_55  (cost=0.30..2.53 rows=1 width=18) (actual time=0.022..0.023 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=2
+        ->  Index Scan using daily_listing_facts_2025_05_key_idx on daily_listing_facts_2025_05 d_56  (cost=0.30..2.53 rows=1 width=18) (actual time=0.018..0.019 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=2
+        ->  Index Scan using daily_listing_facts_2025_06_key_idx on daily_listing_facts_2025_06 d_57  (cost=0.30..2.53 rows=1 width=18) (actual time=0.011..0.011 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=2
+        ->  Index Scan using daily_listing_facts_2025_07_key_idx on daily_listing_facts_2025_07 d_58  (cost=0.30..2.53 rows=1 width=18) (actual time=0.015..0.015 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=2
+        ->  Index Scan using daily_listing_facts_2025_08_key_idx on daily_listing_facts_2025_08 d_59  (cost=0.30..2.53 rows=1 width=18) (actual time=0.018..0.018 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=2
+        ->  Index Scan using daily_listing_facts_2025_09_key_idx on daily_listing_facts_2025_09 d_60  (cost=0.30..2.53 rows=1 width=18) (actual time=0.016..0.016 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=2
+        ->  Index Scan using daily_listing_facts_2025_10_key_idx on daily_listing_facts_2025_10 d_61  (cost=0.31..2.53 rows=1 width=18) (actual time=0.012..0.012 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=2
+        ->  Index Scan using daily_listing_facts_2025_11_key_idx on daily_listing_facts_2025_11 d_62  (cost=0.31..2.53 rows=1 width=18) (actual time=0.016..0.016 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=2
+        ->  Index Scan using daily_listing_facts_2025_12_key_idx on daily_listing_facts_2025_12 d_63  (cost=0.31..2.53 rows=1 width=18) (actual time=0.018..0.018 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=2
+        ->  Index Scan using daily_listing_facts_2026_01_key_idx on daily_listing_facts_2026_01 d_64  (cost=0.31..2.53 rows=1 width=18) (actual time=0.021..0.021 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=2
+        ->  Index Scan using daily_listing_facts_2026_02_key_idx on daily_listing_facts_2026_02 d_65  (cost=0.31..2.53 rows=1 width=18) (actual time=0.017..0.017 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=2
+        ->  Index Scan using daily_listing_facts_2026_03_key_idx on daily_listing_facts_2026_03 d_66  (cost=0.31..2.53 rows=1 width=18) (actual time=0.017..0.017 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=2
+        ->  Index Scan using daily_listing_facts_2026_04_key_idx on daily_listing_facts_2026_04 d_67  (cost=0.31..2.53 rows=1 width=18) (actual time=0.013..0.013 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=2
+        ->  Index Scan using daily_listing_facts_2026_05_key_idx on daily_listing_facts_2026_05 d_68  (cost=0.31..2.53 rows=1 width=18) (actual time=0.022..0.022 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=2
+        ->  Index Scan using daily_listing_facts_2026_06_key_idx on daily_listing_facts_2026_06 d_69  (cost=0.31..2.53 rows=1 width=18) (actual time=0.012..0.012 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=2
+        ->  Index Scan using daily_listing_facts_2026_07_key_idx on daily_listing_facts_2026_07 d_70  (cost=0.31..2.53 rows=1 width=18) (actual time=0.010..0.010 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=2
+        ->  Index Scan using daily_listing_facts_2026_08_key_idx on daily_listing_facts_2026_08 d_71  (cost=0.32..880.50 rows=10881 width=18) (actual time=0.028..2.825 rows=10881.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=449
+        ->  Index Scan using daily_listing_facts_2026_09_key_idx on daily_listing_facts_2026_09 d_72  (cost=0.32..2954.44 rows=37312 width=18) (actual time=0.021..9.483 rows=37312.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=1306
+        ->  Index Scan using daily_listing_facts_2026_10_key_idx on daily_listing_facts_2026_10 d_73  (cost=0.15..2.37 rows=1 width=44) (actual time=0.006..0.006 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=2
+        ->  Index Scan using daily_listing_facts_2026_11_key_idx on daily_listing_facts_2026_11 d_74  (cost=0.15..2.37 rows=1 width=44) (actual time=0.005..0.006 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=2
+        ->  Index Scan using daily_listing_facts_2026_12_key_idx on daily_listing_facts_2026_12 d_75  (cost=0.15..2.37 rows=1 width=44) (actual time=0.006..0.006 rows=0.00 loops=1)
+              Index Cond: ((day >= (((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date - 30)) AND (day <= LEAST(((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date, ((now() AT TIME ZONE 'Europe/Sarajevo'::text))::date)))
+              Index Searches: 1
+              Buffers: shared hit=2
+Settings: effective_cache_size = '1536MB', work_mem = '8MB', random_page_cost = '1.1', effective_io_concurrency = '200', search_path = '"$user", public, topology, tiger'
+Planning:
+  Buffers: shared hit=7186
+Planning Time: 12.963 ms
+Execution Time: 24.418 ms
