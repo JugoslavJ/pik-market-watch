@@ -24,7 +24,7 @@ datasources:
       database: ${POSTGRES_DB}
       sslmode: disable
       postgresVersion: 1600
-      maxOpenConns: 20
-      maxIdleConns: 5
+      maxOpenConns: 8
+      maxIdleConns: 4
     isDefault: true
     editable: false

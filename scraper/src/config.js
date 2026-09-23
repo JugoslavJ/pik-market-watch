@@ -152,6 +152,9 @@ module.exports = {
       );
     return url;
   },
+  // A dedicated migrator preflight uses this bootstrap-admin connection only
+  // for PostgreSQL extensions that cannot be created by the owner role.
+  migrationAdminDatabaseUrl: process.env.MIGRATION_ADMIN_DATABASE_URL || null,
   // Compose runs migrations in the dedicated migrator job before starting
   // the scraper. Bare-metal runs keep the fallback enabled unless explicitly
   // delegated to another deployment job.

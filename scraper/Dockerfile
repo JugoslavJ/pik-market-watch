@@ -3,7 +3,7 @@
 # Alpine Node image: the scraper talks to olx.ba's public JSON endpoints with
 # fetch() — pure JS (pg ships no native addons), so musl costs nothing and
 # trims ~100 MB vs bookworm-slim while sharing base layers with the
-# postgres:16-alpine images the stack already pulls.
+# PostgreSQL 18 images the stack already pulls.
 # ─────────────────────────────────────────────────────────────────────────────
 # Digest pin: reproducible builds regardless of registry tag drift (Dependabot
 # bumps tag + digest together).

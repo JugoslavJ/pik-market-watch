@@ -22,6 +22,11 @@ x-scraper-runtime: &scraper-runtime
   tmpfs:
     - /tmp
   pids_limit: 32
+  # Keep all scraper and one-shot maintenance/migration jobs in the same
+  # bounded resource class so scheduled jobs cannot starve dashboard traffic.
+  mem_limit: 512m
+  memswap_limit: 512m
+  cpus: 0.50
   volumes:
     - ./db/init:/db/init:ro
   networks:
@@ -29,24 +34,22 @@ x-scraper-runtime: &scraper-runtime
 
 services:
   db:
-    # PostGIS-enabled PostgreSQL 16 image. Digest pin = exactly this build
+    # PostGIS-enabled PostgreSQL 18 image. Digest pin = exactly this build
     # everywhere (refresh tag+digest together when upgrading PostGIS).
     image: ghcr.io/baosystems/postgis:18-3.6@sha256:4117c8beae9081e76a23a1577c64d05260a61fb0a3c212f37596054ef4c190d8
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
     pids_limit: 100 # max_connections forks (40) + background workers
-    # Right-size for the 768m cap (stock defaults assume a dedicated server):
-    #   shared_buffers/effective_cache_size fit inside the limit; 40 conns cover
-    #   the real client budget (scraper pool max 5 + Grafana maxOpenConns 20 +
-    #   backup psql sessions); random_page_cost/io_concurrency assume SSD;
-    #   wal_compression suits this tiny write volume.
+    # Initial analytics allocation: PostgreSQL receives 1.25 of the host's
+    # 2 OCPU and 2 GiB RAM while leaving CPU and memory for Grafana and jobs.
+    # The 40-connection cap covers the scraper pool, Grafana pool, and tools.
     command:
       - postgres
       - -c
-      - shared_buffers=192MB
+      - shared_buffers=512MB
       - -c
-      - effective_cache_size=512MB
+      - effective_cache_size=1536MB
       - -c
       - max_connections=40
       - -c
@@ -61,7 +64,7 @@ services:
       - -c
       - work_mem=8MB
       - -c
-      - maintenance_work_mem=64MB
+      - maintenance_work_mem=128MB
       - -c
       - random_page_cost=1.1
       - -c
@@ -70,6 +73,10 @@ services:
       - checkpoint_completion_target=0.9
       - -c
       - wal_compression=on
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - track_io_timing=on
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-olx}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
@@ -88,7 +95,9 @@ services:
       POSTGRES_BACKUP_USER: ${POSTGRES_BACKUP_USER:-olx_backup}
       POSTGRES_BACKUP_PASSWORD: ${POSTGRES_BACKUP_PASSWORD:?set POSTGRES_BACKUP_PASSWORD in .env}
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # PostgreSQL 18 images require the parent mount so PGDATA can include
+      # the major-version directory used by the new image layout.
+      - pgdata:/var/lib/postgresql
       - ./db/init:/docker-entrypoint-initdb.d:ro # runs on FIRST start only
       - ./backups:/backups # host-visible dump target
     healthcheck:
@@ -96,9 +105,9 @@ services:
       interval: 5s
       timeout: 3s
       retries: 12
-    mem_limit: 768m
-    memswap_limit: 768m # hit OOM decisively instead of swapping into latency spikes
-    cpus: 0.50
+    mem_limit: 2g
+    memswap_limit: 2g # hit OOM decisively instead of swapping into latency spikes
+    cpus: 1.25
     logging: *logging
     # Deliberately NO cap_drop/read_only here: the first-boot entrypoint chowns
     # PGDATA. Isolation comes from attaching db to the backend network ONLY.
@@ -121,11 +130,14 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://${POSTGRES_MIGRATOR_USER:-olx_migrator}:${POSTGRES_MIGRATOR_PASSWORD}@db:5432/${POSTGRES_DB:-olx}
+      MIGRATION_ADMIN_DATABASE_URL: postgres://${POSTGRES_USER:-olx}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-olx}
       OLAP_RECONCILE_TIMEOUT_MS: ${OLAP_RECONCILE_TIMEOUT_MS:-900000}
     entrypoint: ["node", "src/migrate-only.js"]
 
   # Run operational cleanup and daily analytics independently from upstream scraping.
-  # Invoke on a host scheduler with --profile maintenance.
+  # Invoke on a host scheduler with --profile maintenance. Maintenance and
+  # olap-reconcile share an application advisory lease, so overlapping runs
+  # serialize or skip instead of competing for database resources.
   maintenance:
     <<: *scraper-runtime
     profiles: ["maintenance"]
@@ -197,9 +209,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s # DB warm-up + first scrape cycle before counting failures
-    mem_limit: 512m
-    memswap_limit: 512m
-    cpus: 0.50
     logging: *logging
     networks:
       - default # egress to olx.ba
@@ -291,8 +300,9 @@ services:
       start_period: 30s
 
   db-backup:
-    # PostgreSQL 16 client; pg_dump stays major-version matched with db.
-    image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+    # Keep pg_dump major-version matched with the database. The PostGIS image
+    # is used here only for its PostgreSQL 18 client tools.
+    image: ghcr.io/baosystems/postgis:18-3.6@sha256:4117c8beae9081e76a23a1577c64d05260a61fb0a3c212f37596054ef4c190d8
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
@@ -340,7 +350,9 @@ volumes:
   # implicit, so renaming olx-price-ext → pik-market-watch would otherwise
   # abandon the existing pgdata/grafana volumes on the next `up`.
   pgdata:
-    name: olx-price-ext_pgdata
+    # PostgreSQL 18 uses a new volume after the 16 -> 18 logical migration.
+    # The old olx-price-ext_pgdata volume is intentionally retained for rollback.
+    name: ${POSTGRES_VOLUME_NAME:-olx-price-ext_pgdata_pg18}
     external: true
   grafana:
     name: olx-price-ext_grafana

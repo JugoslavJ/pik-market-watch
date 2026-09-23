@@ -40,6 +40,17 @@ test("database checkpoint settings avoid long scrape stalls", () => {
   assert.match(compose, /checkpoint_timeout=15min/);
 });
 
+test("Compose and migration tooling target PostgreSQL 18", () => {
+  assert.match(compose, /baosystems\/postgis:18-3\.6@sha256:/);
+  assert.match(compose, /name: \$\{POSTGRES_VOLUME_NAME:-olx-price-ext_pgdata_pg18\}/);
+  const migration = fs.readFileSync(
+    path.join(ROOT, "db", "migrate-pg16-to-pg18.sh"),
+    "utf8",
+  );
+  assert.match(migration, /TARGET_IMAGE=.*postgis:18-3\.6/);
+  assert.match(migration, /pg_restore --exit-on-error --single-transaction/);
+});
+
 test("scraper publishes OLAP and maintenance does not", () => {
   assert.match(
     compose,

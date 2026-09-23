@@ -19,6 +19,7 @@ directory.
 | `09-neighborhood-data.sql` | Generated neighborhood seed data |
 | `10-seed-and-access.sql` | Initial control rows and reporting grants |
 | `11-postgis.sql` | Derived neighborhood geometry validation and finalization |
+| `12-pg-stat-statements.sql` | Performance instrumentation extension (also applied to existing volumes) |
 | `zz-database-roles.sh` | Runtime ownership and reader permissions |
 
 Fresh volumes execute these files in lexical order. The application runner
@@ -30,8 +31,13 @@ volumes from the retired migration chain are supported when their live schema
 matches this current state; retired ledger filenames are preserved.
 
 The canonical SQL is the source of truth. To change the schema, update the
-current definitions and regenerate/verify the full baseline; do not append a
-one-off migration that overrides an earlier init file.
+current definitions and regenerate/verify the full baseline. Operational
+extensions that must be installed on an existing volume may be added as a
+new, idempotent, lexically ordered file and applied by the same migrator. The
+dedicated Compose migrator performs the required bootstrap-admin preflight for
+extensions that PostgreSQL does not permit the migrator owner role to create;
+the extension file is still tracked transactionally in `schema_migrations`. Do
+not use that mechanism to override an earlier schema definition.
 
 ## OLTP and OLAP boundary
 

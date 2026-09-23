@@ -4,7 +4,7 @@
 // container. Requires Docker. Usage: npm run test:integration
 //
 //   1. removes any stale olx-pg-test container
-//   2. starts the pinned PostGIS/PostgreSQL 16 image with db/init mounted
+//   2. starts the pinned PostGIS/PostgreSQL 18 image with db/init mounted
 //      as Docker's canonical bootstrap on TEST_DB_PORT
 //      (default 55432)
 //   3. waits until it accepts connections
@@ -21,7 +21,7 @@ const PORT = process.env.TEST_DB_PORT || "55432";
 const INIT_DIR = path.resolve(__dirname, "..", "..", "db", "init");
 const IMAGE =
   process.env.TEST_POSTGRES_IMAGE ||
-  "ghcr.io/baosystems/postgis:16-3.5@sha256:0f1c5c0f70f03d4d19ad1d7308d86e6162dff5429c491002298a7b5e46d2f2e8";
+  "ghcr.io/baosystems/postgis:18-3.6@sha256:4117c8beae9081e76a23a1577c64d05260a61fb0a3c212f37596054ef4c190d8";
 const DB_URL = `postgres://olx:olx@localhost:${PORT}/olx`;
 
 const docker = (args, opts = {}) =>

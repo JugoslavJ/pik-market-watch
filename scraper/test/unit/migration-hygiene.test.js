@@ -25,10 +25,11 @@ test("init contains only the canonical schema files", () => {
     "09-neighborhood-data.sql",
     "10-seed-and-access.sql",
     "11-postgis.sql",
+    "12-pg-stat-statements.sql",
   ]);
 
   const migrationFiles = fs
     .readdirSync(init)
-    .filter((name) => /^1[2-9]-|^2\d-|^3\d-/.test(name));
+    .filter((name) => /^(1[3-9]|[2-9]\d)-/.test(name));
   assert.deepEqual(migrationFiles, []);
 });
