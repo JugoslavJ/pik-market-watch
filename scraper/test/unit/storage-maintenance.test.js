@@ -112,6 +112,7 @@ test("maintenance logs stage and current-market substep timings", async () => {
       "currentMarket/ensureAnalyticsPartitions",
       "currentMarket/operationalCleanup",
       "currentMarket/validateContracts",
+      "currentMarket/analyzePublishedOlap",
     ],
   );
 });

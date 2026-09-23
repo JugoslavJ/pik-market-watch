@@ -761,3 +761,134 @@ needsDb(
     assert.ok(!segments.rows.some((row) => row.dimension === "district"));
   },
 );
+
+needsDb(
+  "overview current-market refactors match legacy results for the Stage 7 filter matrix",
+  async () => {
+    await reset(db.pool);
+    await db.pool.query(`
+      INSERT INTO saved_searches(search_key, name, url, category) VALUES
+        ('stage7-apt', 'apartments', 'https://olx.ba/pretraga', 'apartments'),
+        ('stage7-house', 'houses', 'https://olx.ba/pretraga', 'houses');
+      INSERT INTO listings(article_id, url, title, sqm, rooms, price, ppm2,
+                           is_rent, first_seen, last_seen, location, latitude,
+                           longitude, condition, floor_num, floors_total, seller_type)
+      VALUES
+        (9701, 'https://olx.ba/artikal/9701', 'apt sale centar', 50, '2', 100000, 2000,
+         false, now()-interval '2 days', now(), 'Centar', 43.85, 18.4, 'good', 0, 5, 'owner'),
+        (9702, 'https://olx.ba/artikal/9702', 'apt sale centar large', 90, '3', 180000, 2000,
+         false, now()-interval '8 days', now(), 'Centar', 43.85, 18.4, 'good', 5, 5, 'agent'),
+        (9703, 'https://olx.ba/artikal/9703', 'apt rent old town', 40, '1', 500, NULL,
+         true, now()-interval '1 day', now(), 'Old Town', NULL, NULL, NULL, NULL, NULL, NULL),
+        (9704, 'https://olx.ba/artikal/9704', 'house sale no pin', 120, '4', 240000, 2000,
+         false, now()-interval '3 days', now(), NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+        (9705, 'https://olx.ba/artikal/9705', 'unmapped sale', 65, '2', 130000, 2000,
+         false, now()-interval '10 days', now(), NULL, 43.80, 18.30, NULL, 2, 6, NULL),
+        (9706, 'https://olx.ba/artikal/9706', 'unknown dimensions', NULL, NULL, 70000, NULL,
+         false, now()-interval '20 days', now(), '', 43.81, 18.31, NULL, NULL, NULL, NULL);
+      INSERT INTO search_results(search_key, article_id) VALUES
+        ('stage7-apt', 9701), ('stage7-apt', 9702), ('stage7-apt', 9703),
+        ('stage7-apt', 9705), ('stage7-apt', 9706), ('stage7-house', 9704);
+      SELECT * FROM reporting.refresh_dashboard_olap();
+      INSERT INTO olap.listing_price_changes(
+        article_id, effective_at, source, price_state, deal, prior_price, delta,
+        category, category_memberships, sqm, rooms, provenance)
+      VALUES
+        (9701, now()-interval '1 day', 'test', 'valid', 'sale', 110000, -10000,
+         'apartments', ARRAY['apartments'], 50, '2', '{}'::jsonb),
+        (9703, now()-interval '1 day', 'test', 'valid', 'rent', 550, -50,
+         'apartments', ARRAY['apartments'], 40, '1', '{}'::jsonb);
+    `);
+
+    const cases = [
+      { name: "all", c: [], min: null, max: null, n: [], r: [], d: [] },
+      { name: "sale", c: [], min: null, max: null, n: [], r: [], d: ["sell"] },
+      { name: "rent", c: [], min: null, max: null, n: [], r: [], d: ["rent"] },
+      { name: "category", c: ["apartments"], min: null, max: null, n: [], r: [], d: [] },
+      { name: "room", c: [], min: null, max: null, n: [], r: ["2"], d: [] },
+      { name: "neighborhoods", c: [], min: null, max: null, n: ["Centar", "Old Town"], r: [], d: [] },
+      { name: "min_area", c: [], min: 60, max: null, n: [], r: [], d: [] },
+      { name: "max_area", c: [], min: null, max: 60, n: [], r: [], d: [] },
+      { name: "area_range", c: [], min: 45, max: 100, n: [], r: [], d: [] },
+      { name: "category_rooms", c: ["apartments"], min: null, max: null, n: [], r: ["2"], d: [] },
+      { name: "category_neighborhood", c: ["apartments"], min: null, max: null, n: ["Centar", "Old Town"], r: [], d: [] },
+      { name: "combined", c: ["apartments"], min: 40, max: 90, n: ["Centar", "Old Town"], r: ["2"], d: ["sell"] },
+      { name: "empty", c: [], min: null, max: null, n: [], r: [], d: [] },
+      { name: "no_pin", c: [], min: null, max: null, n: ["(no pin)"], r: [], d: [] },
+      { name: "unmapped", c: [], min: null, max: null, n: ["(unmapped)"], r: [], d: [] },
+    ];
+    const compare = async (scenario) => {
+      const params = [scenario.c, scenario.min, scenario.max, scenario.n, scenario.r, scenario.d];
+      const { rows } = await reporting.query(`
+        WITH old_base AS MATERIALIZED (
+          SELECT * FROM reporting.listings_filtered($1::text[], $2::numeric, $3::numeric, $4::text[])
+           WHERE (coalesce(cardinality($5::text[]), 0)=0 OR reporting.room_bucket(rooms)=ANY($5::text[]))
+             AND (coalesce(cardinality($6::text[]), 0)=0 OR
+                  (CASE WHEN is_rent THEN 'rent' ELSE 'sell' END)=ANY($6::text[]))
+        ), new_base AS MATERIALIZED (
+          SELECT * FROM reporting.overview_listings_filtered(
+            $1::text[], $2::numeric, $3::numeric, $4::text[], $5::text[], $6::text[])
+        ), old_result AS (
+          SELECT count(*) AS active,
+                 count(*) FILTER (WHERE first_seen > now()-interval '7 days') AS new_7d,
+                 percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)
+                   FILTER (WHERE NOT is_rent AND ppm2>0) AS sale_median,
+                 percentile_cont(0.5) WITHIN GROUP (ORDER BY price)
+                   FILTER (WHERE is_rent AND price>0) AS rent_median,
+                 (SELECT coalesce(jsonb_agg(jsonb_build_array(bucket,n) ORDER BY bucket),'[]') FROM
+                   (SELECT reporting.room_bucket(rooms) bucket,count(*) n FROM old_base GROUP BY 1) x) AS rooms,
+                 (SELECT coalesce(jsonb_agg(article_id ORDER BY article_id),'[]') FROM old_base
+                   WHERE latitude IS NOT NULL AND longitude IS NOT NULL) AS map_ids,
+                 (SELECT coalesce(jsonb_agg(jsonb_build_array(bucket,n) ORDER BY bucket),'[]') FROM
+                   (SELECT CASE WHEN latitude IS NULL THEN '(no pin)' ELSE coalesce(nullif(location,''),'(unmapped)') END bucket,
+                           count(*) n FROM old_base GROUP BY 1) x) AS neighborhoods,
+                 (SELECT jsonb_build_array(count(*), percentile_cont(0.5) WITHIN GROUP (ORDER BY biggest))
+                    FROM (SELECT old_base.article_id, max(-pc.delta) biggest
+                            FROM old_base JOIN reporting.price_changes pc USING (article_id)
+                           WHERE pc.delta < 0 AND pc.deal = ANY (
+                             ARRAY(SELECT CASE WHEN selected='sell' THEN 'sale' ELSE selected END
+                                     FROM unnest($6::text[]) selected))
+                           GROUP BY old_base.article_id) cuts) AS reductions,
+                 (SELECT coalesce(jsonb_agg(jsonb_build_array(bucket,n,median,p25,p75) ORDER BY bucket),'[]') FROM
+                   (SELECT reporting.room_bucket(rooms) bucket, count(*) n,
+                           percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE ppm2>0)::int median,
+                           percentile_cont(0.25) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE ppm2>0)::int p25,
+                           percentile_cont(0.75) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE ppm2>0)::int p75
+                      FROM old_base WHERE NOT is_rent GROUP BY 1) x) AS segment_medians
+            FROM old_base
+        ), new_result AS (
+          SELECT count(*) AS active,
+                 count(*) FILTER (WHERE first_seen > now()-interval '7 days') AS new_7d,
+                 percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)
+                   FILTER (WHERE NOT is_rent AND ppm2>0) AS sale_median,
+                 percentile_cont(0.5) WITHIN GROUP (ORDER BY price)
+                   FILTER (WHERE is_rent AND price>0) AS rent_median,
+                 (SELECT coalesce(jsonb_agg(jsonb_build_array(bucket,n) ORDER BY bucket),'[]') FROM
+                   (SELECT reporting.room_bucket(rooms) bucket,count(*) n FROM new_base GROUP BY 1) x) AS rooms,
+                 (SELECT coalesce(jsonb_agg(article_id ORDER BY article_id),'[]') FROM new_base
+                   WHERE latitude IS NOT NULL AND longitude IS NOT NULL) AS map_ids,
+                 (SELECT coalesce(jsonb_agg(jsonb_build_array(bucket,n) ORDER BY bucket),'[]') FROM
+                   (SELECT CASE WHEN latitude IS NULL THEN '(no pin)' ELSE coalesce(nullif(location,''),'(unmapped)') END bucket,
+                           count(*) n FROM new_base GROUP BY 1) x) AS neighborhoods,
+                 (SELECT jsonb_build_array(count(*), percentile_cont(0.5) WITHIN GROUP (ORDER BY biggest))
+                    FROM (SELECT new_base.article_id, max(-pc.delta) biggest
+                            FROM new_base JOIN reporting.price_changes pc USING (article_id)
+                           WHERE pc.delta < 0 AND pc.deal = ANY (
+                             ARRAY(SELECT CASE WHEN selected='sell' THEN 'sale' ELSE selected END
+                                     FROM unnest($6::text[]) selected))
+                           GROUP BY new_base.article_id) cuts) AS reductions,
+                 (SELECT coalesce(jsonb_agg(jsonb_build_array(bucket,n,median,p25,p75) ORDER BY bucket),'[]') FROM
+                   (SELECT segment.bucket, segment.listing_count n, segment.median_ppm2 median,
+                           segment.p25_ppm2 p25, segment.p75_ppm2 p75
+                      FROM reporting.overview_sale_segments(
+                        $1::text[], $2::numeric, $3::numeric, $4::text[], $5::text[], $6::text[]) segment
+                     WHERE segment.dimension='rooms') x) AS segment_medians
+            FROM new_base
+        )
+        SELECT to_jsonb(old_result) AS old, to_jsonb(new_result) AS current
+          FROM old_result CROSS JOIN new_result`, params);
+      assert.deepEqual(rows[0].current, rows[0].old, `${scenario.name} current-market parity`);
+    };
+    for (const scenario of cases) await compare(scenario);
+  },
+);

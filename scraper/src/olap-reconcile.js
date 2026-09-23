@@ -1,6 +1,10 @@
 "use strict";
 
 const { Pool } = require("pg");
+const {
+  analyzePublishedOlap,
+  captureOlapAnalyzeTargets,
+} = require("./db/analyze-olap");
 
 async function main() {
   if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required");
@@ -23,6 +27,9 @@ async function main() {
         lock,
       ]);
     }
+    const dailyAnalyzeTargets = await captureOlapAnalyzeTargets(pool, {
+      forceFull: true,
+    });
     const refreshed = await pool.query(
       "SELECT * FROM reporting.refresh_dashboard_olap(true)",
     );
@@ -56,6 +63,9 @@ async function main() {
       !queueHealth.daily_queue_healthy
     )
       throw new Error("OLAP reconciliation did not reach exact healthy parity");
+    const analyzed = await analyzePublishedOlap(pool, dailyAnalyzeTargets);
+    result.analyzed = analyzed;
+    console.log(JSON.stringify({ analyzed }, null, 2));
   } finally {
     await pool.query("SELECT pg_advisory_unlock_all()").catch(() => {});
     await pool.end();

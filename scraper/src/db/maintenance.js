@@ -2,6 +2,10 @@
 
 const { runBackfill } = require("../price-history-backfill");
 const { parseListingDetail } = require("../parser");
+const {
+  analyzePublishedOlap,
+  captureOlapAnalyzeTargets,
+} = require("./analyze-olap");
 
 module.exports = function installMaintenanceMethods(Db) {
   Object.assign(Db.prototype, {
@@ -330,6 +334,7 @@ module.exports = function installMaintenanceMethods(Db) {
           throw error;
         }
       };
+      const dailyAnalyzeTargets = await captureOlapAnalyzeTargets(this.pool);
       const result = await timed("currentMarket/olapRefresh", () =>
         this.pool.query("SELECT * FROM reporting.refresh_current_market()"),
       );
@@ -344,6 +349,9 @@ module.exports = function installMaintenanceMethods(Db) {
       );
       await timed("currentMarket/validateContracts", () =>
         this.pool.query("SELECT reporting.validate_olap_contracts()"),
+      );
+      await timed("currentMarket/analyzePublishedOlap", () =>
+        analyzePublishedOlap(this.pool, dailyAnalyzeTargets),
       );
       return result.rows[0] || { rows_written: 0, refreshed_at: null };
     },

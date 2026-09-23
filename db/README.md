@@ -1,9 +1,9 @@
 # Database schema
 
 `init/` is the canonical current schema. The SQL is split by dependency and
-responsibility for readability. File `13-stage5-historical-olap-facts.sql`
-is an additive, idempotent change required to upgrade existing volumes; it
-also runs on fresh volumes so they finish at the same schema state.
+responsibility for readability. Files `13` through `15` are additive,
+idempotent changes required to upgrade existing volumes; they also run on
+fresh volumes so they finish at the same schema state.
 
 | File                                  | Responsibility                                                                      |
 | ------------------------------------- | ----------------------------------------------------------------------------------- |
@@ -21,6 +21,8 @@ also runs on fresh volumes so they finish at the same schema state.
 | `11-postgis.sql`                      | Derived neighborhood geometry validation and finalization                           |
 | `12-pg-stat-statements.sql`           | Performance instrumentation extension (also applied to existing volumes)            |
 | `13-stage5-historical-olap-facts.sql` | Additive historical fact columns, source publication, and direct physical filtering |
+| `14-stage6-targeted-olap-analyze.sql` | Restricted post-publication ANALYZE for current marts and published daily partitions |
+| `15-stage8-olap-health-generations.sql` | Keep refresh-generation health aligned with all nine published marts |
 | `zz-database-roles.sh`                | Runtime ownership and reader permissions                                            |
 
 Fresh volumes execute these files in lexical order. The application runner
