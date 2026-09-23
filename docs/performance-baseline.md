@@ -346,3 +346,50 @@ Analytics maintenance and OLAP reconciliation share the existing
 the lease is held; reconciliation waits for it and also takes the scrape-cycle
 lease. Overlapping analytics jobs therefore do not intentionally execute
 concurrently.
+
+## Stage 4 — Overview current-market query consolidation
+
+The overview dashboard now has 15 PostgreSQL panel targets, down from 26
+before consolidation. Three query-backed variables remain, so the same
+Stage 1 serial-replay accounting gives 18 SQL requests versus 29 (11 fewer,
+a 37.9% reduction); the scrape annotation is excluded from both counts. KPI,
+active-cut, sale-segment, scatter/regression, and mapped-listing requests each
+share their result with dependent panels through Grafana's Dashboard data
+source. The map/table source includes 1,258 mapped rows out of 1,280 active
+listings in the captured live population; this is below the plan's few-thousand
+row guideline.
+
+Focused integration comparisons passed for the consolidated headline values,
+active-cut values, sale room counts and medians, scatter point/fit row counts,
+and mapped-listing output. The full database integration suite also executed
+the migrated SQL as the Grafana reporting role. Historical panel SQL was not
+changed.
+
+### Live Stage 4 replay
+
+After applying the forward migration for the Stage 3 filter-option table and
+publisher, plus the Stage 3/4 reporting functions, the migrator accepted the
+updated canonical checksums. The Stage 4 dashboard replay then completed all
+eight scenarios with zero SQL errors and 18 SQL requests per refresh. For
+comparison, the Stage 1 figures below used the same serial Grafana datasource
+API harness, filters, and time ranges (29 requests per refresh). These are
+serial API replay totals, not browser-concurrent dashboard rendering times.
+
+| Scenario | Stage 1 ms | Stage 4 ms | Change | SQL requests | Approx. p95 SQL ms | Rows returned |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Default, 90d | 5,232.5 | 4,130.2 | -21.1% | 18 | 944.547 | 2,078 |
+| Sale only, 90d | 5,215.2 | 4,540.3 | -12.9% | 18 | 1,225.584 | 1,630 |
+| Rent only, 90d | 4,016.0 | 4,124.7 | +2.7% | 18 | 905.340 | 800 |
+| Apartments, 90d | 10,717.9 | 4,019.9 | -62.5% | 18 | 1,038.063 | 1,671 |
+| Centar 1, 90d | 12,338.1 | 4,268.1 | -65.4% | 18 | 1,169.105 | 780 |
+| Two rooms, 90d | 11,423.2 | 3,158.4 | -72.3% | 18 | 751.673 | 963 |
+| Apartments + Centar 1 + two rooms, 90d | 9,703.0 | 2,683.4 | -72.3% | 18 | 638.393 | 496 |
+| Default, 30d | 9,888.2 | 2,743.9 | -72.3% | 18 | 741.657 | 1,958 |
+| Mean of eight serial replays | 8,566.8 | 3,708.6 | -56.7% | 18 | — | — |
+
+The query count fell by 11 per refresh (37.9%). The mean serial replay time
+fell by 56.7%; the rent-only case was 2.7% slower. Each timing is one run, so
+host load and cache/order effects can materially affect the comparison. Peak
+sampled database CPU was 98.4–104.81%; memory peaked at 192.5 MiB (9.4% of
+the 2 GiB limit). Stage 4 SQL result rows differ from Stage 1 as several
+panels now consume combined results and current listing totals changed.

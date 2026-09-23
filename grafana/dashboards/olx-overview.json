@@ -128,8 +128,20 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT count(*) AS active\nFROM reporting.listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[]) l\nWHERE reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])",
+          "rawSql": "WITH base AS MATERIALIZED (\n  SELECT * FROM reporting.overview_listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[], ARRAY[${rooms:sqlstring}]::text[], ARRAY[${deal:sqlstring}]::text[])\n)\nSELECT count(*) AS active,\n       count(*) FILTER (WHERE first_seen > now() - INTERVAL '7 days') AS new_7d,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE NOT is_rent AND ppm2 > 0) AS median_sale_ppm2,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY price) FILTER (WHERE is_rent AND price > 0) AS median_rent\nFROM base",
           "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "active"
+              ]
+            }
+          }
         }
       ],
       "id": 1
@@ -186,16 +198,35 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
+            "type": "datasource",
+            "uid": "-- Dashboard --"
           },
           "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT count(*) AS new7\nFROM reporting.listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[]) l\nWHERE reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])\n  AND l.first_seen > now() - INTERVAL '7 days'",
-          "refId": "A"
+          "refId": "A",
+          "panelId": 1
         }
       ],
-      "id": 2
+      "id": 2,
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "new_7d"
+              ]
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "new_7d": "new7"
+            }
+          }
+        }
+      ]
     },
     {
       "datasource": {
@@ -312,16 +343,35 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
+            "type": "datasource",
+            "uid": "-- Dashboard --"
           },
           "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)\nFROM reporting.listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[]) l\nWHERE NOT l.is_rent AND l.ppm2 > 0\n  AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])",
-          "refId": "A"
+          "refId": "A",
+          "panelId": 1
         }
       ],
-      "id": 4
+      "id": 4,
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "median_sale_ppm2"
+              ]
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "median_sale_ppm2": "percentile_cont"
+            }
+          }
+        }
+      ]
     },
     {
       "datasource": {
@@ -375,16 +425,35 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
+            "type": "datasource",
+            "uid": "-- Dashboard --"
           },
           "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY l.price)\nFROM reporting.listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[]) l\nWHERE l.is_rent AND l.price > 0\n  AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])",
-          "refId": "A"
+          "refId": "A",
+          "panelId": 1
         }
       ],
-      "id": 5
+      "id": 5,
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "median_rent"
+              ]
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "median_rent": "percentile_cont"
+            }
+          }
+        }
+      ]
     },
     {
       "type": "row",
@@ -582,21 +651,60 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
+            "type": "datasource",
+            "uid": "-- Dashboard --"
           },
           "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT reporting.room_bucket(l.rooms) AS bucket, count(*) AS listings\nFROM reporting.listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[]) l\nWHERE NOT l.is_rent\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])\n\n  AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n  \nGROUP BY 1 ORDER BY 1",
-          "refId": "A"
+          "refId": "A",
+          "panelId": 22
         }
       ],
       "transformations": [
         {
-          "id": "rowsToFields",
+          "id": "sortBy",
           "options": {
-            "nameField": "bucket",
-            "valueField": "listings"
+            "fields": {},
+            "sort": [
+              {
+                "field": "bucket",
+                "desc": false
+              }
+            ]
+          }
+        },
+        {
+          "id": "filterByValue",
+          "options": {
+            "filters": [
+              {
+                "fieldName": "dimension",
+                "config": {
+                  "id": "equal",
+                  "options": {
+                    "value": "rooms"
+                  }
+                }
+              }
+            ],
+            "type": "include"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "bucket": 0,
+              "listing_count": 1
+            },
+            "excludeByName": {
+              "dimension": true,
+              "p25_ppm2": true,
+              "p75_ppm2": true,
+              "median_ppm2": true
+            },
+            "renameByName": {
+              "listing_count": "listings"
+            }
           }
         }
       ],
@@ -829,7 +937,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT l.title, l.url, l.price, l.ppm2,\n       (COALESCE(l.published_at, l.first_seen) AT TIME ZONE 'Europe/Sarajevo')::date AS created_day,\n       (l.renewed_at AT TIME ZONE 'Europe/Sarajevo')::date AS renewed_day,\n       round(EXTRACT(EPOCH FROM (now() - COALESCE(l.published_at, l.first_seen))) / 86400.0)::int AS days_online\nFROM reporting.listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[]) l\nWHERE reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])\nORDER BY COALESCE(l.published_at, l.first_seen) ASC\nLIMIT 15",
+          "rawSql": "SELECT l.title, l.url, l.price, l.ppm2,\n       (COALESCE(l.published_at, l.first_seen) AT TIME ZONE 'Europe/Sarajevo')::date AS created_day,\n       (l.renewed_at AT TIME ZONE 'Europe/Sarajevo')::date AS renewed_day,\n       round(EXTRACT(EPOCH FROM (now() - COALESCE(l.published_at, l.first_seen))) / 86400.0)::int AS days_online\nFROM reporting.overview_listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[], ARRAY[${rooms:sqlstring}]::text[], ARRAY[${deal:sqlstring}]::text[]) l\nWHERE reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])\nORDER BY COALESCE(l.published_at, l.first_seen) ASC\nLIMIT 15",
           "refId": "A"
         }
       ],
@@ -908,6 +1016,18 @@
         "h": 14
       },
       "title": "Listing map — click a pin to open the ad",
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "exclude": {
+              "names": [
+                "last_seen"
+              ]
+            }
+          }
+        }
+      ],
       "description": "Pins of active listings placed by their ad's map coordinates; respects every filter.",
       "type": "geomap",
       "options": {
@@ -969,7 +1089,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT l.latitude, l.longitude, l.title, l.url,\n       l.price, l.sqm, l.rooms, l.ppm2,\n       l.location AS location\nFROM reporting.listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[]) l\nWHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL\n  AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])",
+          "rawSql": "SELECT latitude, longitude, title, url, price, sqm, rooms, ppm2, location AS location, last_seen\nFROM reporting.overview_listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[], ARRAY[${rooms:sqlstring}]::text[], ARRAY[${deal:sqlstring}]::text[])\nWHERE latitude IS NOT NULL AND longitude IS NOT NULL",
           "refId": "A"
         }
       ],
@@ -1064,16 +1184,53 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
+            "type": "datasource",
+            "uid": "-- Dashboard --"
           },
           "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT l.title, l.url, l.price, l.sqm, l.rooms, l.ppm2, l.latitude, l.longitude\nFROM reporting.listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[]) l\nWHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL\n  AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])\nORDER BY l.last_seen DESC\nLIMIT 100",
-          "refId": "A"
+          "refId": "A",
+          "panelId": 13
         }
       ],
-      "id": 14
+      "id": 14,
+      "transformations": [
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "field": "last_seen",
+                "desc": true
+              }
+            ]
+          }
+        },
+        {
+          "id": "limit",
+          "options": {
+            "limit": 100
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "title": 0,
+              "url": 1,
+              "price": 2,
+              "sqm": 3,
+              "rooms": 4,
+              "ppm2": 5,
+              "latitude": 6,
+              "longitude": 7
+            },
+            "excludeByName": {
+              "last_seen": true
+            }
+          }
+        }
+      ]
     },
     {
       "type": "row",
@@ -1181,7 +1338,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT l.title, l.url, l.location, l.rooms, l.sqm, l.price, l.ppm2\nFROM reporting.listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[]) l\nWHERE NOT l.is_rent AND l.ppm2 > 0\n  AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])\nORDER BY l.ppm2 ASC\nLIMIT 50",
+          "rawSql": "SELECT l.title, l.url, l.location, l.rooms, l.sqm, l.price, l.ppm2\nFROM reporting.overview_listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[], ARRAY[${rooms:sqlstring}]::text[], ARRAY[${deal:sqlstring}]::text[]) l\nWHERE NOT l.is_rent AND l.ppm2 > 0\n  AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])\nORDER BY l.ppm2 ASC\nLIMIT 50",
           "refId": "A"
         }
       ],
@@ -1434,21 +1591,25 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT l.sqm, l.price AS price_km\nFROM reporting.listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[]) l\nWHERE NOT l.is_rent AND l.price IS NOT NULL AND l.ppm2 > 0 AND l.sqm > 0\n  AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])",
+          "rawSql": "WITH base AS MATERIALIZED (\n  SELECT sqm::float8 AS sqm, price::float8 AS price\n  FROM reporting.overview_listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[], ARRAY[${rooms:sqlstring}]::text[], ARRAY[${deal:sqlstring}]::text[])\n  WHERE NOT is_rent AND price IS NOT NULL AND ppm2 > 0 AND sqm > 0\n), fit AS (\n  SELECT min(sqm) AS x0, max(sqm) AS x1, regr_slope(price, sqm) AS slope, regr_intercept(price, sqm) AS intercept FROM base\n), plotted AS (\n  SELECT 'Listings'::text AS series, sqm, price AS price_km FROM base\n  UNION ALL\n  SELECT 'Regression', (x0 + (x1 - x0) * gs / 80.0)::float8,\n         round(intercept + slope * (x0 + (x1 - x0) * gs / 80.0))::double precision\n  FROM fit CROSS JOIN generate_series(0, 80) gs WHERE slope IS NOT NULL\n)\nSELECT series, sqm, price_km FROM plotted\nORDER BY CASE series WHEN 'Listings' THEN 0 ELSE 1 END, sqm",
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "WITH base AS (\n  SELECT l.sqm::float8 AS sqm, l.price::float8 AS price\n  FROM reporting.listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[]) l\n  WHERE NOT l.is_rent AND l.price IS NOT NULL AND l.ppm2 > 0 AND l.sqm > 0\n    AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n    AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])\n),\nfit AS (\n  SELECT min(sqm) AS x0, max(sqm) AS x1,\n         regr_slope(price, sqm) AS s, regr_intercept(price, sqm) AS b\n  FROM base\n)\nSELECT (x0 + (x1 - x0) * gs / 80.0)::float8 AS sqm,\n       round(b + s * (x0 + (x1 - x0) * gs / 80.0))::double precision AS price_km\nFROM fit, generate_series(0, 80) gs\nWHERE s IS NOT NULL",
-          "refId": "B"
         }
       ],
-      "id": 26
+      "id": 26,
+      "transformations": [
+        {
+          "id": "partitionByValues",
+          "options": {
+            "fields": [
+              "series"
+            ],
+            "keepFields": false,
+            "naming": {
+              "asLabels": false
+            }
+          }
+        }
+      ]
     },
     {
       "type": "row",
@@ -1519,8 +1680,20 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH cuts AS (\n  SELECT DISTINCT pc.article_id\n  FROM reporting.price_changes pc\n  WHERE pc.delta < 0 AND pc.deal = ANY (ARRAY(SELECT CASE WHEN selected = 'sell' THEN 'sale' ELSE selected END FROM unnest(ARRAY[${deal:sqlstring}]::text[]) AS t(selected)))\n)\nSELECT count(*) AS actives\nFROM cuts c\nJOIN reporting.listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[], true) l\n  ON l.article_id = c.article_id\nWHERE TRUE\n\n  AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])",
+          "rawSql": "WITH base AS MATERIALIZED (\n  SELECT article_id FROM reporting.overview_listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[], ARRAY[${rooms:sqlstring}]::text[], ARRAY[${deal:sqlstring}]::text[])\n), cuts AS (\n  SELECT article_id, max(-delta) AS biggest\n  FROM reporting.price_changes\n  WHERE delta < 0 AND deal = ANY (ARRAY(SELECT CASE WHEN selected = 'sell' THEN 'sale' ELSE selected END FROM unnest(ARRAY[${deal:sqlstring}]::text[]) AS t(selected)))\n  GROUP BY article_id\n), matched AS (\n  SELECT cuts.biggest FROM base JOIN cuts USING (article_id)\n)\nSELECT count(*) AS actives,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY biggest) AS median_biggest\nFROM matched",
           "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "actives"
+              ]
+            }
+          }
         }
       ],
       "id": 19
@@ -1577,16 +1750,35 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
+            "type": "datasource",
+            "uid": "-- Dashboard --"
           },
           "editorMode": "code",
-          "format": "table",
-          "rawSql": "WITH cuts AS (\n  SELECT pc.article_id, max(-pc.delta) AS biggest\n  FROM reporting.price_changes pc\n  WHERE pc.delta < 0 AND pc.deal = ANY (ARRAY(SELECT CASE WHEN selected = 'sell' THEN 'sale' ELSE selected END FROM unnest(ARRAY[${deal:sqlstring}]::text[]) AS t(selected)))\n  GROUP BY pc.article_id\n)\nSELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY c.biggest)\nFROM cuts c\nJOIN reporting.listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[], true) l\n  ON l.article_id = c.article_id\nWHERE TRUE\n\n  AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])",
-          "refId": "A"
+          "refId": "A",
+          "panelId": 19
         }
       ],
-      "id": 20
+      "id": 20,
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "median_biggest"
+              ]
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "median_biggest": "percentile_cont"
+            }
+          }
+        }
+      ]
     },
     {
       "datasource": {
@@ -1640,21 +1832,56 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
+            "type": "datasource",
+            "uid": "-- Dashboard --"
           },
           "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT reporting.room_bucket(l.rooms) AS bucket,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)::int AS median_ppm2\nFROM reporting.listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[]) l\nWHERE NOT l.is_rent AND l.ppm2 > 0 AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])\nGROUP BY 1 ORDER BY 1",
-          "refId": "A"
+          "refId": "A",
+          "panelId": 22
         }
       ],
       "transformations": [
         {
-          "id": "rowsToFields",
+          "id": "sortBy",
           "options": {
-            "nameField": "bucket",
-            "valueField": "median_ppm2"
+            "fields": {},
+            "sort": [
+              {
+                "field": "bucket",
+                "desc": false
+              }
+            ]
+          }
+        },
+        {
+          "id": "filterByValue",
+          "options": {
+            "filters": [
+              {
+                "fieldName": "dimension",
+                "config": {
+                  "id": "equal",
+                  "options": {
+                    "value": "rooms"
+                  }
+                }
+              }
+            ],
+            "type": "include"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "bucket": 0,
+              "median_ppm2": 1
+            },
+            "excludeByName": {
+              "dimension": true,
+              "p25_ppm2": true,
+              "p75_ppm2": true
+            }
           }
         }
       ],
@@ -1707,11 +1934,48 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT COALESCE(NULLIF(l.condition, ''), '(unknown)') AS bucket,\n       count(*) AS n,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)::int AS median_ppm2\nFROM reporting.listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[]) l\nWHERE NOT l.is_rent AND l.ppm2 > 0 AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])\nGROUP BY 1 HAVING count(*) >= 5 ORDER BY 3 DESC NULLS LAST",
+          "rawSql": "SELECT dimension, bucket, listing_count, median_ppm2, p25_ppm2, p75_ppm2\nFROM reporting.overview_sale_segments(\n  ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}),\n  ARRAY[${neighborhood:sqlstring}]::text[], ARRAY[${rooms:sqlstring}]::text[], ARRAY[${deal:sqlstring}]::text[])",
           "refId": "A"
         }
       ],
-      "id": 22
+      "id": 22,
+      "transformations": [
+        {
+          "id": "filterByValue",
+          "options": {
+            "filters": [
+              {
+                "fieldName": "dimension",
+                "config": {
+                  "id": "equal",
+                  "options": {
+                    "value": "condition"
+                  }
+                }
+              }
+            ],
+            "type": "include"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "bucket": 0,
+              "listing_count": 1,
+              "median_ppm2": 2
+            },
+            "excludeByName": {
+              "dimension": true,
+              "p25_ppm2": true,
+              "p75_ppm2": true
+            },
+            "renameByName": {
+              "listing_count": "n"
+            }
+          }
+        }
+      ]
     },
     {
       "type": "row",
@@ -1783,7 +2047,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH s AS (\n  SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY l.price) AS p\n  FROM reporting.listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[]) l\n  WHERE NOT l.is_rent AND l.price > 0\n    AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n),\nr AS (\n  SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY l.price) AS p\n  FROM reporting.listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[]) l\n  WHERE l.is_rent AND l.price > 0\n    AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n)\nSELECT round((r.p * 12 / s.p * 100)::numeric, 1)::double precision AS gross_yield_pct\nFROM s, r",
+          "rawSql": "WITH s AS (\n  SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY l.price) AS p\n  FROM reporting.overview_listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[], ARRAY[${rooms:sqlstring}]::text[], ARRAY[]::text[]) l\n  WHERE NOT l.is_rent AND l.price > 0\n    AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n),\nr AS (\n  SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY l.price) AS p\n  FROM reporting.overview_listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[], ARRAY[${rooms:sqlstring}]::text[], ARRAY[]::text[]) l\n  WHERE l.is_rent AND l.price > 0\n    AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n)\nSELECT round((r.p * 12 / s.p * 100)::numeric, 1)::double precision AS gross_yield_pct\nFROM s, r",
           "refId": "A"
         }
       ],
@@ -1933,21 +2197,44 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
+            "type": "datasource",
+            "uid": "-- Dashboard --"
           },
           "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT CASE WHEN l.floor_num < 0 THEN 'basement'\n            WHEN l.floor_num = 0 THEN 'ground'\n            WHEN l.floors_total IS NOT NULL AND l.floor_num = l.floors_total THEN 'top'\n            ELSE 'mid' END || ' · n=' || count(*)::int AS bucket,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)::int AS median_ppm2\nFROM reporting.listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[]) l\nWHERE NOT l.is_rent AND l.ppm2 > 0 AND l.floor_num IS NOT NULL\n  AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])\nGROUP BY CASE WHEN l.floor_num < 0 THEN 'basement'\n            WHEN l.floor_num = 0 THEN 'ground'\n            WHEN l.floors_total IS NOT NULL AND l.floor_num = l.floors_total THEN 'top'\n            ELSE 'mid' END\nORDER BY 1",
-          "refId": "A"
+          "refId": "A",
+          "panelId": 22
         }
       ],
       "transformations": [
         {
-          "id": "rowsToFields",
+          "id": "filterByValue",
           "options": {
-            "nameField": "bucket",
-            "valueField": "median_ppm2"
+            "filters": [
+              {
+                "fieldName": "dimension",
+                "config": {
+                  "id": "equal",
+                  "options": {
+                    "value": "floor"
+                  }
+                }
+              }
+            ],
+            "type": "include"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "bucket": 0,
+              "median_ppm2": 1
+            },
+            "excludeByName": {
+              "dimension": true,
+              "p25_ppm2": true,
+              "p75_ppm2": true
+            }
           }
         }
       ],
@@ -1995,16 +2282,54 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
+            "type": "datasource",
+            "uid": "-- Dashboard --"
           },
           "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT COALESCE(l.seller_type, '(unknown)') AS seller,\n       count(*)::int AS actives,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)::int AS \"median KM/m2\"\nFROM reporting.listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[]) l\nWHERE NOT l.is_rent AND l.ppm2 > 0\n  AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])\nGROUP BY 1 ORDER BY 2 DESC",
-          "refId": "A"
+          "refId": "A",
+          "panelId": 22
         }
       ],
-      "id": 30
+      "id": 30,
+      "transformations": [
+        {
+          "id": "filterByValue",
+          "options": {
+            "filters": [
+              {
+                "fieldName": "dimension",
+                "config": {
+                  "id": "equal",
+                  "options": {
+                    "value": "seller"
+                  }
+                }
+              }
+            ],
+            "type": "include"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "bucket": 0,
+              "listing_count": 1,
+              "median_ppm2": 2
+            },
+            "excludeByName": {
+              "dimension": true,
+              "p25_ppm2": true,
+              "p75_ppm2": true
+            },
+            "renameByName": {
+              "bucket": "seller",
+              "listing_count": "actives",
+              "median_ppm2": "median KM/m2"
+            }
+          }
+        }
+      ]
     },
     {
       "type": "row",
@@ -2060,16 +2385,56 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
+            "type": "datasource",
+            "uid": "-- Dashboard --"
           },
           "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT CASE WHEN l.latitude IS NULL THEN '(no pin)'\n            ELSE COALESCE(NULLIF(l.location, ''), '(unmapped)') END AS district,\n       count(*)::int AS actives,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)::int AS \"median KM/m2\",\n       percentile_cont(0.25) WITHIN GROUP (ORDER BY l.ppm2)::int AS p25,\n       percentile_cont(0.75) WITHIN GROUP (ORDER BY l.ppm2)::int AS p75\nFROM reporting.listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[]::text[]) l\nWHERE NOT l.is_rent AND l.ppm2 > 0\n  AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])\nGROUP BY 1\nHAVING count(*) >= 8\nORDER BY 3 DESC NULLS LAST",
-          "refId": "A"
+          "refId": "A",
+          "panelId": 22
         }
       ],
-      "id": 32
+      "id": 32,
+      "transformations": [
+        {
+          "id": "filterByValue",
+          "options": {
+            "filters": [
+              {
+                "fieldName": "dimension",
+                "config": {
+                  "id": "equal",
+                  "options": {
+                    "value": "district"
+                  }
+                }
+              }
+            ],
+            "type": "include"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "bucket": 0,
+              "listing_count": 1,
+              "median_ppm2": 2,
+              "p25_ppm2": 3,
+              "p75_ppm2": 4
+            },
+            "excludeByName": {
+              "dimension": true
+            },
+            "renameByName": {
+              "bucket": "district",
+              "listing_count": "actives",
+              "median_ppm2": "median KM/m2",
+              "p25_ppm2": "p25",
+              "p75_ppm2": "p75"
+            }
+          }
+        }
+      ]
     },
     {
       "datasource": {
@@ -2130,7 +2495,7 @@
           "editorMode": "code",
           "format": "table",
           "refId": "A",
-          "rawSql": "SELECT CASE WHEN l.latitude IS NULL THEN '(no pin)'\n            ELSE COALESCE(NULLIF(l.location, ''), '(unmapped)') END AS neighborhood,\n       count(*) AS listings,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)::int AS \"median KM/m2\"\nFROM reporting.listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[]) l\nWHERE reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])\nGROUP BY 1 ORDER BY 2 DESC"
+          "rawSql": "SELECT CASE WHEN l.latitude IS NULL THEN '(no pin)'\n            ELSE COALESCE(NULLIF(l.location, ''), '(unmapped)') END AS neighborhood,\n       count(*) AS listings,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2)::int AS \"median KM/m2\"\nFROM reporting.overview_listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[], ARRAY[${rooms:sqlstring}]::text[], ARRAY[${deal:sqlstring}]::text[]) l\nWHERE reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])\nGROUP BY 1 ORDER BY 2 DESC"
         }
       ],
       "title": "Neighborhood breakdown — actives",
@@ -2231,7 +2596,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT l.title, l.url, l.views, l.sqm, l.rooms, l.price, l.ppm2\nFROM reporting.listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[]) l\nWHERE l.views IS NOT NULL AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[]) AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])\nORDER BY l.views DESC\nLIMIT 20",
+          "rawSql": "SELECT l.title, l.url, l.views, l.sqm, l.rooms, l.price, l.ppm2\nFROM reporting.overview_listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[], ARRAY[${rooms:sqlstring}]::text[], ARRAY[${deal:sqlstring}]::text[]) l\nWHERE l.views IS NOT NULL AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[]) AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])\nORDER BY l.views DESC\nLIMIT 20",
           "refId": "A"
         }
       ],

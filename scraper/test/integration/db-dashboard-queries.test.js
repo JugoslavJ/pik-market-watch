@@ -433,6 +433,7 @@ needsDb(
         for (const p of dashboard.panels) {
           const names = new Set();
           for (const t of p.targets || []) {
+            if (!t.rawSql) continue;
             const result = await reporting
               .query(interpolate(t.rawSql, interpolatedValues))
               .catch((e) => {
@@ -462,5 +463,295 @@ needsDb(
         ["sale", "rent"].includes(scenario) ? 6 : null,
       );
     }
+  },
+);
+
+needsDb(
+  "overview Stage 4 query sources retain output contracts and consolidate requests",
+  async () => {
+    const overview = dashboards.find(
+      (x) => x.name === "olx-overview.json",
+    ).dashboard;
+    const panels = new Map(overview.panels.map((p) => [p.id, p]));
+    const sqlTargets = overview.panels
+      .flatMap((p) => p.targets || [])
+      .filter((t) => t.rawSql);
+    const sharedTargets = overview.panels
+      .flatMap((p) => p.targets || [])
+      .filter((t) => t.panelId);
+    assert.equal(sqlTargets.length, 15);
+    assert.equal(sharedTargets.length, 10);
+    const queryVariables = overview.templating.list.filter(
+      (variable) => variable.type === "query",
+    ).length;
+    assert.equal(sqlTargets.length + queryVariables, 18);
+    assert.match(panels.get(1).targets[0].rawSql, /WITH base AS MATERIALIZED/);
+    assert.match(panels.get(1).targets[0].rawSql, /AS active/);
+    assert.match(panels.get(1).targets[0].rawSql, /AS new_7d/);
+    assert.match(panels.get(1).targets[0].rawSql, /AS median_sale_ppm2/);
+    assert.match(panels.get(1).targets[0].rawSql, /AS median_rent/);
+    assert.equal(panels.get(2).targets[0].panelId, 1);
+    assert.equal(panels.get(4).targets[0].panelId, 1);
+    assert.equal(panels.get(5).targets[0].panelId, 1);
+    assert.equal(panels.get(20).targets[0].panelId, 19);
+    for (const id of [8, 21, 29, 30, 32])
+      assert.equal(panels.get(id).targets[0].panelId, 22);
+    for (const id of [8, 21, 22, 29, 30, 32])
+      assert.equal(
+        panels
+          .get(id)
+          .transformations.find((transform) => transform.id === "filterByValue")
+          .options.filters[0].fieldName,
+        "dimension",
+      );
+    assert.equal(panels.get(14).targets[0].panelId, 13);
+    assert.equal(panels.get(26).targets.length, 1);
+    assert.match(panels.get(26).targets[0].rawSql, /WITH base AS MATERIALIZED/);
+    assert.match(panels.get(26).targets[0].rawSql, /regr_slope/);
+    assert.ok(
+      sqlTargets.every(
+        (t) => !t.rawSql.includes("reporting.listings_filtered("),
+      ),
+      "overview current-market panels use overview_listings_filtered",
+    );
+
+    await reset(db.pool);
+    await db.pool.query(`
+      INSERT INTO saved_searches(search_key, name, url, category)
+      VALUES ('stage4', 'stage4', 'https://olx.ba/pretraga', 'apartments');
+      INSERT INTO listings(article_id, url, title, sqm, rooms, price, ppm2,
+                           is_rent, first_seen, last_seen, location, latitude,
+                           longitude, condition, floor_num, floors_total, seller_type)
+      VALUES
+        (9401, 'https://olx.ba/artikal/9401', 'sale one', 50, '2', 100000, 2000,
+         false, now() - interval '2 days', now(), 'Centar', 43.85, 18.4, 'good', 0, 5, 'owner'),
+        (9402, 'https://olx.ba/artikal/9402', 'sale two', 75, '3', 150000, 2000,
+         false, now() - interval '10 days', now(), 'Centar', 43.85, 18.4, 'good', 5, 5, 'agent'),
+        (9403, 'https://olx.ba/artikal/9403', 'rent one', 40, '1', 500, NULL,
+         true, now() - interval '1 day', now(), 'Old Town', NULL, NULL, NULL, NULL, NULL, NULL);
+      INSERT INTO search_results(search_key, article_id) VALUES
+        ('stage4', 9401), ('stage4', 9402), ('stage4', 9403);
+      SELECT * FROM reporting.refresh_dashboard_olap();
+    `);
+    const current = await reporting.query(`
+      WITH base AS MATERIALIZED (
+        SELECT * FROM reporting.overview_listings_filtered(
+          ARRAY[]::text[], NULL::numeric, NULL::numeric, ARRAY[]::text[],
+          ARRAY[]::text[], ARRAY[]::text[])
+      )
+      SELECT count(*) AS active,
+             count(*) FILTER (WHERE first_seen > now() - interval '7 days') AS new_7d,
+             percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)
+               FILTER (WHERE NOT is_rent AND ppm2 > 0) AS median_sale_ppm2,
+             percentile_cont(0.5) WITHIN GROUP (ORDER BY price)
+               FILTER (WHERE is_rent AND price > 0) AS median_rent
+      FROM base`);
+    const oldKpis = await reporting.query(`
+      SELECT
+        (SELECT count(*) FROM reporting.listings_filtered(ARRAY[]::text[], NULL, NULL, ARRAY[]::text[])) AS active,
+        (SELECT count(*) FROM reporting.listings_filtered(ARRAY[]::text[], NULL, NULL, ARRAY[]::text[])
+          WHERE first_seen > now() - interval '7 days') AS new_7d,
+        (SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)
+           FROM reporting.listings_filtered(ARRAY[]::text[], NULL, NULL, ARRAY[]::text[])
+          WHERE NOT is_rent AND ppm2 > 0) AS median_sale_ppm2,
+        (SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY price)
+           FROM reporting.listings_filtered(ARRAY[]::text[], NULL, NULL, ARRAY[]::text[])
+          WHERE is_rent AND price > 0) AS median_rent`);
+    assert.deepEqual(current.rows, oldKpis.rows);
+
+    const noFilters = {
+      category: [],
+      min_sqm: [""],
+      max_sqm: [""],
+      neighborhood: [],
+      rooms: [],
+      deal: [],
+    };
+    const combinedCuts = await reporting.query(
+      interpolate(panels.get(19).targets[0].rawSql, noFilters),
+    );
+    const oldCutCount = await reporting.query(`
+      WITH cuts AS (
+        SELECT DISTINCT article_id FROM reporting.price_changes WHERE delta < 0
+      )
+      SELECT count(*) AS actives
+      FROM cuts JOIN reporting.listings_filtered(
+        ARRAY[]::text[], NULL, NULL, ARRAY[]::text[]) l USING (article_id)`);
+    const oldBiggest = await reporting.query(`
+      WITH cuts AS (
+        SELECT article_id, max(-delta) AS biggest
+        FROM reporting.price_changes WHERE delta < 0 GROUP BY article_id
+      )
+      SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY biggest) AS median_biggest
+      FROM cuts JOIN reporting.listings_filtered(
+        ARRAY[]::text[], NULL, NULL, ARRAY[]::text[]) l USING (article_id)`);
+    assert.equal(combinedCuts.rows[0].actives, oldCutCount.rows[0].actives);
+    assert.equal(
+      combinedCuts.rows[0].median_biggest,
+      oldBiggest.rows[0].median_biggest,
+    );
+
+    const segments = await reporting.query(`
+      SELECT dimension, bucket, listing_count, median_ppm2, p25_ppm2, p75_ppm2
+      FROM reporting.overview_sale_segments(
+        ARRAY[]::text[], NULL, NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[])
+      ORDER BY dimension, bucket`);
+    const roomCounts = await reporting.query(`
+      SELECT reporting.room_bucket(rooms) AS bucket, count(*) AS listing_count
+      FROM reporting.overview_listings_filtered(
+        ARRAY[]::text[], NULL, NULL, ARRAY[]::text[], ARRAY[]::text[], ARRAY[]::text[])
+      WHERE NOT is_rent GROUP BY 1 ORDER BY 1`);
+    assert.deepEqual(
+      segments.rows
+        .filter((r) => r.dimension === "rooms")
+        .map(({ bucket, listing_count }) => ({ bucket, listing_count })),
+      roomCounts.rows,
+    );
+    const oldRoomMedians = await reporting.query(`
+      SELECT reporting.room_bucket(rooms) AS bucket,
+             percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)::int AS median_ppm2
+      FROM reporting.listings_filtered(ARRAY[]::text[], NULL, NULL, ARRAY[]::text[])
+      WHERE NOT is_rent AND ppm2 > 0 GROUP BY 1 ORDER BY 1`);
+    assert.deepEqual(
+      segments.rows
+        .filter((r) => r.dimension === "rooms")
+        .map(({ bucket, median_ppm2 }) => ({ bucket, median_ppm2 })),
+      oldRoomMedians.rows,
+    );
+    const oldConditions = await reporting.query(`
+      SELECT coalesce(nullif(condition, ''), '(unknown)') AS bucket,
+             count(*) AS listing_count,
+             percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)::int AS median_ppm2,
+             percentile_cont(0.25) WITHIN GROUP (ORDER BY ppm2)::int AS p25_ppm2,
+             percentile_cont(0.75) WITHIN GROUP (ORDER BY ppm2)::int AS p75_ppm2
+      FROM reporting.listings_filtered(ARRAY[]::text[], NULL, NULL, ARRAY[]::text[]) l
+      WHERE NOT is_rent AND ppm2 > 0 GROUP BY 1 HAVING count(*) >= 5`);
+    const oldFloors = await reporting.query(`
+      SELECT CASE WHEN floor_num < 0 THEN 'basement'
+                  WHEN floor_num = 0 THEN 'ground'
+                  WHEN floors_total IS NOT NULL AND floor_num = floors_total THEN 'top'
+                  ELSE 'mid' END || ' · n=' || count(*)::int AS bucket,
+             count(*) AS listing_count,
+             percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)::int AS median_ppm2,
+             percentile_cont(0.25) WITHIN GROUP (ORDER BY ppm2)::int AS p25_ppm2,
+             percentile_cont(0.75) WITHIN GROUP (ORDER BY ppm2)::int AS p75_ppm2
+      FROM reporting.listings_filtered(ARRAY[]::text[], NULL, NULL, ARRAY[]::text[]) l
+      WHERE NOT is_rent AND ppm2 > 0 AND floor_num IS NOT NULL
+      GROUP BY CASE WHEN floor_num < 0 THEN 'basement'
+                    WHEN floor_num = 0 THEN 'ground'
+                    WHEN floors_total IS NOT NULL AND floor_num = floors_total THEN 'top'
+                    ELSE 'mid' END`);
+    const oldSellers = await reporting.query(`
+      SELECT coalesce(seller_type, '(unknown)') AS bucket, count(*) AS listing_count,
+             percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)::int AS median_ppm2,
+             percentile_cont(0.25) WITHIN GROUP (ORDER BY ppm2)::int AS p25_ppm2,
+             percentile_cont(0.75) WITHIN GROUP (ORDER BY ppm2)::int AS p75_ppm2
+      FROM reporting.listings_filtered(ARRAY[]::text[], NULL, NULL, ARRAY[]::text[]) l
+      WHERE NOT is_rent AND ppm2 > 0 GROUP BY 1`);
+    const oldDistricts = await reporting.query(`
+      SELECT CASE WHEN latitude IS NULL THEN '(no pin)'
+                  ELSE coalesce(nullif(location, ''), '(unmapped)') END AS bucket,
+             count(*) AS listing_count,
+             percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)::int AS median_ppm2,
+             percentile_cont(0.25) WITHIN GROUP (ORDER BY ppm2)::int AS p25_ppm2,
+             percentile_cont(0.75) WITHIN GROUP (ORDER BY ppm2)::int AS p75_ppm2
+      FROM reporting.listings_filtered(ARRAY[]::text[], NULL, NULL, ARRAY[]::text[]) l
+      WHERE NOT is_rent AND ppm2 > 0 GROUP BY 1 HAVING count(*) >= 8`);
+    for (const [dimension, expected] of [
+      ["condition", oldConditions.rows],
+      ["floor", oldFloors.rows],
+      ["seller", oldSellers.rows],
+      ["district", oldDistricts.rows],
+    ]) {
+      const actual = segments.rows
+        .filter((row) => row.dimension === dimension)
+        .map(({ bucket, listing_count, median_ppm2, p25_ppm2, p75_ppm2 }) => ({
+          bucket,
+          listing_count,
+          median_ppm2,
+          p25_ppm2,
+          p75_ppm2,
+        }))
+        .sort((a, b) => a.bucket.localeCompare(b.bucket));
+      assert.deepEqual(
+        actual,
+        expected.sort((a, b) => a.bucket.localeCompare(b.bucket)),
+      );
+    }
+
+    const combinedScatter = await reporting.query(
+      interpolate(panels.get(26).targets[0].rawSql, noFilters),
+    );
+    const oldScatter = await reporting.query(`
+      SELECT l.sqm, l.price AS price_km
+      FROM reporting.listings_filtered(ARRAY[]::text[], NULL, NULL, ARRAY[]::text[]) l
+      WHERE NOT l.is_rent AND l.price IS NOT NULL AND l.ppm2 > 0 AND l.sqm > 0`);
+    assert.equal(
+      combinedScatter.rows.filter((r) => r.series === "Listings").length,
+      oldScatter.rows.length,
+    );
+    const oldFit = await reporting.query(`
+      WITH base AS (
+        SELECT sqm::float8 AS sqm, price::float8 AS price
+        FROM reporting.listings_filtered(ARRAY[]::text[], NULL, NULL, ARRAY[]::text[]) l
+        WHERE NOT l.is_rent AND l.price IS NOT NULL AND l.ppm2 > 0 AND l.sqm > 0
+      ), fit AS (
+        SELECT min(sqm) AS x0, max(sqm) AS x1,
+               regr_slope(price, sqm) AS slope, regr_intercept(price, sqm) AS intercept
+        FROM base
+      )
+      SELECT count(*) AS fit_rows FROM fit, generate_series(0, 80) gs
+      WHERE slope IS NOT NULL`);
+    assert.equal(
+      combinedScatter.rows.filter((r) => r.series === "Regression").length,
+      Number(oldFit.rows[0].fit_rows),
+    );
+
+    const sharedMap = await reporting.query(
+      interpolate(panels.get(13).targets[0].rawSql, noFilters),
+    );
+    const oldMap = await reporting.query(`
+      SELECT l.latitude, l.longitude, l.title, l.url, l.price, l.sqm,
+             l.rooms, l.ppm2, l.location AS location
+      FROM reporting.listings_filtered(ARRAY[]::text[], NULL, NULL, ARRAY[]::text[]) l
+      WHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL
+      ORDER BY l.article_id`);
+    assert.deepEqual(
+      sharedMap.rows
+        .map((row) =>
+          Object.fromEntries(
+            Object.entries(row).filter(([key]) => key !== "last_seen"),
+          ),
+        )
+        .sort((a, b) => a.url.localeCompare(b.url)),
+      oldMap.rows.sort((a, b) => a.url.localeCompare(b.url)),
+    );
+    const oldMappedTable = await reporting.query(`
+      SELECT l.title, l.url, l.price, l.sqm, l.rooms, l.ppm2, l.latitude, l.longitude
+      FROM reporting.listings_filtered(ARRAY[]::text[], NULL, NULL, ARRAY[]::text[]) l
+      WHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL
+      ORDER BY l.last_seen DESC LIMIT 100`);
+    assert.deepEqual(
+      sharedMap.rows
+        .slice()
+        .sort((a, b) => Date.parse(b.last_seen) - Date.parse(a.last_seen))
+        .slice(0, 100)
+        .map(
+          ({ title, url, price, sqm, rooms, ppm2, latitude, longitude }) => ({
+            title,
+            url,
+            price,
+            sqm,
+            rooms,
+            ppm2,
+            latitude,
+            longitude,
+          }),
+        ),
+      oldMappedTable.rows,
+    );
+    for (const dimension of ["rooms", "floor", "seller"])
+      assert.ok(segments.rows.some((row) => row.dimension === dimension));
+    assert.ok(!segments.rows.some((row) => row.dimension === "district"));
   },
 );

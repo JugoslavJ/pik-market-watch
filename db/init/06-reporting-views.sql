@@ -613,6 +613,96 @@ CREATE FUNCTION reporting.overview_listings_filtered(
                AND c.category = ANY (p_category)))
 $$;
 
+-- One current-sale population for all overview segment panels. Neighborhood
+-- is intentionally omitted from the base filter because the district panel
+-- ignores that dashboard variable; the other dimensions apply it afterward.
+CREATE FUNCTION reporting.overview_sale_segments(
+    p_category text[], p_min_sqm numeric, p_max_sqm numeric,
+    p_neighborhood text[], p_rooms text[], p_deal text[]
+) RETURNS TABLE(
+    dimension text, bucket text, listing_count bigint,
+    median_ppm2 integer, p25_ppm2 integer, p75_ppm2 integer
+)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'reporting', 'olap', 'public', 'pg_temp'
+    AS $$
+  WITH base AS MATERIALIZED (
+    SELECT l.*,
+           coalesce(nullif(l.location, ''),
+             CASE WHEN l.latitude IS NULL THEN '(no pin)' ELSE '(unmapped)' END)
+             AS dashboard_neighborhood
+      FROM reporting.overview_listings_filtered(
+             p_category, p_min_sqm, p_max_sqm, ARRAY[]::text[],
+             p_rooms, p_deal, true) l
+     WHERE NOT l.is_rent
+  ),
+  eligible AS (
+    SELECT * FROM base
+     WHERE coalesce(cardinality(p_neighborhood), 0) = 0
+        OR dashboard_neighborhood = ANY(p_neighborhood)
+  ),
+  priced AS (
+    SELECT * FROM eligible WHERE ppm2 > 0
+  ),
+  groups AS (
+    SELECT 'rooms'::text AS dimension, reporting.room_bucket(rooms) AS bucket,
+           count(*) AS listing_count,
+           percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)
+             FILTER (WHERE ppm2 > 0)::integer AS median_ppm2,
+           percentile_cont(0.25) WITHIN GROUP (ORDER BY ppm2)
+             FILTER (WHERE ppm2 > 0)::integer AS p25_ppm2,
+           percentile_cont(0.75) WITHIN GROUP (ORDER BY ppm2)
+             FILTER (WHERE ppm2 > 0)::integer AS p75_ppm2
+      FROM eligible GROUP BY 1, 2
+    UNION ALL
+    SELECT 'condition', coalesce(nullif(condition, ''), '(unknown)'), count(*),
+           percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)::integer,
+           percentile_cont(0.25) WITHIN GROUP (ORDER BY ppm2)::integer,
+           percentile_cont(0.75) WITHIN GROUP (ORDER BY ppm2)::integer
+      FROM priced GROUP BY 1, 2
+    UNION ALL
+    SELECT 'floor',
+           CASE WHEN floor_num < 0 THEN 'basement'
+                WHEN floor_num = 0 THEN 'ground'
+                WHEN floors_total IS NOT NULL AND floor_num = floors_total THEN 'top'
+                ELSE 'mid' END,
+           count(*),
+           percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)::integer,
+           percentile_cont(0.25) WITHIN GROUP (ORDER BY ppm2)::integer,
+           percentile_cont(0.75) WITHIN GROUP (ORDER BY ppm2)::integer
+      FROM priced WHERE floor_num IS NOT NULL GROUP BY 1, 2
+    UNION ALL
+    SELECT 'seller', coalesce(seller_type, '(unknown)'), count(*),
+           percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)::integer,
+           percentile_cont(0.25) WITHIN GROUP (ORDER BY ppm2)::integer,
+           percentile_cont(0.75) WITHIN GROUP (ORDER BY ppm2)::integer
+      FROM priced GROUP BY 1, 2
+    UNION ALL
+    SELECT 'district',
+           CASE WHEN latitude IS NULL THEN '(no pin)'
+                ELSE coalesce(nullif(location, ''), '(unmapped)') END,
+           count(*),
+           percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)::integer,
+           percentile_cont(0.25) WITHIN GROUP (ORDER BY ppm2)::integer,
+           percentile_cont(0.75) WITHIN GROUP (ORDER BY ppm2)::integer
+      FROM base WHERE ppm2 > 0 GROUP BY 1, 2
+  )
+  SELECT g.dimension,
+         CASE WHEN g.dimension = 'floor'
+              THEN g.bucket || ' · n=' || g.listing_count::integer
+              ELSE g.bucket END,
+         g.listing_count, g.median_ppm2, g.p25_ppm2, g.p75_ppm2
+    FROM groups g
+   WHERE (g.dimension <> 'condition' OR g.listing_count >= 5)
+     AND (g.dimension <> 'district' OR g.listing_count >= 8)
+   ORDER BY g.dimension,
+            CASE WHEN g.dimension IN ('rooms', 'floor') THEN g.bucket END,
+            CASE WHEN g.dimension = 'condition' THEN g.median_ppm2 END DESC NULLS LAST,
+            CASE WHEN g.dimension = 'seller' THEN g.listing_count END DESC,
+            CASE WHEN g.dimension = 'district' THEN g.median_ppm2 END DESC NULLS LAST,
+            g.bucket
+$$;
+
 
 
 --
