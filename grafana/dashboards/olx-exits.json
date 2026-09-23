@@ -73,8 +73,8 @@
   "panels": [
     {
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Dashboard --"
+        "type": "postgres",
+        "uid": "olx-postgres"
       },
       "fieldConfig": {
         "defaults": {
@@ -134,7 +134,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH closed AS MATERIALIZED (\n  SELECT l.article_id, l.closing_ppm2, l.closed_at, e.days_listed\n    FROM reporting.listings_closed_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[]) l\n    LEFT JOIN reporting.exit_economics e ON e.article_id = l.article_id\n   WHERE l.closed_at > now() - INTERVAL '30 days'\n     AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n    AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])\n), active AS MATERIALIZED (\n  SELECT l.article_id\n    FROM reporting.listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[]) l\n   WHERE reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n    AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])\n)\nSELECT count(*)::int AS closed_30d,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY closing_ppm2) FILTER (WHERE closing_ppm2 > 0) AS median_exit_ppm2,\n       round(count(*)::float / NULLIF(count(*)::float + (SELECT count(*)::float FROM active), 0) * 100)::int AS observed_exit_ratio,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY days_listed) AS median_days_on_market\n  FROM closed",
+          "rawSql": "WITH closed AS MATERIALIZED (\n  SELECT l.article_id, l.closing_ppm2, e.days_listed\n  FROM reporting.exits_closed_filtered(\n    now() - INTERVAL '30 days', NULL::timestamptz, false,\n    ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}),\n    reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${rooms:sqlstring}]::text[],\n    ARRAY[${deal:sqlstring}]::text[], ARRAY[${neighborhood:sqlstring}]::text[]) l\n  LEFT JOIN reporting.exit_economics e USING (article_id)\n),\nactive AS MATERIALIZED (\n  SELECT l.article_id\n  FROM reporting.listings_filtered(\n    ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}),\n    reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[]) l\n  WHERE reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n    AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])\n)\nSELECT count(*) AS closed_30d,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY closing_ppm2)\n         FILTER (WHERE closing_ppm2 > 0) AS median_exit_ppm2,\n       round(count(*)::float /\n         NULLIF(count(*)::float + (SELECT count(*)::float FROM active), 0) * 100)::int\n         AS observed_exit_ratio,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY days_listed) AS median_days_on_market\nFROM closed",
           "refId": "A"
         }
       ],
@@ -193,7 +193,6 @@
             "type": "datasource",
             "uid": "-- Dashboard --"
           },
-          "editorMode": "code",
           "refId": "A",
           "panelId": 1
         }
@@ -263,7 +262,6 @@
             "type": "datasource",
             "uid": "-- Dashboard --"
           },
-          "editorMode": "code",
           "refId": "A",
           "panelId": 1
         }
@@ -333,7 +331,6 @@
             "type": "datasource",
             "uid": "-- Dashboard --"
           },
-          "editorMode": "code",
           "refId": "A",
           "panelId": 1
         }
@@ -459,7 +456,7 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT date_trunc('day', l.closed_at AT TIME ZONE 'Europe/Sarajevo') AT TIME ZONE 'Europe/Sarajevo' AS time,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY l.closing_ppm2) AS \"exit KM/m2 (closed ads)\"\nFROM reporting.listings_closed_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[]) l\nWHERE l.closing_ppm2 > 0\n  AND $__timeFilter(l.closed_at)\n  AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT 'daily'::text AS period,\n       date_trunc('day', l.closed_at AT TIME ZONE 'Europe/Sarajevo') AT TIME ZONE 'Europe/Sarajevo' AS time,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY l.closing_ppm2) AS \"exit KM/m2 (closed ads)\"\nFROM reporting.exits_closed_filtered($__timeFrom(), $__timeTo(), true, ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${rooms:sqlstring}]::text[], ARRAY[${deal:sqlstring}]::text[], ARRAY[${neighborhood:sqlstring}]::text[]) l\nWHERE l.closing_ppm2 > 0\nGROUP BY 2 ORDER BY 2",
           "refId": "A"
         },
         {
@@ -469,11 +466,43 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time,\n       median AS \"asking KM/m2 (daily inventory)\",\n       priced_count AS \"priced sample\",\n       estimated_count AS \"estimated\",\n       stale_count AS \"stale\",\n       provisional_day AS \"provisional\"\nFROM reporting.market_daily_filtered(\n  date($__timeFrom() AT TIME ZONE 'Europe/Sarajevo'),\n  date($__timeTo() AT TIME ZONE 'Europe/Sarajevo'),\n  ARRAY[${category:sqlstring}]::text[],\n  reporting.dashboard_numeric(${min_sqm:sqlstring}),\n  reporting.dashboard_numeric(${max_sqm:sqlstring}),\n  ARRAY[${rooms:sqlstring}]::text[],\n  ARRAY(SELECT CASE WHEN selected = 'sell' THEN 'sale' ELSE selected END FROM unnest(ARRAY[${deal:sqlstring}]::text[]) AS t(selected)),\n  ARRAY[${neighborhood:sqlstring}]::text[])\nORDER BY day",
+          "rawSql": "WITH filtered AS MATERIALIZED (\n  SELECT d.day, d.price_state, d.ppm2, d.membership_inferred,\n         d.attributes_inferred, d.stale_observation, d.provisional_day\n  FROM reporting.daily_listing_facts_olap d\n  WHERE d.day BETWEEN date($__timeFrom() AT TIME ZONE 'Europe/Sarajevo')\n                  AND LEAST(date($__timeTo() AT TIME ZONE 'Europe/Sarajevo'),\n                            (now() AT TIME ZONE 'Europe/Sarajevo')::date)\n    AND (COALESCE(cardinality(ARRAY[${category:sqlstring}]::text[]), 0) = 0\n      OR d.category_memberships && ARRAY[${category:sqlstring}]::text[]\n      OR d.category = ANY (ARRAY[${category:sqlstring}]::text[]))\n    AND (reporting.dashboard_numeric(${min_sqm:sqlstring}) IS NULL OR d.sqm IS NULL\n      OR d.sqm >= reporting.dashboard_numeric(${min_sqm:sqlstring}))\n    AND (reporting.dashboard_numeric(${max_sqm:sqlstring}) IS NULL OR d.sqm IS NULL\n      OR d.sqm <= reporting.dashboard_numeric(${max_sqm:sqlstring}))\n    AND (COALESCE(cardinality(ARRAY[${rooms:sqlstring}]::text[]), 0) = 0\n      OR d.rooms = ANY (ARRAY[${rooms:sqlstring}]::text[])\n      OR d.room_bucket = ANY (ARRAY[${rooms:sqlstring}]::text[]))\n    AND (CASE WHEN d.deal = 'rent' THEN 'rent' ELSE 'sale' END) = ANY (\n      ARRAY(SELECT CASE WHEN selected = 'sell' THEN 'sale' ELSE selected END\n              FROM unnest(ARRAY[${deal:sqlstring}]::text[]) AS t(selected)))\n    AND (COALESCE(cardinality(ARRAY[${neighborhood:sqlstring}]::text[]), 0) = 0\n      OR d.neighborhood = ANY (ARRAY[${neighborhood:sqlstring}]::text[])\n      OR d.location = ANY (ARRAY[${neighborhood:sqlstring}]::text[]))\n), daily AS (\n  SELECT day, count(*)::numeric AS inventory,\n         count(*) FILTER (WHERE price_state = 'valid')::numeric AS valid_prices,\n         count(*) FILTER (WHERE price_state = 'valid' AND ppm2 IS NOT NULL)::bigint AS priced_count,\n         percentile_cont(0.25) WITHIN GROUP (ORDER BY ppm2)\n           FILTER (WHERE price_state = 'valid' AND ppm2 IS NOT NULL) AS p25,\n         percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)\n           FILTER (WHERE price_state = 'valid' AND ppm2 IS NOT NULL) AS median,\n         percentile_cont(0.75) WITHIN GROUP (ORDER BY ppm2)\n           FILTER (WHERE price_state = 'valid' AND ppm2 IS NOT NULL) AS p75,\n         count(*) FILTER (WHERE membership_inferred OR attributes_inferred)::bigint AS estimated_count,\n         count(*) FILTER (WHERE stale_observation)::bigint AS stale_count,\n         bool_or(provisional_day) AS provisional_day\n  FROM filtered GROUP BY day\n), weekly AS (\n  SELECT date_trunc('week', day::timestamp)::date AS day,\n         avg(inventory) AS inventory, avg(valid_prices) AS valid_prices,\n         round(100.0 * avg(valid_prices) / NULLIF(avg(inventory), 0), 2) AS priced_share\n  FROM daily GROUP BY 1\n), combined AS (\n  SELECT 'daily'::text AS period, day, p25, median, p75, inventory,\n         priced_count, valid_prices, estimated_count, stale_count,\n         provisional_day, NULL::numeric AS priced_share\n  FROM daily\n  UNION ALL\n  SELECT 'weekly'::text, day, NULL::numeric, NULL::numeric, NULL::numeric,\n         inventory, NULL::bigint, valid_prices, NULL::bigint, NULL::bigint,\n         NULL::boolean, priced_share\n  FROM weekly\n)\nSELECT period, day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time,\n       p25 AS \"p25 KM/m2\", median AS \"median KM/m2\", p75 AS \"p75 KM/m2\",\n       inventory, priced_count AS \"priced sample\", valid_prices AS \"valid price count\",\n       estimated_count AS estimated, stale_count AS stale,\n       provisional_day AS provisional, priced_share AS \"priced share %\"\nFROM combined ORDER BY day, period",
           "refId": "B"
         }
       ],
-      "id": 6
+      "id": 6,
+      "transformations": [
+        {
+          "id": "filterByValue",
+          "options": {
+            "filters": [
+              {
+                "fieldName": "period",
+                "config": {
+                  "id": "equal",
+                  "options": {
+                    "value": "daily"
+                  }
+                }
+              }
+            ],
+            "type": "include"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "time": 0
+            },
+            "excludeByName": {
+              "period": true,
+              "valid price count": true,
+              "priced share %": true
+            }
+          }
+        }
+      ]
     },
     {
       "datasource": {
@@ -529,11 +558,41 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT CASE WHEN lc.days_listed <= 7  THEN '0-7 d'\n            WHEN lc.days_listed <= 14 THEN '8-14 d'\n            WHEN lc.days_listed <= 30 THEN '15-30 d'\n            WHEN lc.days_listed <= 60 THEN '31-60 d'\n            ELSE '60+ d' END AS bucket,\n       count(*) AS exits\nFROM reporting.listings_closed_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[]) l\nJOIN reporting.exit_economics lc ON lc.article_id = l.article_id\nWHERE $__timeFilter(l.closed_at)\n  AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])\nGROUP BY 1 ORDER BY min(lc.days_listed)",
+          "rawSql": "WITH base AS MATERIALIZED (\n  SELECT l.article_id, l.rooms, l.closing_price, l.closed_at,\n         e.article_id AS economics_article_id, e.opening_price, e.days_listed,\n         CASE WHEN e.opening_price > 0\n              THEN round((l.closing_price - e.opening_price) / e.opening_price * 100)::int END AS change_pct\n  FROM reporting.exits_closed_filtered(\n    $__timeFrom(), $__timeTo(), true, ARRAY[${category:sqlstring}]::text[],\n    reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}),\n    ARRAY[${rooms:sqlstring}]::text[], ARRAY[${deal:sqlstring}]::text[], ARRAY[${neighborhood:sqlstring}]::text[]) l\n  LEFT JOIN reporting.exit_economics e USING (article_id)\n),\nduration AS (\n  SELECT 'duration'::text AS dimension,\n         CASE WHEN days_listed <= 7 THEN '0-7 d'\n              WHEN days_listed <= 14 THEN '8-14 d'\n              WHEN days_listed <= 30 THEN '15-30 d'\n              WHEN days_listed <= 60 THEN '31-60 d'\n              ELSE '60+ d' END AS bucket,\n         count(*) AS exits, min(days_listed)::numeric AS sort_key\n  FROM base WHERE economics_article_id IS NOT NULL\n  GROUP BY 1, 2\n),\nroom_counts AS (\n  SELECT 'rooms'::text AS dimension, reporting.room_bucket(rooms) AS bucket,\n         count(*) AS exits,\n         CASE reporting.room_bucket(rooms)\n           WHEN '0' THEN 0 WHEN '1' THEN 1 WHEN '2' THEN 2\n           WHEN '3' THEN 3 WHEN '4+' THEN 4 WHEN 'unknown' THEN 5 ELSE 6 END::numeric AS sort_key\n  FROM base GROUP BY 1, 2\n),\ndiscount AS (\n  SELECT 'discount'::text AS dimension,\n         CASE WHEN change_pct IS NULL THEN '(unknown)'\n              WHEN change_pct <= -20 THEN '-20 % or worse'\n              WHEN change_pct <= -10 THEN '-10..-20 %'\n              WHEN change_pct < 0 THEN '0..-10 %'\n              WHEN change_pct = 0 THEN 'flat'\n              ELSE 'raised' END AS bucket,\n         count(*) AS exits, -count(*)::numeric AS sort_key\n  FROM base WHERE economics_article_id IS NOT NULL\n  GROUP BY 1, 2\n)\nSELECT dimension, bucket, exits, sort_key FROM duration\nUNION ALL SELECT dimension, bucket, exits, sort_key FROM room_counts\nUNION ALL SELECT dimension, bucket, exits, sort_key FROM discount\nORDER BY dimension, sort_key, bucket",
           "refId": "A"
         }
       ],
       "transformations": [
+        {
+          "id": "filterByValue",
+          "options": {
+            "filters": [
+              {
+                "fieldName": "dimension",
+                "config": {
+                  "id": "equal",
+                  "options": {
+                    "value": "duration"
+                  }
+                }
+              }
+            ],
+            "type": "include"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "bucket": 0,
+              "exits": 1
+            },
+            "excludeByName": {
+              "dimension": true,
+              "sort_key": true
+            }
+          }
+        },
         {
           "id": "rowsToFields",
           "options": {
@@ -680,7 +739,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH recent AS MATERIALIZED (\n  SELECT l.*\nFROM reporting.listings_closed_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[]) l\nWHERE $__timeFilter(l.closed_at)\n  AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])\nORDER BY l.closed_at DESC\nLIMIT 100\n)\nSELECT l.title, l.url, l.location, l.sqm, l.rooms,\n       l.closing_price, l.closing_ppm2, lc.opening_price,\n       round(l.closing_price - lc.opening_price) AS price_change,\n       CASE WHEN lc.opening_price > 0\n            THEN round((l.closing_price - lc.opening_price) / lc.opening_price * 100)::int END AS change_pct,\n       lc.days_listed, l.closed_at\nFROM recent l\nJOIN reporting.exit_economics lc ON lc.article_id = l.article_id\nORDER BY l.closed_at DESC",
+          "rawSql": "WITH recent AS MATERIALIZED (\n  SELECT l.*\nFROM reporting.exits_closed_filtered($__timeFrom(), $__timeTo(), true, ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${rooms:sqlstring}]::text[], ARRAY[${deal:sqlstring}]::text[], ARRAY[${neighborhood:sqlstring}]::text[]) l\nORDER BY l.closed_at DESC\nLIMIT 100\n)\nSELECT l.title, l.url, l.location, l.sqm, l.rooms,\n       l.closing_price, l.closing_ppm2, lc.opening_price,\n       round(l.closing_price - lc.opening_price) AS price_change,\n       CASE WHEN lc.opening_price > 0\n            THEN round((l.closing_price - lc.opening_price) / lc.opening_price * 100)::int END AS change_pct,\n       lc.days_listed, l.closed_at\nFROM recent l\nJOIN reporting.exit_economics lc ON lc.article_id = l.article_id\nORDER BY l.closed_at DESC",
           "refId": "A"
         }
       ],
@@ -688,8 +747,8 @@
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
+        "type": "datasource",
+        "uid": "-- Dashboard --"
       },
       "fieldConfig": {
         "defaults": {
@@ -735,16 +794,44 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
+            "type": "datasource",
+            "uid": "-- Dashboard --"
           },
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT reporting.room_bucket(l.rooms) AS bucket, count(*) AS exits\nFROM reporting.listings_closed_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[]) l\nWHERE $__timeFilter(l.closed_at)\n  AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])\nGROUP BY 1 ORDER BY 1",
-          "refId": "A"
+          "refId": "A",
+          "panelId": 7
         }
       ],
       "transformations": [
+        {
+          "id": "filterByValue",
+          "options": {
+            "filters": [
+              {
+                "fieldName": "dimension",
+                "config": {
+                  "id": "equal",
+                  "options": {
+                    "value": "rooms"
+                  }
+                }
+              }
+            ],
+            "type": "include"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "bucket": 0,
+              "exits": 1
+            },
+            "excludeByName": {
+              "dimension": true,
+              "sort_key": true
+            }
+          }
+        },
         {
           "id": "rowsToFields",
           "options": {
@@ -889,7 +976,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT l.latitude, l.longitude, l.title, l.url,\n       l.closing_price, l.closing_ppm2, l.closed_at,\n       l.location AS location\nFROM reporting.listings_closed_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[]) l\nWHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL\n  AND $__timeFilter(l.closed_at)\n  AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])",
+          "rawSql": "SELECT l.latitude, l.longitude, l.title, l.url,\n       l.closing_price, l.closing_ppm2, l.closed_at,\n       l.location AS location\nFROM reporting.exits_closed_filtered($__timeFrom(), $__timeTo(), true, ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${rooms:sqlstring}]::text[], ARRAY[${deal:sqlstring}]::text[], ARRAY[${neighborhood:sqlstring}]::text[]) l\nWHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL",
           "refId": "A"
         }
       ],
@@ -1031,8 +1118,8 @@
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
+        "type": "datasource",
+        "uid": "-- Dashboard --"
       },
       "fieldConfig": {
         "defaults": {
@@ -1078,16 +1165,44 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
+            "type": "datasource",
+            "uid": "-- Dashboard --"
           },
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT CASE WHEN CASE WHEN lc.opening_price > 0\n            THEN round((l.closing_price - lc.opening_price) / lc.opening_price * 100)::int END IS NULL THEN '(unknown)'\n            WHEN CASE WHEN lc.opening_price > 0\n            THEN round((l.closing_price - lc.opening_price) / lc.opening_price * 100)::int END <= -20 THEN '-20 % or worse'\n            WHEN CASE WHEN lc.opening_price > 0\n            THEN round((l.closing_price - lc.opening_price) / lc.opening_price * 100)::int END <= -10 THEN '-10..-20 %'\n            WHEN CASE WHEN lc.opening_price > 0\n            THEN round((l.closing_price - lc.opening_price) / lc.opening_price * 100)::int END < 0 THEN '0..-10 %'\n            WHEN CASE WHEN lc.opening_price > 0\n            THEN round((l.closing_price - lc.opening_price) / lc.opening_price * 100)::int END = 0 THEN 'flat'\n            ELSE 'raised' END AS bucket,\n       count(*) AS exits\nFROM reporting.listings_closed_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[]) l\nJOIN reporting.exit_economics lc ON lc.article_id = l.article_id\nWHERE $__timeFilter(l.closed_at)\n  AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])\nGROUP BY 1 ORDER BY 2 DESC",
-          "refId": "A"
+          "refId": "A",
+          "panelId": 7
         }
       ],
       "transformations": [
+        {
+          "id": "filterByValue",
+          "options": {
+            "filters": [
+              {
+                "fieldName": "dimension",
+                "config": {
+                  "id": "equal",
+                  "options": {
+                    "value": "discount"
+                  }
+                }
+              }
+            ],
+            "type": "include"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "bucket": 0,
+              "exits": 1
+            },
+            "excludeByName": {
+              "dimension": true,
+              "sort_key": true
+            }
+          }
+        },
         {
           "id": "rowsToFields",
           "options": {
@@ -1100,8 +1215,8 @@
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
+        "type": "datasource",
+        "uid": "-- Dashboard --"
       },
       "fieldConfig": {
         "defaults": {
@@ -1156,16 +1271,54 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
+            "type": "datasource",
+            "uid": "-- Dashboard --"
           },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawSql": "WITH daily AS (\n  SELECT d.day,\n         count(*)::numeric AS inventory,\n         count(*) FILTER (WHERE d.price_state = 'valid')::numeric AS priced\n  FROM reporting.daily_listing_facts_olap d\n  WHERE d.day BETWEEN date($__timeFrom() AT TIME ZONE 'Europe/Sarajevo')\n                  AND date($__timeTo() AT TIME ZONE 'Europe/Sarajevo')\n\n  AND (COALESCE(cardinality(ARRAY[${category:sqlstring}]::text[]), 0) = 0\n    OR d.category_memberships && ARRAY[${category:sqlstring}]::text[]\n    OR d.category = ANY (ARRAY[${category:sqlstring}]::text[]))\n  AND (reporting.dashboard_numeric(${min_sqm:sqlstring}) IS NULL OR d.sqm IS NULL OR d.sqm >= reporting.dashboard_numeric(${min_sqm:sqlstring}))\n  AND (reporting.dashboard_numeric(${max_sqm:sqlstring}) IS NULL OR d.sqm IS NULL OR d.sqm <= reporting.dashboard_numeric(${max_sqm:sqlstring}))\n  AND (COALESCE(cardinality(ARRAY[${rooms:sqlstring}]::text[]), 0) = 0\n    OR d.rooms = ANY (ARRAY[${rooms:sqlstring}]::text[])\n    OR d.room_bucket = ANY (ARRAY[${rooms:sqlstring}]::text[]))\n  AND (CASE WHEN d.deal = 'rent' THEN 'rent' ELSE 'sale' END) = ANY (ARRAY(SELECT CASE WHEN selected = 'sell' THEN 'sale' ELSE selected END FROM unnest(ARRAY[${deal:sqlstring}]::text[]) AS t(selected)))\n  AND (COALESCE(cardinality(ARRAY[${neighborhood:sqlstring}]::text[]), 0) = 0\n    OR d.neighborhood = ANY (ARRAY[${neighborhood:sqlstring}]::text[])\n    OR d.location = ANY (ARRAY[${neighborhood:sqlstring}]::text[]))\n  GROUP BY d.day\n), weekly AS (\n  SELECT date_trunc('week', day::timestamp)::date AS week,\n         avg(inventory) AS inventory,\n         avg(priced) AS priced\n  FROM daily GROUP BY 1\n)\nSELECT week::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time,\n       round(100.0 * priced / NULLIF(inventory, 0), 2) AS \"priced share %\"\nFROM weekly ORDER BY week",
-          "refId": "A"
+          "refId": "A",
+          "panelId": 6
         }
       ],
-      "id": 16
+      "id": 16,
+      "transformations": [
+        {
+          "id": "filterByValue",
+          "options": {
+            "filters": [
+              {
+                "fieldName": "period",
+                "config": {
+                  "id": "equal",
+                  "options": {
+                    "value": "weekly"
+                  }
+                }
+              }
+            ],
+            "type": "include"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "time": 0,
+              "priced share %": 1
+            },
+            "excludeByName": {
+              "period": true,
+              "p25 KM/m2": true,
+              "median KM/m2": true,
+              "p75 KM/m2": true,
+              "inventory": true,
+              "priced sample": true,
+              "valid price count": true,
+              "estimated": true,
+              "stale": true,
+              "provisional": true
+            }
+          }
+        }
+      ]
     },
     {
       "type": "row",
@@ -1268,7 +1421,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT lc.days_listed AS days_on_market,\n       round(100.0 * (l.closing_price - lc.opening_price) / NULLIF(lc.opening_price, 0), 1)::double precision AS exit_vs_opening_pct\nFROM reporting.listings_closed_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[]) l\nJOIN reporting.exit_economics lc ON lc.article_id = l.article_id\nWHERE $__timeFilter(l.closed_at)\n  AND lc.opening_price > 0 AND l.closing_price IS NOT NULL AND lc.days_listed IS NOT NULL\n  AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n  AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])",
+          "rawSql": "SELECT lc.days_listed AS days_on_market,\n       round(100.0 * (l.closing_price - lc.opening_price) / NULLIF(lc.opening_price, 0), 1)::double precision AS exit_vs_opening_pct\nFROM reporting.exits_closed_filtered($__timeFrom(), $__timeTo(), true, ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${rooms:sqlstring}]::text[], ARRAY[${deal:sqlstring}]::text[], ARRAY[${neighborhood:sqlstring}]::text[]) l\nJOIN reporting.exit_economics lc ON lc.article_id = l.article_id\nWHERE lc.opening_price > 0 AND l.closing_price IS NOT NULL AND lc.days_listed IS NOT NULL",
           "refId": "A"
         }
       ],
@@ -1329,7 +1482,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH c AS (\n  SELECT l.closing_ppm2 AS ppm2\n  FROM reporting.listings_closed_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[]) l\n  WHERE l.closing_ppm2 > 0 AND l.closed_at > now() - INTERVAL '30 days'\n    AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n    AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])\n),\na AS (\n  SELECT l.ppm2 AS ppm2\n  FROM reporting.listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[]) l\n  WHERE l.ppm2 > 0\n    AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n    AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])\n),\nbounds AS (\n  SELECT percentile_cont(0.25) WITHIN GROUP (ORDER BY ppm2) AS q25,\n         percentile_cont(0.5)  WITHIN GROUP (ORDER BY ppm2) AS q50,\n         percentile_cont(0.75) WITHIN GROUP (ORDER BY ppm2) AS q75\n  FROM (SELECT ppm2 FROM c UNION ALL SELECT ppm2 FROM a) p\n),\ntagged AS (\n  SELECT 'exit' AS kind, ppm2 FROM c\n  UNION ALL\n  SELECT 'active', ppm2 FROM a\n)\nSELECT CASE WHEN t.ppm2 < b.q25 THEN 'Q1 · cheapest'\n            WHEN t.ppm2 < b.q50 THEN 'Q2'\n            WHEN t.ppm2 < b.q75 THEN 'Q3'\n            ELSE 'Q4 · priciest' END AS bucket,\n       round(100.0 * count(*) FILTER (WHERE t.kind = 'exit') / NULLIF(count(*), 0), 1)::double precision AS exits_pct\nFROM tagged t CROSS JOIN bounds b\nGROUP BY 1 ORDER BY 1",
+          "rawSql": "WITH c AS (\n  SELECT l.closing_ppm2 AS ppm2\n  FROM reporting.exits_closed_filtered(\n    now() - INTERVAL '30 days', NULL::timestamptz, false,\n    ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}),\n    reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${rooms:sqlstring}]::text[],\n    ARRAY[${deal:sqlstring}]::text[], ARRAY[${neighborhood:sqlstring}]::text[]) l\n  WHERE l.closing_ppm2 > 0\n),\na AS (\n  SELECT l.ppm2 AS ppm2\n  FROM reporting.listings_filtered(\n    ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}),\n    reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[]) l\n  WHERE l.ppm2 > 0\n    AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n    AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])\n),\nbounds AS (\n  SELECT percentile_cont(0.25) WITHIN GROUP (ORDER BY ppm2) AS q25,\n         percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) AS q50,\n         percentile_cont(0.75) WITHIN GROUP (ORDER BY ppm2) AS q75\n  FROM (SELECT ppm2 FROM c UNION ALL SELECT ppm2 FROM a) p\n),\ntagged AS (\n  SELECT 'exit' AS kind, ppm2 FROM c\n  UNION ALL\n  SELECT 'active', ppm2 FROM a\n)\nSELECT CASE WHEN t.ppm2 < b.q25 THEN 'Q1 · cheapest'\n            WHEN t.ppm2 < b.q50 THEN 'Q2'\n            WHEN t.ppm2 < b.q75 THEN 'Q3'\n            ELSE 'Q4 · priciest' END AS bucket,\n       round(100.0 * count(*) FILTER (WHERE t.kind = 'exit') / NULLIF(count(*), 0), 1)::double precision AS exits_pct\nFROM tagged t CROSS JOIN bounds b\nGROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -1422,7 +1575,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH ex AS (\n  SELECT CASE WHEN l.latitude IS NULL THEN '(no pin)'\n              ELSE COALESCE(NULLIF(l.location, ''), '(unmapped)') END AS district,\n         count(*)::int AS closed_n\n  FROM reporting.listings_closed_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[]::text[]) l\n  WHERE l.closed_at > now() - INTERVAL '30 days'\n    AND reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n    AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])\n  GROUP BY 1\n),\nac AS (\n  SELECT CASE WHEN l.latitude IS NULL THEN '(no pin)'\n              ELSE COALESCE(NULLIF(l.location, ''), '(unmapped)') END AS district,\n         count(*)::int AS active_n\n  FROM reporting.listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[]::text[]) l\n  WHERE reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n    AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])\n  GROUP BY 1\n)\nSELECT ex.district, ex.closed_n AS closed_30d, COALESCE(ac.active_n, 0) AS actives,\n       round(100.0 * ex.closed_n / NULLIF(ex.closed_n + COALESCE(ac.active_n, 0), 0), 1)::double precision AS exit_rate_pct\nFROM ex\nLEFT JOIN ac USING (district)\nWHERE ex.closed_n + COALESCE(ac.active_n, 0) >= 10\nORDER BY exit_rate_pct DESC",
+          "rawSql": "WITH ex AS (\n  SELECT CASE WHEN l.latitude IS NULL THEN '(no pin)'\n              ELSE COALESCE(NULLIF(l.location, ''), '(unmapped)') END AS district,\n         count(*)::int AS closed_n\n  FROM reporting.exits_closed_filtered(\n    now() - INTERVAL '30 days', NULL::timestamptz, false,\n    ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}),\n    reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${rooms:sqlstring}]::text[],\n    ARRAY[${deal:sqlstring}]::text[], ARRAY[]::text[]) l\n  GROUP BY 1\n),\nac AS (\n  SELECT CASE WHEN l.latitude IS NULL THEN '(no pin)'\n              ELSE COALESCE(NULLIF(l.location, ''), '(unmapped)') END AS district,\n         count(*)::int AS active_n\n  FROM reporting.listings_filtered(\n    ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}),\n    reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[]::text[]) l\n  WHERE reporting.room_bucket(l.rooms) = ANY (ARRAY[${rooms:sqlstring}]::text[])\n    AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY (ARRAY[${deal:sqlstring}]::text[])\n  GROUP BY 1\n)\nSELECT ex.district, ex.closed_n AS closed_30d, COALESCE(ac.active_n, 0) AS actives,\n       round(100.0 * ex.closed_n / NULLIF(ex.closed_n + COALESCE(ac.active_n, 0), 0), 1)::double precision AS exit_rate_pct\nFROM ex\nLEFT JOIN ac USING (district)\nWHERE ex.closed_n + COALESCE(ac.active_n, 0) >= 10\nORDER BY exit_rate_pct DESC",
           "refId": "A"
         }
       ],
@@ -1444,13 +1597,13 @@
           "type": "postgres",
           "uid": "olx-postgres"
         },
-        "definition": "SELECT category AS __value, category AS __text FROM (SELECT category FROM reporting.saved_searches UNION SELECT closing_category FROM reporting.dashboard_listings UNION SELECT category FROM reporting.daily_listing_facts UNION SELECT unnest(category_memberships) FROM (SELECT DISTINCT category_memberships FROM reporting.daily_listing_facts) memberships) s WHERE category IS NOT NULL GROUP BY category ORDER BY 1",
+        "definition": "SELECT value AS __value, value AS __text FROM reporting.dashboard_filter_options WHERE filter_name = 'category' ORDER BY sort_order NULLS LAST, value",
         "includeAll": true,
         "label": "Category",
         "multi": false,
         "name": "category",
         "options": [],
-        "query": "SELECT category AS __value, category AS __text FROM (SELECT category FROM reporting.saved_searches UNION SELECT closing_category FROM reporting.dashboard_listings UNION SELECT category FROM reporting.daily_listing_facts UNION SELECT unnest(category_memberships) FROM (SELECT DISTINCT category_memberships FROM reporting.daily_listing_facts) memberships) s WHERE category IS NOT NULL GROUP BY category ORDER BY 1",
+        "query": "SELECT value AS __value, value AS __text FROM reporting.dashboard_filter_options WHERE filter_name = 'category' ORDER BY sort_order NULLS LAST, value",
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
@@ -1494,13 +1647,13 @@
           "type": "postgres",
           "uid": "olx-postgres"
         },
-        "definition": "SELECT bucket AS __value, bucket AS __text FROM (SELECT DISTINCT reporting.room_bucket(rooms) AS bucket FROM (SELECT rooms FROM reporting.dashboard_listings UNION SELECT rooms FROM reporting.daily_listing_facts) r) s WHERE bucket IS NOT NULL ORDER BY 1",
+        "definition": "SELECT value AS __value, value AS __text FROM reporting.dashboard_filter_options WHERE filter_name = 'room_bucket' ORDER BY sort_order NULLS LAST, value",
         "includeAll": true,
         "label": "Rooms",
         "multi": false,
         "name": "rooms",
         "options": [],
-        "query": "SELECT bucket AS __value, bucket AS __text FROM (SELECT DISTINCT reporting.room_bucket(rooms) AS bucket FROM (SELECT rooms FROM reporting.dashboard_listings UNION SELECT rooms FROM reporting.daily_listing_facts) r) s WHERE bucket IS NOT NULL ORDER BY 1",
+        "query": "SELECT value AS __value, value AS __text FROM reporting.dashboard_filter_options WHERE filter_name = 'room_bucket' ORDER BY sort_order NULLS LAST, value",
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
@@ -1517,13 +1670,13 @@
           "type": "postgres",
           "uid": "olx-postgres"
         },
-        "definition": "SELECT neighborhood AS __value, neighborhood AS __text FROM (SELECT neighborhood FROM reporting.daily_listing_facts WHERE neighborhood IS NOT NULL UNION SELECT location FROM reporting.daily_listing_facts WHERE location IS NOT NULL UNION SELECT COALESCE(NULLIF(location, ''), CASE WHEN latitude IS NULL THEN '(no pin)' ELSE '(unmapped)' END) FROM reporting.dashboard_listings UNION SELECT '(no pin)' UNION SELECT '(unmapped)') s GROUP BY neighborhood ORDER BY 1",
+        "definition": "SELECT value AS __value, value AS __text FROM reporting.dashboard_filter_options WHERE filter_name = 'neighborhood' ORDER BY sort_order NULLS LAST, value",
         "includeAll": true,
         "label": "Neighborhood",
         "multi": true,
         "name": "neighborhood",
         "options": [],
-        "query": "SELECT neighborhood AS __value, neighborhood AS __text FROM (SELECT neighborhood FROM reporting.daily_listing_facts WHERE neighborhood IS NOT NULL UNION SELECT location FROM reporting.daily_listing_facts WHERE location IS NOT NULL UNION SELECT COALESCE(NULLIF(location, ''), CASE WHEN latitude IS NULL THEN '(no pin)' ELSE '(unmapped)' END) FROM reporting.dashboard_listings UNION SELECT '(no pin)' UNION SELECT '(unmapped)') s GROUP BY neighborhood ORDER BY 1",
+        "query": "SELECT value AS __value, value AS __text FROM reporting.dashboard_filter_options WHERE filter_name = 'neighborhood' ORDER BY sort_order NULLS LAST, value",
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,

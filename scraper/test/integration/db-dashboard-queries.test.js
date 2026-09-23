@@ -255,7 +255,6 @@ needsDb(
         ('apt', 8101), ('apt', 8103), ('house', 8102);
       SELECT * FROM reporting.refresh_dashboard_olap();
     `);
-
     const ids = async (
       category,
       minSqm,
@@ -312,6 +311,312 @@ needsDb(
       plan.rows.map((row) => row["QUERY PLAN"]).join("\n"),
       /dashboard_filter_options_order_idx/,
     );
+  },
+);
+
+needsDb(
+  "exits closed helper matches legacy filters and time-boundary semantics",
+  async () => {
+    await reset(db.pool);
+    await db.pool.query(`
+      INSERT INTO saved_searches(search_key, name, url, category) VALUES
+        ('apt', 'apartments', 'https://olx.ba/pretraga', 'apartments'),
+        ('house', 'houses', 'https://olx.ba/pretraga', 'houses');
+      INSERT INTO listings(article_id, url, title, sqm, rooms, price, ppm2,
+                           is_rent, first_seen, last_seen, location, latitude,
+                           longitude, closed_at) VALUES
+        (8301, 'https://olx.ba/artikal/8301', 'closed apartment', 60, '2',
+         120000, 2000, false, now() - interval '20 days',
+         now() - interval '10 days', 'O''Brien', 43.85, 18.4,
+         '2026-09-10 00:00:00+00'),
+        (8302, 'https://olx.ba/artikal/8302', 'closed rental', 100, '3',
+         900, NULL, true, now() - interval '20 days',
+         now() - interval '10 days', 'Borik 1', 43.8, 18.3,
+         '2026-09-11 00:00:00+00'),
+        (8303, 'https://olx.ba/artikal/8303', 'closed unknown apartment', NULL, NULL,
+         50000, NULL, false, now() - interval '20 days',
+         now() - interval '9 days', NULL, NULL, NULL,
+         '2026-09-12 00:00:00+00');
+      INSERT INTO search_results(search_key, article_id) VALUES
+        ('apt', 8301), ('house', 8302), ('apt', 8303);
+      SELECT * FROM reporting.refresh_dashboard_olap();
+      UPDATE olap.listings
+         SET closing_price = CASE article_id
+               WHEN 8301 THEN 120000 WHEN 8302 THEN 900 WHEN 8303 THEN 50000 END,
+             closing_ppm2 = CASE article_id
+               WHEN 8301 THEN 2000 WHEN 8303 THEN 1250 END
+       WHERE article_id IN (8301, 8302, 8303);
+    `);
+    await db.pool.query(`
+      INSERT INTO olap.listing_exit_economics(article_id, opening_price, days_listed)
+      VALUES (8301, 130000, 10), (8302, NULL, NULL), (8303, 100000, 70)
+      ON CONFLICT (article_id) DO UPDATE
+        SET opening_price = EXCLUDED.opening_price,
+            days_listed = EXCLUDED.days_listed;
+    `);
+
+    const selections = [
+      {
+        name: "all",
+        from: "2026-09-10 00:00:00+00",
+        through: "2026-09-12 23:59:59+00",
+        inclusive: true,
+        categories: [],
+        minSqm: null,
+        maxSqm: null,
+        rooms: [],
+        deals: [],
+        neighborhoods: [],
+        expected: [8301, 8302, 8303],
+      },
+      {
+        name: "category-room-deal-neighborhood",
+        from: "2026-09-10 00:00:00+00",
+        through: "2026-09-12 23:59:59+00",
+        inclusive: true,
+        categories: ["apartments"],
+        minSqm: null,
+        maxSqm: null,
+        rooms: ["2"],
+        deals: ["sell"],
+        neighborhoods: ["O'Brien"],
+        expected: [8301],
+      },
+      {
+        name: "null-area-passes-minimum",
+        from: "2026-09-10 00:00:00+00",
+        through: "2026-09-12 23:59:59+00",
+        inclusive: true,
+        categories: [],
+        minSqm: 80,
+        maxSqm: null,
+        rooms: [],
+        deals: [],
+        neighborhoods: [],
+        expected: [8302, 8303],
+      },
+      {
+        name: "exclusive-lower-bound",
+        from: "2026-09-10 00:00:00+00",
+        through: "2026-09-11 00:00:00+00",
+        inclusive: false,
+        categories: [],
+        minSqm: null,
+        maxSqm: null,
+        rooms: [],
+        deals: [],
+        neighborhoods: [],
+        expected: [8302],
+      },
+    ];
+
+    for (const selection of selections) {
+      const args = [
+        selection.from,
+        selection.through,
+        selection.inclusive,
+        selection.categories,
+        selection.minSqm,
+        selection.maxSqm,
+        selection.rooms,
+        selection.deals,
+        selection.neighborhoods,
+      ];
+      const legacy = await db.pool.query(
+        `SELECT l.article_id
+           FROM reporting.listings_closed_filtered($4::text[], $5::numeric,
+             $6::numeric, $9::text[]) l
+          WHERE CASE WHEN $3::boolean THEN l.closed_at >= $1::timestamptz
+                     ELSE l.closed_at > $1::timestamptz END
+            AND l.closed_at <= $2::timestamptz
+            AND (cardinality($7::text[]) = 0 OR
+                 reporting.room_bucket(l.rooms) = ANY($7::text[]))
+            AND (cardinality($8::text[]) = 0 OR
+                 CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY($8::text[]))
+          ORDER BY l.article_id`,
+        args,
+      );
+      const optimized = await db.pool.query(
+        `SELECT l.article_id
+           FROM reporting.exits_closed_filtered(
+             $1::timestamptz, $2::timestamptz, $3::boolean, $4::text[],
+             $5::numeric, $6::numeric, $7::text[], $8::text[], $9::text[]) l
+          ORDER BY l.article_id`,
+        args,
+      );
+      const legacyIds = legacy.rows.map((row) => Number(row.article_id));
+      const optimizedIds = optimized.rows.map((row) => Number(row.article_id));
+      assert.deepEqual(legacyIds, selection.expected, selection.name);
+      assert.deepEqual(optimizedIds, legacyIds, selection.name);
+    }
+
+    const exits = dashboards.find(
+      (item) => item.name === "olx-exits.json",
+    ).dashboard;
+    const filters = {
+      category: [],
+      deal: ["sell", "rent"],
+      rooms: ["0", "1", "2", "3", "4+", "unknown"],
+      neighborhood: [],
+      min_sqm: ["0"],
+      max_sqm: ["99999"],
+    };
+    const optimizedKpis = interpolate(
+      exits.panels.find((panel) => panel.id === 1).targets[0].rawSql,
+      filters,
+    );
+    const comparison = await db.pool.query(`
+      WITH optimized AS (${optimizedKpis}),
+      closed AS MATERIALIZED (
+        SELECT l.article_id, l.closing_ppm2, e.days_listed
+        FROM reporting.listings_closed_filtered(
+          ARRAY[]::text[], 0, 99999, ARRAY[]::text[]) l
+        LEFT JOIN reporting.exit_economics e USING (article_id)
+        WHERE l.closed_at > now() - interval '30 days'
+          AND reporting.room_bucket(l.rooms) = ANY
+            (ARRAY['0','1','2','3','4+','unknown']::text[])
+          AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY
+            (ARRAY['sell','rent']::text[])
+      ),
+      active AS MATERIALIZED (
+        SELECT l.article_id
+        FROM reporting.listings_filtered(
+          ARRAY[]::text[], 0, 99999, ARRAY[]::text[]) l
+        WHERE reporting.room_bucket(l.rooms) = ANY
+            (ARRAY['0','1','2','3','4+','unknown']::text[])
+          AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY
+            (ARRAY['sell','rent']::text[])
+      ),
+      legacy AS (
+        SELECT count(*) AS closed_30d,
+               percentile_cont(0.5) WITHIN GROUP (ORDER BY closing_ppm2)
+                 FILTER (WHERE closing_ppm2 > 0) AS median_exit_ppm2,
+               round(count(*)::float /
+                 NULLIF(count(*)::float + (SELECT count(*)::float FROM active), 0) * 100)::int
+                 AS observed_exit_ratio,
+               percentile_cont(0.5) WITHIN GROUP (ORDER BY days_listed)
+                 AS median_days_on_market
+        FROM closed
+      )
+      SELECT to_jsonb(optimized) AS optimized, to_jsonb(legacy) AS legacy
+      FROM optimized CROSS JOIN legacy`);
+    assert.deepEqual(comparison.rows[0].optimized, comparison.rows[0].legacy);
+
+    const sharedBreakdowns = await db.pool.query(
+      interpolate(
+        exits.panels.find((panel) => panel.id === 7).targets[0].rawSql,
+        filters,
+      ),
+    );
+    const counts = new Map(
+      sharedBreakdowns.rows.map((row) => [
+        `${row.dimension}|${row.bucket}`,
+        Number(row.exits),
+      ]),
+    );
+    assert.equal(counts.get("duration|8-14 d"), 1);
+    assert.equal(counts.get("duration|60+ d"), 2);
+    assert.equal(counts.get("rooms|2"), 1);
+    assert.equal(counts.get("rooms|3"), 1);
+    assert.equal(counts.get("rooms|unknown"), 1);
+    assert.equal(counts.get("discount|0..-10 %"), 1);
+    assert.equal(counts.get("discount|-20 % or worse"), 1);
+    assert.equal(counts.get("discount|(unknown)"), 1);
+  },
+);
+
+needsDb(
+  "shared historical aggregate preserves both priced-share populations",
+  async () => {
+    await reset(db.pool);
+    await db.pool.query(`
+      INSERT INTO olap.daily_listing_facts
+        (day, article_id, price, price_state, ppm2, deal, category,
+         category_memberships, rooms, room_bucket, sqm, location, neighborhood)
+      VALUES
+        ('2026-08-31', 8401, 100000, 'valid', 2000, 'sale', 'apartments',
+         ARRAY['apartments'], '2', '2', 50, 'Centar 1', 'Centar 1'),
+        ('2026-08-31', 8402, 120000, 'valid', NULL, 'sale', 'apartments',
+         ARRAY['apartments'], '2', '2', 60, 'Centar 1', 'Centar 1'),
+        ('2026-08-31', 8403, NULL, 'unpriced', NULL, 'sale', 'apartments',
+         ARRAY['apartments'], '2', '2', 70, 'Centar 1', 'Centar 1'),
+        ('2026-09-01', 8404, 90000, 'valid', 1000, 'sale', 'apartments',
+         ARRAY['apartments'], '2', '2', 45, 'Centar 1', 'Centar 1');
+    `);
+    const exits = dashboards.find(
+      (item) => item.name === "olx-exits.json",
+    ).dashboard;
+    const filters = {
+      category: [],
+      deal: ["sell", "rent"],
+      rooms: ["0", "1", "2", "3", "4+", "unknown"],
+      neighborhood: [],
+      min_sqm: ["0"],
+      max_sqm: ["99999"],
+    };
+    const sharedSql = interpolate(
+      exits.panels
+        .find((panel) => panel.id === 6)
+        .targets.find((target) => target.refId === "B").rawSql,
+      filters,
+    );
+    const factCount = await db.pool.query(
+      "SELECT count(*)::int AS n FROM olap.daily_listing_facts",
+    );
+    assert.equal(factCount.rows[0].n, 4);
+    const client = await reporting.connect();
+    let shared;
+    try {
+      await client.query("SET statement_timeout TO '5s'");
+      shared = await client.query(sharedSql);
+    } finally {
+      client.release();
+    }
+    const legacy = await reporting.query(`
+      SELECT day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time,
+             p25 AS "p25 KM/m2", median AS "median KM/m2", p75 AS "p75 KM/m2",
+             inventory_count AS inventory, priced_count AS "priced sample",
+             estimated_count AS estimated, stale_count AS stale,
+             provisional_day AS provisional
+      FROM reporting.market_daily_filtered(
+        '2026-08-31'::date, '2026-09-01'::date,
+        ARRAY[]::text[], 0, 99999,
+        ARRAY['0','1','2','3','4+','unknown']::text[],
+        ARRAY['sale','rent']::text[], ARRAY[]::text[])
+      ORDER BY day`);
+    const daily = shared.rows.filter((row) => row.period === "daily");
+    const weekly = shared.rows.filter((row) => row.period === "weekly");
+    assert.equal(daily.length, 2);
+    assert.equal(weekly.length, 1);
+    assert.equal(Number(daily[0]["valid price count"]), 2);
+    assert.equal(Number(daily[0]["priced sample"]), 1);
+    assert.equal(Number(daily[1]["valid price count"]), 1);
+    assert.equal(Number(daily[1]["priced sample"]), 1);
+    assert.deepEqual(
+      daily.map((row) => [
+        row.time.toISOString(),
+        Number(row["p25 KM/m2"]),
+        Number(row["median KM/m2"]),
+        Number(row["p75 KM/m2"]),
+        Number(row.inventory),
+        Number(row["priced sample"]),
+        Number(row.estimated),
+        Number(row.stale),
+        row.provisional,
+      ]),
+      legacy.rows.map((row) => [
+        row.time.toISOString(),
+        Number(row["p25 KM/m2"]),
+        Number(row["median KM/m2"]),
+        Number(row["p75 KM/m2"]),
+        Number(row.inventory),
+        Number(row["priced sample"]),
+        Number(row.estimated),
+        Number(row.stale),
+        row.provisional,
+      ]),
+    );
+    assert.equal(Number(weekly[0]["priced share %"]), 75);
   },
 );
 

@@ -186,7 +186,8 @@ test("dashboard metric labels match their query grain and evidence semantics", (
   const pricedShare = panel(exits, 16);
   assert.match(pricedShare.title, /weekly/);
   assert.doesNotMatch(pricedShare.title, /all categories/);
-  assert.match(sql(pricedShare), /weekly/);
+  assert.equal(pricedShare.targets[0].panelId, 6);
+  assert.match(JSON.stringify(pricedShare.transformations), /weekly/);
   for (const id of [3]) {
     const exitRatio = panel(exits, id);
     assert.match(exitRatio.title, /Observed exit ratio/);
@@ -254,21 +255,100 @@ test("overview home, health, and exit KPI groups reuse one aggregate result", ()
     ],
     ["failed_24h", "success_rate_24h", "seconds_since_success", "cards_24h"],
   );
-  assertShared(
-    read("olx-exits.json"),
-    1,
-    [
-      [2, "median_exit_ppm2"],
-      [3, "observed_exit_ratio"],
-      [4, "median_days_on_market"],
-    ],
-    [
-      "closed_30d",
-      "median_exit_ppm2",
-      "observed_exit_ratio",
-      "median_days_on_market",
-    ],
+  const exits = read("olx-exits.json");
+  const source = exits.panels.find((panel) => panel.id === 1);
+  assert.equal(source.datasource.uid, "olx-postgres");
+  assert.equal(source.targets[0].datasource.uid, "olx-postgres");
+  assert.match(source.targets[0].rawSql, /AS closed_30d/);
+  assert.match(source.targets[0].rawSql, /AS median_exit_ppm2/);
+  assert.match(source.targets[0].rawSql, /AS observed_exit_ratio/);
+  assert.match(source.targets[0].rawSql, /AS median_days_on_market/);
+  assert.equal(source.options.reduceOptions.fields, "closed_30d");
+  for (const [id, field] of [
+    [2, "median_exit_ppm2"],
+    [3, "observed_exit_ratio"],
+    [4, "median_days_on_market"],
+  ]) {
+    const panel = exits.panels.find((candidate) => candidate.id === id);
+    assert.equal(panel.datasource.uid, "-- Dashboard --");
+    assert.equal(panel.targets[0].datasource.uid, "-- Dashboard --");
+    assert.equal(panel.targets[0].panelId, 1);
+    assert.deepEqual(panel.transformations?.[0], {
+      id: "filterFieldsByName",
+      options: { include: { names: [field] } },
+    });
+  }
+});
+
+test("exits filters are database backed and dropdowns use the shared cache", () => {
+  const exits = JSON.parse(
+    fs.readFileSync(path.join(dashboardDir, "olx-exits.json"), "utf8"),
   );
+  const panels = new Map(
+    exits.panels.map((candidate) => [candidate.id, candidate]),
+  );
+  const closedTargets = [1, 6, 7, 9, 12, 18, 19, 20];
+  for (const id of closedTargets) {
+    const targetSql = panels
+      .get(id)
+      .targets.map((target) => target.rawSql || "")
+      .join("\n");
+    assert.match(
+      targetSql,
+      /reporting\.exits_closed_filtered\(/,
+      `panel ${id}`,
+    );
+  }
+  assert.match(panels.get(1).targets[0].rawSql, /now\(\) - INTERVAL '30 days'/);
+  assert.match(
+    panels.get(20).targets[0].rawSql,
+    /ARRAY\[\]::text\[\]\) l/,
+    "the neighborhood diagnostic ignores the neighborhood filter",
+  );
+  assert.match(panels.get(20).description, /ignores Neighborhood/);
+  assert.equal(panels.get(10).targets[0].panelId, 7);
+  assert.equal(panels.get(15).targets[0].panelId, 7);
+  assert.equal(panels.get(16).targets[0].panelId, 6);
+  assert.equal(panels.get(7).datasource.uid, "olx-postgres");
+  assert.equal(panels.get(7).targets[0].datasource.uid, "olx-postgres");
+  assert.equal(panels.get(10).datasource.uid, "-- Dashboard --");
+  assert.equal(panels.get(15).datasource.uid, "-- Dashboard --");
+  assert.equal(panels.get(16).datasource.uid, "-- Dashboard --");
+  assert.match(panels.get(7).targets[0].rawSql, /'duration'::text/);
+  assert.match(panels.get(7).targets[0].rawSql, /'rooms'::text/);
+  assert.match(panels.get(7).targets[0].rawSql, /'discount'::text/);
+  assert.equal(panels.get(7).transformations[0].id, "filterByValue");
+  assert.equal(panels.get(10).transformations[0].id, "filterByValue");
+  assert.equal(panels.get(15).transformations[0].id, "filterByValue");
+  assert.equal(panels.get(16).transformations[0].id, "filterByValue");
+  const historical = panels
+    .get(6)
+    .targets.find((target) => target.refId === "B");
+  assert.equal(panels.get(6).datasource.uid, "olx-postgres");
+  assert.equal(historical.datasource.uid, "olx-postgres");
+  assert.match(historical.rawSql, /valid_prices/);
+  assert.match(historical.rawSql, /priced_count/);
+  assert.match(historical.rawSql, /AS "priced share %"/);
+  assert.match(historical.rawSql, /membership_inferred OR attributes_inferred/);
+
+  const sqlTargets = exits.panels
+    .flatMap((panel) => panel.targets || [])
+    .filter((target) => target.rawSql);
+  assert.equal(sqlTargets.length, 9);
+
+  const variables = new Map(
+    exits.templating.list.map((item) => [item.name, item]),
+  );
+  for (const [name, filter] of [
+    ["category", "category"],
+    ["rooms", "room_bucket"],
+    ["neighborhood", "neighborhood"],
+  ]) {
+    const variable = variables.get(name);
+    assert.match(variable.query, /FROM reporting\.dashboard_filter_options/);
+    assert.match(variable.query, new RegExp(`filter_name = '${filter}'`));
+    assert.equal(variable.definition, variable.query);
+  }
 });
 
 test("health dashboard exposes per-search and analytics freshness state", () => {

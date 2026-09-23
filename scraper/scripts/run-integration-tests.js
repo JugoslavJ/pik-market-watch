@@ -122,23 +122,20 @@ try {
   exit = 0;
   let schemaReady = false;
   for (const file of files) {
-    const r = spawnSync(
-      process.execPath,
-      [
-        "--test",
-        "--test-concurrency=1",
-        path.join("test", "integration", file),
-      ],
-      {
-        stdio: "inherit",
-        env: {
-          ...process.env,
-          TEST_DATABASE_URL: DB_URL,
-          TEST_DATABASE_CONTAINER: NAME,
-          ...(schemaReady ? { TEST_DATABASE_SCHEMA_READY: "1" } : {}),
-        },
+    const testArgs = ["--test", "--test-concurrency=1"];
+    if (process.env.TEST_NAME_PATTERN) {
+      testArgs.push(`--test-name-pattern=${process.env.TEST_NAME_PATTERN}`);
+    }
+    testArgs.push(path.join("test", "integration", file));
+    const r = spawnSync(process.execPath, testArgs, {
+      stdio: "inherit",
+      env: {
+        ...process.env,
+        TEST_DATABASE_URL: DB_URL,
+        TEST_DATABASE_CONTAINER: NAME,
+        ...(schemaReady ? { TEST_DATABASE_SCHEMA_READY: "1" } : {}),
       },
-    );
+    });
     if ((r.status ?? 1) !== 0) {
       exit = r.status ?? 1;
       break;
@@ -146,6 +143,16 @@ try {
     schemaReady = true;
   }
 } finally {
+  if (exit !== 0) {
+    const logs = docker(["logs", NAME]);
+    if (logs.stdout.trim()) {
+      console.error("\n--- disposable PostgreSQL logs ---");
+      console.error(logs.stdout.trim().split(/\r?\n/).slice(-120).join("\n"));
+    }
+    if (logs.stderr.trim()) {
+      console.error(logs.stderr.trim().split(/\r?\n/).slice(-120).join("\n"));
+    }
+  }
   docker(["rm", "-f", NAME]);
 }
 process.exit(exit);

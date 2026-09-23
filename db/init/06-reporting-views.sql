@@ -599,6 +599,40 @@ CREATE FUNCTION reporting.listings_closed_filtered(p_category text[], p_min_sqm 
   SELECT l.* FROM public.listings_closed_filtered(
     p_category, p_min_sqm, p_max_sqm, p_neighborhood) l
 $$;
+
+-- Closed-listing dashboard filters stay inside this SECURITY DEFINER helper so
+-- SQL targets can use one trusted OLAP scan with every selected predicate.
+CREATE FUNCTION reporting.exits_closed_filtered(
+    p_from timestamp with time zone, p_through timestamp with time zone,
+    p_from_inclusive boolean, p_category text[], p_min_sqm numeric,
+    p_max_sqm numeric, p_rooms text[], p_deal text[], p_neighborhood text[]
+) RETURNS SETOF reporting.dashboard_listings
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'reporting', 'olap', 'public', 'pg_temp'
+    AS $$
+  SELECT l.*
+    FROM olap.listings l
+   WHERE l.closed_at IS NOT NULL
+     AND (p_from IS NULL OR
+          CASE WHEN p_from_inclusive THEN l.closed_at >= p_from
+               ELSE l.closed_at > p_from END)
+     AND (p_through IS NULL OR l.closed_at <= p_through)
+     AND (p_min_sqm IS NULL OR l.sqm IS NULL OR l.sqm >= p_min_sqm)
+     AND (p_max_sqm IS NULL OR l.sqm IS NULL OR l.sqm <= p_max_sqm)
+     AND (coalesce(cardinality(p_neighborhood), 0) = 0 OR
+          coalesce(nullif(l.location, ''),
+            CASE WHEN l.latitude IS NULL THEN '(no pin)' ELSE '(unmapped)' END)
+            = ANY (p_neighborhood))
+     AND (coalesce(cardinality(p_rooms), 0) = 0 OR
+          reporting.room_bucket(l.rooms) = ANY (p_rooms))
+     AND (coalesce(cardinality(p_deal), 0) = 0 OR
+          (CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END) = ANY (p_deal))
+     AND (coalesce(cardinality(p_category), 0) = 0 OR
+          l.closing_category = ANY (p_category) OR EXISTS (
+            SELECT 1 FROM olap.listing_categories c
+             WHERE c.article_id = l.article_id
+               AND c.category = ANY (p_category)))
+$$;
 --
 -- Name: listings_filtered(text[], numeric, numeric, text[], boolean); Type: FUNCTION; Schema: reporting; Owner: -
 --
