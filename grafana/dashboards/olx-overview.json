@@ -112,7 +112,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": ["lastNotNull"],
-          "fields": "",
+          "fields": "active",
           "values": false
         },
         "textMode": "auto",
@@ -128,16 +128,6 @@
           "format": "table",
           "rawSql": "WITH base AS MATERIALIZED (\n  SELECT * FROM reporting.overview_listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[], ARRAY[${rooms:sqlstring}]::text[], ARRAY[${deal:sqlstring}]::text[])\n)\nSELECT count(*) AS active,\n       count(*) FILTER (WHERE first_seen > now() - INTERVAL '7 days') AS new_7d,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE NOT is_rent AND ppm2 > 0) AS median_sale_ppm2,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY price) FILTER (WHERE is_rent AND price > 0) AS median_rent\nFROM base",
           "refId": "A"
-        }
-      ],
-      "transformations": [
-        {
-          "id": "filterFieldsByName",
-          "options": {
-            "include": {
-              "names": ["active"]
-            }
-          }
         }
       ],
       "id": 1
@@ -994,16 +984,6 @@
         "h": 14
       },
       "title": "Listing map — click a pin to open the ad",
-      "transformations": [
-        {
-          "id": "filterFieldsByName",
-          "options": {
-            "exclude": {
-              "names": ["last_seen"]
-            }
-          }
-        }
-      ],
       "description": "Pins of active listings placed by their ad's map coordinates; respects every filter.",
       "type": "geomap",
       "options": {
@@ -1629,7 +1609,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": ["lastNotNull"],
-          "fields": "",
+          "fields": "actives",
           "values": false
         },
         "textMode": "auto",
@@ -1645,16 +1625,6 @@
           "format": "table",
           "rawSql": "WITH base AS MATERIALIZED (\n  SELECT article_id FROM reporting.overview_listings_filtered(ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${neighborhood:sqlstring}]::text[], ARRAY[${rooms:sqlstring}]::text[], ARRAY[${deal:sqlstring}]::text[])\n), cuts AS (\n  SELECT article_id, max(-delta) AS biggest\n  FROM reporting.price_changes\n  WHERE delta < 0 AND deal = ANY (ARRAY(SELECT CASE WHEN selected = 'sell' THEN 'sale' ELSE selected END FROM unnest(ARRAY[${deal:sqlstring}]::text[]) AS t(selected)))\n  GROUP BY article_id\n), matched AS (\n  SELECT cuts.biggest FROM base JOIN cuts USING (article_id)\n)\nSELECT count(*) AS actives,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY biggest) AS median_biggest\nFROM matched",
           "refId": "A"
-        }
-      ],
-      "transformations": [
-        {
-          "id": "filterFieldsByName",
-          "options": {
-            "include": {
-              "names": ["actives"]
-            }
-          }
         }
       ],
       "id": 19
@@ -1866,8 +1836,8 @@
         "w": 24,
         "h": 9
       },
-      "title": "Asking KM/m² by condition · sales",
-      "description": "Median sale asking KM/m² by condition, including unknown condition. Each group needs at least 5 listings with a positive price per m².",
+      "title": "Asking KM/m² by segment · sales",
+      "description": "Sale listing segments by room count, condition, floor, seller and district. Consumer panels reuse this result and select their own segment.",
       "type": "table",
       "options": {
         "cellHeight": "sm",
@@ -1891,44 +1861,7 @@
           "refId": "A"
         }
       ],
-      "id": 22,
-      "transformations": [
-        {
-          "id": "filterByValue",
-          "options": {
-            "filters": [
-              {
-                "fieldName": "dimension",
-                "config": {
-                  "id": "equal",
-                  "options": {
-                    "value": "condition"
-                  }
-                }
-              }
-            ],
-            "type": "include"
-          }
-        },
-        {
-          "id": "organize",
-          "options": {
-            "indexByName": {
-              "bucket": 0,
-              "listing_count": 1,
-              "median_ppm2": 2
-            },
-            "excludeByName": {
-              "dimension": true,
-              "p25_ppm2": true,
-              "p75_ppm2": true
-            },
-            "renameByName": {
-              "listing_count": "n"
-            }
-          }
-        }
-      ]
+      "id": 22
     },
     {
       "type": "row",
