@@ -511,10 +511,7 @@ needsDb(
     for (const id of [2, 4, 5, 8, 14, 20, 21, 29, 30, 32]) {
       assert.equal(panels.get(id).datasource.type, "datasource");
       assert.equal(panels.get(id).datasource.uid, "-- Dashboard --");
-      assert.equal(
-        panels.get(id).targets[0].datasource.uid,
-        "-- Dashboard --",
-      );
+      assert.equal(panels.get(id).targets[0].datasource.uid, "-- Dashboard --");
     }
     for (const id of [8, 21, 29, 30, 32])
       assert.equal(
