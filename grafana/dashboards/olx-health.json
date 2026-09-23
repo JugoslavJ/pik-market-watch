@@ -237,7 +237,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": ["lastNotNull"],
-          "fields": "success_rate_24h",
+          "fields": "",
           "values": false
         },
         "textMode": "auto",
@@ -254,7 +254,17 @@
           "panelId": 2
         }
       ],
-      "id": 3
+      "id": 3,
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": ["success_rate_24h"]
+            }
+          }
+        }
+      ]
     },
     {
       "datasource": {
@@ -305,7 +315,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": ["lastNotNull"],
-          "fields": "seconds_since_success",
+          "fields": "",
           "values": false
         },
         "textMode": "auto",
@@ -322,7 +332,17 @@
           "panelId": 2
         }
       ],
-      "id": 4
+      "id": 4,
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": ["seconds_since_success"]
+            }
+          }
+        }
+      ]
     },
     {
       "datasource": {
@@ -365,7 +385,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": ["lastNotNull"],
-          "fields": "cards_24h",
+          "fields": "",
           "values": false
         },
         "textMode": "auto",
@@ -382,7 +402,17 @@
           "panelId": 2
         }
       ],
-      "id": 5
+      "id": 5,
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": ["cards_24h"]
+            }
+          }
+        }
+      ]
     },
     {
       "type": "row",

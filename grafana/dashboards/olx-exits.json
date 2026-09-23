@@ -181,7 +181,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": ["lastNotNull"],
-          "fields": "median_exit_ppm2",
+          "fields": "",
           "values": false
         },
         "textMode": "auto",
@@ -198,7 +198,17 @@
           "panelId": 1
         }
       ],
-      "id": 2
+      "id": 2,
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": ["median_exit_ppm2"]
+            }
+          }
+        }
+      ]
     },
     {
       "datasource": {
@@ -241,7 +251,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": ["lastNotNull"],
-          "fields": "observed_exit_ratio",
+          "fields": "",
           "values": false
         },
         "textMode": "auto",
@@ -258,7 +268,17 @@
           "panelId": 1
         }
       ],
-      "id": 3
+      "id": 3,
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": ["observed_exit_ratio"]
+            }
+          }
+        }
+      ]
     },
     {
       "datasource": {
@@ -301,7 +321,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": ["lastNotNull"],
-          "fields": "median_days_on_market",
+          "fields": "",
           "values": false
         },
         "textMode": "auto",
@@ -318,7 +338,17 @@
           "panelId": 1
         }
       ],
-      "id": 4
+      "id": 4,
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": ["median_days_on_market"]
+            }
+          }
+        }
+      ]
     },
     {
       "type": "row",
@@ -954,12 +984,19 @@
           "id": "sortBy",
           "options": {
             "fields": {},
-            "sort": [{ "field": "closed_at", "desc": true }]
+            "sort": [
+              {
+                "field": "closed_at",
+                "desc": true
+              }
+            ]
           }
         },
         {
           "id": "limit",
-          "options": { "limit": 100 }
+          "options": {
+            "limit": 100
+          }
         },
         {
           "id": "organize",
@@ -973,7 +1010,9 @@
               "latitude": 5,
               "longitude": 6
             },
-            "excludeByName": { "location": true }
+            "excludeByName": {
+              "location": true
+            }
           }
         }
       ]

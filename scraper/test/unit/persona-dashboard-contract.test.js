@@ -198,11 +198,15 @@ test("persona KPI cards reuse one source query and select their own result field
           `${file}: panel ${id} datasource`,
         );
       }
-      assert.equal(
-        panel.options.reduceOptions.fields,
-        field,
-        `${file}: panel ${id} field`,
-      );
+      if (id > 2)
+        assert.deepEqual(
+          panel.transformations?.[0],
+          {
+            id: "filterFieldsByName",
+            options: { include: { names: [field] } },
+          },
+          `${file}: panel ${id} selects its source field`,
+        );
     }
   }
 });

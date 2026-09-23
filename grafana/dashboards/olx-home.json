@@ -172,7 +172,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": ["lastNotNull"],
-          "fields": "median_sale_ppm2",
+          "fields": "",
           "values": false
         },
         "textMode": "auto",
@@ -189,7 +189,17 @@
           "panelId": 2
         }
       ],
-      "id": 3
+      "id": 3,
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": ["median_sale_ppm2"]
+            }
+          }
+        }
+      ]
     },
     {
       "datasource": {
@@ -232,7 +242,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": ["lastNotNull"],
-          "fields": "median_rent",
+          "fields": "",
           "values": false
         },
         "textMode": "auto",
@@ -249,7 +259,17 @@
           "panelId": 2
         }
       ],
-      "id": 4
+      "id": 4,
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": ["median_rent"]
+            }
+          }
+        }
+      ]
     },
     {
       "datasource": {
@@ -293,7 +313,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": ["lastNotNull"],
-          "fields": "gross_yield_pct",
+          "fields": "",
           "values": false
         },
         "textMode": "auto",
@@ -310,7 +330,17 @@
           "panelId": 2
         }
       ],
-      "id": 5
+      "id": 5,
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": ["gross_yield_pct"]
+            }
+          }
+        }
+      ]
     },
     {
       "datasource": {
@@ -354,7 +384,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": ["lastNotNull"],
-          "fields": "observed_exit_ratio",
+          "fields": "",
           "values": false
         },
         "textMode": "auto",
@@ -371,7 +401,17 @@
           "panelId": 2
         }
       ],
-      "id": 6
+      "id": 6,
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": ["observed_exit_ratio"]
+            }
+          }
+        }
+      ]
     },
     {
       "datasource": {

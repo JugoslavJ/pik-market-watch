@@ -157,7 +157,7 @@
         "orientation": "auto",
         "reduceOptions": {
           "calcs": ["lastNotNull"],
-          "fields": "within_budget",
+          "fields": "",
           "values": false
         },
         "textMode": "auto",
@@ -172,6 +172,16 @@
           "editorMode": "code",
           "refId": "A",
           "panelId": 2
+        }
+      ],
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": ["within_budget"]
+            }
+          }
         }
       ]
     },
@@ -216,7 +226,7 @@
         "orientation": "auto",
         "reduceOptions": {
           "calcs": ["lastNotNull"],
-          "fields": "below_benchmark",
+          "fields": "",
           "values": false
         },
         "textMode": "auto",
@@ -231,6 +241,16 @@
           "editorMode": "code",
           "refId": "A",
           "panelId": 2
+        }
+      ],
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": ["below_benchmark"]
+            }
+          }
         }
       ]
     },
@@ -275,7 +295,7 @@
         "orientation": "auto",
         "reduceOptions": {
           "calcs": ["lastNotNull"],
-          "fields": "priced / scored",
+          "fields": "",
           "values": false
         },
         "textMode": "auto",
@@ -290,6 +310,16 @@
           "editorMode": "code",
           "refId": "A",
           "panelId": 2
+        }
+      ],
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": ["priced / scored"]
+            }
+          }
         }
       ]
     },

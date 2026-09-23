@@ -218,7 +218,10 @@ test("overview home, health, and exit KPI groups reuse one aggregate result", ()
       assert.equal(panel.targets[0].panelId, sourceId);
       assert.equal(panel.datasource.uid, "-- Dashboard --");
       assert.equal(panel.targets[0].datasource.uid, "-- Dashboard --");
-      assert.equal(panel.options.reduceOptions.fields, field);
+      assert.deepEqual(panel.transformations?.[0], {
+        id: "filterFieldsByName",
+        options: { include: { names: [field] } },
+      });
     }
     for (const field of fields)
       assert.match(source.targets[0].rawSql, new RegExp(`AS ${field}`));
