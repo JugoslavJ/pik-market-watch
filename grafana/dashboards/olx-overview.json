@@ -134,8 +134,8 @@
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
+        "type": "datasource",
+        "uid": "-- Dashboard --"
       },
       "fieldConfig": {
         "defaults": {
@@ -273,8 +273,8 @@
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
+        "type": "datasource",
+        "uid": "-- Dashboard --"
       },
       "fieldConfig": {
         "defaults": {
@@ -351,8 +351,8 @@
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
+        "type": "datasource",
+        "uid": "-- Dashboard --"
       },
       "fieldConfig": {
         "defaults": {
@@ -574,8 +574,8 @@
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
+        "type": "datasource",
+        "uid": "-- Dashboard --"
       },
       "fieldConfig": {
         "defaults": {
@@ -1053,8 +1053,8 @@
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
+        "type": "datasource",
+        "uid": "-- Dashboard --"
       },
       "fieldConfig": {
         "defaults": {
@@ -1631,8 +1631,8 @@
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
+        "type": "datasource",
+        "uid": "-- Dashboard --"
       },
       "fieldConfig": {
         "defaults": {
@@ -1709,8 +1709,8 @@
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
+        "type": "datasource",
+        "uid": "-- Dashboard --"
       },
       "fieldConfig": {
         "defaults": {
@@ -2029,8 +2029,8 @@
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
+        "type": "datasource",
+        "uid": "-- Dashboard --"
       },
       "fieldConfig": {
         "defaults": {
@@ -2122,8 +2122,8 @@
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
+        "type": "datasource",
+        "uid": "-- Dashboard --"
       },
       "fieldConfig": {
         "defaults": {
@@ -2223,8 +2223,8 @@
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
+        "type": "datasource",
+        "uid": "-- Dashboard --"
       },
       "fieldConfig": {
         "defaults": {
