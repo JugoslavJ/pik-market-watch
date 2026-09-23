@@ -54,6 +54,13 @@ CREATE VIEW reporting.dashboard_listings AS
     renewed_at
    FROM olap.listings;
 
+-- Name: dashboard_filter_options; Type: VIEW; Schema: reporting; Owner: -
+--
+
+CREATE VIEW reporting.dashboard_filter_options AS
+ SELECT filter_name, value, sort_order
+   FROM olap.dashboard_filter_options;
+
 --
 -- Name: price_changes; Type: VIEW; Schema: reporting; Owner: -
 --
@@ -569,6 +576,41 @@ CREATE FUNCTION reporting.listings_filtered(p_category text[], p_min_sqm numeric
     AS $$
   SELECT l.* FROM public.listings_filtered(
     p_category, p_min_sqm, p_max_sqm, p_neighborhood, p_active_only) l
+$$;
+
+-- Name: overview_listings_filtered(text[], numeric, numeric, text[], text[], text[], boolean); Type: FUNCTION; Schema: reporting; Owner: -
+--
+
+CREATE FUNCTION reporting.overview_listings_filtered(
+    p_category text[], p_min_sqm numeric, p_max_sqm numeric,
+    p_neighborhood text[], p_rooms text[], p_deal text[],
+    p_active_only boolean DEFAULT true
+) RETURNS SETOF reporting.dashboard_listings
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'reporting', 'olap', 'public', 'pg_temp'
+    AS $$
+  SELECT l.*
+    FROM olap.listings l
+    LEFT JOIN olap.current_listing_scores s USING (article_id)
+   WHERE (NOT p_active_only OR
+          (l.closed_at IS NULL AND l.last_seen > now() - interval '14 days'))
+     AND (p_min_sqm IS NULL OR l.sqm IS NULL OR l.sqm >= p_min_sqm)
+     AND (p_max_sqm IS NULL OR l.sqm IS NULL OR l.sqm <= p_max_sqm)
+     AND (coalesce(cardinality(p_neighborhood), 0) = 0 OR
+          coalesce(nullif(l.location, ''),
+            CASE WHEN l.latitude IS NULL THEN '(no pin)' ELSE '(unmapped)' END)
+            = ANY (p_neighborhood))
+     AND (coalesce(cardinality(p_rooms), 0) = 0 OR
+          coalesce(s.room_bucket, reporting.room_bucket(l.rooms)) = ANY (p_rooms))
+     AND (coalesce(cardinality(p_deal), 0) = 0 OR
+          (CASE WHEN l.is_rent THEN 'rent' ELSE 'sale' END) = ANY (
+            ARRAY(SELECT CASE WHEN selected = 'sell' THEN 'sale' ELSE selected END
+                    FROM unnest(p_deal) AS d(selected))))
+     AND (coalesce(cardinality(p_category), 0) = 0 OR
+          l.closing_category = ANY (p_category) OR EXISTS (
+            SELECT 1 FROM olap.listing_categories c
+             WHERE c.article_id = l.article_id
+               AND c.category = ANY (p_category)))
 $$;
 
 

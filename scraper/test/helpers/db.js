@@ -46,6 +46,7 @@ async function reset(pool) {
     olap.comparison_price_changes,
     olap.listings,
     olap.listing_categories,
+    olap.dashboard_filter_options,
     olap.market_daily,
     olap.listing_price_changes,
     olap.listing_exit_economics`);

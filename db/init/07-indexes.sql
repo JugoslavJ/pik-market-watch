@@ -11,6 +11,10 @@ CREATE INDEX current_listing_scores_olap_first_seen_idx ON olap.current_listing_
 
 CREATE INDEX current_listing_scores_olap_market_idx ON olap.current_listing_scores USING btree (deal, property_type, neighborhood, room_bucket);
 
+-- Supports filter-name lookups followed by deterministic option ordering.
+CREATE INDEX dashboard_filter_options_order_idx
+    ON olap.dashboard_filter_options USING btree (filter_name, sort_order, value);
+
 --
 -- Name: current_listing_scores_olap_reduction_idx; Type: INDEX; Schema: olap; Owner: -
 --

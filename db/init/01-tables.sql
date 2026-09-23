@@ -505,6 +505,14 @@ CREATE TABLE olap.listing_categories (
     CONSTRAINT olap_listing_categories_category_nonblank_ck CHECK (((category IS NULL) OR (btrim(category) <> ''::text)))
 );
 
+-- Small indexed value sets used by Grafana dashboard variables.
+CREATE TABLE olap.dashboard_filter_options (
+    filter_name text NOT NULL,
+    value text NOT NULL,
+    sort_order integer,
+    CONSTRAINT olap_dashboard_filter_options_pkey PRIMARY KEY (filter_name, value)
+);
+
 --
 -- Name: listing_exit_economics; Type: TABLE; Schema: olap; Owner: -
 --

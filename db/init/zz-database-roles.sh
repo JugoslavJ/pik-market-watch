@@ -138,6 +138,11 @@ WHERE n.nspname = 'reporting' AND p.provolatile <> 'v' \gexec
 SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT ALL ON TABLES TO %I', :'migrator_user', :'app_user') \gexec
 SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT ALL ON SEQUENCES TO %I', :'migrator_user', :'app_user') \gexec
 
+-- Reporting objects are created by the migrator after this bootstrap runs.
+-- Give the read-only Grafana role access to future reporting views/functions.
+SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA reporting GRANT SELECT ON TABLES TO %I', :'migrator_user', :'reporting_user') \gexec
+SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA reporting GRANT EXECUTE ON FUNCTIONS TO %I', :'migrator_user', :'reporting_user') \gexec
+
 REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC;
 SELECT format('GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO %I', :'app_user') \gexec
 SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC',

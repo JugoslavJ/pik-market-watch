@@ -91,6 +91,56 @@ END $$;
 -- Name: refresh_dashboard_olap_full(); Type: FUNCTION; Schema: reporting; Owner: -
 --
 
+CREATE FUNCTION reporting.refresh_dashboard_filter_options() RETURNS bigint
+    LANGUAGE plpgsql
+    SET search_path TO 'pg_catalog', 'reporting', 'olap', 'public', 'pg_temp'
+    AS $$
+DECLARE v_rows bigint;
+BEGIN
+  TRUNCATE olap.dashboard_filter_options;
+  INSERT INTO olap.dashboard_filter_options(filter_name, value, sort_order)
+  WITH values AS (
+    SELECT 'category'::text AS filter_name, category AS value
+      FROM reporting.saved_searches
+    UNION ALL
+    SELECT 'category', closing_category FROM reporting.dashboard_listings
+    UNION ALL
+    SELECT 'category', category FROM reporting.daily_listing_facts
+    UNION ALL
+    SELECT 'category', unnest(category_memberships)
+      FROM reporting.daily_listing_facts
+    UNION ALL
+    SELECT 'room_bucket', reporting.room_bucket(rooms)
+      FROM reporting.dashboard_listings
+    UNION ALL
+    SELECT 'room_bucket', room_bucket FROM reporting.daily_listing_facts
+    UNION ALL
+    SELECT 'neighborhood', neighborhood FROM reporting.daily_listing_facts
+    UNION ALL
+    SELECT 'neighborhood', location FROM reporting.daily_listing_facts
+    UNION ALL
+    SELECT 'neighborhood', COALESCE(NULLIF(location, ''),
+             CASE WHEN latitude IS NULL THEN '(no pin)' ELSE '(unmapped)' END)
+      FROM reporting.dashboard_listings
+    UNION ALL
+    SELECT 'neighborhood', '(no pin)'
+    UNION ALL
+    SELECT 'neighborhood', '(unmapped)'
+  ), distinct_values AS (
+    SELECT DISTINCT filter_name, value
+      FROM values
+     WHERE value IS NOT NULL
+  ), ordered_values AS (
+    SELECT filter_name, value,
+           row_number() OVER (PARTITION BY filter_name ORDER BY value)::integer AS sort_order
+      FROM distinct_values
+  )
+  SELECT filter_name, value, sort_order FROM ordered_values;
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  RETURN v_rows;
+END
+$$;
+
 CREATE FUNCTION reporting.refresh_dashboard_olap_full() RETURNS TABLE(refresh_id bigint, refreshed_at timestamp with time zone, rows_written bigint)
     LANGUAGE plpgsql
     SET jit TO 'off'
@@ -118,7 +168,8 @@ BEGIN
            olap.public_daily_market,
            olap.public_price_reductions,
            olap.public_exit_cycles,
-           olap.public_freshness;
+           olap.public_freshness,
+           olap.dashboard_filter_options;
 
   INSERT INTO olap.listings SELECT * FROM listings;
   GET DIAGNOSTICS v_rows = ROW_COUNT;
@@ -154,6 +205,14 @@ BEGIN
   v_total := v_total + v_rows;
   INSERT INTO olap.refresh_state VALUES ('daily_listing_facts', v_at, v_rows,
     v_at, v_id)
+  ON CONFLICT (mart) DO UPDATE SET refreshed_at=excluded.refreshed_at,
+    row_count=excluded.row_count, source_watermark=excluded.source_watermark,
+    refresh_id=excluded.refresh_id;
+
+  SELECT reporting.refresh_dashboard_filter_options() INTO v_rows;
+  v_total := v_total + v_rows;
+  INSERT INTO olap.refresh_state VALUES ('dashboard_filter_options', v_at,
+    v_rows, v_at, v_id)
   ON CONFLICT (mart) DO UPDATE SET refreshed_at=excluded.refreshed_at,
     row_count=excluded.row_count, source_watermark=excluded.source_watermark,
     refresh_id=excluded.refresh_id;
@@ -418,6 +477,12 @@ BEGIN
       WHERE q.day=d.day AND q.generation=d.generation;
   END IF;
 
+  IF EXISTS (SELECT 1 FROM olap_dirty_days)
+     OR EXISTS (SELECT 1 FROM olap_dirty_articles) THEN
+    SELECT reporting.refresh_dashboard_filter_options() INTO v_rows;
+    v_total := v_total + v_rows;
+  END IF;
+
   -- Freshness is a tiny aggregate and has no article/day grain.
   DELETE FROM olap.public_freshness;
   INSERT INTO olap.public_freshness SELECT * FROM reporting.freshness_source;
@@ -430,6 +495,7 @@ BEGIN
     ('lifecycle_cycles',v_at,(SELECT count(*) FROM olap.lifecycle_cycles),v_at,v_id),
     ('lifecycle_movements',v_at,(SELECT count(*) FROM olap.lifecycle_movements),v_at,v_id),
     ('comparison_price_changes',v_at,(SELECT count(*) FROM olap.comparison_price_changes),v_at,v_id),
+    ('dashboard_filter_options',v_at,(SELECT count(*) FROM olap.dashboard_filter_options),v_at,v_id),
     ('legacy_dashboard_contracts',v_at,(SELECT count(*) FROM olap.market_daily)+(SELECT count(*) FROM olap.listing_price_changes)+(SELECT count(*) FROM olap.listing_exit_economics),v_at,v_id),
     ('public_dashboard_contracts',v_at,(SELECT count(*) FROM olap.public_current_listings)+(SELECT count(*) FROM olap.public_daily_market)+(SELECT count(*) FROM olap.public_price_reductions)+(SELECT count(*) FROM olap.public_exit_cycles)+(SELECT count(*) FROM olap.public_freshness),v_at,v_id)
   ON CONFLICT(mart) DO UPDATE SET refreshed_at=excluded.refreshed_at,row_count=excluded.row_count,

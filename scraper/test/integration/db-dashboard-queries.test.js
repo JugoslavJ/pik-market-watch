@@ -226,6 +226,89 @@ needsDb(
   },
 );
 
+needsDb(
+  "overview filter options publish and overview filters apply independently",
+  async () => {
+    await reset(db.pool);
+    await db.pool.query(`
+      INSERT INTO saved_searches(search_key, name, url, category) VALUES
+        ('apt', 'apartments', 'https://olx.ba/pretraga', 'apartments'),
+        ('house', 'houses', 'https://olx.ba/pretraga', 'houses'),
+        ('land', 'land', 'https://olx.ba/pretraga', 'land');
+      INSERT INTO listings(article_id, url, title, sqm, rooms, price, ppm2,
+                           is_rent, first_seen, last_seen, location, latitude,
+                           longitude, closed_at) VALUES
+        (8101, 'https://olx.ba/artikal/8101', 'sale apartment', 60, '2',
+         120000, 2000, false, now(), now(), 'O''Brien', 43.85, 18.4, NULL),
+        (8102, 'https://olx.ba/artikal/8102', 'rental house', 90, '3',
+         900, NULL, true, now(), now(), NULL, NULL, NULL, NULL),
+        (8103, 'https://olx.ba/artikal/8103', 'stale apartment', 40, '1',
+         50000, 1250, false, now() - interval '30 days',
+         now() - interval '20 days', NULL, 43.8, 18.3, NULL);
+      INSERT INTO search_results(search_key, article_id) VALUES
+        ('apt', 8101), ('apt', 8103), ('house', 8102);
+      SELECT * FROM reporting.refresh_dashboard_olap();
+    `);
+
+    const ids = async (
+      category,
+      minSqm,
+      maxSqm,
+      neighborhood,
+      rooms,
+      deal,
+      active = true,
+    ) => {
+      const result = await db.pool.query(
+        `SELECT article_id FROM reporting.overview_listings_filtered(
+           $1::text[], $2::numeric, $3::numeric, $4::text[], $5::text[],
+           $6::text[], $7::boolean) ORDER BY article_id`,
+        [category, minSqm, maxSqm, neighborhood, rooms, deal, active],
+      );
+      return result.rows.map((row) => Number(row.article_id));
+    };
+    assert.deepEqual(await ids([], null, null, [], [], []), [8101, 8102]);
+    assert.deepEqual(await ids(["apartments"], null, null, [], [], []), [8101]);
+    assert.deepEqual(await ids([], 80, null, [], [], []), [8102]);
+    assert.deepEqual(await ids([], null, 70, [], [], []), [8101]);
+    assert.deepEqual(await ids([], null, null, ["O'Brien"], [], []), [8101]);
+    assert.deepEqual(await ids([], null, null, [], ["2"], []), [8101]);
+    assert.deepEqual(await ids([], null, null, [], [], ["sell"]), [8101]);
+    assert.deepEqual(await ids([], null, null, [], [], ["rent"]), [8102]);
+    assert.deepEqual(
+      await ids([], null, null, [], [], [], false),
+      [8101, 8102, 8103],
+    );
+
+    const options = await db.pool.query(`
+      SELECT filter_name, value FROM reporting.dashboard_filter_options
+       ORDER BY filter_name, value`);
+    const values = new Map();
+    for (const row of options.rows) {
+      if (!values.has(row.filter_name)) values.set(row.filter_name, new Set());
+      values.get(row.filter_name).add(row.value);
+    }
+    assert.ok(values.get("category").has("land"));
+    assert.ok(values.get("room_bucket").has("2"));
+    assert.ok(values.get("neighborhood").has("O'Brien"));
+    assert.ok(values.get("neighborhood").has("(no pin)"));
+    assert.ok(values.get("neighborhood").has("(unmapped)"));
+
+    await db.pool.query(`
+      INSERT INTO olap.dashboard_filter_options(filter_name, value, sort_order)
+      SELECT 'unused', 'plan-' || n, n FROM generate_series(1, 10000) AS n;
+      ANALYZE olap.dashboard_filter_options`);
+    const plan = await db.pool.query(`EXPLAIN (COSTS)
+      SELECT value FROM reporting.dashboard_filter_options
+       WHERE filter_name = 'category'
+       ORDER BY sort_order NULLS LAST, value`);
+    assert.match(
+      plan.rows.map((row) => row["QUERY PLAN"]).join("\n"),
+      /dashboard_filter_options_order_idx/,
+    );
+  },
+);
+
 needsDb("failed OLAP publication preserves the prior generation", async () => {
   await reset(db.pool);
   await db.pool.query(`INSERT INTO listings(article_id, url, title)

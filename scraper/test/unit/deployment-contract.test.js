@@ -42,7 +42,10 @@ test("database checkpoint settings avoid long scrape stalls", () => {
 
 test("Compose and migration tooling target PostgreSQL 18", () => {
   assert.match(compose, /baosystems\/postgis:18-3\.6@sha256:/);
-  assert.match(compose, /name: \$\{POSTGRES_VOLUME_NAME:-olx-price-ext_pgdata_pg18\}/);
+  assert.match(
+    compose,
+    /name: \$\{POSTGRES_VOLUME_NAME:-olx-price-ext_pgdata_pg18\}/,
+  );
   const migration = fs.readFileSync(
     path.join(ROOT, "db", "migrate-pg16-to-pg18.sh"),
     "utf8",
