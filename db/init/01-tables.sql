@@ -276,6 +276,15 @@ CREATE TABLE olap.daily_listing_facts (
     asking_rate_unit text,
     deal text,
     neighborhood text,
+    category text,
+    category_memberships text[],
+    rooms text,
+    sqm numeric,
+    location text,
+    membership_inferred boolean NOT NULL DEFAULT false,
+    attributes_inferred boolean NOT NULL DEFAULT false,
+    stale_observation boolean NOT NULL DEFAULT false,
+    provisional_day boolean NOT NULL DEFAULT false,
     CONSTRAINT olap_daily_listing_facts_currency_ck CHECK (((currency IS NULL) OR (currency = 'KM'::text) OR (currency ~ '^[A-Z]{3}$'::text)))
 );
 

@@ -1,9 +1,7 @@
 # Database schema
 
 `init/` is the canonical current schema. The SQL is split by dependency and
-responsibility for readability. Files `13` through `15` are additive,
-idempotent changes required to upgrade existing volumes; they also run on
-fresh volumes so they finish at the same schema state.
+responsibility for readability.
 
 | File                                  | Responsibility                                                                      |
 | ------------------------------------- | ----------------------------------------------------------------------------------- |
@@ -20,9 +18,6 @@ fresh volumes so they finish at the same schema state.
 | `10-seed-and-access.sql`              | Initial control rows and reporting grants                                           |
 | `11-postgis.sql`                      | Derived neighborhood geometry validation and finalization                           |
 | `12-pg-stat-statements.sql`           | Performance instrumentation extension (also applied to existing volumes)            |
-| `13-stage5-historical-olap-facts.sql` | Additive historical fact columns, source publication, and direct physical filtering |
-| `14-stage6-targeted-olap-analyze.sql` | Restricted post-publication ANALYZE for current marts and published daily partitions |
-| `15-stage8-olap-health-generations.sql` | Keep refresh-generation health aligned with all nine published marts |
 | `zz-database-roles.sh`                | Runtime ownership and reader permissions                                            |
 
 Fresh volumes execute these files in lexical order. The application runner
@@ -39,8 +34,7 @@ extensions that must be installed on an existing volume may be added as a
 new, idempotent, lexically ordered file and applied by the same migrator. The
 dedicated Compose migrator performs the required bootstrap-admin preflight for
 extensions that PostgreSQL does not permit the migrator owner role to create;
-the extension file is still tracked transactionally in `schema_migrations`. Do
-not use that mechanism to override an earlier schema definition.
+the extension file is still tracked transactionally in `schema_migrations`.
 
 ## OLTP and OLAP boundary
 

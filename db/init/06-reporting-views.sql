@@ -309,6 +309,39 @@ CREATE VIEW reporting.daily_listing_facts AS
      LEFT JOIN public.listing_daily_state d ON (((d.day = f.day) AND (d.article_id = f.article_id))))
      LEFT JOIN public.listings l ON ((l.article_id = f.article_id)));
 
+-- Historical dashboard queries read the immutable published fact grain.
+--
+-- Name: daily_listing_facts_olap; Type: VIEW; Schema: reporting; Owner: -
+--
+
+CREATE VIEW reporting.daily_listing_facts_olap AS
+ SELECT f.day,
+    f.article_id,
+    f.price_state,
+    f.ppm2,
+    f.deal,
+    f.category,
+    f.category_memberships,
+    f.rooms,
+    f.room_bucket,
+    f.sqm,
+    f.neighborhood,
+    f.location,
+    f.price,
+    f.membership_inferred,
+    f.attributes_inferred,
+    f.stale_observation,
+    f.provisional_day
+   FROM olap.daily_listing_facts f;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'olx_reporting') THEN
+    GRANT SELECT ON reporting.daily_listing_facts_olap TO olx_reporting;
+  END IF;
+END
+$$;
+
 --
 -- Name: evidence_timeline; Type: VIEW; Schema: reporting; Owner: -
 --
@@ -491,7 +524,7 @@ CREATE VIEW reporting.olap_health AS
     min(refreshed_at) AS oldest_mart_at,
     (count(*))::integer AS tracked_marts,
     (count(DISTINCT refresh_id))::integer AS generation_count,
-    ((count(DISTINCT refresh_id) = 1) AND (count(*) = 8)) AS generation_consistent,
+    ((count(DISTINCT refresh_id) = 1) AND (count(*) = 9)) AS generation_consistent,
     (max(refreshed_at) >= (now() - '02:00:00'::interval)) AS refresh_is_fresh,
     (max(EXTRACT(epoch FROM (now() - refreshed_at))))::bigint AS maximum_age_seconds,
     (sum(row_count))::bigint AS tracked_rows

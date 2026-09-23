@@ -7,7 +7,7 @@ const test = require("node:test");
 
 const init = path.resolve(__dirname, "../../../db/init");
 
-test("init contains the canonical schema and additive OLAP migrations", () => {
+test("init contains only the canonical schema baseline", () => {
   const sqlFiles = fs
     .readdirSync(init)
     .filter((name) => name.endsWith(".sql"))
@@ -26,17 +26,11 @@ test("init contains the canonical schema and additive OLAP migrations", () => {
     "10-seed-and-access.sql",
     "11-postgis.sql",
     "12-pg-stat-statements.sql",
-    "13-stage5-historical-olap-facts.sql",
-    "14-stage6-targeted-olap-analyze.sql",
-    "15-stage8-olap-health-generations.sql",
   ]);
 
-  const migrationFiles = fs
-    .readdirSync(init)
-    .filter((name) => /^(1[3-9]|[2-9]\d)-/.test(name));
-  assert.deepEqual(migrationFiles, [
-    "13-stage5-historical-olap-facts.sql",
-    "14-stage6-targeted-olap-analyze.sql",
-    "15-stage8-olap-health-generations.sql",
-  ]);
+  assert.equal(
+    fs.readdirSync(init).some((name) => /^(1[3-9]|[2-9]\d)-/.test(name)),
+    false,
+    "all current schema changes belong in their canonical baseline files",
+  );
 });

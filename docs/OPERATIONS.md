@@ -55,26 +55,6 @@ This transfers object ownership to `olx_migrator` and refreshes the
 writer/reporting grants. Do this before
 starting Grafana or the scraper with the new credentials.
 
-### PostgreSQL 16 to 18 migration
-
-PostgreSQL major versions cannot start from the same data directory. The
-checked-in Compose stack uses PostgreSQL 18 and the versioned volume
-`olx-price-ext_pgdata_pg18`. To migrate an existing PostgreSQL 16 volume,
-schedule a maintenance window, confirm the latest backup is available, and
-run this from the repository root:
-
-```bash
-bash db/migrate-pg16-to-pg18.sh --yes
-```
-
-The script stops Compose services, starts the original volume with the pinned
-PostgreSQL 16 image, creates and verifies a custom-format dump, restores it to
-a new PostgreSQL 18 volume, runs the normal migrator, and starts the stack
-again. It never removes or modifies `olx-price-ext_pgdata`; keep that volume
-and the verified dump until the PostgreSQL 18 deployment has been validated.
-The target volume name can be overridden with `POSTGRES_VOLUME_NAME` in `.env`
-or `TARGET_VOLUME` when a different empty Docker volume is required.
-
 Search configuration is read from `config/searches.json`; `SEARCH_URLS` is an environment override for a bare scraper process or an explicit `docker compose run -e SEARCH_URLS=...` invocation. The scraper also accepts `SCRAPE_USER_AGENT`, `HEALTH_PORT`, and pacing/health variables (`MAX_PAGES`, `CONCURRENCY`, `PAGE_DELAY_MS`, `API_PER_PAGE`, `API_TIMEOUT_MS`, `MAX_GEO_FETCHES`, `GEO_CONCURRENCY`, `GEO_DELAY_MS`, `SCRAPE_MIN_GAP_MINUTES`, `ABANDONED_RUN_AFTER_MINUTES`, `DETAIL_JOB_LEASE_MINUTES`, and `HEALTH_FAILURE_THRESHOLD`). Compose injects `ABANDONED_RUN_AFTER_MINUTES`, `DETAIL_JOB_LEASE_MINUTES`, and `ANALYTICS_REBUILD_MAX_DAYS`; pass the other tuning variables explicitly with `docker compose run -e NAME=value` or set them in a supported deployment change.
 
 Grafana is HTTP-only inside the stack. Local development uses

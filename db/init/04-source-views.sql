@@ -2021,7 +2021,16 @@ CREATE VIEW reporting.daily_listing_facts_source AS
     asking_price_unit,
     asking_rate_unit,
     deal,
-    neighborhood
+    neighborhood,
+    category,
+    category_memberships,
+    rooms,
+    sqm,
+    location,
+    membership_inferred,
+    attributes_inferred,
+    stale_observation,
+    provisional_day
    FROM reporting.daily_listing_facts_source_canonical s;
 
 --

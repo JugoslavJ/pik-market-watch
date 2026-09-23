@@ -71,19 +71,17 @@ test("publication analysis invokes the scoped OLAP analyze function", async () =
   assert.deepEqual(result, { relations: 3 });
 });
 
-test("database analyze migration restricts dynamic targets to registered fact children", () => {
-  const migration = fs.readFileSync(
-    path.resolve(
-      __dirname,
-      "../../../db/init/14-stage6-targeted-olap-analyze.sql",
-    ),
+test("canonical schema restricts analyze targets to registered fact children", () => {
+  const schema = fs.readFileSync(
+    path.resolve(__dirname, "../../../db/init/03-functions.sql"),
     "utf8",
   );
 
-  assert.match(migration, /SECURITY DEFINER/);
-  assert.match(migration, /parent_table = 'daily_listing_facts'/);
-  assert.match(migration, /ANALYZE olap\.listings/);
-  assert.match(migration, /ANALYZE olap\.listing_categories/);
-  assert.match(migration, /EXECUTE format\('ANALYZE %I\.%I'/);
-  assert.match(migration, /REVOKE|GRANT EXECUTE ON FUNCTION/);
+  assert.match(schema, /CREATE FUNCTION public\.analyze_published_olap/);
+  assert.match(schema, /SECURITY DEFINER/);
+  assert.match(schema, /parent_table = 'daily_listing_facts'/);
+  assert.match(schema, /ANALYZE olap\.listings/);
+  assert.match(schema, /ANALYZE olap\.listing_categories/);
+  assert.match(schema, /EXECUTE format\('ANALYZE %I\.%I'/);
+  assert.match(schema, /REVOKE ALL ON FUNCTION public\.analyze_published_olap/);
 });
