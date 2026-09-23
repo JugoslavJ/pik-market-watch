@@ -496,13 +496,19 @@ needsDb(
     assert.match(panels.get(1).targets[0].rawSql, /AS new_7d/);
     assert.match(panels.get(1).targets[0].rawSql, /AS median_sale_ppm2/);
     assert.match(panels.get(1).targets[0].rawSql, /AS median_rent/);
+    assert.equal(panels.get(1).transformations, undefined);
+    assert.equal(panels.get(1).options.reduceOptions.fields, "active");
     assert.equal(panels.get(2).targets[0].panelId, 1);
     assert.equal(panels.get(4).targets[0].panelId, 1);
     assert.equal(panels.get(5).targets[0].panelId, 1);
     assert.equal(panels.get(20).targets[0].panelId, 19);
+    assert.equal(panels.get(19).transformations, undefined);
+    assert.equal(panels.get(19).options.reduceOptions.fields, "actives");
     for (const id of [8, 21, 29, 30, 32])
       assert.equal(panels.get(id).targets[0].panelId, 22);
-    for (const id of [8, 21, 22, 29, 30, 32])
+    assert.equal(panels.get(22).transformations, undefined);
+    assert.equal(panels.get(13).transformations, undefined);
+    for (const id of [8, 21, 29, 30, 32])
       assert.equal(
         panels
           .get(id)
