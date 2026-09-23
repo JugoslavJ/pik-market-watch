@@ -96,10 +96,8 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
+          "calcs": ["lastNotNull"],
+          "fields": "matches",
           "values": false
         },
         "textMode": "auto",
@@ -113,15 +111,15 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH matches AS MATERIALIZED (\n  SELECT *\n    FROM reporting.agent_listing_scope(\n    ${deal:sqlstring},\n    ${property_type:sqlstring},\n    ARRAY[${neighborhood:sqlstring}]::text[],\n    ARRAY[${rooms:sqlstring}]::text[],\n    ${min_area:sqlstring},\n    ${max_area:sqlstring},\n    ARRAY[${condition:sqlstring}]::text[],\n    ARRAY[${furnishing:sqlstring}]::text[],\n    ARRAY[${parking:sqlstring}]::text[],\n    ARRAY[${seller_type:sqlstring}]::text[],\n    ${min_price:sqlstring},\n    ${max_price:sqlstring},\n    ${min_rate:sqlstring},\n    ${max_rate:sqlstring},\n    ${min_score:sqlstring},\n    ${max_score:sqlstring},\n    ${view:sqlstring},\n    ${pricing_position:sqlstring},\n    ARRAY[${review_signals:sqlstring}]::text[],\n    ${analysis_days:sqlstring},\n    true\n  )\n)\nSELECT count(DISTINCT article_id)::int AS matches FROM matches",
+          "rawSql": "WITH matches AS MATERIALIZED (\n  SELECT * FROM reporting.agent_listing_scope(\n    ${deal:sqlstring},\n    ${property_type:sqlstring},\n    ARRAY[${neighborhood:sqlstring}]::text[],\n    ARRAY[${rooms:sqlstring}]::text[],\n    ${min_area:sqlstring},\n    ${max_area:sqlstring},\n    ARRAY[${condition:sqlstring}]::text[],\n    ARRAY[${furnishing:sqlstring}]::text[],\n    ARRAY[${parking:sqlstring}]::text[],\n    ARRAY[${seller_type:sqlstring}]::text[],\n    ${min_price:sqlstring},\n    ${max_price:sqlstring},\n    ${min_rate:sqlstring},\n    ${max_rate:sqlstring},\n    ${min_score:sqlstring},\n    ${max_score:sqlstring},\n    ${view:sqlstring},\n    ${pricing_position:sqlstring},\n    ARRAY[${review_signals:sqlstring}]::text[],\n    ${analysis_days:sqlstring},\n    true\n  )\n)\nSELECT count(DISTINCT article_id)::int AS matches,\n       concat(count(*) FILTER (WHERE asking_price IS NOT NULL), ' / ', count(*) FILTER (WHERE score IS NOT NULL)) AS \"priced / scored\",\n       CASE ${deal:sqlstring}\n         WHEN 'rent' THEN concat(round(percentile_cont(0.5) WITHIN GROUP (ORDER BY asking_rate) FILTER (WHERE asking_rate IS NOT NULL)), ' KM/m²/month')\n         ELSE concat(round(percentile_cont(0.5) WITHIN GROUP (ORDER BY asking_rate) FILTER (WHERE asking_rate IS NOT NULL)), ' KM/m²')\n       END AS \"median asking rate\",\n       count(*) FILTER (WHERE latest_reduction_at >= now() - make_interval(days => reporting.numeric_bound(${analysis_days:sqlstring}, 'analysis window', 90)::int))::int AS reductions\n  FROM matches",
           "refId": "A"
         }
       ]
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
+        "type": "datasource",
+        "uid": "-- Dashboard --"
       },
       "id": 3,
       "title": "Eligible priced / scored",
@@ -158,10 +156,8 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
+          "calcs": ["lastNotNull"],
+          "fields": "priced / scored",
           "values": false
         },
         "textMode": "auto",
@@ -170,20 +166,19 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
+            "type": "datasource",
+            "uid": "-- Dashboard --"
           },
           "editorMode": "code",
-          "format": "table",
-          "rawSql": "WITH matches AS MATERIALIZED (\n  SELECT *\n    FROM reporting.agent_listing_scope(\n    ${deal:sqlstring},\n    ${property_type:sqlstring},\n    ARRAY[${neighborhood:sqlstring}]::text[],\n    ARRAY[${rooms:sqlstring}]::text[],\n    ${min_area:sqlstring},\n    ${max_area:sqlstring},\n    ARRAY[${condition:sqlstring}]::text[],\n    ARRAY[${furnishing:sqlstring}]::text[],\n    ARRAY[${parking:sqlstring}]::text[],\n    ARRAY[${seller_type:sqlstring}]::text[],\n    ${min_price:sqlstring},\n    ${max_price:sqlstring},\n    ${min_rate:sqlstring},\n    ${max_rate:sqlstring},\n    ${min_score:sqlstring},\n    ${max_score:sqlstring},\n    ${view:sqlstring},\n    ${pricing_position:sqlstring},\n    ARRAY[${review_signals:sqlstring}]::text[],\n    ${analysis_days:sqlstring},\n    true\n  )\n)\nSELECT concat(count(*) FILTER (WHERE asking_price IS NOT NULL), ' / ', count(*) FILTER (WHERE score IS NOT NULL)) AS \"priced / scored\" FROM matches",
-          "refId": "A"
+          "refId": "A",
+          "panelId": 2
         }
       ]
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
+        "type": "datasource",
+        "uid": "-- Dashboard --"
       },
       "id": 4,
       "title": "Median asking rate",
@@ -220,10 +215,8 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
+          "calcs": ["lastNotNull"],
+          "fields": "median asking rate",
           "values": false
         },
         "textMode": "auto",
@@ -232,20 +225,19 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
+            "type": "datasource",
+            "uid": "-- Dashboard --"
           },
           "editorMode": "code",
-          "format": "table",
-          "rawSql": "WITH matches AS MATERIALIZED (\n  SELECT *\n    FROM reporting.agent_listing_scope(\n    ${deal:sqlstring},\n    ${property_type:sqlstring},\n    ARRAY[${neighborhood:sqlstring}]::text[],\n    ARRAY[${rooms:sqlstring}]::text[],\n    ${min_area:sqlstring},\n    ${max_area:sqlstring},\n    ARRAY[${condition:sqlstring}]::text[],\n    ARRAY[${furnishing:sqlstring}]::text[],\n    ARRAY[${parking:sqlstring}]::text[],\n    ARRAY[${seller_type:sqlstring}]::text[],\n    ${min_price:sqlstring},\n    ${max_price:sqlstring},\n    ${min_rate:sqlstring},\n    ${max_rate:sqlstring},\n    ${min_score:sqlstring},\n    ${max_score:sqlstring},\n    ${view:sqlstring},\n    ${pricing_position:sqlstring},\n    ARRAY[${review_signals:sqlstring}]::text[],\n    ${analysis_days:sqlstring},\n    true\n  )\n)\nSELECT CASE ${deal:sqlstring}\n         WHEN 'rent' THEN concat(round(percentile_cont(0.5) WITHIN GROUP (ORDER BY asking_rate) FILTER (WHERE asking_rate IS NOT NULL)), ' KM/m²/month')\n         ELSE concat(round(percentile_cont(0.5) WITHIN GROUP (ORDER BY asking_rate) FILTER (WHERE asking_rate IS NOT NULL)), ' KM/m²')\n       END AS \"median asking rate\" FROM matches",
-          "refId": "A"
+          "refId": "A",
+          "panelId": 2
         }
       ]
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
+        "type": "datasource",
+        "uid": "-- Dashboard --"
       },
       "id": 5,
       "title": "Valid reductions",
@@ -282,10 +274,8 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
+          "calcs": ["lastNotNull"],
+          "fields": "reductions",
           "values": false
         },
         "textMode": "auto",
@@ -294,13 +284,12 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
+            "type": "datasource",
+            "uid": "-- Dashboard --"
           },
           "editorMode": "code",
-          "format": "table",
-          "rawSql": "WITH matches AS MATERIALIZED (\n  SELECT *\n    FROM reporting.agent_listing_scope(\n    ${deal:sqlstring},\n    ${property_type:sqlstring},\n    ARRAY[${neighborhood:sqlstring}]::text[],\n    ARRAY[${rooms:sqlstring}]::text[],\n    ${min_area:sqlstring},\n    ${max_area:sqlstring},\n    ARRAY[${condition:sqlstring}]::text[],\n    ARRAY[${furnishing:sqlstring}]::text[],\n    ARRAY[${parking:sqlstring}]::text[],\n    ARRAY[${seller_type:sqlstring}]::text[],\n    ${min_price:sqlstring},\n    ${max_price:sqlstring},\n    ${min_rate:sqlstring},\n    ${max_rate:sqlstring},\n    ${min_score:sqlstring},\n    ${max_score:sqlstring},\n    ${view:sqlstring},\n    ${pricing_position:sqlstring},\n    ARRAY[${review_signals:sqlstring}]::text[],\n    ${analysis_days:sqlstring},\n    true\n  )\n)\nSELECT count(*) FILTER (WHERE latest_reduction_at >= now() - make_interval(days => reporting.numeric_bound(${analysis_days:sqlstring}, 'analysis window', 90)::int))::int AS reductions FROM matches",
-          "refId": "A"
+          "refId": "A",
+          "panelId": 2
         }
       ]
     },
@@ -344,9 +333,7 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -406,9 +393,7 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -473,9 +458,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -759,9 +742,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -957,9 +938,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -1096,9 +1075,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -1150,9 +1127,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -1478,9 +1453,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -1508,13 +1481,7 @@
   ],
   "refresh": "2h",
   "schemaVersion": 41,
-  "tags": [
-    "olx",
-    "real-estate",
-    "private",
-    "persona",
-    "responsive"
-  ],
+  "tags": ["olx", "real-estate", "private", "persona", "responsive"],
   "templating": {
     "list": [
       {
@@ -1865,12 +1832,7 @@
     "to": "now"
   },
   "timepicker": {
-    "refresh_intervals": [
-      "5m",
-      "15m",
-      "30m",
-      "1h"
-    ]
+    "refresh_intervals": ["5m", "15m", "30m", "1h"]
   },
   "timezone": "Europe/Sarajevo",
   "title": "Agent market desk",

@@ -120,6 +120,93 @@ test("SQL keeps context, scoring, history, freshness, and pagination boundaries 
   }
 });
 
+test("persona KPI cards reuse one source query and select their own result field", () => {
+  const expectations = {
+    "olx-buyer.json": {
+      source: "buyer_listing_scope",
+      fields: [
+        "matches",
+        "within_budget",
+        "below_benchmark",
+        "priced / scored",
+      ],
+      calls: 2,
+    },
+    "olx-renter.json": {
+      source: "renter_listing_scope",
+      fields: [
+        "matches",
+        "within_budget",
+        "below_benchmark",
+        "priced / scored",
+      ],
+      calls: 2,
+    },
+    "olx-agent.json": {
+      source: "agent_listing_scope",
+      fields: [
+        "matches",
+        "priced / scored",
+        "median asking rate",
+        "reductions",
+      ],
+      calls: 1,
+    },
+  };
+  for (const [file, expected] of Object.entries(expectations)) {
+    const dashboard = dashboards[file];
+    const panels = new Map(dashboard.panels.map((panel) => [panel.id, panel]));
+    const source = panels.get(2);
+    assert.equal(
+      source.transformations,
+      undefined,
+      `${file}: preserve source fields`,
+    );
+    assert.equal(
+      source.options.reduceOptions.fields,
+      "matches",
+      `${file}: source card field`,
+    );
+    assert.equal(
+      source.targets[0].rawSql.match(
+        new RegExp(`reporting\\.${expected.source}\\(`, "g"),
+      )?.length,
+      expected.calls,
+      `${file}: consolidate matching scope calls`,
+    );
+    for (const field of expected.fields)
+      assert.match(
+        source.targets[0].rawSql,
+        new RegExp(`AS ["']?${field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`),
+      );
+    for (const [id, field] of [
+      [2, expected.fields[0]],
+      [3, expected.fields[1]],
+      [4, expected.fields[2]],
+      [5, expected.fields[3]],
+    ]) {
+      const panel = panels.get(id);
+      if (id > 2) {
+        assert.equal(
+          panel.targets[0].panelId,
+          2,
+          `${file}: panel ${id} source`,
+        );
+        assert.equal(
+          panel.datasource.uid,
+          "-- Dashboard --",
+          `${file}: panel ${id} datasource`,
+        );
+      }
+      assert.equal(
+        panel.options.reduceOptions.fields,
+        field,
+        `${file}: panel ${id} field`,
+      );
+    }
+  }
+});
+
 test("Grafana 13 map and scatter definitions use explicit coordinates, manual fields, and contextual links", () => {
   for (const dashboard of Object.values(dashboards)) {
     const map = panels(dashboard).find((panel) => panel.type === "geomap");

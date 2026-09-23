@@ -179,6 +179,10 @@ test("dashboard metric labels match their query grain and evidence semantics", (
   assert.match(sql(homeFlow), /reporting\.market_daily/);
 
   const exits = read("olx-exits.json");
+  const closedTable = panel(exits, 13);
+  assert.equal(closedTable.targets[0].panelId, 12);
+  assert.equal(closedTable.datasource.uid, "-- Dashboard --");
+  assert.match(JSON.stringify(closedTable.transformations), /closed_at/);
   const pricedShare = panel(exits, 16);
   assert.match(pricedShare.title, /weekly/);
   assert.doesNotMatch(pricedShare.title, /all categories/);
@@ -200,6 +204,68 @@ test("dashboard metric labels match their query grain and evidence semantics", (
   const rejected = panel(health, 26);
   assert.match(rejected.title, /Invalid or conflicting price evidence/);
   assert.match(sql(rejected), /price_state IN \('invalid', 'conflict'\)/);
+});
+
+test("overview home, health, and exit KPI groups reuse one aggregate result", () => {
+  const read = (name) =>
+    JSON.parse(fs.readFileSync(path.join(dashboardDir, name), "utf8"));
+  const assertShared = (dashboard, sourceId, consumers, fields) => {
+    const panels = new Map(dashboard.panels.map((panel) => [panel.id, panel]));
+    const source = panels.get(sourceId);
+    assert.equal(source.transformations, undefined);
+    for (const [id, field] of consumers) {
+      const panel = panels.get(id);
+      assert.equal(panel.targets[0].panelId, sourceId);
+      assert.equal(panel.datasource.uid, "-- Dashboard --");
+      assert.equal(panel.targets[0].datasource.uid, "-- Dashboard --");
+      assert.equal(panel.options.reduceOptions.fields, field);
+    }
+    for (const field of fields)
+      assert.match(source.targets[0].rawSql, new RegExp(`AS ${field}`));
+  };
+
+  assertShared(
+    read("olx-home.json"),
+    2,
+    [
+      [3, "median_sale_ppm2"],
+      [4, "median_rent"],
+      [5, "gross_yield_pct"],
+      [6, "observed_exit_ratio"],
+    ],
+    [
+      "active",
+      "median_sale_ppm2",
+      "median_rent",
+      "gross_yield_pct",
+      "observed_exit_ratio",
+    ],
+  );
+  assertShared(
+    read("olx-health.json"),
+    2,
+    [
+      [3, "success_rate_24h"],
+      [4, "seconds_since_success"],
+      [5, "cards_24h"],
+    ],
+    ["failed_24h", "success_rate_24h", "seconds_since_success", "cards_24h"],
+  );
+  assertShared(
+    read("olx-exits.json"),
+    1,
+    [
+      [2, "median_exit_ppm2"],
+      [3, "observed_exit_ratio"],
+      [4, "median_days_on_market"],
+    ],
+    [
+      "closed_30d",
+      "median_exit_ppm2",
+      "observed_exit_ratio",
+      "median_days_on_market",
+    ],
+  );
 });
 
 test("health dashboard exposes per-search and analytics freshness state", () => {

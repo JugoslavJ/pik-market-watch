@@ -98,9 +98,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -169,10 +167,8 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
+          "calcs": ["lastNotNull"],
+          "fields": "failed_24h",
           "values": false
         },
         "textMode": "auto",
@@ -186,7 +182,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT count(*) FROM reporting.scrape_health\nWHERE status = 'error'\n  AND started_at > now() - INTERVAL '24 hours'",
+          "rawSql": "SELECT count(*) FILTER (WHERE status = 'error' AND started_at > now() - INTERVAL '24 hours')::int AS failed_24h,\n       round(100.0 * count(*) FILTER (WHERE started_at > now() - INTERVAL '24 hours' AND status = 'ok') / NULLIF(count(*) FILTER (WHERE started_at > now() - INTERVAL '24 hours' AND status IN ('ok', 'error')), 0))::int AS success_rate_24h,\n       EXTRACT(EPOCH FROM (now() - max(finished_at) FILTER (WHERE status = 'ok' AND is_complete = TRUE AND finished_at IS NOT NULL)))::bigint AS seconds_since_success,\n       COALESCE(sum(cards) FILTER (WHERE status = 'ok' AND started_at > now() - INTERVAL '24 hours'), 0)::bigint AS cards_24h\nFROM reporting.scrape_health",
           "refId": "A"
         }
       ],
@@ -194,8 +190,8 @@
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
+        "type": "datasource",
+        "uid": "-- Dashboard --"
       },
       "fieldConfig": {
         "defaults": {
@@ -240,10 +236,8 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
+          "calcs": ["lastNotNull"],
+          "fields": "success_rate_24h",
           "values": false
         },
         "textMode": "auto",
@@ -252,21 +246,20 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
+            "type": "datasource",
+            "uid": "-- Dashboard --"
           },
           "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT round(100.0 * count(*) FILTER (WHERE status = 'ok') / NULLIF(count(*), 0))\nFROM reporting.scrape_health\nWHERE started_at > now() - INTERVAL '24 hours'\n  AND status IN ('ok', 'error')",
-          "refId": "A"
+          "refId": "A",
+          "panelId": 2
         }
       ],
       "id": 3
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
+        "type": "datasource",
+        "uid": "-- Dashboard --"
       },
       "fieldConfig": {
         "defaults": {
@@ -311,10 +304,8 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
+          "calcs": ["lastNotNull"],
+          "fields": "seconds_since_success",
           "values": false
         },
         "textMode": "auto",
@@ -323,21 +314,20 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
+            "type": "datasource",
+            "uid": "-- Dashboard --"
           },
           "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT EXTRACT(EPOCH FROM (now() - max(finished_at)))::bigint\nFROM reporting.scrape_health\nWHERE status = 'ok' AND is_complete = TRUE AND finished_at IS NOT NULL",
-          "refId": "A"
+          "refId": "A",
+          "panelId": 2
         }
       ],
       "id": 4
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
+        "type": "datasource",
+        "uid": "-- Dashboard --"
       },
       "fieldConfig": {
         "defaults": {
@@ -374,10 +364,8 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
+          "calcs": ["lastNotNull"],
+          "fields": "cards_24h",
           "values": false
         },
         "textMode": "auto",
@@ -386,13 +374,12 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
+            "type": "datasource",
+            "uid": "-- Dashboard --"
           },
           "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT COALESCE(sum(cards), 0) FROM reporting.scrape_health\nWHERE status = 'ok'\n  AND started_at > now() - INTERVAL '24 hours'",
-          "refId": "A"
+          "refId": "A",
+          "panelId": 2
         }
       ],
       "id": 5
@@ -632,9 +619,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -767,9 +752,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -848,9 +831,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -919,9 +900,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -990,9 +969,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -1057,9 +1034,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -1112,9 +1087,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -1165,9 +1138,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -1224,9 +1195,7 @@
         "colorMode": "value",
         "graphMode": "none",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -1271,9 +1240,7 @@
         "colorMode": "value",
         "graphMode": "none",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -1318,9 +1285,7 @@
         "colorMode": "value",
         "graphMode": "none",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -1365,9 +1330,7 @@
         "colorMode": "value",
         "graphMode": "none",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -1455,9 +1418,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -1602,9 +1563,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -1680,9 +1639,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -1746,9 +1703,7 @@
         "colorMode": "value",
         "graphMode": "none",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -1770,12 +1725,7 @@
   ],
   "refresh": "2h",
   "schemaVersion": 39,
-  "tags": [
-    "olx",
-    "scraper",
-    "ops",
-    "responsive"
-  ],
+  "tags": ["olx", "scraper", "ops", "responsive"],
   "templating": {
     "list": [
       {

@@ -96,10 +96,8 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
+          "calcs": ["lastNotNull"],
+          "fields": "matches",
           "values": false
         },
         "textMode": "auto",
@@ -113,15 +111,15 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH matches AS MATERIALIZED (\n  SELECT *\n    FROM reporting.renter_listing_scope(\n    ${property_type:sqlstring},\n    ARRAY[${neighborhood:sqlstring}]::text[],\n    ARRAY[${rooms:sqlstring}]::text[],\n    ${min_area:sqlstring},\n    ${max_area:sqlstring},\n    ARRAY[${furnishing:sqlstring}]::text[],\n    ARRAY[${heating:sqlstring}]::text[],\n    ARRAY[${parking:sqlstring}]::text[],\n    ARRAY[${elevator:sqlstring}]::text[],\n    ARRAY[${floor:sqlstring}]::text[],\n    ARRAY[${seller_type:sqlstring}]::text[],\n    ${min_price:sqlstring},\n    ${max_price:sqlstring},\n    ${min_rate:sqlstring},\n    ${max_rate:sqlstring},\n    ${min_score:sqlstring},\n    ${max_score:sqlstring},\n    ${listing_selection:sqlstring},\n    true\n  )\n)\nSELECT count(DISTINCT article_id)::int AS matches FROM matches",
+          "rawSql": "WITH matches AS MATERIALIZED (\n  SELECT * FROM reporting.renter_listing_scope(\n    ${property_type:sqlstring},\n    ARRAY[${neighborhood:sqlstring}]::text[],\n    ARRAY[${rooms:sqlstring}]::text[],\n    ${min_area:sqlstring},\n    ${max_area:sqlstring},\n    ARRAY[${furnishing:sqlstring}]::text[],\n    ARRAY[${heating:sqlstring}]::text[],\n    ARRAY[${parking:sqlstring}]::text[],\n    ARRAY[${elevator:sqlstring}]::text[],\n    ARRAY[${floor:sqlstring}]::text[],\n    ARRAY[${seller_type:sqlstring}]::text[],\n    ${min_price:sqlstring},\n    ${max_price:sqlstring},\n    ${min_rate:sqlstring},\n    ${max_rate:sqlstring},\n    ${min_score:sqlstring},\n    ${max_score:sqlstring},\n    ${listing_selection:sqlstring},\n    true\n  )\n), market AS MATERIALIZED (\n  SELECT * FROM reporting.renter_listing_scope(\n    ${property_type:sqlstring},\n    ARRAY[${neighborhood:sqlstring}]::text[],\n    ARRAY[${rooms:sqlstring}]::text[],\n    ${min_area:sqlstring},\n    ${max_area:sqlstring},\n    ARRAY[${furnishing:sqlstring}]::text[],\n    ARRAY[${heating:sqlstring}]::text[],\n    ARRAY[${parking:sqlstring}]::text[],\n    ARRAY[${elevator:sqlstring}]::text[],\n    ARRAY[${floor:sqlstring}]::text[],\n    ARRAY[${seller_type:sqlstring}]::text[],\n    ${min_price:sqlstring},\n    ${max_price:sqlstring},\n    ${min_rate:sqlstring},\n    ${max_rate:sqlstring},\n    ${min_score:sqlstring},\n    ${max_score:sqlstring},\n    ${listing_selection:sqlstring},\n    false\n  )\n), match_metrics AS (\n  SELECT count(DISTINCT article_id)::int AS matches,\n         count(DISTINCT article_id) FILTER (WHERE deviation_pct < -5)::int AS below_benchmark,\n         concat(count(*) FILTER (WHERE asking_price IS NOT NULL), ' / ', count(*) FILTER (WHERE score IS NOT NULL)) AS \"priced / scored\"\n    FROM matches\n), budget_metrics AS (\n  SELECT CASE WHEN reporting.numeric_bound(${min_price:sqlstring}, 'monthly asking rent') IS NULL\n                    AND reporting.numeric_bound(${max_price:sqlstring}, 'monthly asking rent') IS NULL\n              THEN NULL::int\n              ELSE count(DISTINCT article_id) FILTER (WHERE reporting.within_bounds(asking_price, ${min_price:sqlstring}, ${max_price:sqlstring}, 'monthly asking rent'))::int\n         END AS within_budget\n    FROM market\n)\nSELECT * FROM match_metrics CROSS JOIN budget_metrics",
           "refId": "A"
         }
       ]
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
+        "type": "datasource",
+        "uid": "-- Dashboard --"
       },
       "id": 3,
       "title": "Within stated budget",
@@ -158,10 +156,8 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
+          "calcs": ["lastNotNull"],
+          "fields": "within_budget",
           "values": false
         },
         "textMode": "auto",
@@ -170,20 +166,19 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
+            "type": "datasource",
+            "uid": "-- Dashboard --"
           },
           "editorMode": "code",
-          "format": "table",
-          "rawSql": "WITH market AS MATERIALIZED (\n  SELECT *\n    FROM reporting.renter_listing_scope(\n    ${property_type:sqlstring},\n    ARRAY[${neighborhood:sqlstring}]::text[],\n    ARRAY[${rooms:sqlstring}]::text[],\n    ${min_area:sqlstring},\n    ${max_area:sqlstring},\n    ARRAY[${furnishing:sqlstring}]::text[],\n    ARRAY[${heating:sqlstring}]::text[],\n    ARRAY[${parking:sqlstring}]::text[],\n    ARRAY[${elevator:sqlstring}]::text[],\n    ARRAY[${floor:sqlstring}]::text[],\n    ARRAY[${seller_type:sqlstring}]::text[],\n    ${min_price:sqlstring},\n    ${max_price:sqlstring},\n    ${min_rate:sqlstring},\n    ${max_rate:sqlstring},\n    ${min_score:sqlstring},\n    ${max_score:sqlstring},\n    ${listing_selection:sqlstring},\n    false\n  )\n)\nSELECT CASE WHEN reporting.numeric_bound(${min_price:sqlstring}, 'monthly asking rent') IS NULL AND reporting.numeric_bound(${max_price:sqlstring}, 'monthly asking rent') IS NULL THEN NULL ELSE count(DISTINCT article_id) FILTER (WHERE reporting.within_bounds(asking_price, ${min_price:sqlstring}, ${max_price:sqlstring}, 'monthly asking rent'))::int END AS within_budget FROM market",
-          "refId": "A"
+          "refId": "A",
+          "panelId": 2
         }
       ]
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
+        "type": "datasource",
+        "uid": "-- Dashboard --"
       },
       "id": 4,
       "title": "Below local benchmark",
@@ -220,10 +215,8 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
+          "calcs": ["lastNotNull"],
+          "fields": "below_benchmark",
           "values": false
         },
         "textMode": "auto",
@@ -232,20 +225,19 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
+            "type": "datasource",
+            "uid": "-- Dashboard --"
           },
           "editorMode": "code",
-          "format": "table",
-          "rawSql": "WITH matches AS MATERIALIZED (\n  SELECT *\n    FROM reporting.renter_listing_scope(\n    ${property_type:sqlstring},\n    ARRAY[${neighborhood:sqlstring}]::text[],\n    ARRAY[${rooms:sqlstring}]::text[],\n    ${min_area:sqlstring},\n    ${max_area:sqlstring},\n    ARRAY[${furnishing:sqlstring}]::text[],\n    ARRAY[${heating:sqlstring}]::text[],\n    ARRAY[${parking:sqlstring}]::text[],\n    ARRAY[${elevator:sqlstring}]::text[],\n    ARRAY[${floor:sqlstring}]::text[],\n    ARRAY[${seller_type:sqlstring}]::text[],\n    ${min_price:sqlstring},\n    ${max_price:sqlstring},\n    ${min_rate:sqlstring},\n    ${max_rate:sqlstring},\n    ${min_score:sqlstring},\n    ${max_score:sqlstring},\n    ${listing_selection:sqlstring},\n    true\n  )\n)\nSELECT count(DISTINCT article_id) FILTER (WHERE deviation_pct < -5)::int AS below_benchmark FROM matches",
-          "refId": "A"
+          "refId": "A",
+          "panelId": 2
         }
       ]
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
+        "type": "datasource",
+        "uid": "-- Dashboard --"
       },
       "id": 5,
       "title": "Eligible priced / scored",
@@ -282,10 +274,8 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
+          "calcs": ["lastNotNull"],
+          "fields": "priced / scored",
           "values": false
         },
         "textMode": "auto",
@@ -294,13 +284,12 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
+            "type": "datasource",
+            "uid": "-- Dashboard --"
           },
           "editorMode": "code",
-          "format": "table",
-          "rawSql": "WITH matches AS MATERIALIZED (\n  SELECT *\n    FROM reporting.renter_listing_scope(\n    ${property_type:sqlstring},\n    ARRAY[${neighborhood:sqlstring}]::text[],\n    ARRAY[${rooms:sqlstring}]::text[],\n    ${min_area:sqlstring},\n    ${max_area:sqlstring},\n    ARRAY[${furnishing:sqlstring}]::text[],\n    ARRAY[${heating:sqlstring}]::text[],\n    ARRAY[${parking:sqlstring}]::text[],\n    ARRAY[${elevator:sqlstring}]::text[],\n    ARRAY[${floor:sqlstring}]::text[],\n    ARRAY[${seller_type:sqlstring}]::text[],\n    ${min_price:sqlstring},\n    ${max_price:sqlstring},\n    ${min_rate:sqlstring},\n    ${max_rate:sqlstring},\n    ${min_score:sqlstring},\n    ${max_score:sqlstring},\n    ${listing_selection:sqlstring},\n    true\n  )\n)\nSELECT concat(count(*) FILTER (WHERE asking_price IS NOT NULL), ' / ', count(*) FILTER (WHERE score IS NOT NULL)) AS \"priced / scored\" FROM matches",
-          "refId": "A"
+          "refId": "A",
+          "panelId": 2
         }
       ]
     },
@@ -344,9 +333,7 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -406,9 +393,7 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -498,9 +483,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -784,9 +767,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -1112,9 +1093,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -1310,9 +1289,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -1449,9 +1426,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -1503,9 +1478,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -1526,13 +1499,7 @@
   ],
   "refresh": "2h",
   "schemaVersion": 41,
-  "tags": [
-    "olx",
-    "real-estate",
-    "private",
-    "persona",
-    "responsive"
-  ],
+  "tags": ["olx", "real-estate", "private", "persona", "responsive"],
   "templating": {
     "list": [
       {
@@ -1892,12 +1859,7 @@
     "to": "now"
   },
   "timepicker": {
-    "refresh_intervals": [
-      "5m",
-      "15m",
-      "30m",
-      "1h"
-    ]
+    "refresh_intervals": ["5m", "15m", "30m", "1h"]
   },
   "timezone": "Europe/Sarajevo",
   "title": "Find a home to rent",

@@ -111,7 +111,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": ["lastNotNull"],
-          "fields": "",
+          "fields": "active",
           "values": false
         },
         "textMode": "auto",
@@ -125,7 +125,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT count(*) FROM reporting.dashboard_listings",
+          "rawSql": "WITH base AS MATERIALIZED (\n  SELECT * FROM reporting.dashboard_listings\n), metrics AS (\n  SELECT count(*) AS active,\n         percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE NOT is_rent AND ppm2 > 0)::int AS median_sale_ppm2,\n         percentile_cont(0.5) WITHIN GROUP (ORDER BY price) FILTER (WHERE is_rent AND price > 0)::int AS median_rent,\n         percentile_cont(0.5) WITHIN GROUP (ORDER BY price) FILTER (WHERE NOT is_rent AND price > 0) AS median_sale_price_exact,\n         percentile_cont(0.5) WITHIN GROUP (ORDER BY price) FILTER (WHERE is_rent AND price > 0) AS median_rent_exact,\n         count(*) FILTER (WHERE closed_at > now() - INTERVAL '30 days')::float AS closed_30d\n    FROM base\n)\nSELECT active, median_sale_ppm2, median_rent,\n       round((median_rent_exact * 12 / NULLIF(median_sale_price_exact, 0) * 100)::numeric, 1)::double precision AS gross_yield_pct,\n       round(closed_30d / NULLIF(closed_30d + active, 0) * 100)::int AS observed_exit_ratio\n  FROM metrics",
           "refId": "A"
         }
       ],
@@ -133,8 +133,8 @@
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
+        "type": "datasource",
+        "uid": "-- Dashboard --"
       },
       "fieldConfig": {
         "defaults": {
@@ -172,7 +172,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": ["lastNotNull"],
-          "fields": "",
+          "fields": "median_sale_ppm2",
           "values": false
         },
         "textMode": "auto",
@@ -181,21 +181,20 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
+            "type": "datasource",
+            "uid": "-- Dashboard --"
           },
           "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)::int\nFROM reporting.dashboard_listings\nWHERE NOT is_rent AND ppm2 > 0",
-          "refId": "A"
+          "refId": "A",
+          "panelId": 2
         }
       ],
       "id": 3
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
+        "type": "datasource",
+        "uid": "-- Dashboard --"
       },
       "fieldConfig": {
         "defaults": {
@@ -233,7 +232,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": ["lastNotNull"],
-          "fields": "",
+          "fields": "median_rent",
           "values": false
         },
         "textMode": "auto",
@@ -242,21 +241,20 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
+            "type": "datasource",
+            "uid": "-- Dashboard --"
           },
           "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY price)::int\nFROM reporting.dashboard_listings\nWHERE is_rent AND price > 0",
-          "refId": "A"
+          "refId": "A",
+          "panelId": 2
         }
       ],
       "id": 4
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
+        "type": "datasource",
+        "uid": "-- Dashboard --"
       },
       "fieldConfig": {
         "defaults": {
@@ -295,7 +293,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": ["lastNotNull"],
-          "fields": "",
+          "fields": "gross_yield_pct",
           "values": false
         },
         "textMode": "auto",
@@ -304,21 +302,20 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
+            "type": "datasource",
+            "uid": "-- Dashboard --"
           },
           "editorMode": "code",
-          "format": "table",
-          "rawSql": "WITH s AS (\n  SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY price) AS p\n  FROM reporting.dashboard_listings WHERE NOT is_rent AND price > 0\n),\nr AS (\n  SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY price) AS p\n  FROM reporting.dashboard_listings WHERE is_rent AND price > 0\n)\nSELECT round((r.p * 12 / s.p * 100)::numeric, 1)::double precision AS gross_yield_pct\nFROM s, r",
-          "refId": "A"
+          "refId": "A",
+          "panelId": 2
         }
       ],
       "id": 5
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
+        "type": "datasource",
+        "uid": "-- Dashboard --"
       },
       "fieldConfig": {
         "defaults": {
@@ -357,7 +354,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": ["lastNotNull"],
-          "fields": "",
+          "fields": "observed_exit_ratio",
           "values": false
         },
         "textMode": "auto",
@@ -366,13 +363,12 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
+            "type": "datasource",
+            "uid": "-- Dashboard --"
           },
           "editorMode": "code",
-          "format": "table",
-          "rawSql": "WITH c AS (\n  SELECT count(*)::float AS n FROM reporting.dashboard_listings WHERE closed_at > now() - INTERVAL '30 days'\n),\na AS (\n  SELECT count(*)::float AS n FROM reporting.dashboard_listings\n)\nSELECT round(c.n / NULLIF(c.n + a.n, 0) * 100) FROM c, a",
-          "refId": "A"
+          "refId": "A",
+          "panelId": 2
         }
       ],
       "id": 6
