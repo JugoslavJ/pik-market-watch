@@ -804,22 +804,86 @@ needsDb(
       { name: "all", c: [], min: null, max: null, n: [], r: [], d: [] },
       { name: "sale", c: [], min: null, max: null, n: [], r: [], d: ["sell"] },
       { name: "rent", c: [], min: null, max: null, n: [], r: [], d: ["rent"] },
-      { name: "category", c: ["apartments"], min: null, max: null, n: [], r: [], d: [] },
+      {
+        name: "category",
+        c: ["apartments"],
+        min: null,
+        max: null,
+        n: [],
+        r: [],
+        d: [],
+      },
       { name: "room", c: [], min: null, max: null, n: [], r: ["2"], d: [] },
-      { name: "neighborhoods", c: [], min: null, max: null, n: ["Centar", "Old Town"], r: [], d: [] },
+      {
+        name: "neighborhoods",
+        c: [],
+        min: null,
+        max: null,
+        n: ["Centar", "Old Town"],
+        r: [],
+        d: [],
+      },
       { name: "min_area", c: [], min: 60, max: null, n: [], r: [], d: [] },
       { name: "max_area", c: [], min: null, max: 60, n: [], r: [], d: [] },
       { name: "area_range", c: [], min: 45, max: 100, n: [], r: [], d: [] },
-      { name: "category_rooms", c: ["apartments"], min: null, max: null, n: [], r: ["2"], d: [] },
-      { name: "category_neighborhood", c: ["apartments"], min: null, max: null, n: ["Centar", "Old Town"], r: [], d: [] },
-      { name: "combined", c: ["apartments"], min: 40, max: 90, n: ["Centar", "Old Town"], r: ["2"], d: ["sell"] },
+      {
+        name: "category_rooms",
+        c: ["apartments"],
+        min: null,
+        max: null,
+        n: [],
+        r: ["2"],
+        d: [],
+      },
+      {
+        name: "category_neighborhood",
+        c: ["apartments"],
+        min: null,
+        max: null,
+        n: ["Centar", "Old Town"],
+        r: [],
+        d: [],
+      },
+      {
+        name: "combined",
+        c: ["apartments"],
+        min: 40,
+        max: 90,
+        n: ["Centar", "Old Town"],
+        r: ["2"],
+        d: ["sell"],
+      },
       { name: "empty", c: [], min: null, max: null, n: [], r: [], d: [] },
-      { name: "no_pin", c: [], min: null, max: null, n: ["(no pin)"], r: [], d: [] },
-      { name: "unmapped", c: [], min: null, max: null, n: ["(unmapped)"], r: [], d: [] },
+      {
+        name: "no_pin",
+        c: [],
+        min: null,
+        max: null,
+        n: ["(no pin)"],
+        r: [],
+        d: [],
+      },
+      {
+        name: "unmapped",
+        c: [],
+        min: null,
+        max: null,
+        n: ["(unmapped)"],
+        r: [],
+        d: [],
+      },
     ];
     const compare = async (scenario) => {
-      const params = [scenario.c, scenario.min, scenario.max, scenario.n, scenario.r, scenario.d];
-      const { rows } = await reporting.query(`
+      const params = [
+        scenario.c,
+        scenario.min,
+        scenario.max,
+        scenario.n,
+        scenario.r,
+        scenario.d,
+      ];
+      const { rows } = await reporting.query(
+        `
         WITH old_base AS MATERIALIZED (
           SELECT * FROM reporting.listings_filtered($1::text[], $2::numeric, $3::numeric, $4::text[])
            WHERE (coalesce(cardinality($5::text[]), 0)=0 OR reporting.room_bucket(rooms)=ANY($5::text[]))
@@ -886,8 +950,14 @@ needsDb(
             FROM new_base
         )
         SELECT to_jsonb(old_result) AS old, to_jsonb(new_result) AS current
-          FROM old_result CROSS JOIN new_result`, params);
-      assert.deepEqual(rows[0].current, rows[0].old, `${scenario.name} current-market parity`);
+          FROM old_result CROSS JOIN new_result`,
+        params,
+      );
+      assert.deepEqual(
+        rows[0].current,
+        rows[0].old,
+        `${scenario.name} current-market parity`,
+      );
     };
     for (const scenario of cases) await compare(scenario);
   },
