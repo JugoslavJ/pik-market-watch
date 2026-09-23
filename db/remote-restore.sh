@@ -176,12 +176,9 @@ fi
 # point (/backups), never by the host-side path.
 #
 # build_toc <container-archive-path> <output-list>: filter the TOC to entries
-# this restore may execute. The source machine's zz-database-roles.sh
-# (pre-2026-08 versions) also set default privileges FOR ROLE <bootstrap
-# admin>. Restoring runs as $migrator_user, which may not alter ANOTHER role's
-# defaults - those archive entries would fail, and any pg_restore error aborts
-# the whole sync. Keep every entry EXCEPT DEFAULT ACL items whose trailing
-# role is not $migrator_user; the dump's own migration-role defaults restore normally.
+# this restore may execute. ACL entries are omitted because extension ACLs can
+# reference extension-owned functions absent after reset; the canonical role
+# repair reapplies supported application/reporting grants and defaults.
 build_toc() {
   docker compose exec -T db sh -c "
      pg_restore -l '$1' > /tmp/toc.all || exit 1
@@ -196,7 +193,7 @@ build_toc() {
      # Extension metadata is installed by the bootstrap administrator in
      # reset_schemas; the app role must not try to CREATE EXTENSION or replay
      # its extension-owned spatial_ref_sys table/data.
-     grep -ve ' EXTENSION - ' -e ' COMMENT - EXTENSION ' \
+     grep -ve ' ACL ' -e ' EXTENSION - ' -e ' COMMENT - EXTENSION ' \
           -e 'spatial_ref_sys' \
           '$2' > '$2'.extensions || :
      mv '$2'.extensions '$2'
@@ -229,6 +226,7 @@ reset_schemas() {
     CREATE SCHEMA reporting AUTHORIZATION \"$migrator_user\";
     CREATE SCHEMA olap AUTHORIZATION \"$migrator_user\";
     CREATE EXTENSION IF NOT EXISTS postgis;
+    CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
     GRANT ALL ON SCHEMA public TO \"$app_user\";
       GRANT USAGE ON SCHEMA reporting TO \"$reporting_user\";"
 }
@@ -245,7 +243,8 @@ restore_failed=0
 # --no-owner: belt-and-braces behind the audit above — a no-op while every
 # entry targets $migrator_user; if anything ever slips through it degrades to
 # "object owned by the restoring role" instead of failing the whole sync.
-if ! docker compose exec -T db pg_restore -U "$migrator_user" -d "$db_name" --no-owner \
+# --no-acl: grants and defaults are reapplied by the canonical role repair.
+if ! docker compose exec -T db pg_restore -U "$migrator_user" -d "$db_name" --no-owner --no-acl \
        --single-transaction --use-list=/tmp/toc.use /backups/olx-sync-incoming.dump; then
   restore_failed=1
 fi
@@ -253,7 +252,7 @@ fi
 if [ "$restore_failed" = "1" ]; then
   if [ -n "$prev" ] && build_toc "/backups/$(basename "$prev")" /tmp/toc.prev; then
     echo "RESTORE_ERROR: pg_restore failed - rolling back to previous snapshot $(basename "$prev")" >&2
-    if reset_schemas && docker compose exec -T db pg_restore -U "$migrator_user" -d "$db_name" --no-owner \
+    if reset_schemas && docker compose exec -T db pg_restore -U "$migrator_user" -d "$db_name" --no-owner --no-acl \
          --single-transaction --use-list=/tmp/toc.prev "/backups/$(basename "$prev")"; then
       echo "RESTORE_ERROR: rollback finished - instance is serving the previous snapshot" >&2
     else

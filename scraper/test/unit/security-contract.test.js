@@ -128,6 +128,9 @@ test("restore input and identifiers are bounded and cleaned up", () => {
     /grep -vE ' SCHEMA - \(public\|reporting\|olap\|tiger\|topology\) '/,
   );
   assert.match(restore, /grep -vE ' \(COMMENT\|ACL\) - SCHEMA '/);
+  assert.match(restore, /grep -ve ' ACL '/);
+  assert.match(restore, /CREATE EXTENSION IF NOT EXISTS pg_stat_statements/);
+  assert.match(restore, /--no-owner --no-acl/);
 });
 
 test("remote restore repairs roles before ownership and schema reset", () => {
