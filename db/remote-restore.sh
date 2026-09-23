@@ -135,9 +135,10 @@ fi
 # ─── Ownership audit (before anything destructive) ───────────────────────────
 # pg_restore replays every entry's ALTER ... OWNER TO <source-owner>, and the
 # least-privileged restore role cannot SET ROLE to any other role — so every
-# archived object must ALREADY be owned by $migrator_user. Drift happens when the
-# SOURCE machine creates objects as its bootstrap superuser (2026-08-24: a
-# migration re-applied by hand as "-U olx" shipped two superuser-owned objects;
+# restorable application object must already be owned by $migrator_user. Schema
+# entries are excluded because reset_schemas and PostGIS recreate them. Drift
+# happens when the SOURCE machine creates objects as its bootstrap superuser
+# (2026-08-24: a migration re-applied by hand as "-U olx" shipped two objects;
 # the failure only surfaced here, after the schema had already been dropped).
 # DEFAULT ACL entries are excluded: build_toc filters those separately and
 # their trailing token is a grantee, not the owner. PostGIS extension entries
@@ -148,6 +149,8 @@ drifted=$(docker compose exec -T db sh -c "
     pg_restore -l '/backups/olx-sync-incoming.dump' |
     grep -v '^;' | grep -v 'DEFAULT ACL' |
     grep -v ' EXTENSION - ' | grep -v ' COMMENT - EXTENSION ' |
+    grep -vE ' SCHEMA - (public|reporting|olap|tiger|topology) ' |
+    grep -vE ' (COMMENT|ACL) - SCHEMA ' |
     awk '\$NF != \"$migrator_user\" {print \$NF}' | sort -u")
 if [ -n "$drifted" ]; then
   echo "RESTORE_ERROR: archive contains objects not owned by $migrator_user:" >&2
@@ -201,6 +204,7 @@ build_toc() {
      # TO <bootstrap admin>) and cannot be replayed by $app_user; the reset
      # block already created the schema with the right owner and grants
      grep -ve 'SCHEMA - public' -e 'SCHEMA - reporting' -e 'SCHEMA - olap' \
+          -e 'SCHEMA - tiger' -e 'SCHEMA - topology' \
           -e 'COMMENT - SCHEMA' -e 'ACL - SCHEMA' \
           '$2' > '$2.f' || :
      mv '$2.f' '$2'

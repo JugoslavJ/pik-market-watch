@@ -103,10 +103,13 @@ FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
 WHERE n.nspname = 'olap'
   AND c.relkind IN ('r','p','v','m','f','S')
   AND pg_get_userbyid(c.relowner) IN (:'admin_user', :'app_user') \gexec
-SELECT format('ALTER VIEW %I.%I OWNER TO %I', n.nspname, c.relname, :'migrator_user')
+-- Reporting is normally a view-only contract, but current_market_refresh_state
+-- is a publisher table. Transfer it too so custom-format sync dumps remain
+-- restorable by olx_migrator.
+SELECT format('ALTER TABLE %I.%I OWNER TO %I', n.nspname, c.relname, :'migrator_user')
 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
 WHERE n.nspname = 'reporting'
-  AND c.relkind IN ('v','m')
+  AND c.relkind IN ('r','p','v','m','f','S')
   AND pg_get_userbyid(c.relowner) IN (:'admin_user', :'app_user') \gexec
 SELECT format('ALTER FUNCTION %I.%I(%s) OWNER TO %I', n.nspname, p.proname,
               pg_get_function_identity_arguments(p.oid), :'migrator_user')

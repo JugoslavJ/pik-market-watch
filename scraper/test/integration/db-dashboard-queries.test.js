@@ -135,6 +135,12 @@ needsDb(
     assert.deepEqual((await db.pool.query(ownershipQuery)).rows, [
       { proname: "apply_operational_cleanup", owner: "olx_migrator" },
     ]);
+    const refreshStateOwner = await db.pool.query(`
+      SELECT pg_get_userbyid(c.relowner) AS owner
+        FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname = 'reporting'
+         AND c.relname = 'current_market_refresh_state'`);
+    assert.deepEqual(refreshStateOwner.rows, [{ owner: "olx_migrator" }]);
   },
 );
 

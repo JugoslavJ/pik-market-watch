@@ -97,6 +97,14 @@ test("database roles separate reporting and backup access", () => {
   assert.match(roles, /DROP ROLE %I.*olx_reader/);
 });
 
+test("database role repair transfers reporting publisher tables to the migrator", () => {
+  const roles = read("db/init/zz-database-roles.sh");
+  assert.match(
+    roles,
+    /n\.nspname = 'reporting'\s+AND c\.relkind IN \('r','p','v','m','f','S'\)/,
+  );
+});
+
 test("restore input and identifiers are bounded and cleaned up", () => {
   const restore = read("db/remote-restore.sh");
   assert.match(restore, /umask 077/);
@@ -113,6 +121,13 @@ test("restore input and identifiers are bounded and cleaned up", () => {
   assert.match(restore, /DROP SCHEMA IF EXISTS olap CASCADE/);
   assert.match(restore, /reset_schemas && docker compose exec/);
   assert.doesNotMatch(restore, /pg_restore -U[^\n]*--clean/);
+  assert.match(restore, /SCHEMA - tiger/);
+  assert.match(restore, /SCHEMA - topology/);
+  assert.match(
+    restore,
+    /grep -vE ' SCHEMA - \(public\|reporting\|olap\|tiger\|topology\) '/,
+  );
+  assert.match(restore, /grep -vE ' \(COMMENT\|ACL\) - SCHEMA '/);
 });
 
 test("remote restore repairs roles before ownership and schema reset", () => {
