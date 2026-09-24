@@ -22,7 +22,7 @@ const INIT_DIR = path.resolve(__dirname, "..", "..", "db", "init");
 const IMAGE =
   process.env.TEST_POSTGRES_IMAGE ||
   "ghcr.io/baosystems/postgis:18-3.6@sha256:4117c8beae9081e76a23a1577c64d05260a61fb0a3c212f37596054ef4c190d8";
-const DB_URL = `postgres://olx:olx@localhost:${PORT}/olx`;
+const DB_URL = `postgres://olx:olx@127.0.0.1:${PORT}/olx`;
 
 const docker = (args, opts = {}) =>
   spawnSync("docker", args, { encoding: "utf8", ...opts });

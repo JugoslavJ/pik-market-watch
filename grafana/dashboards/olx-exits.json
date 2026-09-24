@@ -399,6 +399,22 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "inventory"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "exit KM/m2 (closed ads)"
             },
             "properties": [
@@ -435,7 +451,7 @@
         "h": 9
       },
       "title": "Exit KM/m² vs asking KM/m² — daily medians",
-      "description": "Green line: exit askings of ads that closed. Blue: pooled reconstructed daily inventory asking median for the selected filters. Estimated, stale and provisional fields expose historical availability quality.",
+      "description": "Green line: sale exit askings in KM/m². Blue: reconstructed daily inventory asking median for the selected filters. Estimated, stale and provisional fields expose historical availability quality.",
       "type": "timeseries",
       "options": {
         "legend": {
@@ -455,19 +471,9 @@
             "uid": "olx-postgres"
           },
           "editorMode": "code",
-          "format": "time_series",
-          "rawSql": "SELECT 'daily'::text AS period,\n       date_trunc('day', l.closed_at AT TIME ZONE 'Europe/Sarajevo') AT TIME ZONE 'Europe/Sarajevo' AS time,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY l.closing_ppm2) AS \"exit KM/m2 (closed ads)\"\nFROM reporting.exits_closed_filtered($__timeFrom(), $__timeTo(), true, ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${rooms:sqlstring}]::text[], ARRAY[${deal:sqlstring}]::text[], ARRAY[${neighborhood:sqlstring}]::text[]) l\nWHERE l.closing_ppm2 > 0\nGROUP BY 2 ORDER BY 2",
+          "format": "table",
+          "rawSql": "WITH filtered AS MATERIALIZED (\n  SELECT d.day, d.price_state, d.ppm2, d.membership_inferred,\n         d.attributes_inferred, d.stale_observation, d.provisional_day\n  FROM reporting.daily_listing_facts_olap d\n  WHERE d.day BETWEEN date($__timeFrom() AT TIME ZONE 'Europe/Sarajevo')\n                  AND LEAST(date($__timeTo() AT TIME ZONE 'Europe/Sarajevo'),\n                            (now() AT TIME ZONE 'Europe/Sarajevo')::date)\n    AND (COALESCE(cardinality(ARRAY[${category:sqlstring}]::text[]), 0) = 0\n      OR d.category_memberships && ARRAY[${category:sqlstring}]::text[]\n      OR d.category = ANY (ARRAY[${category:sqlstring}]::text[]))\n    AND (reporting.dashboard_numeric(${min_sqm:sqlstring}) IS NULL OR d.sqm IS NULL\n      OR d.sqm >= reporting.dashboard_numeric(${min_sqm:sqlstring}))\n    AND (reporting.dashboard_numeric(${max_sqm:sqlstring}) IS NULL OR d.sqm IS NULL\n      OR d.sqm <= reporting.dashboard_numeric(${max_sqm:sqlstring}))\n    AND (COALESCE(cardinality(ARRAY[${rooms:sqlstring}]::text[]), 0) = 0\n      OR d.rooms = ANY (ARRAY[${rooms:sqlstring}]::text[])\n      OR d.room_bucket = ANY (ARRAY[${rooms:sqlstring}]::text[]))\n    AND (CASE WHEN d.deal = 'rent' THEN 'rent' ELSE 'sale' END) = ANY (\n      ARRAY(SELECT CASE WHEN selected = 'sell' THEN 'sale' ELSE selected END\n              FROM unnest(ARRAY[${deal:sqlstring}]::text[]) AS t(selected)))\n    AND (COALESCE(cardinality(ARRAY[${neighborhood:sqlstring}]::text[]), 0) = 0\n      OR d.neighborhood = ANY (ARRAY[${neighborhood:sqlstring}]::text[])\n      OR d.location = ANY (ARRAY[${neighborhood:sqlstring}]::text[]))\n), exits AS MATERIALIZED (\n  SELECT date_trunc('day', l.closed_at AT TIME ZONE 'Europe/Sarajevo')::date AS day,\n         COALESCE(l.closing_ppm2::numeric,\n                  round(l.closing_price / NULLIF(l.sqm, 0))) AS closing_ppm2\n  FROM reporting.exits_closed_filtered($__timeFrom(), $__timeTo(), true,\n       ARRAY[${category:sqlstring}]::text[],\n       reporting.dashboard_numeric(${min_sqm:sqlstring}),\n       reporting.dashboard_numeric(${max_sqm:sqlstring}),\n       ARRAY[${rooms:sqlstring}]::text[], ARRAY[${deal:sqlstring}]::text[],\n       ARRAY[${neighborhood:sqlstring}]::text[]) l\n  WHERE l.is_rent IS NOT TRUE\n    AND COALESCE(l.closing_ppm2::numeric,\n                 round(l.closing_price / NULLIF(l.sqm, 0))) > 0\n), exit_daily AS (\n  SELECT day, percentile_cont(0.5) WITHIN GROUP (ORDER BY closing_ppm2) AS exit_median\n  FROM exits GROUP BY 1), daily AS (\n  SELECT day, count(*)::numeric AS inventory,\n         count(*) FILTER (WHERE price_state = 'valid')::numeric AS valid_prices,\n         count(*) FILTER (WHERE price_state = 'valid' AND ppm2 IS NOT NULL)::bigint AS priced_count,\n         percentile_cont(0.25) WITHIN GROUP (ORDER BY ppm2)\n           FILTER (WHERE price_state = 'valid' AND ppm2 IS NOT NULL) AS p25,\n         percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)\n           FILTER (WHERE price_state = 'valid' AND ppm2 IS NOT NULL) AS median,\n         percentile_cont(0.75) WITHIN GROUP (ORDER BY ppm2)\n           FILTER (WHERE price_state = 'valid' AND ppm2 IS NOT NULL) AS p75,\n         count(*) FILTER (WHERE membership_inferred OR attributes_inferred)::bigint AS estimated_count,\n         count(*) FILTER (WHERE stale_observation)::bigint AS stale_count,\n         bool_or(provisional_day) AS provisional_day\n  FROM filtered GROUP BY day\n), weekly AS (\n  SELECT date_trunc('week', day::timestamp)::date AS day,\n         avg(inventory) AS inventory, avg(valid_prices) AS valid_prices,\n         round(100.0 * avg(valid_prices) / NULLIF(avg(inventory), 0), 2) AS priced_share\n  FROM daily GROUP BY 1\n), weekly_exit AS (\n  SELECT date_trunc('week', day::timestamp)::date AS day,\n         percentile_cont(0.5) WITHIN GROUP (ORDER BY closing_ppm2) AS exit_median\n  FROM exits GROUP BY 1\n), combined AS (\n  SELECT 'daily'::text AS period, COALESCE(d.day, e.day) AS day,\n         d.p25, d.median, d.p75, e.exit_median, d.inventory,\n         d.priced_count, d.valid_prices, d.estimated_count, d.stale_count,\n         d.provisional_day, NULL::numeric AS priced_share\n  FROM daily d FULL OUTER JOIN exit_daily e ON e.day = d.day\n  UNION ALL\n  SELECT 'weekly'::text, w.day, NULL::numeric, NULL::numeric, NULL::numeric,\n         e.exit_median, w.inventory, NULL::bigint, w.valid_prices, NULL::bigint, NULL::bigint,\n         NULL::boolean, w.priced_share\n  FROM weekly w LEFT JOIN weekly_exit e USING (day)\n)\nSELECT period, day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time,\n       p25 AS \"p25 KM/m2\", median AS \"median KM/m2\", p75 AS \"p75 KM/m2\",\n       exit_median AS \"exit KM/m2 (closed ads)\",\n       inventory, priced_count AS \"priced sample\", valid_prices AS \"valid price count\",\n       estimated_count AS estimated, stale_count AS stale,\n       provisional_day AS provisional, priced_share AS \"priced share %\"\nFROM combined ORDER BY day, period",
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawSql": "WITH filtered AS MATERIALIZED (\n  SELECT d.day, d.price_state, d.ppm2, d.membership_inferred,\n         d.attributes_inferred, d.stale_observation, d.provisional_day\n  FROM reporting.daily_listing_facts_olap d\n  WHERE d.day BETWEEN date($__timeFrom() AT TIME ZONE 'Europe/Sarajevo')\n                  AND LEAST(date($__timeTo() AT TIME ZONE 'Europe/Sarajevo'),\n                            (now() AT TIME ZONE 'Europe/Sarajevo')::date)\n    AND (COALESCE(cardinality(ARRAY[${category:sqlstring}]::text[]), 0) = 0\n      OR d.category_memberships && ARRAY[${category:sqlstring}]::text[]\n      OR d.category = ANY (ARRAY[${category:sqlstring}]::text[]))\n    AND (reporting.dashboard_numeric(${min_sqm:sqlstring}) IS NULL OR d.sqm IS NULL\n      OR d.sqm >= reporting.dashboard_numeric(${min_sqm:sqlstring}))\n    AND (reporting.dashboard_numeric(${max_sqm:sqlstring}) IS NULL OR d.sqm IS NULL\n      OR d.sqm <= reporting.dashboard_numeric(${max_sqm:sqlstring}))\n    AND (COALESCE(cardinality(ARRAY[${rooms:sqlstring}]::text[]), 0) = 0\n      OR d.rooms = ANY (ARRAY[${rooms:sqlstring}]::text[])\n      OR d.room_bucket = ANY (ARRAY[${rooms:sqlstring}]::text[]))\n    AND (CASE WHEN d.deal = 'rent' THEN 'rent' ELSE 'sale' END) = ANY (\n      ARRAY(SELECT CASE WHEN selected = 'sell' THEN 'sale' ELSE selected END\n              FROM unnest(ARRAY[${deal:sqlstring}]::text[]) AS t(selected)))\n    AND (COALESCE(cardinality(ARRAY[${neighborhood:sqlstring}]::text[]), 0) = 0\n      OR d.neighborhood = ANY (ARRAY[${neighborhood:sqlstring}]::text[])\n      OR d.location = ANY (ARRAY[${neighborhood:sqlstring}]::text[]))\n), daily AS (\n  SELECT day, count(*)::numeric AS inventory,\n         count(*) FILTER (WHERE price_state = 'valid')::numeric AS valid_prices,\n         count(*) FILTER (WHERE price_state = 'valid' AND ppm2 IS NOT NULL)::bigint AS priced_count,\n         percentile_cont(0.25) WITHIN GROUP (ORDER BY ppm2)\n           FILTER (WHERE price_state = 'valid' AND ppm2 IS NOT NULL) AS p25,\n         percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)\n           FILTER (WHERE price_state = 'valid' AND ppm2 IS NOT NULL) AS median,\n         percentile_cont(0.75) WITHIN GROUP (ORDER BY ppm2)\n           FILTER (WHERE price_state = 'valid' AND ppm2 IS NOT NULL) AS p75,\n         count(*) FILTER (WHERE membership_inferred OR attributes_inferred)::bigint AS estimated_count,\n         count(*) FILTER (WHERE stale_observation)::bigint AS stale_count,\n         bool_or(provisional_day) AS provisional_day\n  FROM filtered GROUP BY day\n), weekly AS (\n  SELECT date_trunc('week', day::timestamp)::date AS day,\n         avg(inventory) AS inventory, avg(valid_prices) AS valid_prices,\n         round(100.0 * avg(valid_prices) / NULLIF(avg(inventory), 0), 2) AS priced_share\n  FROM daily GROUP BY 1\n), combined AS (\n  SELECT 'daily'::text AS period, day, p25, median, p75, inventory,\n         priced_count, valid_prices, estimated_count, stale_count,\n         provisional_day, NULL::numeric AS priced_share\n  FROM daily\n  UNION ALL\n  SELECT 'weekly'::text, day, NULL::numeric, NULL::numeric, NULL::numeric,\n         inventory, NULL::bigint, valid_prices, NULL::bigint, NULL::bigint,\n         NULL::boolean, priced_share\n  FROM weekly\n)\nSELECT period, day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time,\n       p25 AS \"p25 KM/m2\", median AS \"median KM/m2\", p75 AS \"p75 KM/m2\",\n       inventory, priced_count AS \"priced sample\", valid_prices AS \"valid price count\",\n       estimated_count AS estimated, stale_count AS stale,\n       provisional_day AS provisional, priced_share AS \"priced share %\"\nFROM combined ORDER BY day, period",
-          "refId": "B"
         }
       ],
       "id": 6,
@@ -497,6 +503,7 @@
             },
             "excludeByName": {
               "period": true,
+              "provisional": true,
               "valid price count": true,
               "priced share %": true
             }
@@ -558,7 +565,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH base AS MATERIALIZED (\n  SELECT l.article_id, l.rooms, l.closing_price, l.closed_at,\n         e.article_id AS economics_article_id, e.opening_price, e.days_listed,\n         CASE WHEN e.opening_price > 0\n              THEN round((l.closing_price - e.opening_price) / e.opening_price * 100)::int END AS change_pct\n  FROM reporting.exits_closed_filtered(\n    $__timeFrom(), $__timeTo(), true, ARRAY[${category:sqlstring}]::text[],\n    reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}),\n    ARRAY[${rooms:sqlstring}]::text[], ARRAY[${deal:sqlstring}]::text[], ARRAY[${neighborhood:sqlstring}]::text[]) l\n  LEFT JOIN reporting.exit_economics e USING (article_id)\n),\nduration AS (\n  SELECT 'duration'::text AS dimension,\n         CASE WHEN days_listed <= 7 THEN '0-7 d'\n              WHEN days_listed <= 14 THEN '8-14 d'\n              WHEN days_listed <= 30 THEN '15-30 d'\n              WHEN days_listed <= 60 THEN '31-60 d'\n              ELSE '60+ d' END AS bucket,\n         count(*) AS exits, min(days_listed)::numeric AS sort_key\n  FROM base WHERE economics_article_id IS NOT NULL\n  GROUP BY 1, 2\n),\nroom_counts AS (\n  SELECT 'rooms'::text AS dimension, reporting.room_bucket(rooms) AS bucket,\n         count(*) AS exits,\n         CASE reporting.room_bucket(rooms)\n           WHEN '0' THEN 0 WHEN '1' THEN 1 WHEN '2' THEN 2\n           WHEN '3' THEN 3 WHEN '4+' THEN 4 WHEN 'unknown' THEN 5 ELSE 6 END::numeric AS sort_key\n  FROM base GROUP BY 1, 2\n),\ndiscount AS (\n  SELECT 'discount'::text AS dimension,\n         CASE WHEN change_pct IS NULL THEN '(unknown)'\n              WHEN change_pct <= -20 THEN '-20 % or worse'\n              WHEN change_pct <= -10 THEN '-10..-20 %'\n              WHEN change_pct < 0 THEN '0..-10 %'\n              WHEN change_pct = 0 THEN 'flat'\n              ELSE 'raised' END AS bucket,\n         count(*) AS exits, -count(*)::numeric AS sort_key\n  FROM base WHERE economics_article_id IS NOT NULL\n  GROUP BY 1, 2\n)\nSELECT dimension, bucket, exits, sort_key FROM duration\nUNION ALL SELECT dimension, bucket, exits, sort_key FROM room_counts\nUNION ALL SELECT dimension, bucket, exits, sort_key FROM discount\nORDER BY dimension, sort_key, bucket",
+          "rawSql": "WITH base AS MATERIALIZED (\n  SELECT l.article_id, l.rooms, l.closing_price, l.closed_at,\n         e.article_id AS economics_article_id, e.opening_price, e.days_listed,\n         CASE WHEN e.opening_price > 0\n              THEN round((l.closing_price - e.opening_price) / e.opening_price * 100)::int END AS change_pct\n  FROM reporting.exits_closed_filtered(\n    $__timeFrom(), $__timeTo(), true, ARRAY[${category:sqlstring}]::text[],\n    reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}),\n    ARRAY[${rooms:sqlstring}]::text[], ARRAY[${deal:sqlstring}]::text[], ARRAY[${neighborhood:sqlstring}]::text[]) l\n  LEFT JOIN reporting.exit_economics e USING (article_id)\n),\nduration AS (\n  SELECT 'duration'::text AS dimension,\n         CASE WHEN days_listed <= 7 THEN '0-7 d'\n              WHEN days_listed <= 14 THEN '8-14 d'\n              WHEN days_listed <= 30 THEN '15-30 d'\n              WHEN days_listed <= 60 THEN '31-60 d'\n              ELSE '60+ d' END AS bucket,\n         count(*) AS exits, min(days_listed)::numeric AS sort_key\n  FROM base WHERE economics_article_id IS NOT NULL\n  GROUP BY 1, 2\n),\nroom_counts AS (\n  SELECT 'rooms'::text AS dimension, reporting.room_bucket(rooms) AS bucket,\n         count(*) AS exits,\n         CASE reporting.room_bucket(rooms)\n           WHEN '0' THEN 0 WHEN '1' THEN 1 WHEN '2' THEN 2\n           WHEN '3' THEN 3 WHEN '4+' THEN 4 WHEN 'unknown' THEN 5 ELSE 6 END::numeric AS sort_key\n  FROM base GROUP BY 1, 2\n),\ndiscount AS (\n  SELECT 'discount'::text AS dimension,\n         CASE WHEN change_pct IS NULL THEN 'Unknown'\n              WHEN change_pct <= -20 THEN 'Reduced by 20% or more'\n              WHEN change_pct <= -10 THEN 'Reduced by 10–20%'\n              WHEN change_pct < 0 THEN 'Reduced by less than 10%'\n              WHEN change_pct = 0 THEN 'No change'\n              ELSE 'Increased' END AS bucket,\n         count(*) AS exits, -count(*)::numeric AS sort_key\n  FROM base WHERE economics_article_id IS NOT NULL\n  GROUP BY 1, 2\n)\nSELECT dimension, bucket, exits, sort_key FROM duration\nUNION ALL SELECT dimension, bucket, exits, sort_key FROM room_counts\nUNION ALL SELECT dimension, bucket, exits, sort_key FROM discount\nORDER BY dimension, sort_key, bucket",
           "refId": "A"
         }
       ],
@@ -651,8 +658,8 @@
             },
             "properties": [
               {
-                "id": "custom.width",
-                "value": 340
+                "id": "displayName",
+                "value": "Listing"
               },
               {
                 "id": "links",
@@ -672,6 +679,10 @@
               "options": "change_pct"
             },
             "properties": [
+              {
+                "id": "displayName",
+                "value": "Change (%)"
+              },
               {
                 "id": "unit",
                 "value": "percent"
@@ -705,8 +716,136 @@
             },
             "properties": [
               {
+                "id": "displayName",
+                "value": "Change (KM)"
+              },
+              {
                 "id": "unit",
-                "value": "none"
+                "value": "suffix: KM"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "location"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Neighbourhood"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "sqm"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Area"
+              },
+              {
+                "id": "unit",
+                "value": "suffix: m²"
+              },
+              {
+                "id": "custom.minWidth",
+                "value": 35
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "rooms"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Rooms"
+              },
+              {
+                "id": "custom.minWidth",
+                "value": 35
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "closing_price"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Final ask"
+              },
+              {
+                "id": "unit",
+                "value": "suffix: KM"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "closing_ppm2"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Final ask per m²"
+              },
+              {
+                "id": "unit",
+                "value": "suffix: KM/m²"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "opening_price"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Original ask"
+              },
+              {
+                "id": "unit",
+                "value": "suffix: KM"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "days_listed"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Days on market"
+              },
+              {
+                "id": "unit",
+                "value": "suffix: days"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "closed_at"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Closed at"
               }
             ]
           }
@@ -723,6 +862,7 @@
       "type": "table",
       "options": {
         "cellHeight": "sm",
+        "wrapHeaderText": true,
         "footer": {
           "countRows": false,
           "fields": "",
@@ -877,8 +1017,12 @@
             },
             "properties": [
               {
-                "id": "custom.hidden",
-                "value": true
+                "id": "custom.hideFrom",
+                "value": {
+                  "viz": false,
+                  "legend": true,
+                  "tooltip": true
+                }
               }
             ]
           },
@@ -888,6 +1032,10 @@
               "options": "latitude"
             },
             "properties": [
+              {
+                "id": "displayName",
+                "value": "Latitude"
+              },
               {
                 "id": "decimals",
                 "value": 4
@@ -901,8 +1049,96 @@
             },
             "properties": [
               {
+                "id": "displayName",
+                "value": "Longitude"
+              },
+              {
                 "id": "decimals",
                 "value": 4
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "title"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Listing title"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "closing_price"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Final asking price"
+              },
+              {
+                "id": "unit",
+                "value": "suffix: KM"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "closing_ppm2"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Final asking price per m²"
+              },
+              {
+                "id": "unit",
+                "value": "suffix: KM/m²"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "closed_on"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Closed at"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "location"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Neighbourhood"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^(published_on|closed_on|days_on_market)$"
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "viz": false,
+                  "legend": true,
+                  "tooltip": true
+                }
               }
             ]
           }
@@ -976,7 +1212,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT l.latitude, l.longitude, l.title, l.url,\n       l.closing_price, l.closing_ppm2, l.closed_at,\n       l.location AS location\nFROM reporting.exits_closed_filtered($__timeFrom(), $__timeTo(), true, ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${rooms:sqlstring}]::text[], ARRAY[${deal:sqlstring}]::text[], ARRAY[${neighborhood:sqlstring}]::text[]) l\nWHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL",
+          "rawSql": "SELECT l.latitude, l.longitude, l.title, l.url,\n       l.closing_price, l.closing_ppm2,\n       to_char(l.published_at AT TIME ZONE 'Europe/Sarajevo', 'YYYY-MM-DD') AS published_on,\n       to_char(l.closed_at AT TIME ZONE 'Europe/Sarajevo', 'YYYY-MM-DD') AS closed_on,\n       CASE WHEN l.published_at IS NOT NULL\n            THEN (l.closed_at AT TIME ZONE 'Europe/Sarajevo')::date - (l.published_at AT TIME ZONE 'Europe/Sarajevo')::date END AS days_on_market,\n       l.location AS location\nFROM reporting.exits_closed_filtered($__timeFrom(), $__timeTo(), true, ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${rooms:sqlstring}]::text[], ARRAY[${deal:sqlstring}]::text[], ARRAY[${neighborhood:sqlstring}]::text[]) l\nWHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL",
           "refId": "A"
         }
       ],
@@ -1018,6 +1254,10 @@
             },
             "properties": [
               {
+                "id": "displayName",
+                "value": "Listing"
+              },
+              {
                 "id": "custom.width",
                 "value": 300
               },
@@ -1030,6 +1270,102 @@
                     "url": "${__data.fields.url}"
                   }
                 ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "closing_price"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Final asking price"
+              },
+              {
+                "id": "unit",
+                "value": "suffix: KM"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "closing_ppm2"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Final asking price per m²"
+              },
+              {
+                "id": "unit",
+                "value": "suffix: KM/m²"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "published_on"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Published on"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "closed_on"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Closed on"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "days_on_market"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Days on market"
+              },
+              {
+                "id": "unit",
+                "value": "suffix: days"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "latitude"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Latitude"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "longitude"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Longitude"
               }
             ]
           }
@@ -1046,6 +1382,7 @@
       "type": "table",
       "options": {
         "cellHeight": "sm",
+        "enablePagination": true,
         "footer": {
           "countRows": false,
           "fields": "",
@@ -1073,16 +1410,10 @@
             "fields": {},
             "sort": [
               {
-                "field": "closed_at",
+                "field": "closed_on",
                 "desc": true
               }
             ]
-          }
-        },
-        {
-          "id": "limit",
-          "options": {
-            "limit": 100
           }
         },
         {
@@ -1093,12 +1424,14 @@
               "url": 1,
               "closing_price": 2,
               "closing_ppm2": 3,
-              "closed_at": 4,
-              "latitude": 5,
-              "longitude": 6
+              "published_on": 4,
+              "closed_on": 5,
+              "days_on_market": 6
             },
             "excludeByName": {
-              "location": true
+              "location": true,
+              "latitude": true,
+              "longitude": true
             }
           }
         }
@@ -1144,8 +1477,8 @@
         "w": 24,
         "h": 10
       },
-      "title": "Exit discount vs original ask",
-      "description": "How final asks compared to the first price we saw. Flat market → most ads exit at their opening ask.",
+      "title": "Final asking-price change vs original ask",
+      "description": "Compares each closed ad's final asking price with its first observed asking price. Negative values mean the final ask was lower; positive values mean it increased; flat means no change.",
       "type": "bargauge",
       "options": {
         "displayMode": "gradient",
@@ -1222,8 +1555,9 @@
         "defaults": {
           "custom": {
             "drawStyle": "line",
-            "fillOpacity": 20,
-            "lineWidth": 2,
+            "fillOpacity": 8,
+            "lineInterpolation": "smooth",
+            "lineWidth": 1.5,
             "showPoints": "never",
             "spanNulls": true
           },
@@ -1242,7 +1576,38 @@
               },
               {
                 "id": "custom.fillOpacity",
-                "value": 20
+                "value": 8
+              },
+              {
+                "id": "custom.lineInterpolation",
+                "value": "smooth"
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1.5
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "exit KM/m2 (closed ads)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: KM/m²"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
               }
             ]
           }
@@ -1351,7 +1716,11 @@
             "properties": [
               {
                 "id": "unit",
-                "value": "d"
+                "value": "suffix: d"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "Days on market"
               }
             ]
           },
@@ -1363,7 +1732,86 @@
             "properties": [
               {
                 "id": "unit",
-                "value": "percent"
+                "value": "suffix: %"
+              },
+              {
+                "id": "displayName",
+                "value": "Final asking-price change"
+              },
+              {
+                "id": "custom.scaleDistribution",
+                "value": {
+                  "type": "symlog",
+                  "linearThreshold": 10
+                }
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "Final asking-price change (%) · symlog"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "is_outlier"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "blue",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Trend line"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              },
+              {
+                "id": "custom.show",
+                "value": "lines"
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [5, 5]
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
               }
             ]
           }
@@ -1375,15 +1823,15 @@
         "w": 24,
         "h": 11
       },
-      "title": "Days on market vs exit discount",
-      "description": "Each closed sale ad as a point: how long it sat (x) vs how its final asking price compared to the first one we saw (y). Points drifting downward to the right = stale ads exiting at bigger discounts. Days-on-market is a lower bound until published_at converges; exit prices are askings, not transactions.",
+      "title": "Days listed vs final asking-price change",
+      "description": "Each closed sale ad is plotted by days listed (x) and final asking-price change (y), calculated as (closing ask − opening ask) / opening ask × 100. Positive values mean the asking price increased; negative values mean it decreased. The 1.5×IQR fences identify outliers, shown in red at their actual values. A symmetric logarithmic y-axis keeps extreme values visible while preserving detail near zero. The dashed green line is a least-squares fit to typical listings only. Days listed is a lower bound until published_at converges; exit prices are askings, not transactions.",
       "type": "xychart",
       "pluginVersion": "13.0.2",
       "options": {
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": false
+          "showLegend": true
         },
         "tooltip": {
           "mode": "single",
@@ -1392,10 +1840,36 @@
         "mapping": "manual",
         "series": [
           {
+            "color": {
+              "matcher": {
+                "id": "byName",
+                "options": "is_outlier"
+              }
+            },
             "frame": {
               "matcher": {
                 "id": "byIndex",
                 "options": 0
+              }
+            },
+            "x": {
+              "matcher": {
+                "id": "byName",
+                "options": "days_on_market"
+              }
+            },
+            "y": {
+              "matcher": {
+                "id": "byName",
+                "options": "exit_vs_opening_pct"
+              }
+            }
+          },
+          {
+            "frame": {
+              "matcher": {
+                "id": "byIndex",
+                "options": 1
               }
             },
             "x": {
@@ -1421,8 +1895,18 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT lc.days_listed AS days_on_market,\n       round(100.0 * (l.closing_price - lc.opening_price) / NULLIF(lc.opening_price, 0), 1)::double precision AS exit_vs_opening_pct\nFROM reporting.exits_closed_filtered($__timeFrom(), $__timeTo(), true, ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${rooms:sqlstring}]::text[], ARRAY[${deal:sqlstring}]::text[], ARRAY[${neighborhood:sqlstring}]::text[]) l\nJOIN reporting.exit_economics lc ON lc.article_id = l.article_id\nWHERE lc.opening_price > 0 AND l.closing_price IS NOT NULL AND lc.days_listed IS NOT NULL",
+          "rawSql": "WITH points AS (\n  SELECT lc.days_listed::double precision AS days_on_market,\n         round(100.0 * (l.closing_price - lc.opening_price) / NULLIF(lc.opening_price, 0), 1)::double precision AS exit_vs_opening_pct\n  FROM reporting.exits_closed_filtered($__timeFrom(), $__timeTo(), true, ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${rooms:sqlstring}]::text[], ARRAY[${deal:sqlstring}]::text[], ARRAY[${neighborhood:sqlstring}]::text[]) l\n  JOIN reporting.exit_economics lc ON lc.article_id = l.article_id\n  WHERE lc.opening_price > 0 AND l.closing_price IS NOT NULL AND lc.days_listed IS NOT NULL\n), bounds AS (\n  SELECT percentile_cont(0.25) WITHIN GROUP (ORDER BY days_on_market) AS x_q1,\n         percentile_cont(0.75) WITHIN GROUP (ORDER BY days_on_market) AS x_q3,\n         percentile_cont(0.25) WITHIN GROUP (ORDER BY exit_vs_opening_pct) AS y_q1,\n         percentile_cont(0.75) WITHIN GROUP (ORDER BY exit_vs_opening_pct) AS y_q3,\n         percentile_cont(0.25) WITHIN GROUP (ORDER BY exit_vs_opening_pct) FILTER (WHERE exit_vs_opening_pct <> 0) AS y_nonzero_q1,\n         percentile_cont(0.75) WITHIN GROUP (ORDER BY exit_vs_opening_pct) FILTER (WHERE exit_vs_opening_pct <> 0) AS y_nonzero_q3\n  FROM points\n), fences AS (\n  SELECT x_q1 - 1.5 * (x_q3 - x_q1) AS x_low,\n         x_q3 + 1.5 * (x_q3 - x_q1) AS x_high,\n         CASE WHEN y_q3 > y_q1 THEN y_q1 - 1.5 * (y_q3 - y_q1)\n              WHEN y_nonzero_q3 > y_nonzero_q1 THEN least(0, y_nonzero_q1 - 1.5 * (y_nonzero_q3 - y_nonzero_q1))\n              ELSE -1 END AS y_low,\n         CASE WHEN y_q3 > y_q1 THEN y_q3 + 1.5 * (y_q3 - y_q1)\n              WHEN y_nonzero_q3 > y_nonzero_q1 THEN greatest(0, y_nonzero_q3 + 1.5 * (y_nonzero_q3 - y_nonzero_q1))\n              ELSE 1 END AS y_high\n  FROM bounds\n)\nSELECT greatest(f.x_low, least(p.days_on_market, f.x_high)) AS days_on_market,\n       p.exit_vs_opening_pct AS exit_vs_opening_pct,\n       CASE WHEN p.days_on_market NOT BETWEEN f.x_low AND f.x_high\n                  OR p.exit_vs_opening_pct NOT BETWEEN f.y_low AND f.y_high\n            THEN 1 ELSE 0 END::int AS is_outlier\nFROM points p CROSS JOIN fences f",
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH points AS (\n  SELECT lc.days_listed::double precision AS days_on_market,\n         round(100.0 * (l.closing_price - lc.opening_price) / NULLIF(lc.opening_price, 0), 1)::double precision AS exit_vs_opening_pct\n  FROM reporting.exits_closed_filtered($__timeFrom(), $__timeTo(), true, ARRAY[${category:sqlstring}]::text[], reporting.dashboard_numeric(${min_sqm:sqlstring}), reporting.dashboard_numeric(${max_sqm:sqlstring}), ARRAY[${rooms:sqlstring}]::text[], ARRAY[${deal:sqlstring}]::text[], ARRAY[${neighborhood:sqlstring}]::text[]) l\n  JOIN reporting.exit_economics lc ON lc.article_id = l.article_id\n  WHERE lc.opening_price > 0 AND l.closing_price IS NOT NULL AND lc.days_listed IS NOT NULL\n), bounds AS (\n  SELECT percentile_cont(0.25) WITHIN GROUP (ORDER BY days_on_market) AS x_q1,\n         percentile_cont(0.75) WITHIN GROUP (ORDER BY days_on_market) AS x_q3,\n         percentile_cont(0.25) WITHIN GROUP (ORDER BY exit_vs_opening_pct) AS y_q1,\n         percentile_cont(0.75) WITHIN GROUP (ORDER BY exit_vs_opening_pct) AS y_q3,\n         percentile_cont(0.25) WITHIN GROUP (ORDER BY exit_vs_opening_pct) FILTER (WHERE exit_vs_opening_pct <> 0) AS y_nonzero_q1,\n         percentile_cont(0.75) WITHIN GROUP (ORDER BY exit_vs_opening_pct) FILTER (WHERE exit_vs_opening_pct <> 0) AS y_nonzero_q3\n  FROM points\n), fences AS (\n  SELECT x_q1 - 1.5 * (x_q3 - x_q1) AS x_low,\n         x_q3 + 1.5 * (x_q3 - x_q1) AS x_high,\n         CASE WHEN y_q3 > y_q1 THEN y_q1 - 1.5 * (y_q3 - y_q1)\n              WHEN y_nonzero_q3 > y_nonzero_q1 THEN least(0, y_nonzero_q1 - 1.5 * (y_nonzero_q3 - y_nonzero_q1))\n              ELSE -1 END AS y_low,\n         CASE WHEN y_q3 > y_q1 THEN y_q3 + 1.5 * (y_q3 - y_q1)\n              WHEN y_nonzero_q3 > y_nonzero_q1 THEN greatest(0, y_nonzero_q3 + 1.5 * (y_nonzero_q3 - y_nonzero_q1))\n              ELSE 1 END AS y_high\n  FROM bounds\n), typical AS (\n  SELECT p.days_on_market, p.exit_vs_opening_pct\n  FROM points p CROSS JOIN fences f\n  WHERE p.days_on_market BETWEEN f.x_low AND f.x_high\n    AND p.exit_vs_opening_pct BETWEEN f.y_low AND f.y_high\n), fit AS (\n  SELECT min(days_on_market) AS x_min, max(days_on_market) AS x_max,\n         regr_slope(exit_vs_opening_pct, days_on_market) AS slope,\n         regr_intercept(exit_vs_opening_pct, days_on_market) AS intercept\n  FROM typical\n)\nSELECT x_min AS days_on_market, (intercept + slope * x_min)::double precision AS exit_vs_opening_pct\nFROM fit WHERE slope IS NOT NULL\nUNION ALL\nSELECT x_max AS days_on_market, (intercept + slope * x_max)::double precision AS exit_vs_opening_pct\nFROM fit WHERE slope IS NOT NULL AND x_max > x_min",
+          "refId": "B"
         }
       ],
       "id": 18
@@ -1517,9 +2001,49 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "district"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Neighbourhood"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "closed_30d"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Closed in Last 30 Days"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "actives"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Active Listings"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "exit_rate_pct"
             },
             "properties": [
+              {
+                "id": "displayName",
+                "value": "Exit Rate (%)"
+              },
               {
                 "id": "unit",
                 "value": "percent"
@@ -1554,8 +2078,8 @@
         "w": 24,
         "h": 10
       },
-      "title": "Exit rate by neighborhood — 30 d",
-      "description": "Observed closed ads / (closed + active) by district over the last 30 days. A disappearance proxy, not a transaction rate. Requires at least 10 combined listings; ignores Neighborhood while the other filters apply.",
+      "title": "Exit rate by neighbourhood — 30 d",
+      "description": "Observed closed ads / (closed + active) by neighbourhood over the last 30 days. A disappearance proxy, not a transaction rate. Requires at least 10 combined listings; ignores Neighborhood while the other filters apply.",
       "type": "table",
       "options": {
         "cellHeight": "sm",
@@ -1579,7 +2103,21 @@
           "refId": "A"
         }
       ],
-      "id": 20
+      "id": 20,
+      "transformations": [
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "field": "closed_30d",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ]
     }
   ],
   "refresh": "2h",

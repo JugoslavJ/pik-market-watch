@@ -99,7 +99,11 @@ module.exports = function installEnrichmentMethods(Db) {
       const client = await this.pool.connect();
       try {
         await client.query("BEGIN");
-        const detailObservedAt = new Date();
+        // The database compares event times with now(); use its clock so a
+        // host clock running ahead cannot hide a just-written price event.
+        const detailObservedAt = (
+          await client.query("SELECT clock_timestamp() AS observed_at")
+        ).rows[0].observed_at;
         const input = renderUnnest(ENRICH_COLS, rows);
         const observedParam = input.params.length + 1;
         await client.query(

@@ -519,9 +519,9 @@ needsDb(
     assert.equal(counts.get("rooms|2"), 1);
     assert.equal(counts.get("rooms|3"), 1);
     assert.equal(counts.get("rooms|unknown"), 1);
-    assert.equal(counts.get("discount|0..-10 %"), 1);
-    assert.equal(counts.get("discount|-20 % or worse"), 1);
-    assert.equal(counts.get("discount|(unknown)"), 1);
+    assert.equal(counts.get("discount|Reduced by less than 10%"), 1);
+    assert.equal(counts.get("discount|Reduced by 20% or more"), 1);
+    assert.equal(counts.get("discount|Unknown"), 1);
   },
 );
 
@@ -557,7 +557,7 @@ needsDb(
     const sharedSql = interpolate(
       exits.panels
         .find((panel) => panel.id === 6)
-        .targets.find((target) => target.refId === "B").rawSql,
+        .targets.find((target) => target.refId === "A").rawSql,
       filters,
     );
     const factCount = await db.pool.query(

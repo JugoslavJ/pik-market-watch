@@ -182,7 +182,7 @@ test("dashboard metric labels match their query grain and evidence semantics", (
   const closedTable = panel(exits, 13);
   assert.equal(closedTable.targets[0].panelId, 12);
   assert.equal(closedTable.datasource.uid, "-- Dashboard --");
-  assert.match(JSON.stringify(closedTable.transformations), /closed_at/);
+  assert.match(JSON.stringify(closedTable.transformations), /closed_on/);
   const pricedShare = panel(exits, 16);
   assert.match(pricedShare.title, /weekly/);
   assert.doesNotMatch(pricedShare.title, /all categories/);
@@ -323,7 +323,7 @@ test("exits filters are database backed and dropdowns use the shared cache", () 
   assert.equal(panels.get(16).transformations[0].id, "filterByValue");
   const historical = panels
     .get(6)
-    .targets.find((target) => target.refId === "B");
+    .targets.find((target) => target.refId === "A");
   assert.equal(panels.get(6).datasource.uid, "olx-postgres");
   assert.equal(historical.datasource.uid, "olx-postgres");
   assert.match(historical.rawSql, /valid_prices/);
