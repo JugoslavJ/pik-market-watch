@@ -1,6 +1,5 @@
 "use strict";
-// Integration tests for detail-page enrichment (sqm/ppm² derivation with
-// never-overwrite semantics) and saved-search / run lifecycle.
+// Integration tests for detail-page enrichment and saved-search / run lifecycle.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { needsDb, reset, setupDb } = require("../helpers/db.js");
@@ -17,13 +16,12 @@ test.beforeEach(() => reset(db.pool));
 
 async function seed(articleId, over = {}) {
   await db.pool.query(
-    `INSERT INTO listings (article_id, url, title, price, ppm2, is_rent, sqm, latitude, longitude)
-     VALUES ($1::bigint, 'https://olx.ba/artikal/' || $1::bigint::text, $2, $3, $4, $5, $6, $7, $8)`,
+    `INSERT INTO listings (article_id, url, title, price, is_rent, sqm, latitude, longitude)
+     VALUES ($1::bigint, 'https://olx.ba/artikal/' || $1::bigint::text, $2, $3, $4, $5, $6, $7)`,
     [
       articleId,
       "ad " + articleId,
       over.price ?? null,
-      over.ppm2 ?? null,
       over.isRent ?? false,
       over.sqm ?? null,
       over.lat ?? 44.78,
@@ -53,6 +51,22 @@ needsDb(
 );
 
 needsDb(
+  "listing rates are recalculated on database inserts and updates",
+  async () => {
+    await seed(4010, { price: 399000, sqm: 138 });
+    assert.equal((await rowOf(4010)).ppm2, 2891);
+    await db.pool.query(
+      "UPDATE listings SET price = 276000 WHERE article_id = 4010",
+    );
+    assert.equal((await rowOf(4010)).ppm2, 2000);
+    await db.pool.query(
+      "UPDATE listings SET is_rent = true WHERE article_id = 4010",
+    );
+    assert.equal((await rowOf(4010)).ppm2, null);
+  },
+);
+
+needsDb(
   "enrichListings: rent listings get m² but never a derived ppm²",
   async () => {
     await seed(4002, { price: 500, isRent: true });
@@ -65,15 +79,45 @@ needsDb(
   },
 );
 
-needsDb("enrichListings: existing sqm/ppm² are never overwritten", async () => {
-  await seed(4003, { price: 60000, ppm2: 1000, sqm: 100 });
+needsDb("detail price removal preserves the last valid amount", async () => {
+  await seed(4011, { price: 399000, sqm: 138 });
   await db.enrichListings([
-    { articleId: 4003, latitude: null, longitude: null, sqm: 55 },
+    {
+      articleId: 4011,
+      price: null,
+      pricePresent: true,
+      priceText: "Na upit",
+      priceState: "unpriced",
+      isRent: false,
+      sqm: 138,
+    },
   ]);
-  const r = await rowOf(4003);
-  assert.equal(r.sqm_text, "100.00");
-  assert.equal(r.ppm2, 1000);
+  const result = await db.pool.query(
+    "SELECT price, price_text, ppm2 FROM listings WHERE article_id = 4011",
+  );
+  assert.deepEqual(result.rows[0], {
+    price: "399000.00",
+    price_text: "Na upit",
+    ppm2: 2891,
+  });
+  const events = await db.pool.query(
+    "SELECT price_state FROM listing_price_events WHERE article_id = 4011 ORDER BY effective_at DESC, id DESC LIMIT 1",
+  );
+  assert.equal(events.rows[0].price_state, "unpriced");
 });
+
+needsDb(
+  "enrichListings: existing sqm is retained and ppm² follows it",
+  async () => {
+    await seed(4003, { price: 60000, sqm: 100 });
+    await db.enrichListings([
+      { articleId: 4003, latitude: null, longitude: null, sqm: 55 },
+    ]);
+    const r = await rowOf(4003);
+    assert.equal(r.sqm_text, "100.00");
+    assert.equal(r.ppm2, 600);
+  },
+);
 
 needsDb(
   "enrichListings: a pin-less fetch keeps the previous coordinates",

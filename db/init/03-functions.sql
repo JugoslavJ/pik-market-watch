@@ -1898,3 +1898,56 @@ EXCEPTION WHEN OTHERS THEN
   RAISE;
 END
 $$;
+
+-- The listings row owns rates calculated from its final stored price and area.
+CREATE FUNCTION public.sale_ppm2(
+  p_price numeric, p_sqm numeric, p_is_rent boolean
+) RETURNS integer
+    LANGUAGE sql IMMUTABLE PARALLEL SAFE
+    AS $$
+  SELECT CASE
+    WHEN p_is_rent IS FALSE
+      AND p_price >= 3000
+      AND p_sqm BETWEEN 5 AND 500
+      AND round(p_price / p_sqm) BETWEEN 1 AND 15000
+    THEN round(p_price / p_sqm)::integer
+  END
+$$;
+
+CREATE FUNCTION public.set_listing_rates() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.is_rent IS DISTINCT FROM OLD.is_rent
+       AND NEW.price IS NOT DISTINCT FROM OLD.price THEN
+      NEW.price := NULL;
+      NEW.price_text := NULL;
+    END IF;
+    IF NEW.price IS NULL AND OLD.price IS NOT NULL
+       AND NEW.is_rent = OLD.is_rent
+       AND ((OLD.is_rent AND OLD.price >= 50)
+            OR (NOT OLD.is_rent AND OLD.price >= 3000)) THEN
+      NEW.price := OLD.price;
+    END IF;
+  END IF;
+
+  NEW.ppm2 := public.sale_ppm2(NEW.price, NEW.sqm, NEW.is_rent);
+
+  IF NEW.closed_at IS NULL THEN
+    NEW.closing_ppm2 := NULL;
+  ELSIF TG_OP = 'INSERT' THEN
+    NEW.closing_ppm2 := public.sale_ppm2(
+      NEW.closing_price, NEW.sqm, NEW.is_rent
+    );
+  ELSIF OLD.closed_at IS NULL
+      OR NEW.closing_price IS DISTINCT FROM OLD.closing_price THEN
+    -- Later detail updates must not alter an earlier closing rate.
+    NEW.closing_ppm2 := public.sale_ppm2(
+      NEW.closing_price, NEW.sqm, NEW.is_rent
+    );
+  END IF;
+
+  RETURN NEW;
+END;
+$$;

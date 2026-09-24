@@ -34,6 +34,29 @@ const foldedStageFiles = [
   "15-stage8-olap-health-generations.sql",
 ];
 
+// The listing-rate and last-valid-price extensions were applied before their
+// definitions moved into the canonical table, function, and trigger files.
+// Only databases with both retired migration records may advance these exact
+// baseline checksums; older databases still need the intermediate upgrade.
+const foldedListingPriceChecksums = {
+  "01-tables.sql": [
+    "d1ac93811ca63c8393ad0cf2f9090b16b2a6e9fbafeff50882af6e17e299f892",
+    "671858758608ef7b3c81dac0da2f5fdfadf351dcd471ff18e4e2660579847400",
+  ],
+  "03-functions.sql": [
+    "53b5d90fe5022c2795924e66a3770e421ea0ea4bc73115544bdabc4d98fd2e14",
+    "73c3ef9583a3548f1fc0d2e0e052142c968491b90d46ade8d0c725603ea59aee",
+  ],
+  "08-triggers.sql": [
+    "eb247f645c408a44a7c7ebad035b3b119ae24856c9e926f26c1ed8f500f69879",
+    "1cf7d6fe600d47673e7d0447e1a0ae39a50e7c5ea3b029770b254bf5a389cf68",
+  ],
+};
+const foldedListingPriceFiles = [
+  "13-listing-rates.sql",
+  "14-last-valid-listing-price.sql",
+];
+
 function migrationChecksum(sql) {
   const canonicalSql = String(sql).replace(/\r\n?/g, "\n");
   return crypto.createHash("sha256").update(canonicalSql, "utf8").digest("hex");
@@ -50,6 +73,15 @@ async function schemaIsCurrent(client) {
        AND to_regclass('reporting.daily_listing_facts_olap') IS NOT NULL
        AND to_regprocedure('public.analyze_published_olap(text[])') IS NOT NULL
        AND to_regprocedure('public.room_bucket(text)') IS NOT NULL
+       AND to_regprocedure('public.sale_ppm2(numeric,numeric,boolean)') IS NOT NULL
+       AND pg_get_functiondef(to_regprocedure('public.set_listing_rates()'))
+             LIKE '%NEW.price := OLD.price%'
+       AND EXISTS (
+             SELECT 1 FROM pg_trigger
+              WHERE tgrelid = to_regclass('public.listings')
+                AND tgname = 'listings_set_rates'
+                AND NOT tgisinternal
+           )
        AND (SELECT count(*) = 9
               FROM information_schema.columns
              WHERE table_schema = 'olap'
@@ -118,6 +150,12 @@ async function applyMigrations(pool, dir, log = () => {}) {
     );
     const canUpdateFoldedChecksums =
       foldedStages.rows[0].count === foldedStageFiles.length;
+    const foldedListingPrices = await client.query(
+      "SELECT count(*)::int AS count FROM schema_migrations WHERE filename = ANY($1::text[])",
+      [foldedListingPriceFiles],
+    );
+    const canUpdateFoldedListingPriceChecksums =
+      foldedListingPrices.rows[0].count === foldedListingPriceFiles.length;
 
     // Docker executes the canonical files before the application migrator. A
     // complete live schema can therefore adopt the ledger without replaying
@@ -174,6 +212,16 @@ async function applyMigrations(pool, dir, log = () => {}) {
               [file, checksum],
             );
             applied.push(`${file} (folded-stage checksum updated)`);
+          } else if (
+            canUpdateFoldedListingPriceChecksums &&
+            foldedListingPriceChecksums[file]?.[0] === recordedChecksum &&
+            foldedListingPriceChecksums[file]?.[1] === checksum
+          ) {
+            await client.query(
+              "UPDATE schema_migrations SET checksum = $2 WHERE filename = $1",
+              [file, checksum],
+            );
+            applied.push(`${file} (folded-listing-price checksum updated)`);
           } else {
             throw new Error(
               `canonical schema ${file} changed after being applied (recorded sha256 ${recordedChecksum}, current ${checksum})`,

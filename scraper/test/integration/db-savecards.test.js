@@ -24,7 +24,6 @@ const card = (over) =>
       rooms: "2",
       price: 100000,
       priceText: "100.000 KM",
-      ppm2: 2000,
       isRent: false,
     },
     over,
@@ -102,17 +101,18 @@ needsDb(
       articleId: 3001,
       price: 90000,
       priceText: "90.000 KM",
-      ppm2: 1800,
     });
     assert.deepEqual(await commit([first]), {
       newCount: 1,
       dropCount: 0,
       newIds: [3001],
+      median: 2000,
     });
     assert.deepEqual(await commit([second]), {
       newCount: 0,
       dropCount: 1,
       newIds: [],
+      median: 1800,
     });
     const saved = await db.pool.query(
       "SELECT new_count, drop_count FROM saved_searches WHERE search_key = $1",
@@ -257,6 +257,7 @@ needsDb(
       newCount: 1,
       dropCount: 0,
       newIds: [3001],
+      median: 2000,
     });
     const [row] = await listingRows();
     assert.equal(Number(row.article_id), 3001);
@@ -274,6 +275,35 @@ needsDb(
       [SEARCH_A.searchKey],
     );
     assert.deepEqual(membership.rows, [{ id: 3001 }]);
+  },
+);
+
+needsDb(
+  "a later search card without area keeps the detail rate through closure",
+  async () => {
+    const listing = card({ articleId: 3014, price: 399000, sqm: null });
+    await commit([listing]);
+    await db.enrichListings([
+      {
+        articleId: 3014,
+        price: 399000,
+        pricePresent: true,
+        isRent: false,
+        sqm: 138,
+      },
+    ]);
+    await commit([listing]);
+    await commit([]);
+
+    const result = await db.pool.query(
+      "SELECT sqm, closing_price, ppm2, closing_ppm2 FROM listings WHERE article_id = 3014",
+    );
+    assert.deepEqual(result.rows[0], {
+      sqm: "138.00",
+      closing_price: "399000.00",
+      ppm2: 2891,
+      closing_ppm2: 2891,
+    });
   },
 );
 
@@ -366,7 +396,12 @@ needsDb(
       observedAt,
     });
 
-    assert.deepEqual(result, { newCount: 0, dropCount: 0, newIds: [] });
+    assert.deepEqual(result, {
+      newCount: 0,
+      dropCount: 0,
+      newIds: [],
+      median: 2000,
+    });
     const memberships = await db.pool.query(
       "SELECT search_key FROM search_results WHERE article_id = 3010 ORDER BY search_key",
     );
@@ -385,13 +420,18 @@ needsDb(
     await commit([input], { observedAt });
     const retry = await commit([input], { observedAt });
 
-    assert.deepEqual(retry, { newCount: 0, dropCount: 0, newIds: [] });
+    assert.deepEqual(retry, {
+      newCount: 0,
+      dropCount: 0,
+      newIds: [],
+      median: 2000,
+    });
     assert.equal((await eventRows(3011)).length, 1);
   },
 );
 
 needsDb(
-  "an explicit unpriced observation preserves the last known current price",
+  "a removed asking price keeps the last valid amount through closure",
   async () => {
     const pricedAt = new Date("2026-09-05T09:00:00Z");
     const unpricedAt = new Date("2026-09-05T10:00:00Z");
@@ -402,8 +442,7 @@ needsDb(
           articleId: 3012,
           price: null,
           priceText: "Na upit",
-          ppm2: null,
-          pricePresent: false,
+          pricePresent: true,
           priceState: "unpriced",
         }),
       ],
@@ -411,6 +450,7 @@ needsDb(
     );
 
     assert.equal(result.dropCount, 0);
+    assert.equal(result.median, null);
     const [row] = await listingRows();
     assert.equal(Number(row.price), 100000);
     assert.equal(row.ppm2, 2000);
@@ -424,6 +464,39 @@ needsDb(
         { price: null, state: "unpriced" },
       ],
     );
+    await commit([], { observedAt: new Date("2026-09-05T11:00:00Z") });
+    const closed = await db.pool.query(
+      "SELECT closing_price, closing_ppm2 FROM listings WHERE article_id = 3012",
+    );
+    assert.deepEqual(closed.rows[0], {
+      closing_price: "100000.00",
+      closing_ppm2: 2000,
+    });
+  },
+);
+
+needsDb(
+  "an unpriced deal switch does not carry over the prior price",
+  async () => {
+    await commit([card({ articleId: 3015 })]);
+    await commit([
+      card({
+        articleId: 3015,
+        isRent: true,
+        price: null,
+        priceText: "Na upit",
+        pricePresent: true,
+        priceState: "unpriced",
+      }),
+    ]);
+    const result = await db.pool.query(
+      "SELECT price, ppm2, is_rent FROM listings WHERE article_id = 3015",
+    );
+    assert.deepEqual(result.rows[0], {
+      price: null,
+      ppm2: null,
+      is_rent: true,
+    });
   },
 );
 
@@ -458,6 +531,11 @@ needsDb("rent observations remain priced without deriving ppm²", async () => {
 
 needsDb("cards without a supported article id are ignored", async () => {
   const result = await commit([card({ articleId: null })]);
-  assert.deepEqual(result, { newCount: 0, dropCount: 0, newIds: [] });
+  assert.deepEqual(result, {
+    newCount: 0,
+    dropCount: 0,
+    newIds: [],
+    median: null,
+  });
   assert.equal((await listingRows()).length, 0);
 });

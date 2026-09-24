@@ -3,7 +3,7 @@
 // persistence and API-driven enrichment — plain HTTP, no browser.
 
 const api = require("./api");
-const { sleep, computeMedian } = require("./util");
+const { sleep } = require("./util");
 const {
   buildSearchObservations,
   buildSearchPriceEvents,
@@ -104,9 +104,6 @@ async function scrapeSearch(
     allCards.push(...harvested.cards);
     pagesDone = harvested.pages;
 
-    const median = computeMedian(
-      allCards.map((c) => c.ppm2).filter((v) => v != null && v > 0),
-    );
     const stats = await db.commitSearchIngestion({
       runId,
       search: {
@@ -132,7 +129,6 @@ async function scrapeSearch(
         pages: pagesDone,
         cards: allCards.length,
         listingCount: allCards.length,
-        median,
       },
       analytics: { invalidateFrom: new Date() },
     });
@@ -143,6 +139,7 @@ async function scrapeSearch(
 
     const newCount = Number(stats?.newCount || 0);
     const dropCount = Number(stats?.dropCount || 0);
+    const median = stats?.median ?? null;
     const ids = allCards.map((c) => c.articleId).filter(Boolean);
 
     const enrichedCount = await enrichSearchResults({

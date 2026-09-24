@@ -118,3 +118,26 @@ CREATE TRIGGER price_history_partition_route BEFORE INSERT ON public.price_histo
 --
 
 CREATE TRIGGER search_results_olap_dirty AFTER INSERT OR DELETE OR UPDATE ON public.search_results FOR EACH ROW EXECUTE FUNCTION public.mark_article_olap_dirty();
+
+-- Derived prices and rates are set before downstream detail and OLAP triggers.
+CREATE TRIGGER listings_set_rates
+BEFORE INSERT OR UPDATE ON public.listings
+FOR EACH ROW EXECUTE FUNCTION public.set_listing_rates();
+
+CREATE TRIGGER listings_rates_olap_dirty_insert
+AFTER INSERT ON public.listings
+FOR EACH ROW EXECUTE FUNCTION public.mark_article_olap_dirty();
+
+CREATE TRIGGER listings_rates_olap_dirty_update
+AFTER UPDATE ON public.listings
+FOR EACH ROW
+WHEN (
+  OLD.price IS DISTINCT FROM NEW.price OR
+  OLD.sqm IS DISTINCT FROM NEW.sqm OR
+  OLD.is_rent IS DISTINCT FROM NEW.is_rent OR
+  OLD.ppm2 IS DISTINCT FROM NEW.ppm2 OR
+  OLD.closing_price IS DISTINCT FROM NEW.closing_price OR
+  OLD.closing_ppm2 IS DISTINCT FROM NEW.closing_ppm2 OR
+  OLD.closed_at IS DISTINCT FROM NEW.closed_at
+)
+EXECUTE FUNCTION public.mark_article_olap_dirty();

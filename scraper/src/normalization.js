@@ -17,8 +17,6 @@ const PRICE_POLICY = Object.freeze({
   rentMinimum: 50,
   sqmMinimum: 5,
   sqmMaximum: 500,
-  ppm2Minimum: 1,
-  ppm2Maximum: 15000,
 });
 
 const UNIX_SECONDS_MAX = 4102444800; // 2100-01-01; rejects millisecond epochs
@@ -227,18 +225,6 @@ function normalizeArea(value) {
     : null;
 }
 
-function normalizePpm2(price, sqm, dealType) {
-  const area = normalizeArea(sqm);
-  if (dealTypeOf(dealType) === DEAL_TYPES.RENT || price == null || area == null)
-    return null;
-  const n = Math.round(price / area);
-  return Number.isFinite(n) &&
-    n >= PRICE_POLICY.ppm2Minimum &&
-    n <= PRICE_POLICY.ppm2Maximum
-    ? n
-    : null;
-}
-
 /** Unix seconds only; milliseconds and fractional values are rejected. */
 function normalizeUnixSeconds(value) {
   const n = finiteNumber(value);
@@ -363,7 +349,6 @@ module.exports = {
   normalizeHistoryWithRejections,
   normalizeId,
   normalizeLegacyPriceHistory,
-  normalizePpm2,
   normalizePrice,
   normalizePriceHistory,
   priceCurrencyOf,

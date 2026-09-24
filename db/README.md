@@ -28,6 +28,10 @@ into the ledger instead of replaying its `CREATE` statements. Existing
 volumes from the retired migration chain are supported when their live schema
 matches this current state; retired ledger filenames are preserved.
 
+The listing rate and last-valid-price migrations are folded into the canonical
+table, function, and trigger files. Existing volumes must have applied both
+retired migrations before their baseline checksums can advance to this version.
+
 The canonical SQL is the source of truth. To change the schema, update the
 current definitions and regenerate/verify the full baseline. Operational
 extensions that must be installed on an existing volume may be added as a
@@ -41,6 +45,12 @@ the extension file is still tracked transactionally in `schema_migrations`.
 The scraper-owned tables in `public` are the system of record: current listing
 state, search/run state, raw response evidence, and append-only state and price
 events. `listing_daily` is the historical inventory projection.
+
+`listings.price` keeps the last valid amount observed for the current sale or
+rent segment. `price_text` keeps the latest source display, including "Na upit".
+The latest `listing_price_events.price_state` records whether the ad is
+currently priced; a retained amount must not be treated as a fresh asking
+price. Closing snapshots retain that last valid amount and its sale rate.
 
 Physical dashboard-grain tables live in `olap`. Ingestion never writes them
 directly. Grafana reads stable views and functions in `reporting`, backed by the

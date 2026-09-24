@@ -31,7 +31,6 @@ const {
   normalizeDealType,
   normalizeHistoryWithRejections,
   normalizeId,
-  normalizePpm2,
   normalizePrice,
   priceCurrencyOf,
 } = require("./normalization");
@@ -218,8 +217,6 @@ function parseSearchItem(item) {
     }
   }
 
-  const ppm2 = normalizePpm2(price, sqm, dealType);
-
   return {
     articleId: id,
     title,
@@ -229,7 +226,6 @@ function parseSearchItem(item) {
     price,
     priceText,
     priceCurrency: priceCurrencyOf(item),
-    ppm2,
     isRent,
     dealType,
     priceState: priceQuality.state,
@@ -341,7 +337,6 @@ function parseListingDetail(json, fallbackId) {
       (priceQuality.state === "unpriced"
         ? "Na upit"
         : String(json.price ?? "")),
-    ppm2: null,
     isRent,
     dealType,
     priceState: priceQuality.state,
@@ -406,8 +401,6 @@ function parseListingDetail(json, fallbackId) {
     const v = normalizeArea(detail.characteristics["kvadrata"]);
     if (v !== null) detail.sqm = v;
   }
-
-  detail.ppm2 = normalizePpm2(detail.price, detail.sqm, detail.dealType);
 
   return detail;
 }

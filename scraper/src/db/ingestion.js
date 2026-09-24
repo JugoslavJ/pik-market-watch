@@ -1,6 +1,7 @@
 "use strict";
 
 const LISTING_LIFECYCLE_LOCK = "pik-market-watch listing lifecycle";
+const { computeMedian } = require("../util");
 
 module.exports = function installIngestionMethods(Db) {
   Object.assign(Db.prototype, {
@@ -41,19 +42,7 @@ module.exports = function installIngestionMethods(Db) {
           existing.rows.map((row) => [Number(row.article_id), row]),
         );
         const newIds = articleIds.filter((id) => !previousById.has(id));
-        const dropCount = uniqueCards.filter((card) => {
-          const previous = previousById.get(Number(card.articleId));
-          return (
-            previous &&
-            card.pricePresent !== false &&
-            card.ppm2 != null &&
-            previous.ppm2 != null &&
-            Number(card.ppm2) < Number(previous.ppm2) &&
-            (Number(card.ppm2) !== Number(previous.ppm2) ||
-              card.price !== previous.price)
-          );
-        }).length;
-
+        let currentRates = new Map();
         // Insert and update in sets. The separate update preserves the old
         // pricePresent=false rule without adding a staging column to listings.
         if (uniqueCards.length) {
@@ -65,7 +54,6 @@ module.exports = function installIngestionMethods(Db) {
             rooms: card.rooms ?? null,
             price: card.price ?? null,
             price_text: card.priceText ?? null,
-            ppm2: card.ppm2 ?? null,
             is_rent: Boolean(card.isRent),
             renewed_at: card.renewedAt ?? null,
             price_present: card.pricePresent !== false,
@@ -73,25 +61,24 @@ module.exports = function installIngestionMethods(Db) {
           const cardInput = JSON.stringify(cardRows);
           await client.query(
             `INSERT INTO listings
-             (article_id, url, title, sqm, rooms, price, price_text, ppm2,
+             (article_id, url, title, sqm, rooms, price, price_text,
               is_rent, first_seen, last_seen, renewed_at)
            SELECT article_id, url, title, sqm, rooms,
                   CASE WHEN price_present THEN price ELSE NULL END,
                   CASE WHEN price_present THEN price_text ELSE NULL END,
-                  CASE WHEN price_present THEN ppm2 ELSE NULL END,
                   is_rent, now(), now(), renewed_at
              FROM jsonb_to_recordset($1::jsonb) AS c(
                article_id bigint, url text, title text, sqm numeric,
-               rooms text, price numeric, price_text text, ppm2 integer,
+               rooms text, price numeric, price_text text,
                is_rent boolean, renewed_at timestamptz, price_present boolean)
            ON CONFLICT (article_id) DO NOTHING`,
             [cardInput],
           );
-          await client.query(
+          const updated = await client.query(
             `WITH input AS (
              SELECT * FROM jsonb_to_recordset($1::jsonb) AS c(
                article_id bigint, url text, title text, sqm numeric,
-               rooms text, price numeric, price_text text, ppm2 integer,
+               rooms text, price numeric, price_text text,
                is_rent boolean, renewed_at timestamptz, price_present boolean)
            )
            UPDATE listings l SET
@@ -99,18 +86,44 @@ module.exports = function installIngestionMethods(Db) {
              title = i.title,
              sqm = COALESCE(i.sqm, l.sqm),
              rooms = COALESCE(i.rooms, l.rooms),
-             price = CASE WHEN i.price_present THEN i.price ELSE l.price END,
-             price_text = CASE WHEN i.price_present THEN i.price_text ELSE l.price_text END,
-             ppm2 = CASE WHEN i.price_present THEN i.ppm2 ELSE l.ppm2 END,
+             price = CASE WHEN i.price_present THEN i.price
+                          WHEN i.is_rent IS DISTINCT FROM l.is_rent THEN NULL
+                          ELSE l.price END,
+             price_text = CASE WHEN i.price_present THEN i.price_text
+                               WHEN i.is_rent IS DISTINCT FROM l.is_rent THEN NULL
+                               ELSE l.price_text END,
              is_rent = i.is_rent,
              last_seen = now(),
              renewed_at = GREATEST(l.renewed_at, i.renewed_at),
              closed_at = NULL, closing_price = NULL, closing_ppm2 = NULL,
              closing_category = NULL
-           FROM input i WHERE l.article_id = i.article_id`,
+           FROM input i WHERE l.article_id = i.article_id
+           RETURNING l.article_id, l.ppm2`,
             [cardInput],
           );
+          currentRates = new Map(
+            updated.rows.map((row) => [Number(row.article_id), row.ppm2]),
+          );
         }
+
+        const dropCount = uniqueCards.filter((card) => {
+          const previous = previousById.get(Number(card.articleId));
+          const currentRate = currentRates.get(Number(card.articleId));
+          return (
+            previous &&
+            card.pricePresent !== false &&
+            previous.ppm2 != null &&
+            currentRate != null &&
+            Number(currentRate) < Number(previous.ppm2)
+          );
+        }).length;
+        const median = computeMedian(
+          uniqueCards
+            .filter((card) => card.pricePresent !== false && card.price != null)
+            .map((card) => currentRates.get(Number(card.articleId)))
+            .filter((rate) => rate != null && Number(rate) > 0)
+            .map(Number),
+        );
 
         const observations = payload.stateObservations || [];
         if (observations.length) {
@@ -123,12 +136,13 @@ module.exports = function installIngestionMethods(Db) {
                   get_or_create_listing_state_version(
                     category, category_membership, is_rent, sqm, rooms,
                     filter_attributes, membership_inferred, attributes_inferred),
-                  price, ppm2, COALESCE(last_seen_at, effective_at), is_closed
+                  price, public.sale_ppm2(price, sqm, is_rent),
+                  COALESCE(last_seen_at, effective_at), is_closed
              FROM jsonb_to_recordset($1::jsonb) AS o(
                article_id bigint, effective_at timestamptz, ingested_at timestamptz,
                source text, event_type text, run_id bigint, search_key text,
                category text, category_membership text[], is_rent boolean,
-               sqm numeric, rooms text, price numeric, ppm2 integer,
+               sqm numeric, rooms text, price numeric,
                filter_attributes jsonb, last_seen_at timestamptz, is_closed boolean,
                membership_inferred boolean, attributes_inferred boolean)`,
             [
@@ -147,7 +161,6 @@ module.exports = function installIngestionMethods(Db) {
                   sqm: observation.sqm ?? null,
                   rooms: observation.rooms ?? null,
                   price: observation.price ?? null,
-                  ppm2: observation.ppm2 ?? null,
                   filter_attributes: observation.filterAttributes || {},
                   last_seen_at:
                     observation.lastSeenAt ?? observation.effectiveAt,
@@ -210,7 +223,6 @@ module.exports = function installIngestionMethods(Db) {
              UPDATE listings l SET
                closed_at = COALESCE(l.closed_at, now()),
                closing_price = COALESCE(l.closing_price, l.price),
-               closing_ppm2 = COALESCE(l.closing_ppm2, l.ppm2),
                closing_category = COALESCE(l.closing_category, $2)
              WHERE l.article_id = ANY($1::bigint[])
                AND NOT EXISTS (
@@ -267,7 +279,7 @@ module.exports = function installIngestionMethods(Db) {
             payload.search.url,
             payload.search.category,
             run.listingCount ?? cards.length,
-            run.median ?? null,
+            median,
             newIds.length,
             dropCount,
           ],
@@ -286,7 +298,7 @@ module.exports = function installIngestionMethods(Db) {
           ],
         );
         await client.query("COMMIT");
-        return { newCount: newIds.length, dropCount, newIds };
+        return { newCount: newIds.length, dropCount, newIds, median };
       } catch (error) {
         await client.query("ROLLBACK").catch(() => {});
         throw error;

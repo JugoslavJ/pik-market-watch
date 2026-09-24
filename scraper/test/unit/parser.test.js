@@ -47,7 +47,7 @@ withFixtures(
 
 // ── synthetic edges (shapes verified against live payloads) ──────────────────
 
-test("search item: priced sale maps price/m²/rooms/ppm²/pin/seller", () => {
+test("search item: priced sale maps price/m²/rooms/pin/seller", () => {
   const card = parseSearchItem({
     id: 78615352,
     title: "Prodaja/ stan/ Sarajevo/ Centar/ dvosoban/ 58 m2",
@@ -71,7 +71,6 @@ test("search item: priced sale maps price/m²/rooms/ppm²/pin/seller", () => {
       rooms: card.rooms,
       price: card.price,
       priceText: card.priceText,
-      ppm2: card.ppm2,
       isRent: card.isRent,
     },
     {
@@ -81,7 +80,6 @@ test("search item: priced sale maps price/m²/rooms/ppm²/pin/seller", () => {
       rooms: "2",
       price: 435000,
       priceText: "435.000 KM",
-      ppm2: 7500,
       isRent: false,
     },
   );
@@ -95,7 +93,7 @@ test("search item: priced sale maps price/m²/rooms/ppm²/pin/seller", () => {
   assert.equal(card.publishedAt, undefined);
 });
 
-test('search item: "Na upit" (price 0) stays unpriced, ppm² null, no pin', () => {
+test('search item: "Na upit" (price 0) stays unpriced, no pin', () => {
   const card = parseSearchItem({
     id: 78191965,
     title: "ODMAH USELJIV - trosoban stan 59m2",
@@ -108,11 +106,11 @@ test('search item: "Na upit" (price 0) stays unpriced, ppm² null, no pin', () =
   });
   assert.equal(card.price, null);
   assert.equal(card.priceText, "Na upit");
-  assert.equal(card.ppm2, null);
+  assert.equal(card.ppm2, undefined);
   assert.equal(card.latitude, null);
 });
 
-test("search item: listing_type rent wins; rents never get KM/m²", () => {
+test("search item: listing_type rent wins", () => {
   const card = parseSearchItem({
     id: 9,
     title: "Stan iznajmljivanje 60m2",
@@ -122,7 +120,7 @@ test("search item: listing_type rent wins; rents never get KM/m²", () => {
     special_labels: [{ value: 60, label: "Kvadrata" }],
   });
   assert.equal(card.isRent, true);
-  assert.equal(card.ppm2, null);
+  assert.equal(card.ppm2, undefined);
 });
 
 test("search item: cheap declared sale stays sale but is invalid", () => {
@@ -155,10 +153,10 @@ test("search item: garbage m² (a real live case: value 4) discarded", () => {
   });
   assert.equal(card.sqm, null);
   assert.equal(card.rooms, "2");
-  assert.equal(card.ppm2, null);
+  assert.equal(card.ppm2, undefined);
 });
 
-test("search item: implausible KM/m² (>15000) nulled; foreign pin rejected", () => {
+test("search item: foreign pin rejected", () => {
   const card = parseSearchItem({
     id: 12,
     title: "Mikro stan centar",
@@ -167,7 +165,7 @@ test("search item: implausible KM/m² (>15000) nulled; foreign pin rejected", ()
     special_labels: [{ value: 20, label: "Kvadrata" }],
     location: { lat: 51.5074, lon: -0.1278 },
   }); // London
-  assert.equal(card.ppm2, null); // 20000 → nulled
+  assert.equal(card.ppm2, undefined);
   assert.equal(card.latitude, null);
   assert.equal(card.longitude, null);
 });

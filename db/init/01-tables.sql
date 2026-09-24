@@ -48,6 +48,9 @@ CREATE TABLE public.listings (
     renewed_at timestamp with time zone
 );
 
+COMMENT ON COLUMN public.listings.price IS
+  'Last valid observed amount for the current deal segment; latest unpriced state is retained in price events.';
+
 --
 -- Name: listing_price_events; Type: TABLE; Schema: public; Owner: -
 --

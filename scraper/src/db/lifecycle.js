@@ -53,8 +53,7 @@ module.exports = function installLifecycleMethods(Db) {
         const closed = await client.query(
           `UPDATE listings l
               SET closed_at = $1::timestamptz,
-                  closing_price = COALESCE(l.closing_price, l.price),
-                  closing_ppm2 = COALESCE(l.closing_ppm2, l.ppm2)
+                  closing_price = COALESCE(l.closing_price, l.price)
             WHERE l.closed_at IS NULL
               AND NOT EXISTS (SELECT 1 FROM search_results sr
                                WHERE sr.article_id = l.article_id)

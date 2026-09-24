@@ -6,7 +6,6 @@ const ENRICH_COLS = [
   ["article_id", "bigint", "articleId"],
   ["price", "numeric", "price"],
   ["price_text", "text", "priceText"],
-  ["ppm2_current", "integer", "ppm2"],
   ["is_rent_current", "boolean", "isRent"],
   ["price_present", "boolean", "pricePresent"],
   ["lat", "float8", "latitude"],
@@ -105,7 +104,7 @@ module.exports = function installEnrichmentMethods(Db) {
         const observedParam = input.params.length + 1;
         await client.query(
           `WITH input AS (
-         SELECT article_id, price, price_text, ppm2_current, is_rent_current,
+         SELECT article_id, price, price_text, is_rent_current,
                 price_present, lat, lon, sqm, published_at, seller_type,
                 rooms_detail, bathrooms, floor_num, floors_total, unit_levels,
                 heating, furnished, condition, parking, garage, elevator,
@@ -118,21 +117,19 @@ module.exports = function installEnrichmentMethods(Db) {
              ${input.castsSql})
            AS t(${input.aliasSql}))
        UPDATE listings l SET
-          price = CASE WHEN i.price_present THEN i.price ELSE l.price END,
-          price_text = CASE WHEN i.price_present THEN i.price_text ELSE l.price_text END,
+          price = CASE WHEN i.price_present THEN i.price
+                       WHEN i.is_rent_current IS DISTINCT FROM l.is_rent
+                            AND i.is_rent_current IS NOT NULL THEN NULL
+                       ELSE l.price END,
+          price_text = CASE WHEN i.price_present THEN i.price_text
+                            WHEN i.is_rent_current IS DISTINCT FROM l.is_rent
+                                 AND i.is_rent_current IS NOT NULL THEN NULL
+                            ELSE l.price_text END,
           is_rent = COALESCE(i.is_rent_current, l.is_rent),
           latitude  = COALESCE(l.latitude, i.lat),
           longitude = COALESCE(l.longitude, i.lon),
           location = COALESCE(l.location, neighborhood_of(i.lat, i.lon)),
           sqm = COALESCE(l.sqm, i.sqm),
-          ppm2 = CASE
-                   WHEN i.price_present THEN i.ppm2_current
-                   WHEN l.ppm2 IS NULL AND l.price IS NOT NULL AND NOT l.is_rent
-                        AND COALESCE(l.sqm, i.sqm) IS NOT NULL
-                        AND round(l.price / COALESCE(l.sqm, i.sqm)) BETWEEN 1 AND 15000
-                   THEN round(l.price / COALESCE(l.sqm, i.sqm))::int
-                   ELSE l.ppm2
-                 END,
           published_at       = COALESCE(l.published_at, i.published_at),
           seller_type        = COALESCE(l.seller_type, i.seller_type),
           rooms_detail       = COALESCE(l.rooms_detail, i.rooms_detail),
@@ -193,10 +190,10 @@ module.exports = function installEnrichmentMethods(Db) {
                   get_or_create_listing_state_version(
                     d.category, '{}'::text[], d.is_rent, d.sqm, d.rooms,
                     d.attributes, false, false),
-                  d.price, d.ppm2
+                  d.price, public.sale_ppm2(d.price, d.sqm, d.is_rent)
              FROM jsonb_to_recordset($1::jsonb) AS d(
                 article_id bigint, is_rent boolean, sqm numeric, price numeric,
-                ppm2 integer, category text, rooms text, attributes jsonb)
+                category text, rooms text, attributes jsonb)
             WHERE EXISTS (
               SELECT 1 FROM listings l WHERE l.article_id = d.article_id)`,
           [
@@ -206,7 +203,6 @@ module.exports = function installEnrichmentMethods(Db) {
                 is_rent: row.isRent ?? null,
                 sqm: row.sqm ?? null,
                 price: row.price ?? null,
-                ppm2: row.ppm2 ?? null,
                 attributes: {
                   ...(row.pricePresent !== false
                     ? { currency: row.priceCurrency ?? null }

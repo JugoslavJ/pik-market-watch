@@ -10,7 +10,6 @@ const {
   normalizeHistoryWithRejections,
   normalizeId,
   normalizeLegacyPriceHistory,
-  normalizePpm2,
   normalizePrice,
   normalizePriceHistory,
 } = require("../../src/normalization");
@@ -42,9 +41,6 @@ test("numeric IDs, locale strings, area bounds and missing-area prices are safe"
   assert.equal(normalizeArea("72,5"), 72.5);
   assert.equal(normalizeArea(4), null);
   assert.equal(normalizeArea(501), null);
-  assert.equal(normalizePpm2(3000, null, "sale"), null);
-  assert.equal(normalizePpm2(3000, 5, "sale"), 600);
-  assert.equal(normalizePpm2(3000, 1, "sale"), null);
 });
 
 test("localized numbers accept validated grouping and decimal separators", () => {
@@ -118,7 +114,7 @@ test("declared sale remains sale when its price is invalid; valid price works wi
   });
   assert.equal(validNoArea.priceState, "valid");
   assert.equal(validNoArea.price, 3000);
-  assert.equal(validNoArea.ppm2, null);
+  assert.equal(validNoArea.ppm2, undefined);
 });
 
 test("detail preserves characteristics, pin mapping and raw history separately", () => {
@@ -140,7 +136,7 @@ test("detail preserves characteristics, pin mapping and raw history separately",
   });
   assert.equal(detail.price, 3000);
   assert.equal(detail.sqm, 72.5);
-  assert.equal(detail.ppm2, 41);
+  assert.equal(detail.ppm2, undefined);
   assert.equal(detail.parking, true);
   assert.equal(detail.characteristics.unknown, "kept");
   assert.equal(detail.latitude, 44.77);

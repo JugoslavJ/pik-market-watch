@@ -35,7 +35,6 @@ function buildSearchObservations(
     sqm: card.sqm ?? null,
     rooms: card.rooms ?? null,
     price: card.price ?? null,
-    ppm2: card.ppm2 ?? null,
     filterAttributes: observationAttributes(card),
     lastSeenAt: observedAt,
     closedAt: null,
