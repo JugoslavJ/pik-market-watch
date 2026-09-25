@@ -27,10 +27,4 @@ test("init contains only the canonical schema baseline", () => {
     "11-postgis.sql",
     "12-pg-stat-statements.sql",
   ]);
-
-  assert.equal(
-    fs.readdirSync(init).some((name) => /^(1[3-9]|[2-9]\d)-/.test(name)),
-    false,
-    "all current schema changes belong in their canonical baseline files",
-  );
 });

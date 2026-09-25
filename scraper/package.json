@@ -14,6 +14,7 @@
     "benchmark:ingestion": "node scripts/benchmark-ingestion.js",
     "benchmark:olap": "node scripts/benchmark-olap.js",
     "benchmark:regressions": "node scripts/benchmark-regressions.js",
+    "benchmark:analytics": "node scripts/benchmark-analytics.js",
     "check:schema-parity": "node scripts/check-schema-parity.js",
     "db:reindex-dashboard-facts": "node scripts/reindex-dashboard-facts.js",
     "db:reclaim-history": "node src/reclaim-history.js",

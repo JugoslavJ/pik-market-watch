@@ -68,18 +68,35 @@ async function seed(pool) {
       [firstId, lastId],
     );
     await pool.query(
+      `INSERT INTO public.listing_state_versions
+         (state_hash, category, category_membership, is_rent, sqm, rooms,
+          filter_attributes)
+       SELECT public.listing_state_version_hash(
+                'apartments', ARRAY['apartments'], false, l.sqm, l.rooms,
+                jsonb_build_object('latitude', l.latitude::text,
+                                   'longitude', l.longitude::text), false, false),
+              'apartments', ARRAY['apartments'], false, l.sqm, l.rooms,
+              jsonb_build_object('latitude', l.latitude::text,
+                                 'longitude', l.longitude::text)
+         FROM public.listings l
+        WHERE l.article_id BETWEEN $1 AND $2
+       ON CONFLICT (state_hash) DO NOTHING`,
+      [firstId, lastId],
+    );
+    await pool.query(
       `INSERT INTO public.listing_state_history
-         (article_id, effective_at, source, event_type, category,
-          category_membership, is_rent, sqm, rooms, filter_attributes,
+         (article_id, effective_at, source, event_type, state_version_id,
           last_seen_at)
        SELECT l.article_id,
               now() - make_interval(days => d, hours => h),
-              'benchmark', 'search_sighting', 'apartments',
-              ARRAY['apartments'], false, l.sqm, l.rooms,
-              jsonb_build_object('latitude', l.latitude::text,
-                                 'longitude', l.longitude::text),
+              'search', 'search_sighting', v.state_version_id,
               now() - make_interval(days => d, hours => h)
          FROM public.listings l
+         JOIN public.listing_state_versions v
+           ON v.state_hash = public.listing_state_version_hash(
+                'apartments', ARRAY['apartments'], false, l.sqm, l.rooms,
+                jsonb_build_object('latitude', l.latitude::text,
+                                   'longitude', l.longitude::text), false, false)
          CROSS JOIN generate_series(0, $3::int - 1) d
          CROSS JOIN generate_series(0, 1) h
         WHERE l.article_id BETWEEN $1 AND $2

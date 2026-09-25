@@ -227,9 +227,13 @@ CREATE VIEW reporting.resolved_price_evidence AS
                 WHEN 'rent'::text THEN true
                 ELSE NULL::boolean
             END
-            ELSE s.is_rent
+            ELSE ( SELECT h.is_rent
+                     FROM public.listing_state_history_state h
+                    WHERE ((h.article_id = e.article_id) AND (h.effective_at <= e.effective_at) AND (h.is_rent IS NOT NULL))
+                    ORDER BY h.effective_at DESC, h.id DESC
+                    LIMIT 1)
         END AS evidence_is_rent
-   FROM (( SELECT DISTINCT ON (listing_price_events.article_id, listing_price_events.effective_at) listing_price_events.id,
+   FROM ( SELECT DISTINCT ON (listing_price_events.article_id, listing_price_events.effective_at) listing_price_events.id,
             listing_price_events.article_id,
             listing_price_events.effective_at,
             listing_price_events.ingested_at,
@@ -252,12 +256,7 @@ CREATE VIEW reporting.resolved_price_evidence AS
                     WHEN 'invalid'::text THEN 1
                     WHEN 'unpriced'::text THEN 2
                     ELSE 3
-                END, listing_price_events.id DESC) e
-     LEFT JOIN LATERAL ( SELECT h.is_rent
-           FROM public.listing_state_history_state h
-          WHERE ((h.article_id = e.article_id) AND (h.effective_at <= e.effective_at) AND (h.is_rent IS NOT NULL))
-          ORDER BY h.effective_at DESC, h.id DESC
-         LIMIT 1) s ON (true));
+                END, listing_price_events.id DESC) e;
 
 --
 -- The resolved evidence helper is needed by current_comparison_inputs below.
@@ -277,26 +276,28 @@ CREATE FUNCTION reporting.latest_resolved_price_evidence(p_article_id bigint) RE
              CASE e.provenance ->> 'dealType'
                WHEN 'sale' THEN false WHEN 'rent' THEN true ELSE NULL::boolean
              END
-           ELSE state.is_rent
+           ELSE (
+             SELECT h.is_rent
+               FROM public.listing_state_history_state h
+              WHERE h.article_id=e.article_id
+                AND h.effective_at<=e.effective_at
+                AND h.is_rent IS NOT NULL
+              ORDER BY h.effective_at DESC, h.id DESC
+              LIMIT 1
+           )
          END
     FROM (
-      SELECT DISTINCT ON (p.article_id, p.effective_at) p.*
+      SELECT p.*
         FROM public.listing_price_events p
        WHERE p.article_id = $1 AND p.effective_at <= now()
-       ORDER BY p.article_id, p.effective_at,
+       ORDER BY p.effective_at DESC,
                 CASE WHEN p.source IN ('search', 'detail') THEN 0 ELSE 1 END,
                 CASE p.price_state
                   WHEN 'conflict' THEN 0 WHEN 'invalid' THEN 1
                   WHEN 'unpriced' THEN 2 ELSE 3 END,
                 p.id DESC
+       LIMIT 1
     ) e
-    LEFT JOIN LATERAL (
-      SELECT h.is_rent FROM public.listing_state_history_state h
-       WHERE h.article_id=e.article_id AND h.effective_at<=e.effective_at
-         AND h.is_rent IS NOT NULL
-       ORDER BY h.effective_at DESC, h.id DESC LIMIT 1
-    ) state ON true
-   ORDER BY e.effective_at DESC, e.id DESC LIMIT 1
 $_$;
 
 
@@ -1085,11 +1086,19 @@ CREATE VIEW reporting.comparison_price_changes_source AS
             lag(e_1.effective_at) OVER w AS prior_effective_at
            FROM evidence e_1
           WINDOW w AS (PARTITION BY e_1.article_id ORDER BY e_1.effective_at, e_1.id)
+        ), latest_cycles AS MATERIALIZED (
+         SELECT DISTINCT ON (c.article_id) c.article_id,
+            c.opened_at,
+            c.closed_at
+           FROM public.v_listing_lifecycle_cycles c
+          WHERE (c.opened_at <= now())
+          ORDER BY c.article_id, c.opened_at DESC, c.cycle_no DESC
         ), current_inputs AS MATERIALIZED (
-         SELECT current_comparison_inputs.article_id,
-            current_comparison_inputs.cycle_opened_at,
-            current_comparison_inputs.is_rent
-           FROM reporting.current_comparison_inputs
+         SELECT l.article_id,
+                CASE WHEN c.closed_at IS NULL THEN c.opened_at ELSE NULL::timestamptz END AS cycle_opened_at,
+            l.is_rent
+           FROM (public.v_active_listings_source l
+             LEFT JOIN latest_cycles c USING (article_id))
         )
  SELECT e.article_id,
     e.effective_at,
@@ -1775,66 +1784,51 @@ CREATE VIEW reporting.daily_listing_facts_source_legacy AS
             d.filter_attributes,
             p.currency_normalized AS currency,
             p.evidence_is_rent,
-            ARRAY( SELECT DISTINCT members.member
-                   FROM unnest((COALESCE(d.category_memberships, '{}'::text[]) ||
-                        CASE
-                            WHEN (NULLIF(btrim(d.category), ''::text) IS NULL) THEN '{}'::text[]
-                            ELSE ARRAY[d.category]
-                        END)) members(member)
-                  WHERE ((members.member IS NOT NULL) AND (members.member <> ''::text))
-                  ORDER BY members.member) AS resolved_category_memberships,
-            reporting.comparison_property_type(ARRAY( SELECT DISTINCT members.member
-                   FROM unnest((COALESCE(d.category_memberships, '{}'::text[]) ||
-                        CASE
-                            WHEN (NULLIF(btrim(d.category), ''::text) IS NULL) THEN '{}'::text[]
-                            ELSE ARRAY[d.category]
-                        END)) members(member)
-                  WHERE ((members.member IS NOT NULL) AND (members.member <> ''::text))
-                  ORDER BY members.member)) AS property_type
-           FROM (public.v_listing_daily d
+            memberships.resolved_category_memberships,
+            reporting.comparison_property_type(memberships.resolved_category_memberships) AS property_type
+           FROM ((public.v_listing_daily d
              LEFT JOIN reporting.resolved_price_evidence p ON (((p.article_id = d.article_id) AND (p.effective_at = d.price_effective_at))))
+             CROSS JOIN LATERAL (
+               SELECT ARRAY(
+                 SELECT DISTINCT members.member
+                   FROM unnest((COALESCE(d.category_memberships, '{}'::text[]) ||
+                        CASE
+                            WHEN (NULLIF(btrim(d.category), ''::text) IS NULL) THEN '{}'::text[]
+                            ELSE ARRAY[d.category]
+                        END)) members(member)
+                  WHERE members.member IS NOT NULL AND members.member <> ''
+                  ORDER BY members.member
+               ) AS resolved_category_memberships
+               OFFSET 0
+             ) memberships)
         ), quality AS (
-         SELECT e.day,
-            e.article_id,
-            e.title,
-            e.url,
-            e.category,
-            e.category_memberships,
-            e.is_rent,
-            e.deal,
-            e.rooms,
-            e.sqm,
-            e.location,
-            e.neighborhood,
-            e.price,
-            e.price_state,
-            e.ppm2,
-            e.state_effective_at,
-            e.price_effective_at,
-            e.membership_inferred,
-            e.attributes_inferred,
-            e.stale_observation,
-            e.provisional_day,
-            e.filter_attributes,
-            e.currency,
-            e.evidence_is_rent,
-            e.resolved_category_memberships,
-            e.property_type,
-                CASE
-                    WHEN ((e.price_effective_at IS NOT NULL) AND (e.evidence_is_rent IS DISTINCT FROM e.is_rent)) THEN 'price evidence belongs to another deal'::text
-                    WHEN ((e.price_effective_at IS NOT NULL) AND (EXISTS ( SELECT 1
-                       FROM public.listing_state_history_state h
-                      WHERE ((h.article_id = e.article_id) AND (h.effective_at > e.price_effective_at) AND (h.effective_at < public.analytics_sarajevo_day_start((e.day + 1))) AND (h.is_rent IS NOT NULL) AND (h.is_rent IS DISTINCT FROM e.evidence_is_rent))))) THEN 'price evidence predates a deal switch'::text
-                    ELSE reporting.comparison_price_reason(e.price, e.price_state, e.currency, e.is_rent)
-                END AS price_quality_reason,
-                CASE
-                    WHEN ((e.price_effective_at IS NOT NULL) AND (e.evidence_is_rent IS DISTINCT FROM e.is_rent)) THEN 'price evidence belongs to another deal'::text
-                    WHEN ((e.price_effective_at IS NOT NULL) AND (EXISTS ( SELECT 1
-                       FROM public.listing_state_history_state h
-                      WHERE ((h.article_id = e.article_id) AND (h.effective_at > e.price_effective_at) AND (h.effective_at < public.analytics_sarajevo_day_start((e.day + 1))) AND (h.is_rent IS NOT NULL) AND (h.is_rent IS DISTINCT FROM e.evidence_is_rent))))) THEN 'price evidence predates a deal switch'::text
-                    ELSE reporting.comparison_quality_reason(e.price, e.price_state, e.currency, e.sqm, e.is_rent)
-                END AS rate_quality_reason
+         SELECT e.*, decision.price_quality_reason, decision.rate_quality_reason
            FROM evidence e
+           CROSS JOIN LATERAL (
+             WITH deal_boundary AS MATERIALIZED (
+               SELECT CASE
+                 WHEN e.price_effective_at IS NOT NULL
+                      AND e.evidence_is_rent IS DISTINCT FROM e.is_rent
+                   THEN 'price evidence belongs to another deal'::text
+                 WHEN e.price_effective_at IS NOT NULL
+                      AND EXISTS (
+                        SELECT 1 FROM public.listing_state_history_state h
+                         WHERE h.article_id = e.article_id
+                           AND h.effective_at > e.price_effective_at
+                           AND h.effective_at < public.analytics_sarajevo_day_start(e.day + 1)
+                           AND h.is_rent IS NOT NULL
+                           AND h.is_rent IS DISTINCT FROM e.evidence_is_rent
+                      )
+                   THEN 'price evidence predates a deal switch'::text
+               END AS reason
+             )
+             SELECT COALESCE(b.reason, reporting.comparison_price_reason(
+                      e.price, e.price_state, e.currency, e.is_rent)) AS price_quality_reason,
+                    COALESCE(b.reason, reporting.comparison_quality_reason(
+                      e.price, e.price_state, e.currency, e.sqm, e.is_rent)) AS rate_quality_reason
+               FROM deal_boundary b
+             OFFSET 0
+           ) decision
         )
  SELECT day,
     article_id,
@@ -2256,33 +2250,39 @@ CREATE VIEW reporting.lifecycle_cycles_source AS
                   WHERE ((h.article_id = c.article_id) AND (h.effective_at = c.opened_at) AND (h.event_type = ANY (ARRAY['search_sighting'::text, 'reopened'::text])))
                   ORDER BY h.id DESC
                  LIMIT 1) od ON (true))
-             LEFT JOIN LATERAL ( SELECT fields.category,
-                    fields.is_rent,
-                    fields.sqm,
-                    fields.rooms,
-                    memberships.memberships,
-                    attributes.attributes
-                   FROM ((LATERAL ( SELECT (array_agg(h.category ORDER BY h.effective_at DESC, h.id DESC) FILTER (WHERE (NULLIF(btrim(h.category), ''::text) IS NOT NULL)))[1] AS category,
-                            (array_agg(h.is_rent ORDER BY h.effective_at DESC, h.id DESC) FILTER (WHERE (h.is_rent IS NOT NULL)))[1] AS is_rent,
-                            (array_agg(h.sqm ORDER BY h.effective_at DESC, h.id DESC) FILTER (WHERE (h.sqm IS NOT NULL)))[1] AS sqm,
-                            (array_agg(h.rooms ORDER BY h.effective_at DESC, h.id DESC) FILTER (WHERE (h.rooms IS NOT NULL)))[1] AS rooms
-                           FROM public.listing_state_history_state h
-                          WHERE ((h.article_id = c.article_id) AND (h.effective_at <= c.opened_at) AND (h.event_type = ANY (ARRAY['search_sighting'::text, 'detail_update'::text, 'reopened'::text])))) fields
-                     CROSS JOIN LATERAL ( SELECT COALESCE(array_agg(DISTINCT members.member ORDER BY members.member), '{}'::text[]) AS memberships
-                           FROM (public.listing_state_history_state h
-                             CROSS JOIN LATERAL unnest(h.category_membership) members(member))
-                          WHERE ((h.article_id = c.article_id) AND (h.effective_at <= c.opened_at) AND (h.event_type = ANY (ARRAY['search_sighting'::text, 'detail_update'::text, 'reopened'::text])) AND (members.member IS NOT NULL) AND (members.member <> ''::text))) memberships)
-                     CROSS JOIN LATERAL ( SELECT COALESCE(jsonb_object_agg(a.key, a.value), '{}'::jsonb) AS attributes
-                           FROM ( SELECT DISTINCT ON (attrs.key) attrs.key,
-                                    attrs.value
-                                   FROM (public.listing_state_history_state h
-                                     CROSS JOIN LATERAL jsonb_each(
-CASE
- WHEN (jsonb_typeof(h.filter_attributes) = 'object'::text) THEN h.filter_attributes
- ELSE '{}'::jsonb
-END) attrs(key, value))
-                                  WHERE ((h.article_id = c.article_id) AND (h.effective_at <= c.opened_at) AND (h.event_type = ANY (ARRAY['search_sighting'::text, 'detail_update'::text, 'reopened'::text])))
-                                  ORDER BY attrs.key, h.effective_at DESC, h.id DESC) a) attributes)) os ON (true))
+             LEFT JOIN LATERAL (
+               WITH eligible AS MATERIALIZED (
+                 SELECT h.effective_at, h.id, h.category, h.is_rent, h.sqm,
+                        h.rooms, h.category_membership, h.filter_attributes
+                   FROM public.listing_state_history_state h
+                  WHERE h.article_id = c.article_id
+                    AND h.effective_at <= c.opened_at
+                    AND h.event_type = ANY (ARRAY['search_sighting'::text, 'detail_update'::text, 'reopened'::text])
+               )
+               SELECT fields.category, fields.is_rent, fields.sqm, fields.rooms,
+                      memberships.memberships, attributes.attributes
+                 FROM ((LATERAL (
+                   SELECT (array_agg(h.category ORDER BY h.effective_at DESC, h.id DESC) FILTER (WHERE NULLIF(btrim(h.category), '') IS NOT NULL))[1] AS category,
+                          (array_agg(h.is_rent ORDER BY h.effective_at DESC, h.id DESC) FILTER (WHERE h.is_rent IS NOT NULL))[1] AS is_rent,
+                          (array_agg(h.sqm ORDER BY h.effective_at DESC, h.id DESC) FILTER (WHERE h.sqm IS NOT NULL))[1] AS sqm,
+                          (array_agg(h.rooms ORDER BY h.effective_at DESC, h.id DESC) FILTER (WHERE h.rooms IS NOT NULL))[1] AS rooms
+                     FROM eligible h
+                 ) fields
+                 CROSS JOIN LATERAL (
+                   SELECT COALESCE(array_agg(DISTINCT members.member ORDER BY members.member), '{}'::text[]) AS memberships
+                     FROM eligible h CROSS JOIN LATERAL unnest(h.category_membership) members(member)
+                    WHERE members.member IS NOT NULL AND members.member <> ''
+                 ) memberships)
+                 CROSS JOIN LATERAL (
+                   SELECT COALESCE(jsonb_object_agg(a.key, a.value), '{}'::jsonb) AS attributes
+                     FROM (
+                       SELECT DISTINCT ON (attrs.key) attrs.key, attrs.value
+                         FROM eligible h
+                         CROSS JOIN LATERAL jsonb_each(CASE WHEN jsonb_typeof(h.filter_attributes) = 'object' THEN h.filter_attributes ELSE '{}'::jsonb END) attrs(key, value)
+                        ORDER BY attrs.key, h.effective_at DESC, h.id DESC
+                     ) a
+                 ) attributes)
+             ) os ON (true))
              LEFT JOIN LATERAL ( SELECT h.id,
                     h.article_id,
                     h.effective_at,
@@ -2308,33 +2308,39 @@ END) attrs(key, value))
                   WHERE ((h.article_id = c.article_id) AND (h.effective_at = c.closed_at) AND (h.event_type = 'closed'::text))
                   ORDER BY h.id DESC
                  LIMIT 1) cd ON (true))
-             LEFT JOIN LATERAL ( SELECT fields.category,
-                    fields.is_rent,
-                    fields.sqm,
-                    fields.rooms,
-                    memberships.memberships,
-                    attributes.attributes
-                   FROM ((LATERAL ( SELECT (array_agg(h.category ORDER BY h.effective_at DESC, h.id DESC) FILTER (WHERE (NULLIF(btrim(h.category), ''::text) IS NOT NULL)))[1] AS category,
-                            (array_agg(h.is_rent ORDER BY h.effective_at DESC, h.id DESC) FILTER (WHERE (h.is_rent IS NOT NULL)))[1] AS is_rent,
-                            (array_agg(h.sqm ORDER BY h.effective_at DESC, h.id DESC) FILTER (WHERE (h.sqm IS NOT NULL)))[1] AS sqm,
-                            (array_agg(h.rooms ORDER BY h.effective_at DESC, h.id DESC) FILTER (WHERE (h.rooms IS NOT NULL)))[1] AS rooms
-                           FROM public.listing_state_history_state h
-                          WHERE ((h.article_id = c.article_id) AND (h.effective_at < c.closed_at) AND (h.event_type = ANY (ARRAY['search_sighting'::text, 'detail_update'::text, 'reopened'::text])))) fields
-                     CROSS JOIN LATERAL ( SELECT COALESCE(array_agg(DISTINCT members.member ORDER BY members.member), '{}'::text[]) AS memberships
-                           FROM (public.listing_state_history_state h
-                             CROSS JOIN LATERAL unnest(h.category_membership) members(member))
-                          WHERE ((h.article_id = c.article_id) AND (h.effective_at < c.closed_at) AND (h.event_type = ANY (ARRAY['search_sighting'::text, 'detail_update'::text, 'reopened'::text])) AND (members.member IS NOT NULL) AND (members.member <> ''::text))) memberships)
-                     CROSS JOIN LATERAL ( SELECT COALESCE(jsonb_object_agg(a.key, a.value), '{}'::jsonb) AS attributes
-                           FROM ( SELECT DISTINCT ON (attrs.key) attrs.key,
-                                    attrs.value
-                                   FROM (public.listing_state_history_state h
-                                     CROSS JOIN LATERAL jsonb_each(
-CASE
- WHEN (jsonb_typeof(h.filter_attributes) = 'object'::text) THEN h.filter_attributes
- ELSE '{}'::jsonb
-END) attrs(key, value))
-                                  WHERE ((h.article_id = c.article_id) AND (h.effective_at < c.closed_at) AND (h.event_type = ANY (ARRAY['search_sighting'::text, 'detail_update'::text, 'reopened'::text])))
-                                  ORDER BY attrs.key, h.effective_at DESC, h.id DESC) a) attributes)) cs ON (true))
+             LEFT JOIN LATERAL (
+               WITH eligible AS MATERIALIZED (
+                 SELECT h.effective_at, h.id, h.category, h.is_rent, h.sqm,
+                        h.rooms, h.category_membership, h.filter_attributes
+                   FROM public.listing_state_history_state h
+                  WHERE h.article_id = c.article_id
+                    AND h.effective_at < c.closed_at
+                    AND h.event_type = ANY (ARRAY['search_sighting'::text, 'detail_update'::text, 'reopened'::text])
+               )
+               SELECT fields.category, fields.is_rent, fields.sqm, fields.rooms,
+                      memberships.memberships, attributes.attributes
+                 FROM ((LATERAL (
+                   SELECT (array_agg(h.category ORDER BY h.effective_at DESC, h.id DESC) FILTER (WHERE NULLIF(btrim(h.category), '') IS NOT NULL))[1] AS category,
+                          (array_agg(h.is_rent ORDER BY h.effective_at DESC, h.id DESC) FILTER (WHERE h.is_rent IS NOT NULL))[1] AS is_rent,
+                          (array_agg(h.sqm ORDER BY h.effective_at DESC, h.id DESC) FILTER (WHERE h.sqm IS NOT NULL))[1] AS sqm,
+                          (array_agg(h.rooms ORDER BY h.effective_at DESC, h.id DESC) FILTER (WHERE h.rooms IS NOT NULL))[1] AS rooms
+                     FROM eligible h
+                 ) fields
+                 CROSS JOIN LATERAL (
+                   SELECT COALESCE(array_agg(DISTINCT members.member ORDER BY members.member), '{}'::text[]) AS memberships
+                     FROM eligible h CROSS JOIN LATERAL unnest(h.category_membership) members(member)
+                    WHERE members.member IS NOT NULL AND members.member <> ''
+                 ) memberships)
+                 CROSS JOIN LATERAL (
+                   SELECT COALESCE(jsonb_object_agg(a.key, a.value), '{}'::jsonb) AS attributes
+                     FROM (
+                       SELECT DISTINCT ON (attrs.key) attrs.key, attrs.value
+                         FROM eligible h
+                         CROSS JOIN LATERAL jsonb_each(CASE WHEN jsonb_typeof(h.filter_attributes) = 'object' THEN h.filter_attributes ELSE '{}'::jsonb END) attrs(key, value)
+                        ORDER BY attrs.key, h.effective_at DESC, h.id DESC
+                     ) a
+                 ) attributes)
+             ) cs ON (true))
         ), frozen_states AS (
          SELECT s.article_id,
             s.cycle_no,

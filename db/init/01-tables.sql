@@ -364,6 +364,21 @@ CREATE TABLE public.neighborhoods (
 
 COMMENT ON COLUMN public.neighborhoods.boundary IS 'Canonical PostGIS MultiPolygon boundary (WGS 84 / EPSG:4326); `poly` is retained temporarily for rollout comparison.';
 
+CREATE TABLE public.neighborhood_neighbor_cache (
+  subject_neighborhood text NOT NULL,
+  neighborhood text NOT NULL,
+  neighbor_rank integer NOT NULL,
+  distance_m double precision NOT NULL,
+  CONSTRAINT neighborhood_neighbor_cache_pk
+    PRIMARY KEY (subject_neighborhood, neighborhood),
+  CONSTRAINT neighborhood_neighbor_cache_rank_uq
+    UNIQUE (subject_neighborhood, neighbor_rank),
+  CONSTRAINT neighborhood_neighbor_cache_rank_ck CHECK (neighbor_rank > 0)
+);
+
+COMMENT ON TABLE public.neighborhood_neighbor_cache IS
+  'Exact nearest-neighborhood rankings derived from boundary geography; refreshed automatically when neighborhood rows change.';
+
 --
 -- Name: saved_searches; Type: TABLE; Schema: public; Owner: -
 --
@@ -572,28 +587,6 @@ CREATE TABLE olap.public_current_listings (
     last_seen timestamp with time zone,
     views integer,
     CONSTRAINT olap_public_current_listings_deal_ck CHECK (((deal IS NULL) OR (deal = ANY (ARRAY['sale'::text, 'rent'::text, 'unknown'::text]))))
-);
-
---
--- Name: public_daily_market; Type: TABLE; Schema: olap; Owner: -
---
-
-CREATE TABLE olap.public_daily_market (
-    day date NOT NULL,
-    article_id bigint NOT NULL,
-    category_memberships text[],
-    deal text,
-    sqm numeric(8,2),
-    rooms text,
-    price numeric(12,2),
-    price_state text NOT NULL,
-    ppm2 integer,
-    neighborhood text,
-    stale_observation boolean DEFAULT false NOT NULL,
-    provisional_day boolean DEFAULT false NOT NULL,
-    membership_inferred boolean DEFAULT false NOT NULL,
-    attributes_inferred boolean DEFAULT false NOT NULL,
-    CONSTRAINT olap_public_daily_market_deal_ck CHECK (((deal IS NULL) OR (deal = ANY (ARRAY['sale'::text, 'rent'::text, 'unknown'::text]))))
 );
 
 --

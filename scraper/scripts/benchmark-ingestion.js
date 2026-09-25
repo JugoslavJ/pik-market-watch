@@ -93,12 +93,14 @@ async function main() {
         queryCounter,
       });
       const elapsedMs = Number(process.hrtime.bigint() - started) / 1e6;
+      const { newIds = [], ...summary } = result;
       console.log(
         JSON.stringify({
           size,
           queryCount: queryCounter.count,
           elapsedMs: Math.round(elapsedMs),
-          ...result,
+          ...summary,
+          newIdCount: newIds.length,
         }),
       );
     }

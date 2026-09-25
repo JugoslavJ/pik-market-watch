@@ -130,3 +130,73 @@ needsDb(
     }
   },
 );
+
+needsDb(
+  "daily rebuild retains unchanged tuples and replaces changed ones",
+  async () => {
+    const day = "2026-09-20";
+    const articleId = 9301;
+    await db.pool.query(
+      `INSERT INTO listings(article_id, url, title, first_seen, last_seen)
+     VALUES ($1, $2, 'daily churn fixture', '2026-09-20 09:00Z',
+             '2026-09-20 09:00Z')`,
+      [articleId, `https://olx.ba/artikal/${articleId}`],
+    );
+    await db.pool.query(
+      `INSERT INTO listing_state_history
+       (article_id, effective_at, source, event_type, state_version_id,
+        last_seen_at)
+     VALUES ($1, '2026-09-20 09:00Z', 'fixture', 'search_sighting',
+             get_or_create_listing_state_version(
+               'apartments', ARRAY['apartments'], false, 50, '2',
+               '{}'::jsonb, false, false), '2026-09-20 09:00Z')`,
+      [articleId],
+    );
+    const addPrice = (at, price) =>
+      db.pool.query(
+        `INSERT INTO listing_price_events
+         (article_id, effective_at, source, price, price_state)
+       VALUES ($1, $2, 'fixture', $3, 'valid')`,
+        [articleId, at, price],
+      );
+    const rebuild = () =>
+      db.pool.query("SELECT * FROM rebuild_listing_daily($1, $1)", [day]);
+    const read = async () =>
+      (
+        await db.pool.query(
+          `SELECT ctid::text AS ctid, price, detail_version_id
+           FROM listing_daily WHERE day=$1 AND article_id=$2`,
+          [day, articleId],
+        )
+      ).rows;
+
+    await addPrice("2026-09-20 09:00Z", 100000);
+    await rebuild();
+    const original = await read();
+    assert.equal(original.length, 1);
+    assert.equal(Number(original[0].price), 100000);
+
+    const unchanged = await rebuild();
+    assert.equal(Number(unchanged.rows[0].rows_written), 0);
+    assert.deepEqual(await read(), original);
+
+    await addPrice("2026-09-20 10:00Z", 120000);
+    const changed = await rebuild();
+    const updated = await read();
+    assert.equal(Number(changed.rows[0].rows_written), 1);
+    assert.equal(Number(updated[0].price), 120000);
+    assert.notEqual(updated[0].ctid, original[0].ctid);
+
+    await db.pool.query(
+      `INSERT INTO listing_state_history
+       (article_id, effective_at, source, event_type, state_version_id)
+     VALUES ($1, '2026-09-20 11:00Z', 'lifecycle', 'closed',
+             get_or_create_listing_state_version(
+               NULL, '{}'::text[], NULL, NULL, NULL, '{}'::jsonb,
+               false, false))`,
+      [articleId],
+    );
+    await rebuild();
+    assert.deepEqual(await read(), []);
+  },
+);

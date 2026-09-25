@@ -50,3 +50,11 @@ $$;
 ALTER TABLE public.neighborhoods
   ALTER COLUMN boundary SET NOT NULL,
   ALTER COLUMN boundary_geography SET NOT NULL;
+
+-- Geometry is complete, so the derived distance ranking can now be filled.
+SELECT public.rebuild_neighborhood_neighbor_cache();
+
+CREATE TRIGGER neighborhoods_refresh_neighbor_cache
+  AFTER INSERT OR UPDATE OR DELETE ON public.neighborhoods
+  FOR EACH STATEMENT
+  EXECUTE FUNCTION public.refresh_neighborhood_neighbor_cache_trigger();

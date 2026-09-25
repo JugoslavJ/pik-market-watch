@@ -12,12 +12,6 @@ CREATE TRIGGER daily_listing_facts_partition_route BEFORE INSERT ON olap.daily_l
 CREATE TRIGGER market_daily_partition_route BEFORE INSERT ON olap.market_daily FOR EACH ROW EXECUTE FUNCTION public.route_analytics_partition_insert();
 
 --
--- Name: public_daily_market public_daily_market_partition_route; Type: TRIGGER; Schema: olap; Owner: -
---
-
-CREATE TRIGGER public_daily_market_partition_route BEFORE INSERT ON olap.public_daily_market FOR EACH ROW EXECUTE FUNCTION public.route_analytics_partition_insert();
-
---
 -- Name: analytics_daily_coverage analytics_daily_coverage_mark_olap_dirty; Type: TRIGGER; Schema: public; Owner: -
 --
 

@@ -18,7 +18,6 @@ VALUES
   ('public', 'price_history', 'scraped_at', 'timestamptz', 2),
   ('public', 'listing_daily', 'day', 'date', 2),
   ('olap', 'daily_listing_facts', 'day', 'date', 2),
-  ('olap', 'public_daily_market', 'day', 'date', 2),
   ('olap', 'market_daily', 'day', 'date', 2)
 ON CONFLICT (parent_schema, parent_table) DO UPDATE SET
   partition_column = EXCLUDED.partition_column,

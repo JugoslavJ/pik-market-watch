@@ -151,6 +151,7 @@ DECLARE
   v_rows bigint;
   v_total bigint := 0;
   v_source_watermark timestamptz;
+  v_daily_facts_count bigint := 0;
 BEGIN
   PERFORM pg_advisory_xact_lock(hashtextextended('pik-market-watch dashboard OLAP refresh', 0));
 
@@ -165,7 +166,6 @@ BEGIN
            olap.listing_price_changes,
            olap.listing_exit_economics,
            olap.public_current_listings,
-           olap.public_daily_market,
            olap.public_price_reductions,
            olap.public_exit_cycles,
            olap.public_freshness,
@@ -203,7 +203,8 @@ BEGIN
   SELECT * FROM reporting.daily_listing_facts_source;
   GET DIAGNOSTICS v_rows = ROW_COUNT;
   v_total := v_total + v_rows;
-  INSERT INTO olap.refresh_state VALUES ('daily_listing_facts', v_at, v_rows,
+  v_daily_facts_count := v_rows;
+  INSERT INTO olap.refresh_state VALUES ('daily_listing_facts', v_at, v_daily_facts_count,
     v_at, v_id)
   ON CONFLICT (mart) DO UPDATE SET refreshed_at=excluded.refreshed_at,
     row_count=excluded.row_count, source_watermark=excluded.source_watermark,
@@ -256,8 +257,6 @@ BEGIN
 
   INSERT INTO olap.public_current_listings SELECT * FROM reporting.current_listings_source;
   GET DIAGNOSTICS v_rows = ROW_COUNT; v_total := v_total + v_rows;
-  INSERT INTO olap.public_daily_market SELECT * FROM reporting.daily_market_source;
-  GET DIAGNOSTICS v_rows = ROW_COUNT; v_total := v_total + v_rows;
   INSERT INTO olap.public_price_reductions SELECT * FROM reporting.price_reductions_source;
   GET DIAGNOSTICS v_rows = ROW_COUNT; v_total := v_total + v_rows;
   INSERT INTO olap.public_exit_cycles SELECT * FROM reporting.exit_cycles_source;
@@ -274,7 +273,7 @@ BEGIN
     refresh_id=excluded.refresh_id;
   INSERT INTO olap.refresh_state VALUES ('public_dashboard_contracts', v_at,
     (SELECT count(*) FROM olap.public_current_listings) +
-    (SELECT count(*) FROM olap.public_daily_market) +
+    v_daily_facts_count +
     (SELECT count(*) FROM olap.public_price_reductions) +
     (SELECT count(*) FROM olap.public_exit_cycles) +
     (SELECT count(*) FROM olap.public_freshness), v_at, v_id)
@@ -307,6 +306,7 @@ DECLARE
   v_rows bigint;
   v_total bigint := 0;
   v_watermark timestamptz;
+  v_daily_facts_count bigint;
 BEGIN
   PERFORM pg_advisory_xact_lock(hashtextextended('pik-market-watch dashboard OLAP refresh', 0));
   SELECT s.refreshed_at INTO v_previous_at
@@ -460,18 +460,29 @@ BEGIN
   SELECT max(last_seen) INTO v_watermark FROM olap.current_listing_scores;
 
   IF EXISTS (SELECT 1 FROM olap_dirty_days) THEN
-    DELETE FROM olap.daily_listing_facts f USING olap_dirty_days d WHERE f.day=d.day;
-    INSERT INTO olap.daily_listing_facts
+    -- Preserve identical rows: deleting a whole dirty day creates dead heap
+    -- and index entries even when only one listing in that day changed.
+    CREATE TEMP TABLE olap_new_daily_facts ON COMMIT DROP AS
       SELECT * FROM reporting.daily_listing_facts_source_for_days(
         ARRAY(SELECT day FROM olap_dirty_days));
+    CREATE UNIQUE INDEX ON olap_new_daily_facts(day, article_id);
+    DELETE FROM olap.daily_listing_facts f USING olap_dirty_days d
+     WHERE f.day=d.day
+       AND NOT EXISTS (
+         SELECT 1 FROM olap_new_daily_facts s
+          WHERE s.day=f.day AND s.article_id=f.article_id
+            AND ROW(s.*) IS NOT DISTINCT FROM ROW(f.*)
+       );
+    INSERT INTO olap.daily_listing_facts
+      SELECT s.* FROM olap_new_daily_facts s
+       WHERE NOT EXISTS (
+         SELECT 1 FROM olap.daily_listing_facts f
+          WHERE f.day=s.day AND f.article_id=s.article_id
+       );
     GET DIAGNOSTICS v_rows=ROW_COUNT; v_total:=v_total+v_rows;
     DELETE FROM olap.market_daily m USING olap_dirty_days d WHERE m.day=d.day;
     INSERT INTO olap.market_daily
       SELECT s.* FROM v_market_daily_source s JOIN olap_dirty_days d USING(day);
-    GET DIAGNOSTICS v_rows=ROW_COUNT; v_total:=v_total+v_rows;
-    DELETE FROM olap.public_daily_market m USING olap_dirty_days d WHERE m.day=d.day;
-    INSERT INTO olap.public_daily_market
-      SELECT s.* FROM reporting.daily_market_source s JOIN olap_dirty_days d USING(day);
     GET DIAGNOSTICS v_rows=ROW_COUNT; v_total:=v_total+v_rows;
     DELETE FROM analytics_daily_olap_dirty q USING olap_dirty_days d
       WHERE q.day=d.day AND q.generation=d.generation;
@@ -488,16 +499,18 @@ BEGIN
   INSERT INTO olap.public_freshness SELECT * FROM reporting.freshness_source;
   GET DIAGNOSTICS v_rows=ROW_COUNT; v_total:=v_total+v_rows;
 
+  SELECT count(*) INTO v_daily_facts_count FROM olap.daily_listing_facts;
+
   INSERT INTO olap.refresh_state(mart,refreshed_at,row_count,source_watermark,refresh_id) VALUES
     ('listings',v_at,(SELECT count(*) FROM olap.listings),(SELECT max(last_seen) FROM olap.listings),v_id),
     ('current_listing_scores',v_at,(SELECT count(*) FROM olap.current_listing_scores),v_watermark,v_id),
-    ('daily_listing_facts',v_at,(SELECT count(*) FROM olap.daily_listing_facts),v_at,v_id),
+    ('daily_listing_facts',v_at,v_daily_facts_count,v_at,v_id),
     ('lifecycle_cycles',v_at,(SELECT count(*) FROM olap.lifecycle_cycles),v_at,v_id),
     ('lifecycle_movements',v_at,(SELECT count(*) FROM olap.lifecycle_movements),v_at,v_id),
     ('comparison_price_changes',v_at,(SELECT count(*) FROM olap.comparison_price_changes),v_at,v_id),
     ('dashboard_filter_options',v_at,(SELECT count(*) FROM olap.dashboard_filter_options),v_at,v_id),
     ('legacy_dashboard_contracts',v_at,(SELECT count(*) FROM olap.market_daily)+(SELECT count(*) FROM olap.listing_price_changes)+(SELECT count(*) FROM olap.listing_exit_economics),v_at,v_id),
-    ('public_dashboard_contracts',v_at,(SELECT count(*) FROM olap.public_current_listings)+(SELECT count(*) FROM olap.public_daily_market)+(SELECT count(*) FROM olap.public_price_reductions)+(SELECT count(*) FROM olap.public_exit_cycles)+(SELECT count(*) FROM olap.public_freshness),v_at,v_id)
+    ('public_dashboard_contracts',v_at,(SELECT count(*) FROM olap.public_current_listings)+v_daily_facts_count+(SELECT count(*) FROM olap.public_price_reductions)+(SELECT count(*) FROM olap.public_exit_cycles)+(SELECT count(*) FROM olap.public_freshness),v_at,v_id)
   ON CONFLICT(mart) DO UPDATE SET refreshed_at=excluded.refreshed_at,row_count=excluded.row_count,
     source_watermark=excluded.source_watermark,refresh_id=excluded.refresh_id;
 

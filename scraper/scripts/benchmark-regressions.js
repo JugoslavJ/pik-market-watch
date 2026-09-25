@@ -22,7 +22,7 @@ const timed = async (pool, label, sql, params = []) => {
   return {
     label,
     elapsedMs: Math.round(Number(process.hrtime.bigint() - start) / 1e6),
-    rows: result.rows,
+    rowCount: result.rowCount,
   };
 };
 
@@ -69,11 +69,11 @@ async function seed(pool) {
     await pool.query(
       `INSERT INTO public.listing_state_history
          (article_id, effective_at, source, event_type, state_version_id,
-          price, price_state, last_seen_at)
+          price, last_seen_at)
        SELECT l.article_id,
               now() - make_interval(days => 60 - cycle * 8),
-              'benchmark', 'search_sighting', v.state_version_id,
-              100000, 'valid', now() - make_interval(days => 60 - cycle * 8)
+              'search', 'search_sighting', v.state_version_id,
+              100000, now() - make_interval(days => 60 - cycle * 8)
          FROM generate_series(0, $3::int - 1) cycle
          CROSS JOIN public.listings l
          JOIN public.listing_state_versions v
@@ -150,9 +150,9 @@ async function measure(url, label, offset) {
         "sighting_insert_10k",
         `INSERT INTO public.listing_state_history
            (article_id, effective_at, source, event_type, state_version_id,
-            price, price_state, last_seen_at)
-         SELECT l.article_id, now() - interval '1 hour', 'benchmark',
-                'search_sighting', min(v.state_version_id), 100000, 'valid',
+            price, last_seen_at)
+         SELECT l.article_id, now() - interval '1 hour', 'search',
+                'search_sighting', min(v.state_version_id), 100000,
                 now() - interval '1 hour'
            FROM public.listings l
            JOIN public.listing_state_versions v

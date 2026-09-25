@@ -299,7 +299,7 @@ BEGIN
           v_child || '_append_only', p.parent_schema, v_child);
         EXECUTE format('CREATE TRIGGER %I BEFORE UPDATE OR DELETE ON %I.%I FOR EACH ROW EXECUTE FUNCTION public.prevent_history_mutation()',
           v_child || '_append_only', p.parent_schema, v_child);
-      ELSIF p.parent_table IN ('listing_daily', 'daily_listing_facts', 'public_daily_market') THEN
+      ELSIF p.parent_table IN ('listing_daily', 'daily_listing_facts') THEN
         EXECUTE format('CREATE UNIQUE INDEX IF NOT EXISTS %I ON %I.%I (day, article_id)',
           v_child || '_grain_uq', p.parent_schema, v_child);
       ELSIF p.parent_table = 'market_daily' THEN
@@ -954,22 +954,16 @@ BEGIN
    FOR UPDATE;
 
 
-  IF v_full_rebuild THEN
-    DELETE FROM public.listing_daily WHERE day BETWEEN v_from AND v_through;
-  ELSIF EXISTS (
+  IF NOT v_full_rebuild AND NOT EXISTS (
     SELECT 1 FROM public.analytics_daily_dirty_articles WHERE article_id > 0
   ) THEN
-    DELETE FROM public.listing_daily
-     WHERE day BETWEEN v_from AND v_through
-       AND article_id IN (
-         SELECT article_id FROM public.analytics_daily_dirty_articles
-          WHERE article_id > 0
-       );
-  ELSE
     RETURN QUERY SELECT v_from, v_through, 0::bigint;
     RETURN;
   END IF;
 
+  -- Build the replacement cohort before touching the published rows.
+  CREATE TEMP TABLE rebuilt_listing_daily
+    (LIKE public.listing_daily) ON COMMIT DROP;
 
   WITH
   days AS MATERIALIZED (
@@ -1239,21 +1233,47 @@ BEGIN
       FROM inputs
   )
 
-  INSERT INTO listing_daily (
+  INSERT INTO rebuilt_listing_daily (
     day, article_id, price, price_state, ppm2, state_version_id,
     location, state_effective_at, price_effective_at, stale_observation,
-    provisional_day, neighborhood, resolved_state_version
+    provisional_day, neighborhood, resolved_state_version, detail_version_id
   )
   SELECT f.day, f.article_id, f.price, f.price_state, f.ppm2,
          public.get_or_create_listing_state_version(
            f.category, f.category_memberships, f.is_rent, f.sqm, f.rooms,
            f.filter_attributes, f.membership_inferred, f.attributes_inferred),
          l.neighborhood, f.state_effective_at, f.price_effective_at,
-         f.stale_observation, f.provisional_day, l.neighborhood, 1
+         f.stale_observation, f.provisional_day, l.neighborhood, 1,
+         public.ensure_listing_detail_version(f.article_id, f.state_effective_at)
     FROM filled f JOIN locations l USING (filter_attributes);
 
-  GET DIAGNOSTICS v_rows = ROW_COUNT;
-
+  CREATE UNIQUE INDEX ON rebuilt_listing_daily(day, article_id);
+  DELETE FROM public.listing_daily d
+   WHERE d.day BETWEEN v_from AND v_through
+     AND (v_full_rebuild OR EXISTS (
+       SELECT 1 FROM public.analytics_daily_dirty_articles q
+        WHERE q.article_id=d.article_id AND q.article_id > 0
+     ))
+     AND NOT EXISTS (
+       SELECT 1 FROM rebuilt_listing_daily s
+        WHERE s.day=d.day AND s.article_id=d.article_id
+          AND ROW(s.*) IS NOT DISTINCT FROM ROW(d.*)
+     );
+  -- A BEFORE INSERT trigger routes rows into monthly children. PostgreSQL's
+  -- ROW_COUNT for the parent insert is zero in that case, so count the rows
+  -- selected for insertion before routing them.
+  SELECT count(*) INTO v_rows
+    FROM rebuilt_listing_daily s
+   WHERE NOT EXISTS (
+     SELECT 1 FROM public.listing_daily d
+      WHERE d.day=s.day AND d.article_id=s.article_id
+   );
+  INSERT INTO public.listing_daily
+    SELECT s.* FROM rebuilt_listing_daily s
+     WHERE NOT EXISTS (
+       SELECT 1 FROM public.listing_daily d
+        WHERE d.day=s.day AND d.article_id=s.article_id
+     );
   INSERT INTO analytics_daily_coverage (day, rebuilt_at, provisional)
   SELECT days.day, now(), days.day = v_today
     FROM generate_series(v_from, v_through, interval '1 day') AS days(day)
@@ -1776,35 +1796,61 @@ CREATE FUNCTION reporting.market_daily_filtered(p_from_day date, p_through_day d
     p_rooms, p_deal, p_neighborhood)
 $$;
 
---
--- Name: nearest_neighborhoods(text, integer); Type: FUNCTION; Schema: reporting; Owner: -
---
+-- Neighborhood distances are stable until the polygon data changes.
+CREATE FUNCTION public.rebuild_neighborhood_neighbor_cache() RETURNS bigint
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'public'
+    AS $$
+DECLARE
+  v_rows bigint;
+BEGIN
+  TRUNCATE TABLE public.neighborhood_neighbor_cache;
+  INSERT INTO public.neighborhood_neighbor_cache (
+    subject_neighborhood, neighborhood, neighbor_rank, distance_m
+  )
+  WITH distances AS (
+    SELECT s.name AS subject_neighborhood,
+           n.name AS neighborhood,
+           ST_Distance(s.boundary_geography, n.boundary_geography) AS distance_m
+      FROM public.neighborhoods s
+      JOIN public.neighborhoods n
+        ON n.name <> s.name
+       AND n.boundary && ST_Expand(s.boundary, 0.25)
+  ), ranked AS (
+    SELECT subject_neighborhood, neighborhood, distance_m,
+           row_number() OVER (
+             PARTITION BY subject_neighborhood
+             ORDER BY distance_m, neighborhood
+           )::integer AS neighbor_rank
+      FROM distances
+  )
+  SELECT subject_neighborhood, neighborhood, neighbor_rank, distance_m
+    FROM ranked;
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  RETURN v_rows;
+END
+$$;
 
+CREATE FUNCTION public.refresh_neighborhood_neighbor_cache_trigger() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'public'
+    AS $$
+BEGIN
+  PERFORM public.rebuild_neighborhood_neighbor_cache();
+  RETURN NULL;
+END
+$$;
+
+-- Name: nearest_neighborhoods(text, integer); Type: FUNCTION; Schema: reporting; Owner: -
 CREATE FUNCTION reporting.nearest_neighborhoods(p_name text, p_limit integer DEFAULT 3) RETURNS TABLE(neighborhood text, neighbor_rank integer)
     LANGUAGE sql STABLE STRICT
     AS $$
-  WITH subject AS MATERIALIZED (
-    SELECT boundary, boundary_geography
-      FROM public.neighborhoods
-     WHERE name = p_name
-  ), candidates AS MATERIALIZED (
-    SELECT n.name, n.boundary, n.boundary_geography
-      FROM subject s
-      JOIN public.neighborhoods n
-           ON n.name <> p_name
-       AND n.boundary && ST_Expand(s.boundary, 0.25)
-  ), ranked AS (
-    SELECT c.name,
-           ST_Distance(s.boundary_geography, c.boundary_geography) AS distance_m
-      FROM subject s
-      JOIN candidates c ON true
-    WHERE p_limit > 0
-  )
-  SELECT name,
-         row_number() OVER (ORDER BY distance_m, name)::integer
-    FROM ranked
-   ORDER BY distance_m, name
-   LIMIT p_limit
+  SELECT n.neighborhood, n.neighbor_rank
+    FROM public.neighborhood_neighbor_cache n
+   WHERE n.subject_neighborhood = p_name
+     AND p_limit > 0
+     AND n.neighbor_rank <= p_limit
+   ORDER BY n.neighbor_rank
 $$;
 
 --
@@ -1866,9 +1912,6 @@ CREATE FUNCTION reporting.validate_olap_contracts() RETURNS jsonb
     AS $$
 DECLARE v jsonb := '{}'::jsonb; n bigint;
 BEGIN
-  SELECT count(*) INTO n FROM olap.public_daily_market
-   WHERE day IS NULL OR article_id IS NULL OR price_state IS NULL;
-  IF n <> 0 THEN RAISE EXCEPTION 'OLAP contract public_daily_market has % malformed rows', n; END IF;
   SELECT count(*) INTO n FROM olap.daily_listing_facts
    WHERE day IS NULL OR article_id IS NULL OR price_state IS NULL;
   IF n <> 0 THEN RAISE EXCEPTION 'OLAP contract daily_listing_facts has % malformed rows', n; END IF;
@@ -1887,7 +1930,6 @@ BEGIN
       OR (status <> 'running' AND finished_at IS NULL);
   IF n <> 0 THEN RAISE EXCEPTION 'OLTP contract scrape_runs has % malformed rows', n; END IF;
   v := jsonb_build_object('checked_at', now(), 'ok', true,
-                          'daily_market_rows', (SELECT count(*) FROM olap.public_daily_market),
                           'daily_fact_rows', (SELECT count(*) FROM olap.daily_listing_facts),
                           'market_days', (SELECT count(*) FROM olap.market_daily));
   INSERT INTO public.analytics_contract_validation (ok, details) VALUES (true, v);

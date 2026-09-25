@@ -334,7 +334,7 @@ needsDb(
 needsDb(
   "enrichmentQueue: skips closed rows; empty when nothing is pending",
   async () => {
-    await seed(7104);
+    await seed(7104, {}, KEY_A, new Date("2025-01-01T00:00:00Z"));
     await db.enrichListings([
       {
         articleId: 7104,

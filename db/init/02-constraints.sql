@@ -84,13 +84,6 @@ ALTER TABLE ONLY olap.public_current_listings
     ADD CONSTRAINT public_current_listings_grain_uq UNIQUE (article_id);
 
 --
--- Name: public_daily_market public_daily_market_grain_uq; Type: CONSTRAINT; Schema: olap; Owner: -
---
-
-ALTER TABLE ONLY olap.public_daily_market
-    ADD CONSTRAINT public_daily_market_grain_uq UNIQUE (day, article_id);
-
---
 -- Name: public_exit_cycles public_exit_cycles_grain_uq; Type: CONSTRAINT; Schema: olap; Owner: -
 --
 
