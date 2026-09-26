@@ -1,7 +1,4 @@
 -- Canonical reporting functions baseline.
---
--- Name: price_changes_filtered(timestamp with time zone, timestamp with time zone, text[], numeric, numeric, text[], text[], text[]); Type: FUNCTION; Schema: public; Owner: -
---
 
 CREATE FUNCTION public.price_changes_filtered(p_from timestamp with time zone, p_through timestamp with time zone, p_category text[] DEFAULT '{}'::text[], p_min_sqm numeric DEFAULT NULL::numeric, p_max_sqm numeric DEFAULT NULL::numeric, p_rooms text[] DEFAULT '{}'::text[], p_deal text[] DEFAULT '{}'::text[], p_neighborhood text[] DEFAULT '{}'::text[]) RETURNS SETOF public.v_listing_price_changes
     LANGUAGE sql STABLE
@@ -17,10 +14,6 @@ CREATE FUNCTION public.price_changes_filtered(p_from timestamp with time zone, p
          ARRAY(SELECT CASE WHEN selected='sell' THEN 'sale' ELSE selected END FROM unnest(p_deal) selected)))
      AND (coalesce(cardinality(p_neighborhood),0)=0 OR analytics_state_neighborhood(pc.provenance)=ANY(p_neighborhood))
 $$;
-
---
--- Name: listing_comparables(bigint); Type: FUNCTION; Schema: reporting; Owner: -
---
 
 CREATE FUNCTION reporting.listing_comparables(p_article_id bigint) RETURNS SETOF reporting.current_comparison_inputs
     LANGUAGE sql STABLE SECURITY DEFINER
@@ -52,10 +45,6 @@ CREATE FUNCTION reporting.listing_comparables(p_article_id bigint) RETURNS SETOF
    ORDER BY c.article_id
 $$;
 
---
--- Name: numeric_bound(text, text, numeric); Type: FUNCTION; Schema: reporting; Owner: -
---
-
 CREATE FUNCTION reporting.numeric_bound(p_value text, p_label text, p_maximum numeric DEFAULT NULL::numeric) RETURNS numeric
     LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE
     AS $_$
@@ -72,10 +61,6 @@ BEGIN
   RETURN v;
 END $_$;
 
---
--- Name: within_bounds(numeric, text, text, text, numeric); Type: FUNCTION; Schema: reporting; Owner: -
---
-
 CREATE FUNCTION reporting.within_bounds(p_value numeric, p_min text, p_max text, p_label text, p_maximum numeric DEFAULT NULL::numeric) RETURNS boolean
     LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE
     AS $$
@@ -86,10 +71,6 @@ BEGIN
   RETURN (lo IS NULL OR coalesce(p_value >= lo,false))
      AND (hi IS NULL OR coalesce(p_value <= hi,false));
 END $$;
-
---
--- Name: refresh_dashboard_olap_full(); Type: FUNCTION; Schema: reporting; Owner: -
---
 
 CREATE FUNCTION reporting.refresh_dashboard_filter_options() RETURNS bigint
     LANGUAGE plpgsql
@@ -264,7 +245,7 @@ BEGIN
   INSERT INTO olap.public_freshness SELECT * FROM reporting.freshness_source;
   GET DIAGNOSTICS v_rows = ROW_COUNT; v_total := v_total + v_rows;
 
-  INSERT INTO olap.refresh_state VALUES ('legacy_dashboard_contracts', v_at,
+  INSERT INTO olap.refresh_state VALUES ('market_metrics', v_at,
     (SELECT count(*) FROM olap.market_daily) +
     (SELECT count(*) FROM olap.listing_price_changes) +
     (SELECT count(*) FROM olap.listing_exit_economics), v_at, v_id)
@@ -290,10 +271,6 @@ BEGIN
   RETURN QUERY SELECT v_id, v_at, v_total;
 END
 $$;
-
---
--- Name: refresh_dashboard_olap(boolean); Type: FUNCTION; Schema: reporting; Owner: -
---
 
 CREATE FUNCTION reporting.refresh_dashboard_olap(p_force_full boolean) RETURNS TABLE(refresh_id bigint, refreshed_at timestamp with time zone, rows_written bigint)
     LANGUAGE plpgsql
@@ -377,7 +354,6 @@ BEGIN
       SELECT * FROM reporting.current_listing_scores_source;
     GET DIAGNOSTICS v_rows = ROW_COUNT;
     v_total := v_total + v_rows;
-
 
     DELETE FROM olap.listings l USING olap_dirty_articles d WHERE l.article_id=d.article_id;
     INSERT INTO olap.listings SELECT l.* FROM listings l JOIN olap_dirty_articles d USING(article_id);
@@ -509,7 +485,7 @@ BEGIN
     ('lifecycle_movements',v_at,(SELECT count(*) FROM olap.lifecycle_movements),v_at,v_id),
     ('comparison_price_changes',v_at,(SELECT count(*) FROM olap.comparison_price_changes),v_at,v_id),
     ('dashboard_filter_options',v_at,(SELECT count(*) FROM olap.dashboard_filter_options),v_at,v_id),
-    ('legacy_dashboard_contracts',v_at,(SELECT count(*) FROM olap.market_daily)+(SELECT count(*) FROM olap.listing_price_changes)+(SELECT count(*) FROM olap.listing_exit_economics),v_at,v_id),
+    ('market_metrics',v_at,(SELECT count(*) FROM olap.market_daily)+(SELECT count(*) FROM olap.listing_price_changes)+(SELECT count(*) FROM olap.listing_exit_economics),v_at,v_id),
     ('public_dashboard_contracts',v_at,(SELECT count(*) FROM olap.public_current_listings)+v_daily_facts_count+(SELECT count(*) FROM olap.public_price_reductions)+(SELECT count(*) FROM olap.public_exit_cycles)+(SELECT count(*) FROM olap.public_freshness),v_at,v_id)
   ON CONFLICT(mart) DO UPDATE SET refreshed_at=excluded.refreshed_at,row_count=excluded.row_count,
     source_watermark=excluded.source_watermark,refresh_id=excluded.refresh_id;
@@ -521,17 +497,9 @@ BEGIN
 END
 $$;
 
---
--- Name: refresh_dashboard_olap(); Type: FUNCTION; Schema: reporting; Owner: -
---
-
 CREATE FUNCTION reporting.refresh_dashboard_olap() RETURNS TABLE(refresh_id bigint, refreshed_at timestamp with time zone, rows_written bigint)
     LANGUAGE sql
     AS $$ SELECT * FROM reporting.refresh_dashboard_olap(false) $$;
-
---
--- Name: refresh_current_market(); Type: FUNCTION; Schema: reporting; Owner: -
---
 
 CREATE FUNCTION reporting.refresh_current_market() RETURNS TABLE(rows_written integer, refreshed_at timestamp with time zone)
     LANGUAGE plpgsql
@@ -545,10 +513,6 @@ BEGIN
     SELECT (SELECT count(*)::integer FROM olap.current_listing_scores), result.refreshed_at;
 END
 $$;
-
---
--- Name: validate_dashboard_olap(); Type: FUNCTION; Schema: reporting; Owner: -
---
 
 CREATE FUNCTION reporting.validate_dashboard_olap() RETURNS TABLE(mart text, source_rows bigint, mart_rows bigint, missing_rows bigint, unexpected_rows bigint)
     LANGUAGE sql STABLE
@@ -602,86 +566,28 @@ CREATE FUNCTION reporting.validate_dashboard_olap() RETURNS TABLE(mart text, sou
   ) movements
 $$;
 
---
--- Name: FUNCTION apply_history_retention(p_batch_size integer); Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON FUNCTION public.apply_history_retention(p_batch_size integer) IS 'Compatibility alias for apply_operational_cleanup; no analytical history is deleted.';
-
---
--- Name: FUNCTION apply_operational_cleanup(p_batch_size integer); Type: COMMENT; Schema: public; Owner: -
---
-
 COMMENT ON FUNCTION public.apply_operational_cleanup(p_batch_size integer) IS 'Cleans only explicitly delete-enabled operational policy data and expired raw bodies; analytical history is never age-pruned.';
-
---
--- Name: FUNCTION ensure_analytics_partitions(p_months_ahead integer); Type: COMMENT; Schema: public; Owner: -
---
 
 COMMENT ON FUNCTION public.ensure_analytics_partitions(p_months_ahead integer) IS 'Creates analytics children and cohort indexes for new daily-fact children; existing cohort indexes are rebuilt concurrently by maintenance.';
 
---
--- Name: FUNCTION neighborhood_of(p_lat double precision, p_lon double precision); Type: COMMENT; Schema: public; Owner: -
---
-
 COMMENT ON FUNCTION public.neighborhood_of(p_lat double precision, p_lon double precision) IS 'Maps pins with indexed geometry containment and a bounded indexed nearby search.';
-
---
--- Name: FUNCTION rebuild_listing_daily(p_from_day date, p_through_day date); Type: COMMENT; Schema: public; Owner: -
---
 
 COMMENT ON FUNCTION public.rebuild_listing_daily(p_from_day date, p_through_day date) IS 'Atomically rebuilds a bounded range and consumes only its successfully rebuilt dirty prefix.';
 
---
--- Name: FUNCTION route_analytics_partition_insert(); Type: COMMENT; Schema: public; Owner: -
---
-
 COMMENT ON FUNCTION public.route_analytics_partition_insert() IS 'Routes analytics partitions and queues only daily-projection changes.';
-
---
--- Name: FUNCTION agent_listing_scope(p_deal text, p_property_type text, p_neighborhoods text[], p_rooms text[], p_min_area text, p_max_area text, p_conditions text[], p_furnishing text[], p_parking text[], p_seller_types text[], p_min_price text, p_max_price text, p_min_rate text, p_max_rate text, p_min_score text, p_max_score text, p_view text, p_pricing_position text, p_review_signals text[], p_analysis_days text, p_apply_result_filters boolean); Type: COMMENT; Schema: reporting; Owner: -
---
 
 COMMENT ON FUNCTION reporting.agent_listing_scope(p_deal text, p_property_type text, p_neighborhoods text[], p_rooms text[], p_min_area text, p_max_area text, p_conditions text[], p_furnishing text[], p_parking text[], p_seller_types text[], p_min_price text, p_max_price text, p_min_rate text, p_max_rate text, p_min_score text, p_max_score text, p_view text, p_pricing_position text, p_review_signals text[], p_analysis_days text, p_apply_result_filters boolean) IS 'Canonical current-listing scope for the private agent dashboard; validates all bounds and optionally applies result-only workflow filters.';
 
---
--- Name: FUNCTION buyer_listing_scope(p_property_type text, p_neighborhoods text[], p_rooms text[], p_min_area text, p_max_area text, p_conditions text[], p_parking text[], p_garage text[], p_elevator text[], p_floors text[], p_seller_types text[], p_min_price text, p_max_price text, p_min_rate text, p_max_rate text, p_min_score text, p_max_score text, p_listing_selection text, p_apply_result_filters boolean); Type: COMMENT; Schema: reporting; Owner: -
---
-
 COMMENT ON FUNCTION reporting.buyer_listing_scope(p_property_type text, p_neighborhoods text[], p_rooms text[], p_min_area text, p_max_area text, p_conditions text[], p_parking text[], p_garage text[], p_elevator text[], p_floors text[], p_seller_types text[], p_min_price text, p_max_price text, p_min_rate text, p_max_rate text, p_min_score text, p_max_score text, p_listing_selection text, p_apply_result_filters boolean) IS 'Canonical current-listing scope for the private buyer dashboard; optionally applies price, score, and listing-selection filters.';
-
---
--- Name: FUNCTION comparison_price_changes_source_for_articles(p_article_ids bigint[]); Type: COMMENT; Schema: reporting; Owner: -
---
 
 COMMENT ON FUNCTION reporting.comparison_price_changes_source_for_articles(p_article_ids bigint[]) IS 'Incremental comparison changes with article-scoped evidence resolution.';
 
---
--- Name: FUNCTION comparison_quality_reason(p_price numeric, p_state text, p_currency text, p_sqm numeric, p_is_rent boolean); Type: COMMENT; Schema: reporting; Owner: -
---
-
 COMMENT ON FUNCTION reporting.comparison_quality_reason(p_price numeric, p_state text, p_currency text, p_sqm numeric, p_is_rent boolean) IS 'Sale: existing minimum 3000 BAM, area 5..500, rounded rate 1..15000. Monthly rental quality v1: minimum 50 BAM/month, area 5..500, positive rate; no sale rate threshold or invented rental upper bound.';
-
---
--- Name: FUNCTION refresh_dashboard_olap(p_force_full boolean); Type: COMMENT; Schema: reporting; Owner: -
---
 
 COMMENT ON FUNCTION reporting.refresh_dashboard_olap(p_force_full boolean) IS 'Incrementally publishes dirty daily/lifecycle grains; open cycles refresh only when rounded age changes; true forces a full rebuild.';
 
---
--- Name: FUNCTION refresh_dashboard_olap_full(); Type: COMMENT; Schema: reporting; Owner: -
---
-
 COMMENT ON FUNCTION reporting.refresh_dashboard_olap_full() IS 'Atomically rebuild every dashboard mart from canonical OLTP-derived source views.';
 
---
--- Name: FUNCTION renter_listing_scope(p_property_type text, p_neighborhoods text[], p_rooms text[], p_min_area text, p_max_area text, p_furnishing text[], p_heating text[], p_parking text[], p_elevator text[], p_floors text[], p_seller_types text[], p_min_price text, p_max_price text, p_min_rate text, p_max_rate text, p_min_score text, p_max_score text, p_listing_selection text, p_apply_result_filters boolean); Type: COMMENT; Schema: reporting; Owner: -
---
-
 COMMENT ON FUNCTION reporting.renter_listing_scope(p_property_type text, p_neighborhoods text[], p_rooms text[], p_min_area text, p_max_area text, p_furnishing text[], p_heating text[], p_parking text[], p_elevator text[], p_floors text[], p_seller_types text[], p_min_price text, p_max_price text, p_min_rate text, p_max_rate text, p_min_score text, p_max_score text, p_listing_selection text, p_apply_result_filters boolean) IS 'Canonical current-listing scope for the private renter dashboard; optionally applies price, score, and listing-selection filters.';
-
---
--- Name: FUNCTION validate_dashboard_olap(); Type: COMMENT; Schema: reporting; Owner: -
---
 
 COMMENT ON FUNCTION reporting.validate_dashboard_olap() IS 'Exact durable-field parity using one materialized source evaluation and indexed grain joins.';

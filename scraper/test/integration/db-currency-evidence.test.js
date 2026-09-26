@@ -82,7 +82,7 @@ needsDb(
 );
 
 needsDb(
-  "unknown upstream deal evidence cannot inherit the legacy sale default",
+  "unknown upstream deal evidence cannot inherit an assumed sale default",
   async () => {
     await db.pool.query(
       "INSERT INTO listings(article_id,url,title,is_rent) VALUES(123,'https://olx.ba/artikal/123','Unknown deal',false)",

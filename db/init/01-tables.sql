@@ -1,7 +1,4 @@
 -- Canonical tables baseline.
---
--- Name: listings; Type: TABLE; Schema: public; Owner: -
---
 
 CREATE TABLE public.listings (
     article_id bigint NOT NULL,
@@ -51,10 +48,6 @@ CREATE TABLE public.listings (
 COMMENT ON COLUMN public.listings.price IS
   'Last valid observed amount for the current deal segment; latest unpriced state is retained in price events.';
 
---
--- Name: listing_price_events; Type: TABLE; Schema: public; Owner: -
---
-
 CREATE TABLE public.listing_price_events (
     id bigint NOT NULL,
     article_id bigint NOT NULL,
@@ -75,33 +68,13 @@ CREATE TABLE public.listing_price_events (
     CONSTRAINT price_event_value_ranges_ck CHECK (((price IS NULL) OR (price >= (0)::numeric)))
 );
 
---
--- Name: COLUMN listing_price_events.effective_at; Type: COMMENT; Schema: public; Owner: -
---
-
 COMMENT ON COLUMN public.listing_price_events.effective_at IS 'Source/evidence time used for temporal reconstruction. For current observations this is fetch time.';
-
---
--- Name: COLUMN listing_price_events.observed_at; Type: COMMENT; Schema: public; Owner: -
---
 
 COMMENT ON COLUMN public.listing_price_events.observed_at IS 'Database fetch/observation time for current evidence; NULL for source-history assertions.';
 
---
--- Name: COLUMN listing_price_events.renewed_at; Type: COMMENT; Schema: public; Owner: -
---
-
 COMMENT ON COLUMN public.listing_price_events.renewed_at IS 'Source renewal/bump timestamp, retained as metadata and never used as price effective time.';
 
---
--- Name: COLUMN listing_price_events.effective_at_basis; Type: COMMENT; Schema: public; Owner: -
---
-
 COMMENT ON COLUMN public.listing_price_events.effective_at_basis IS 'How effective_at was established: observed, source_history, or legacy/unknown.';
-
---
--- Name: listing_state_history; Type: TABLE; Schema: public; Owner: -
---
 
 CREATE TABLE public.listing_state_history (
     id bigint NOT NULL,
@@ -124,15 +97,7 @@ CREATE TABLE public.listing_state_history (
     CONSTRAINT listing_state_history_event_type_check CHECK ((event_type = ANY (ARRAY['search_sighting'::text, 'detail_update'::text, 'closed'::text, 'reopened'::text])))
 );
 
---
--- Name: COLUMN listing_state_history.state_version_id; Type: COMMENT; Schema: public; Owner: -
---
-
 COMMENT ON COLUMN public.listing_state_history.state_version_id IS 'Deduplicated state payload referenced by this historical observation.';
-
---
--- Name: listing_state_versions; Type: TABLE; Schema: public; Owner: -
---
 
 CREATE TABLE public.listing_state_versions (
     state_version_id bigint NOT NULL,
@@ -148,15 +113,7 @@ CREATE TABLE public.listing_state_versions (
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
---
--- Name: TABLE listing_state_versions; Type: COMMENT; Schema: public; Owner: -
---
-
 COMMENT ON TABLE public.listing_state_versions IS 'Content-addressed historical listing states shared by history and daily rows.';
-
---
--- Name: current_listing_scores; Type: TABLE; Schema: olap; Owner: -
---
 
 CREATE TABLE olap.current_listing_scores (
     article_id bigint NOT NULL,
@@ -223,15 +180,7 @@ CREATE TABLE olap.current_listing_scores (
     CONSTRAINT olap_current_listing_scores_deal_ck CHECK (((deal IS NULL) OR (deal = ANY (ARRAY['sale'::text, 'rent'::text, 'unknown'::text]))))
 );
 
---
--- Name: TABLE current_listing_scores; Type: COMMENT; Schema: olap; Owner: -
---
-
 COMMENT ON TABLE olap.current_listing_scores IS 'OLAP snapshot for private Grafana dashboards; rebuilt from OLTP listing and evidence tables.';
-
---
--- Name: comparison_price_changes; Type: TABLE; Schema: olap; Owner: -
---
 
 CREATE TABLE olap.comparison_price_changes (
     article_id bigint NOT NULL,
@@ -245,10 +194,6 @@ CREATE TABLE olap.comparison_price_changes (
     currency text,
     CONSTRAINT olap_comparison_price_changes_currency_ck CHECK (((currency IS NULL) OR (currency = 'KM'::text) OR (currency ~ '^[A-Z]{3}$'::text)))
 );
-
---
--- Name: daily_listing_facts; Type: TABLE; Schema: olap; Owner: -
---
 
 CREATE TABLE olap.daily_listing_facts (
     day date NOT NULL,
@@ -290,10 +235,6 @@ CREATE TABLE olap.daily_listing_facts (
     provisional_day boolean NOT NULL DEFAULT false,
     CONSTRAINT olap_daily_listing_facts_currency_ck CHECK (((currency IS NULL) OR (currency = 'KM'::text) OR (currency ~ '^[A-Z]{3}$'::text)))
 );
-
---
--- Name: lifecycle_cycles; Type: TABLE; Schema: olap; Owner: -
---
 
 CREATE TABLE olap.lifecycle_cycles (
     article_id bigint NOT NULL,
@@ -345,10 +286,6 @@ CREATE TABLE olap.lifecycle_cycles (
     CONSTRAINT olap_lifecycle_cycles_opening_category_nonblank_ck CHECK (((opening_category IS NULL) OR (btrim(opening_category) <> ''::text)))
 );
 
---
--- Name: neighborhoods; Type: TABLE; Schema: public; Owner: -
---
-
 CREATE TABLE public.neighborhoods (
     name text NOT NULL,
     priority integer DEFAULT 100 NOT NULL,
@@ -357,10 +294,6 @@ CREATE TABLE public.neighborhoods (
     boundary_geography public.geography(MultiPolygon,4326),
     CONSTRAINT neighborhoods_boundary_valid CHECK (((public.st_srid(boundary) = 4326) AND (NOT public.st_isempty(boundary)) AND public.st_isvalid(boundary)))
 );
-
---
--- Name: COLUMN neighborhoods.boundary; Type: COMMENT; Schema: public; Owner: -
---
 
 COMMENT ON COLUMN public.neighborhoods.boundary IS 'Canonical PostGIS MultiPolygon boundary (WGS 84 / EPSG:4326); `poly` is retained temporarily for rollout comparison.';
 
@@ -379,10 +312,6 @@ CREATE TABLE public.neighborhood_neighbor_cache (
 COMMENT ON TABLE public.neighborhood_neighbor_cache IS
   'Exact nearest-neighborhood rankings derived from boundary geography; refreshed automatically when neighborhood rows change.';
 
---
--- Name: saved_searches; Type: TABLE; Schema: public; Owner: -
---
-
 CREATE TABLE public.saved_searches (
     search_key text NOT NULL,
     name text NOT NULL,
@@ -397,18 +326,10 @@ CREATE TABLE public.saved_searches (
     CONSTRAINT public_saved_searches_category_nonblank_ck CHECK (((category IS NULL) OR (btrim(category) <> ''::text)))
 );
 
---
--- Name: search_results; Type: TABLE; Schema: public; Owner: -
---
-
 CREATE TABLE public.search_results (
     search_key text NOT NULL,
     article_id bigint NOT NULL
 );
-
---
--- Name: listings; Type: TABLE; Schema: olap; Owner: -
---
 
 CREATE TABLE olap.listings (
     article_id bigint NOT NULL,
@@ -455,10 +376,6 @@ CREATE TABLE olap.listings (
     renewed_at timestamp with time zone
 );
 
---
--- Name: listing_price_changes; Type: TABLE; Schema: olap; Owner: -
---
-
 CREATE TABLE olap.listing_price_changes (
     article_id bigint NOT NULL,
     effective_at timestamp with time zone NOT NULL,
@@ -480,10 +397,6 @@ CREATE TABLE olap.listing_price_changes (
     null_boundary boolean,
     CONSTRAINT olap_listing_price_changes_deal_ck CHECK (((deal IS NULL) OR (deal = ANY (ARRAY['sale'::text, 'rent'::text, 'unknown'::text]))))
 );
-
---
--- Name: lifecycle_movements; Type: TABLE; Schema: olap; Owner: -
---
 
 CREATE TABLE olap.lifecycle_movements (
     movement_type text NOT NULL,
@@ -522,10 +435,6 @@ CREATE TABLE olap.lifecycle_movements (
     CONSTRAINT olap_lifecycle_movements_deal_ck CHECK (((deal IS NULL) OR (deal = ANY (ARRAY['sale'::text, 'rent'::text, 'unknown'::text]))))
 );
 
---
--- Name: listing_categories; Type: TABLE; Schema: olap; Owner: -
---
-
 CREATE TABLE olap.listing_categories (
     article_id bigint NOT NULL,
     category text NOT NULL,
@@ -540,19 +449,11 @@ CREATE TABLE olap.dashboard_filter_options (
     CONSTRAINT olap_dashboard_filter_options_pkey PRIMARY KEY (filter_name, value)
 );
 
---
--- Name: listing_exit_economics; Type: TABLE; Schema: olap; Owner: -
---
-
 CREATE TABLE olap.listing_exit_economics (
     article_id bigint NOT NULL,
     opening_price numeric(12,2),
     days_listed integer
 );
-
---
--- Name: market_daily; Type: TABLE; Schema: olap; Owner: -
---
 
 CREATE TABLE olap.market_daily (
     day date NOT NULL,
@@ -563,10 +464,6 @@ CREATE TABLE olap.market_daily (
     stale_n integer NOT NULL,
     provisional_day boolean DEFAULT false NOT NULL
 );
-
---
--- Name: public_current_listings; Type: TABLE; Schema: olap; Owner: -
---
 
 CREATE TABLE olap.public_current_listings (
     article_id bigint NOT NULL,
@@ -589,10 +486,6 @@ CREATE TABLE olap.public_current_listings (
     CONSTRAINT olap_public_current_listings_deal_ck CHECK (((deal IS NULL) OR (deal = ANY (ARRAY['sale'::text, 'rent'::text, 'unknown'::text]))))
 );
 
---
--- Name: public_exit_cycles; Type: TABLE; Schema: olap; Owner: -
---
-
 CREATE TABLE olap.public_exit_cycles (
     article_id bigint NOT NULL,
     cycle_no bigint NOT NULL,
@@ -613,19 +506,11 @@ CREATE TABLE olap.public_exit_cycles (
     CONSTRAINT olap_public_exit_cycles_deal_ck CHECK (((deal IS NULL) OR (deal = ANY (ARRAY['sale'::text, 'rent'::text, 'unknown'::text]))))
 );
 
---
--- Name: public_freshness; Type: TABLE; Schema: olap; Owner: -
---
-
 CREATE TABLE olap.public_freshness (
     category text NOT NULL,
     configured_searches integer NOT NULL,
     last_success_at timestamp with time zone
 );
-
---
--- Name: public_price_reductions; Type: TABLE; Schema: olap; Owner: -
---
 
 CREATE TABLE olap.public_price_reductions (
     article_id bigint NOT NULL,
@@ -648,20 +533,12 @@ CREATE TABLE olap.public_price_reductions (
     CONSTRAINT olap_public_price_reductions_deal_ck CHECK (((deal IS NULL) OR (deal = ANY (ARRAY['sale'::text, 'rent'::text, 'unknown'::text]))))
 );
 
---
--- Name: refresh_id_seq; Type: SEQUENCE; Schema: olap; Owner: -
---
-
 CREATE SEQUENCE olap.refresh_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
-
---
--- Name: refresh_state; Type: TABLE; Schema: olap; Owner: -
---
 
 CREATE TABLE olap.refresh_state (
     mart text NOT NULL,
@@ -672,20 +549,12 @@ CREATE TABLE olap.refresh_state (
     CONSTRAINT refresh_state_row_count_check CHECK ((row_count >= 0))
 );
 
---
--- Name: analytics_contract_validation; Type: TABLE; Schema: public; Owner: -
---
-
 CREATE TABLE public.analytics_contract_validation (
     id bigint NOT NULL,
     checked_at timestamp with time zone DEFAULT now() NOT NULL,
     ok boolean NOT NULL,
     details jsonb DEFAULT '{}'::jsonb NOT NULL
 );
-
---
--- Name: analytics_contract_validation_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
 
 ALTER TABLE public.analytics_contract_validation ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
     SEQUENCE NAME public.analytics_contract_validation_id_seq
@@ -696,34 +565,18 @@ ALTER TABLE public.analytics_contract_validation ALTER COLUMN id ADD GENERATED A
     CACHE 1
 );
 
---
--- Name: analytics_daily_coverage; Type: TABLE; Schema: public; Owner: -
---
-
 CREATE TABLE public.analytics_daily_coverage (
     day date NOT NULL,
     rebuilt_at timestamp with time zone DEFAULT now() NOT NULL,
     provisional boolean DEFAULT false NOT NULL
 );
 
---
--- Name: analytics_daily_dirty_articles; Type: TABLE; Schema: public; Owner: -
---
-
 CREATE TABLE public.analytics_daily_dirty_articles (
     article_id bigint NOT NULL,
     marked_at timestamp with time zone DEFAULT clock_timestamp() NOT NULL
 );
 
---
--- Name: TABLE analytics_daily_dirty_articles; Type: COMMENT; Schema: public; Owner: -
---
-
 COMMENT ON TABLE public.analytics_daily_dirty_articles IS 'Article cohort whose daily projection must be replaced for the pending day range.';
-
---
--- Name: analytics_daily_olap_dirty; Type: TABLE; Schema: public; Owner: -
---
 
 CREATE TABLE public.analytics_daily_olap_dirty (
     day date NOT NULL,
@@ -731,15 +584,7 @@ CREATE TABLE public.analytics_daily_olap_dirty (
     marked_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
---
--- Name: TABLE analytics_daily_olap_dirty; Type: COMMENT; Schema: public; Owner: -
---
-
 COMMENT ON TABLE public.analytics_daily_olap_dirty IS 'Commit-visible queue of reconstructed days awaiting OLAP publication.';
-
---
--- Name: analytics_daily_olap_dirty_generation_seq; Type: SEQUENCE; Schema: public; Owner: -
---
 
 CREATE SEQUENCE public.analytics_daily_olap_dirty_generation_seq
     START WITH 1
@@ -747,10 +592,6 @@ CREATE SEQUENCE public.analytics_daily_olap_dirty_generation_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
-
---
--- Name: analytics_partition_policy; Type: TABLE; Schema: public; Owner: -
---
 
 CREATE TABLE public.analytics_partition_policy (
     parent_schema text NOT NULL,
@@ -762,10 +603,6 @@ CREATE TABLE public.analytics_partition_policy (
     CONSTRAINT analytics_partition_policy_months_ahead_check CHECK ((months_ahead >= 0))
 );
 
---
--- Name: analytics_partition_registry; Type: TABLE; Schema: public; Owner: -
---
-
 CREATE TABLE public.analytics_partition_registry (
     parent_schema text NOT NULL,
     parent_table text NOT NULL,
@@ -776,30 +613,17 @@ CREATE TABLE public.analytics_partition_registry (
     CONSTRAINT analytics_partition_registry_check CHECK ((from_at < through_at))
 );
 
---
--- Name: analytics_refresh_state; Type: TABLE; Schema: public; Owner: -
---
-
 CREATE TABLE public.analytics_refresh_state (
     scope text NOT NULL,
     pending_from_day date,
     pending_through_day date,
     last_successful_refresh_at timestamp with time zone,
-    historical_tracking_boundary timestamp with time zone,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     completed_through_day date,
     CONSTRAINT analytics_refresh_state_range_ck CHECK (((pending_from_day IS NULL) OR (pending_through_day IS NULL) OR (pending_from_day <= pending_through_day)))
 );
 
---
--- Name: COLUMN analytics_refresh_state.completed_through_day; Type: COMMENT; Schema: public; Owner: -
---
-
 COMMENT ON COLUMN public.analytics_refresh_state.completed_through_day IS 'Latest contiguous Sarajevo day whose daily projection was successfully rebuilt and finalized.';
-
---
--- Name: analytics_retention_policy; Type: TABLE; Schema: public; Owner: -
---
 
 CREATE TABLE public.analytics_retention_policy (
     table_schema text NOT NULL,
@@ -810,10 +634,6 @@ CREATE TABLE public.analytics_retention_policy (
     CONSTRAINT analytics_retention_policy_action_check CHECK ((action = ANY (ARRAY['delete'::text, 'archive'::text, 'retain'::text]))),
     CONSTRAINT analytics_retention_policy_retention_days_check CHECK ((retention_days > 0))
 );
-
---
--- Name: detail_jobs; Type: TABLE; Schema: public; Owner: -
---
 
 CREATE TABLE public.detail_jobs (
     article_id bigint NOT NULL,
@@ -835,27 +655,11 @@ CREATE TABLE public.detail_jobs (
     CONSTRAINT detail_jobs_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'leased'::text, 'succeeded'::text, 'terminal'::text])))
 );
 
---
--- Name: TABLE detail_jobs; Type: COMMENT; Schema: public; Owner: -
---
-
 COMMENT ON TABLE public.detail_jobs IS 'Durable detail request queue with claim leases, retry schedule, and outcome telemetry';
-
---
--- Name: COLUMN detail_jobs.next_attempt_at; Type: COMMENT; Schema: public; Owner: -
---
 
 COMMENT ON COLUMN public.detail_jobs.next_attempt_at IS 'Earliest timestamp at which a pending or expired lease may be claimed';
 
---
--- Name: COLUMN detail_jobs.lease_until; Type: COMMENT; Schema: public; Owner: -
---
-
 COMMENT ON COLUMN public.detail_jobs.lease_until IS 'Claim expiry; an expired lease is safe to reclaim by another scraper process';
-
---
--- Name: listing_daily; Type: TABLE; Schema: public; Owner: -
---
 
 CREATE TABLE public.listing_daily (
     day date NOT NULL,
@@ -875,21 +679,9 @@ CREATE TABLE public.listing_daily (
     CONSTRAINT listing_daily_price_state_check CHECK ((price_state = ANY (ARRAY['valid'::text, 'unpriced'::text, 'invalid'::text, 'unknown'::text, 'conflict'::text])))
 );
 
---
--- Name: COLUMN listing_daily.resolved_state_version; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.listing_daily.resolved_state_version IS '0: direct insert requiring compatibility resolution; 1: bulk-resolved state and geography';
-
---
--- Name: COLUMN listing_daily.state_version_id; Type: COMMENT; Schema: public; Owner: -
---
+COMMENT ON COLUMN public.listing_daily.resolved_state_version IS '0: resolve state and geography on read; 1: state and geography resolved during rebuild';
 
 COMMENT ON COLUMN public.listing_daily.state_version_id IS 'Deduplicated resolved state payload referenced by this listing-day row.';
-
---
--- Name: listing_detail_versions; Type: TABLE; Schema: public; Owner: -
---
 
 CREATE TABLE public.listing_detail_versions (
     detail_version_id bigint NOT NULL,
@@ -930,15 +722,7 @@ CREATE TABLE public.listing_detail_versions (
     CONSTRAINT listing_detail_versions_interval_ck CHECK (((valid_to IS NULL) OR (valid_to > valid_from)))
 );
 
---
--- Name: TABLE listing_detail_versions; Type: COMMENT; Schema: public; Owner: -
---
-
 COMMENT ON TABLE public.listing_detail_versions IS 'Slowly changing listing details; one row is created only when detail content changes.';
-
---
--- Name: listing_detail_versions_detail_version_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
 
 ALTER TABLE public.listing_detail_versions ALTER COLUMN detail_version_id ADD GENERATED ALWAYS AS IDENTITY (
     SEQUENCE NAME public.listing_detail_versions_detail_version_id_seq
@@ -949,10 +733,6 @@ ALTER TABLE public.listing_detail_versions ALTER COLUMN detail_version_id ADD GE
     CACHE 1
 );
 
---
--- Name: listing_price_events_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
 ALTER TABLE public.listing_price_events ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
     SEQUENCE NAME public.listing_price_events_id_seq
     START WITH 1
@@ -961,10 +741,6 @@ ALTER TABLE public.listing_price_events ALTER COLUMN id ADD GENERATED ALWAYS AS 
     NO MAXVALUE
     CACHE 1
 );
-
---
--- Name: listing_publication_evidence; Type: TABLE; Schema: public; Owner: -
---
 
 CREATE TABLE public.listing_publication_evidence (
     id bigint NOT NULL,
@@ -976,10 +752,6 @@ CREATE TABLE public.listing_publication_evidence (
     evidence_kind text DEFAULT 'upstream_created_at'::text NOT NULL
 );
 
---
--- Name: listing_publication_evidence_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
 ALTER TABLE public.listing_publication_evidence ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
     SEQUENCE NAME public.listing_publication_evidence_id_seq
     START WITH 1
@@ -988,10 +760,6 @@ ALTER TABLE public.listing_publication_evidence ALTER COLUMN id ADD GENERATED AL
     NO MAXVALUE
     CACHE 1
 );
-
---
--- Name: listing_state_history_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
 
 ALTER TABLE public.listing_state_history ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
     SEQUENCE NAME public.listing_state_history_id_seq
@@ -1002,10 +770,6 @@ ALTER TABLE public.listing_state_history ALTER COLUMN id ADD GENERATED ALWAYS AS
     CACHE 1
 );
 
---
--- Name: listing_state_versions_state_version_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
 ALTER TABLE public.listing_state_versions ALTER COLUMN state_version_id ADD GENERATED ALWAYS AS IDENTITY (
     SEQUENCE NAME public.listing_state_versions_state_version_id_seq
     START WITH 1
@@ -1014,10 +778,6 @@ ALTER TABLE public.listing_state_versions ALTER COLUMN state_version_id ADD GENE
     NO MAXVALUE
     CACHE 1
 );
-
---
--- Name: maintenance_runs; Type: TABLE; Schema: public; Owner: -
---
 
 CREATE TABLE public.maintenance_runs (
     id bigint NOT NULL,
@@ -1031,15 +791,7 @@ CREATE TABLE public.maintenance_runs (
     CONSTRAINT maintenance_runs_rows_affected_check CHECK ((rows_affected >= 0))
 );
 
---
--- Name: TABLE maintenance_runs; Type: COMMENT; Schema: public; Owner: -
---
-
 COMMENT ON TABLE public.maintenance_runs IS 'Bounded operational outcomes and durations for retention and analytics maintenance.';
-
---
--- Name: maintenance_runs_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
 
 ALTER TABLE public.maintenance_runs ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
     SEQUENCE NAME public.maintenance_runs_id_seq
@@ -1050,18 +802,10 @@ ALTER TABLE public.maintenance_runs ALTER COLUMN id ADD GENERATED ALWAYS AS IDEN
     CACHE 1
 );
 
---
--- Name: olap_article_dirty; Type: TABLE; Schema: public; Owner: -
---
-
 CREATE TABLE public.olap_article_dirty (
     article_id bigint NOT NULL,
     marked_at timestamp with time zone DEFAULT now() NOT NULL
 );
-
---
--- Name: price_history; Type: TABLE; Schema: public; Owner: -
---
 
 CREATE TABLE public.price_history (
     id bigint NOT NULL,
@@ -1071,10 +815,6 @@ CREATE TABLE public.price_history (
     ppm2 integer
 );
 
---
--- Name: price_history_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
 ALTER TABLE public.price_history ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
     SEQUENCE NAME public.price_history_id_seq
     START WITH 1
@@ -1083,25 +823,6 @@ ALTER TABLE public.price_history ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTIT
     NO MAXVALUE
     CACHE 1
 );
-
---
--- Name: publication_evidence_transition; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.publication_evidence_transition (
-    id smallint NOT NULL,
-    last_raw_id bigint DEFAULT 0 NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    recoverable bigint DEFAULT 0 NOT NULL,
-    imported bigint DEFAULT 0 NOT NULL,
-    conflicting bigint DEFAULT 0 NOT NULL,
-    unrecoverable bigint DEFAULT 0 NOT NULL,
-    CONSTRAINT publication_evidence_transition_id_check CHECK ((id = 1))
-);
-
---
--- Name: raw_api_responses; Type: TABLE; Schema: public; Owner: -
---
 
 CREATE TABLE public.raw_api_responses (
     id bigint NOT NULL,
@@ -1118,62 +839,26 @@ CREATE TABLE public.raw_api_responses (
     response_metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
     build_version text DEFAULT 'unknown'::text NOT NULL,
     diagnostic jsonb,
-    archive_format text DEFAULT 'legacy-v1'::text NOT NULL,
-    CONSTRAINT raw_api_responses_archive_format_ck CHECK ((archive_format = ANY (ARRAY['legacy-v1'::text, 'canonical-v2'::text, 'diagnostic-v2'::text]))),
+    archive_format text DEFAULT 'canonical-v2'::text NOT NULL,
+    CONSTRAINT raw_api_responses_archive_format_ck CHECK ((archive_format = ANY (ARRAY['canonical-v2'::text, 'diagnostic-v2'::text]))),
     CONSTRAINT raw_api_responses_request_kind_check CHECK ((request_kind = ANY (ARRAY['search'::text, 'detail'::text])))
 );
 
---
--- Name: COLUMN raw_api_responses.expires_at; Type: COMMENT; Schema: public; Owner: -
---
+COMMENT ON COLUMN public.raw_api_responses.expires_at IS 'Optional expiry bound; count-based maintenance also retains only the newest configured number per request kind and URL.';
 
-COMMENT ON COLUMN public.raw_api_responses.expires_at IS 'Compatibility timestamp; count-based maintenance retains the newest configured number per request kind and URL.';
+COMMENT ON COLUMN public.raw_api_responses.payload IS 'Original decoded detail response; NULL for search responses and diagnostics.';
 
---
--- Name: COLUMN raw_api_responses.payload; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.raw_api_responses.payload IS 'Backward-compatible adapter payload (items/meta for search, decoded detail for detail).';
-
---
--- Name: COLUMN raw_api_responses.source_payload; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.raw_api_responses.source_payload IS 'Original decoded upstream JSON body, retained for parser replay while unexpired.';
-
---
--- Name: COLUMN raw_api_responses.request_metadata; Type: COMMENT; Schema: public; Owner: -
---
+COMMENT ON COLUMN public.raw_api_responses.source_payload IS 'Original decoded search response; NULL for detail responses and diagnostics.';
 
 COMMENT ON COLUMN public.raw_api_responses.request_metadata IS 'Bounded, non-secret request metadata such as method and URL.';
 
---
--- Name: COLUMN raw_api_responses.response_metadata; Type: COMMENT; Schema: public; Owner: -
---
-
 COMMENT ON COLUMN public.raw_api_responses.response_metadata IS 'Bounded response metadata such as status, content type, byte count, and attempts.';
-
---
--- Name: COLUMN raw_api_responses.build_version; Type: COMMENT; Schema: public; Owner: -
---
 
 COMMENT ON COLUMN public.raw_api_responses.build_version IS 'Parser/build identifier that produced this archive record.';
 
---
--- Name: COLUMN raw_api_responses.diagnostic; Type: COMMENT; Schema: public; Owner: -
---
-
 COMMENT ON COLUMN public.raw_api_responses.diagnostic IS 'Bounded error or parser diagnostic; NULL for successful responses.';
 
---
--- Name: COLUMN raw_api_responses.archive_format; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.raw_api_responses.archive_format IS 'legacy-v1 uses source_payload/payload fallback; canonical-v2 has one original body; diagnostic-v2 has no successful body.';
-
---
--- Name: raw_api_responses_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
+COMMENT ON COLUMN public.raw_api_responses.archive_format IS 'canonical-v2 stores one original response body; diagnostic-v2 stores only diagnostic metadata.';
 
 ALTER TABLE public.raw_api_responses ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
     SEQUENCE NAME public.raw_api_responses_id_seq
@@ -1183,32 +868,6 @@ ALTER TABLE public.raw_api_responses ALTER COLUMN id ADD GENERATED ALWAYS AS IDE
     NO MAXVALUE
     CACHE 1
 );
-
---
--- Name: raw_retention_transition; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.raw_retention_transition (
-    id smallint NOT NULL,
-    horizon_days smallint NOT NULL,
-    started_at timestamp with time zone,
-    completed_at timestamp with time zone,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    rows_capped bigint DEFAULT 0 NOT NULL,
-    CONSTRAINT raw_retention_transition_horizon_days_check CHECK ((horizon_days > 0)),
-    CONSTRAINT raw_retention_transition_id_check CHECK ((id = 1)),
-    CONSTRAINT raw_retention_transition_rows_capped_check CHECK ((rows_capped >= 0))
-);
-
---
--- Name: TABLE raw_retention_transition; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON TABLE public.raw_retention_transition IS 'Durable progress marker for the bounded cap of legacy raw expiry timestamps.';
-
---
--- Name: scrape_run_pages; Type: TABLE; Schema: public; Owner: -
---
 
 CREATE TABLE public.scrape_run_pages (
     run_id bigint NOT NULL,
@@ -1241,21 +900,9 @@ CREATE TABLE public.scrape_run_pages (
     CONSTRAINT scrape_run_pages_response_state_check CHECK ((response_state = ANY (ARRAY['ok'::text, 'verified_empty'::text, 'malformed'::text, 'blocked'::text, 'error'::text])))
 );
 
---
--- Name: TABLE scrape_run_pages; Type: COMMENT; Schema: public; Owner: -
---
-
 COMMENT ON TABLE public.scrape_run_pages IS 'Per-page scrape attempts, parser diagnostics, and authority classification.';
 
---
--- Name: COLUMN scrape_run_pages.is_authoritative; Type: COMMENT; Schema: public; Owner: -
---
-
 COMMENT ON COLUMN public.scrape_run_pages.is_authoritative IS 'True only when this page response is safe to use as complete pagination evidence.';
-
---
--- Name: scrape_runs; Type: TABLE; Schema: public; Owner: -
---
 
 CREATE TABLE public.scrape_runs (
     id bigint NOT NULL,
@@ -1274,10 +921,6 @@ CREATE TABLE public.scrape_runs (
     CONSTRAINT scrape_runs_temporal_ck CHECK (((finished_at IS NULL) OR (finished_at >= started_at)))
 );
 
---
--- Name: scrape_runs_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
 ALTER TABLE public.scrape_runs ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
     SEQUENCE NAME public.scrape_runs_id_seq
     START WITH 1
@@ -1286,10 +929,6 @@ ALTER TABLE public.scrape_runs ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY 
     NO MAXVALUE
     CACHE 1
 );
-
---
--- Name: current_market_refresh_state; Type: TABLE; Schema: reporting; Owner: -
---
 
 CREATE TABLE reporting.current_market_refresh_state (
     singleton boolean DEFAULT true NOT NULL,

@@ -1,9 +1,6 @@
 -- Canonical source views baseline.
 
--- Compatibility projections required by the source views below.
---
--- Name: listing_state_history_state; Type: VIEW; Schema: public; Owner: -
---
+-- Resolve state-version references for source queries.
 
 CREATE VIEW public.listing_state_history_state AS
  SELECT h.id,
@@ -32,11 +29,6 @@ CREATE VIEW public.listing_state_history_state AS
    FROM (public.listing_state_history h
      JOIN public.listing_state_versions v ON ((v.state_version_id = h.state_version_id)));
 
-
---
--- Name: listing_daily_state; Type: VIEW; Schema: public; Owner: -
---
-
 CREATE VIEW public.listing_daily_state AS
  SELECT d.day,
     d.article_id,
@@ -62,11 +54,6 @@ CREATE VIEW public.listing_daily_state AS
     d.detail_version_id
    FROM (public.listing_daily d
      JOIN public.listing_state_versions v ON ((v.state_version_id = d.state_version_id)));
-
-
---
--- Name: v_listing_price_changes_source; Type: VIEW; Schema: public; Owner: -
---
 
 CREATE VIEW public.v_listing_price_changes_source AS
  WITH resolved AS (
@@ -178,10 +165,6 @@ CREATE VIEW public.v_listing_price_changes_source AS
             ELSE 'sale'::text
         END);
 
---
--- Name: v_listing_price_changes; Type: VIEW; Schema: public; Owner: -
---
-
 CREATE VIEW public.v_listing_price_changes AS
  SELECT article_id,
     effective_at,
@@ -202,10 +185,6 @@ CREATE VIEW public.v_listing_price_changes AS
     provenance,
     null_boundary
    FROM public.v_listing_price_changes_source;
-
---
--- Name: resolved_price_evidence; Type: VIEW; Schema: reporting; Owner: -
---
 
 CREATE VIEW reporting.resolved_price_evidence AS
  SELECT e.id,
@@ -258,11 +237,7 @@ CREATE VIEW reporting.resolved_price_evidence AS
                     ELSE 3
                 END, listing_price_events.id DESC) e;
 
---
 -- The resolved evidence helper is needed by current_comparison_inputs below.
---
--- Name: latest_resolved_price_evidence(bigint); Type: FUNCTION; Schema: reporting; Owner: -
---
 
 CREATE FUNCTION reporting.latest_resolved_price_evidence(p_article_id bigint) RETURNS SETOF reporting.resolved_price_evidence
     LANGUAGE sql STABLE PARALLEL SAFE
@@ -299,12 +274,6 @@ CREATE FUNCTION reporting.latest_resolved_price_evidence(p_article_id bigint) RE
        LIMIT 1
     ) e
 $_$;
-
-
-
-
--- Name: v_active_listings_source; Type: VIEW; Schema: public; Owner: -
---
 
 CREATE VIEW public.v_active_listings_source AS
  SELECT article_id,
@@ -348,10 +317,6 @@ CREATE VIEW public.v_active_listings_source AS
     renewed_at
    FROM public.listings
   WHERE ((last_seen > (now() - '14 days'::interval)) AND (closed_at IS NULL));
-
---
--- Name: v_listing_lifecycle_cycles; Type: VIEW; Schema: public; Owner: -
---
 
 CREATE VIEW public.v_listing_lifecycle_cycles AS
  WITH markers AS (
@@ -410,10 +375,6 @@ CREATE VIEW public.v_listing_lifecycle_cycles AS
           ORDER BY e.effective_at, e.id
          LIMIT 1) fp ON (true));
 
---
--- Name: current_listings; Type: VIEW; Schema: reporting; Owner: -
---
-
 CREATE VIEW reporting.current_listings AS
  SELECT article_id,
     url,
@@ -455,10 +416,6 @@ CREATE VIEW reporting.current_listings AS
     last_seen,
     renewed_at
    FROM public.v_active_listings_source;
-
---
--- Name: current_comparison_inputs; Type: VIEW; Schema: reporting; Owner: -
---
 
 CREATE VIEW reporting.current_comparison_inputs AS
  WITH evidence AS (
@@ -707,10 +664,6 @@ CREATE VIEW reporting.current_comparison_inputs AS
     score_input_reason
    FROM eligible;
 
---
--- Name: v_listing_daily; Type: VIEW; Schema: public; Owner: -
---
-
 CREATE VIEW public.v_listing_daily AS
  SELECT d.day,
     d.article_id,
@@ -739,10 +692,6 @@ CREATE VIEW public.v_listing_daily AS
     d.filter_attributes
    FROM (public.listing_daily_state d
      JOIN public.listings l ON ((l.article_id = d.article_id)));
-
---
--- Name: v_listing_evidence_timeline; Type: VIEW; Schema: public; Owner: -
---
 
 CREATE VIEW public.v_listing_evidence_timeline AS
  SELECT listing_price_events.article_id,
@@ -778,10 +727,6 @@ UNION ALL
     '{}'::jsonb AS provenance
    FROM public.listing_publication_evidence;
 
---
--- Name: v_listing_exit_economics_source; Type: VIEW; Schema: public; Owner: -
---
-
 CREATE VIEW public.v_listing_exit_economics_source AS
  SELECT l.article_id,
     fp.opening_price,
@@ -810,10 +755,6 @@ CREATE VIEW public.v_listing_exit_economics_source AS
           WHERE ((e.article_id = l.article_id) AND (e.price_state = 'valid'::text))
           ORDER BY e.effective_at, e.id
          LIMIT 1) fp ON (true));
-
---
--- Name: v_listing_history_contract; Type: VIEW; Schema: public; Owner: -
---
 
 CREATE VIEW public.v_listing_history_contract AS
  WITH first_observation AS (
@@ -854,10 +795,6 @@ CREATE VIEW public.v_listing_history_contract AS
      LEFT JOIN publication p USING (article_id))
      LEFT JOIN first_observation f USING (article_id))
      LEFT JOIN first_price fp USING (article_id));
-
---
--- Name: v_listing_lifecycle; Type: VIEW; Schema: public; Owner: -
---
 
 CREATE VIEW public.v_listing_lifecycle AS
  WITH first_state AS (
@@ -968,10 +905,6 @@ CREATE VIEW public.v_listing_lifecycle AS
      LEFT JOIN last_state ls ON ((ls.article_id = l.article_id)))
      LEFT JOIN prices p ON ((p.article_id = l.article_id)));
 
---
--- Name: v_market_daily_source; Type: VIEW; Schema: public; Owner: -
---
-
 CREATE VIEW public.v_market_daily_source AS
  WITH bounds AS (
          SELECT min(listing_daily_state.day) AS first_day,
@@ -1045,10 +978,6 @@ CREATE VIEW public.v_market_daily_source AS
      LEFT JOIN inventory i USING (day))
   ORDER BY g.day;
 
---
--- Name: comparison_price_changes_source; Type: VIEW; Schema: reporting; Owner: -
---
-
 CREATE VIEW reporting.comparison_price_changes_source AS
  WITH evidence AS MATERIALIZED (
          SELECT e_1.id,
@@ -1117,10 +1046,6 @@ CREATE VIEW reporting.comparison_price_changes_source AS
   WHERE ((e.effective_at >= l.cycle_opened_at) AND (e.prior_effective_at >= l.cycle_opened_at) AND (e.evidence_is_rent = l.is_rent) AND (e.prior_is_rent = e.evidence_is_rent) AND (reporting.comparison_price_reason(e.price, e.price_state, e.currency_normalized, e.evidence_is_rent) IS NULL) AND (reporting.comparison_price_reason(e.prior_price, e.prior_state, e.prior_currency, e.prior_is_rent) IS NULL) AND (e.price <> e.prior_price) AND (NOT (EXISTS ( SELECT 1
            FROM public.listing_state_history_state h
           WHERE ((h.article_id = e.article_id) AND (h.effective_at > e.prior_effective_at) AND (h.effective_at <= e.effective_at) AND (h.is_rent IS NOT NULL) AND (h.is_rent <> e.evidence_is_rent))))));
-
---
--- Name: current_listing_scores_local_source; Type: VIEW; Schema: reporting; Owner: -
---
 
 CREATE VIEW reporting.current_listing_scores_local_source AS
  WITH inputs AS MATERIALIZED (
@@ -1388,10 +1313,6 @@ CREATE VIEW reporting.current_listing_scores_local_source AS
                   WHERE ((h.article_id = d.article_id) AND (h.effective_at > pc.effective_at) AND (h.effective_at <= now()) AND (h.is_rent IS NOT NULL) AND (h.is_rent <> d.is_rent))))))
           ORDER BY pc.effective_at DESC
          LIMIT 1) reduction ON (true));
-
---
--- Name: current_listing_scores_source; Type: VIEW; Schema: reporting; Owner: -
---
 
 CREATE VIEW reporting.current_listing_scores_source AS
  WITH local AS MATERIALIZED (
@@ -1713,10 +1634,6 @@ CREATE VIEW reporting.current_listing_scores_source AS
             ELSE NULL::text[]
         END))) expanded(article_id, url, title, sqm, rooms, is_rent, deal, latitude, longitude, first_seen, last_seen, seller_type, condition, parking, garage, elevator, heating, floor_num, plot_sqm, year_built, bathrooms, rooms_detail, furnished, category_memberships, property_type, neighborhood, room_bucket, resolved_price, price_state, currency, price_effective_at, evidence_is_rent, cycle_opened_at, current_cycle_age_days, reopened, benchmark_at, score_version, price_reason, asking_price, asking_rate, score_input_reason, comparable_count, benchmark_rate, benchmark_p25, benchmark_p75, deviation_pct, unscored_reason, confidence, score, position_label, indicative_total, indicative_low, indicative_high, asking_gap_km, latest_reduction_at, reduction_km, reduction_pct, local_comparable_count, benchmark_scope, benchmark_neighborhoods));
 
---
--- Name: current_listings_source; Type: VIEW; Schema: reporting; Owner: -
---
-
 CREATE VIEW reporting.current_listings_source AS
  SELECT l.article_id,
         CASE
@@ -1752,13 +1669,9 @@ CREATE VIEW reporting.current_listings_source AS
           WHERE (sr.article_id = l.article_id)) m ON (true))
   WHERE ((l.closed_at IS NULL) AND (l.last_seen > (now() - '14 days'::interval)));
 
---
--- Historical daily fact source contract and its canonical compatibility view.
---
--- Name: daily_listing_facts_source_legacy; Type: VIEW; Schema: reporting; Owner: -
---
+-- Daily facts with historical state, price eligibility, and asking-rate quality.
 
-CREATE VIEW reporting.daily_listing_facts_source_legacy AS
+CREATE VIEW reporting.daily_listing_facts_source AS
  WITH evidence AS (
          SELECT d.day,
             d.article_id,
@@ -1829,7 +1742,7 @@ CREATE VIEW reporting.daily_listing_facts_source_legacy AS
                FROM deal_boundary b
              OFFSET 0
            ) decision
-        )
+        ), facts AS (
  SELECT day,
     article_id,
     title,
@@ -1933,61 +1846,8 @@ CREATE VIEW reporting.daily_listing_facts_source_legacy AS
             WHEN (is_rent IS FALSE) THEN 'KM/m²'::text
             ELSE NULL::text
         END AS asking_rate_unit
-   FROM quality q;
-
-
---
--- Name: daily_listing_facts_source_canonical; Type: VIEW; Schema: reporting; Owner: -
---
-
-CREATE VIEW reporting.daily_listing_facts_source_canonical AS
- SELECT day,
-    article_id,
-    category,
-    category_memberships,
-    is_rent,
-    deal,
-    rooms,
-    sqm,
-    location,
-    neighborhood,
-    price,
-    price_state,
-    ppm2,
-    state_effective_at,
-    price_effective_at,
-    membership_inferred,
-    attributes_inferred,
-    stale_observation,
-    provisional_day,
-    filter_attributes,
-    property_type,
-    room_bucket,
-    currency,
-    historical_attributes,
-    historical_seller_type,
-    historical_condition,
-    historical_furnished,
-    historical_heating,
-    historical_parking,
-    historical_garage,
-    historical_elevator,
-    historical_floor_num,
-    price_quality_reason,
-    rate_quality_reason,
-    price_eligible,
-    rate_eligible,
-    asking_price,
-    asking_rate,
-    asking_price_unit,
-    asking_rate_unit
-   FROM reporting.daily_listing_facts_source_legacy;
-
-
--- Name: daily_listing_facts_source; Type: VIEW; Schema: reporting; Owner: -
---
-
-CREATE VIEW reporting.daily_listing_facts_source AS
+   FROM quality q
+ )
  SELECT day,
     article_id,
     price,
@@ -2025,11 +1885,7 @@ CREATE VIEW reporting.daily_listing_facts_source AS
     attributes_inferred,
     stale_observation,
     provisional_day
-   FROM reporting.daily_listing_facts_source_canonical s;
-
---
--- Name: daily_market_source; Type: VIEW; Schema: reporting; Owner: -
---
+   FROM facts s;
 
 CREATE VIEW reporting.daily_market_source AS
  SELECT day,
@@ -2059,10 +1915,6 @@ CREATE VIEW reporting.daily_market_source AS
     membership_inferred,
     attributes_inferred
    FROM public.listing_daily_state d;
-
---
--- Name: exit_cycles_source; Type: VIEW; Schema: reporting; Owner: -
---
 
 CREATE VIEW reporting.exit_cycles_source AS
  WITH closed AS (
@@ -2167,10 +2019,6 @@ CREATE VIEW reporting.exit_cycles_source AS
     (cycle_no > 1) AS reopened_cycle
    FROM price_at_close;
 
---
--- Name: freshness_source; Type: VIEW; Schema: reporting; Owner: -
---
-
 CREATE VIEW reporting.freshness_source AS
  SELECT COALESCE(NULLIF(ss.category, ''::text), '(unclassified)'::text) AS category,
     (count(*))::integer AS configured_searches,
@@ -2183,10 +2031,6 @@ CREATE VIEW reporting.freshness_source AS
            FROM public.scrape_runs r
           WHERE ((r.search_key = ss.search_key) AND (r.status = 'ok'::text) AND (r.is_complete = true) AND (r.finished_at IS NOT NULL))) success ON (true))
   GROUP BY COALESCE(NULLIF(ss.category, ''::text), '(unclassified)'::text);
-
---
--- Name: lifecycle_cycles_source; Type: VIEW; Schema: reporting; Owner: -
---
 
 CREATE VIEW reporting.lifecycle_cycles_source AS
  WITH cycle_states AS (
@@ -2643,10 +2487,6 @@ CREATE VIEW reporting.lifecycle_cycles_source AS
         END AS final_asking_rate_unit
    FROM quality q;
 
---
--- Name: lifecycle_movements_from_olap_cycles; Type: VIEW; Schema: reporting; Owner: -
---
-
 CREATE VIEW reporting.lifecycle_movements_from_olap_cycles AS
  WITH movement_rows AS (
          SELECT
@@ -2779,10 +2619,6 @@ CREATE VIEW reporting.lifecycle_movements_from_olap_cycles AS
             ELSE NULL::smallint
         END AS historical_floor_num
    FROM movement_rows m;
-
---
--- Name: lifecycle_movements_source; Type: VIEW; Schema: reporting; Owner: -
---
 
 CREATE VIEW reporting.lifecycle_movements_source AS
  WITH cycles AS MATERIALIZED (
@@ -2962,10 +2798,6 @@ CREATE VIEW reporting.lifecycle_movements_source AS
             ELSE NULL::smallint
         END AS historical_floor_num
    FROM movement_rows;
-
---
--- Name: price_reductions_source; Type: VIEW; Schema: reporting; Owner: -
---
 
 CREATE VIEW reporting.price_reductions_source AS
  SELECT pc.article_id,

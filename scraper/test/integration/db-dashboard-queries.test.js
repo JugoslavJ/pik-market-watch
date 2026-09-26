@@ -315,7 +315,7 @@ needsDb(
 );
 
 needsDb(
-  "exits closed helper matches legacy filters and time-boundary semantics",
+  "exits closed helper matches reference filters and time-boundary semantics",
   async () => {
     await reset(db.pool);
     await db.pool.query(`
@@ -422,7 +422,7 @@ needsDb(
         selection.deals,
         selection.neighborhoods,
       ];
-      const legacy = await db.pool.query(
+      const reference = await db.pool.query(
         `SELECT l.article_id
            FROM reporting.listings_closed_filtered($4::text[], $5::numeric,
              $6::numeric, $9::text[]) l
@@ -444,10 +444,10 @@ needsDb(
           ORDER BY l.article_id`,
         args,
       );
-      const legacyIds = legacy.rows.map((row) => Number(row.article_id));
+      const referenceIds = reference.rows.map((row) => Number(row.article_id));
       const optimizedIds = optimized.rows.map((row) => Number(row.article_id));
-      assert.deepEqual(legacyIds, selection.expected, selection.name);
-      assert.deepEqual(optimizedIds, legacyIds, selection.name);
+      assert.deepEqual(referenceIds, selection.expected, selection.name);
+      assert.deepEqual(optimizedIds, referenceIds, selection.name);
     }
 
     const exits = dashboards.find(
@@ -487,7 +487,7 @@ needsDb(
           AND CASE WHEN l.is_rent THEN 'rent' ELSE 'sell' END = ANY
             (ARRAY['sell','rent']::text[])
       ),
-      legacy AS (
+      reference AS (
         SELECT count(*) AS closed_30d,
                percentile_cont(0.5) WITHIN GROUP (ORDER BY closing_ppm2)
                  FILTER (WHERE closing_ppm2 > 0) AS median_exit_ppm2,
@@ -498,9 +498,12 @@ needsDb(
                  AS median_days_on_market
         FROM closed
       )
-      SELECT to_jsonb(optimized) AS optimized, to_jsonb(legacy) AS legacy
-      FROM optimized CROSS JOIN legacy`);
-    assert.deepEqual(comparison.rows[0].optimized, comparison.rows[0].legacy);
+      SELECT to_jsonb(optimized) AS optimized, to_jsonb(reference) AS reference
+      FROM optimized CROSS JOIN reference`);
+    assert.deepEqual(
+      comparison.rows[0].optimized,
+      comparison.rows[0].reference,
+    );
 
     const sharedBreakdowns = await db.pool.query(
       interpolate(
@@ -572,7 +575,7 @@ needsDb(
     } finally {
       client.release();
     }
-    const legacy = await reporting.query(`
+    const reference = await reporting.query(`
       SELECT day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time,
              p25 AS "p25 KM/m2", median AS "median KM/m2", p75 AS "p75 KM/m2",
              inventory_count AS inventory, priced_count AS "priced sample",
@@ -604,7 +607,7 @@ needsDb(
         Number(row.stale),
         row.provisional,
       ]),
-      legacy.rows.map((row) => [
+      reference.rows.map((row) => [
         row.time.toISOString(),
         Number(row["p25 KM/m2"]),
         Number(row["median KM/m2"]),
@@ -778,7 +781,7 @@ needsDb(
 );
 
 needsDb(
-  "overview Stage 4 query sources retain output contracts and consolidate requests",
+  "overview consolidated query sources retain output contracts and consolidate requests",
   async () => {
     const overview = dashboards.find(
       (x) => x.name === "olx-overview.json",
@@ -840,7 +843,7 @@ needsDb(
     await reset(db.pool);
     await db.pool.query(`
       INSERT INTO saved_searches(search_key, name, url, category)
-      VALUES ('stage4', 'stage4', 'https://olx.ba/pretraga', 'apartments');
+      VALUES ('overview', 'overview', 'https://olx.ba/pretraga', 'apartments');
       INSERT INTO listings(article_id, url, title, sqm, rooms, price, ppm2,
                            is_rent, first_seen, last_seen, location, latitude,
                            longitude, condition, floor_num, floors_total, seller_type)
@@ -852,7 +855,7 @@ needsDb(
         (9403, 'https://olx.ba/artikal/9403', 'rent one', 40, '1', 500, NULL,
          true, now() - interval '1 day', now(), 'Old Town', NULL, NULL, NULL, NULL, NULL, NULL);
       INSERT INTO search_results(search_key, article_id) VALUES
-        ('stage4', 9401), ('stage4', 9402), ('stage4', 9403);
+        ('overview', 9401), ('overview', 9402), ('overview', 9403);
       SELECT * FROM reporting.refresh_dashboard_olap();
     `);
     const current = await reporting.query(`
@@ -1079,13 +1082,13 @@ needsDb(
 );
 
 needsDb(
-  "overview current-market refactors match legacy results for the Stage 7 filter matrix",
+  "overview current-market refactors match reference results for the selected filter matrix",
   async () => {
     await reset(db.pool);
     await db.pool.query(`
       INSERT INTO saved_searches(search_key, name, url, category) VALUES
-        ('stage7-apt', 'apartments', 'https://olx.ba/pretraga', 'apartments'),
-        ('stage7-house', 'houses', 'https://olx.ba/pretraga', 'houses');
+        ('market-apt', 'apartments', 'https://olx.ba/pretraga', 'apartments'),
+        ('market-house', 'houses', 'https://olx.ba/pretraga', 'houses');
       INSERT INTO listings(article_id, url, title, sqm, rooms, price, ppm2,
                            is_rent, first_seen, last_seen, location, latitude,
                            longitude, condition, floor_num, floors_total, seller_type)
@@ -1103,8 +1106,8 @@ needsDb(
         (9706, 'https://olx.ba/artikal/9706', 'unknown dimensions', NULL, NULL, 70000, NULL,
          false, now()-interval '20 days', now(), '', 43.81, 18.31, NULL, NULL, NULL, NULL);
       INSERT INTO search_results(search_key, article_id) VALUES
-        ('stage7-apt', 9701), ('stage7-apt', 9702), ('stage7-apt', 9703),
-        ('stage7-apt', 9705), ('stage7-apt', 9706), ('stage7-house', 9704);
+        ('market-apt', 9701), ('market-apt', 9702), ('market-apt', 9703),
+        ('market-apt', 9705), ('market-apt', 9706), ('market-house', 9704);
       SELECT * FROM reporting.refresh_dashboard_olap();
       INSERT INTO olap.listing_price_changes(
         article_id, effective_at, source, price_state, deal, prior_price, delta,

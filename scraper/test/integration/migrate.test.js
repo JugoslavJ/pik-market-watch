@@ -71,48 +71,6 @@ needsDb(
 );
 
 needsDb(
-  "canonical schema: daily projection and refresh upgrades advance the ledger",
-  async () => {
-    const pool = new Pool({
-      connectionString: await recreateDb("mig_daily_refresh_upgrade"),
-    });
-    try {
-      await applyMigrations(pool, FULL_DIR, log);
-      await pool.query(
-        `UPDATE schema_migrations SET checksum = $1
-        WHERE filename = '03-functions.sql'`,
-        ["73c3ef9583a3548f1fc0d2e0e052142c968491b90d46ade8d0c725603ea59aee"],
-      );
-      await pool.query(
-        `UPDATE schema_migrations SET checksum = $1
-        WHERE filename = '05-reporting-functions.sql'`,
-        ["c22bae0d732792a90b3ef1582e2aea07a3ce1ed4249015bcea2b9b8a7bda270f"],
-      );
-      await applyMigrations(pool, FULL_DIR, log);
-      const result = await pool.query(
-        `SELECT filename, checksum FROM schema_migrations
-        WHERE filename IN ('03-functions.sql', '05-reporting-functions.sql')
-        ORDER BY filename`,
-      );
-      assert.deepEqual(
-        result.rows,
-        ["03-functions.sql", "05-reporting-functions.sql"].map((filename) => ({
-          filename,
-          checksum: applyMigrations.migrationChecksum(
-            fs.readFileSync(path.join(FULL_DIR, filename), "utf8"),
-          ),
-        })),
-      );
-      await applyMigrations(pool, FULL_DIR, () =>
-        assert.fail("upgraded daily functions must be a no-op"),
-      );
-    } finally {
-      await pool.end();
-    }
-  },
-);
-
-needsDb(
   "canonical schema: Docker initialization is adopted without replay",
   async () => {
     const pool = new Pool({
@@ -131,26 +89,21 @@ needsDb(
 );
 
 needsDb(
-  "canonical schema: retired ledger rows are preserved during adoption",
+  "canonical schema: unrelated ledger rows are preserved during adoption",
   async () => {
     const pool = new Pool({
-      connectionString: await recreateDb("mig_retired_ledger"),
+      connectionString: await recreateDb("mig_extra_ledger"),
     });
     try {
       await applyMigrations(pool, FULL_DIR, log);
       await pool.query("DELETE FROM schema_migrations");
       await pool.query(
-        "INSERT INTO schema_migrations (filename) VALUES ('legacy-schema.sql'), ('13-neighborhood-neighbor-cache.sql'), ('20260925-public-daily-market-view.sql')",
+        "INSERT INTO schema_migrations (filename) VALUES ('external-schema.sql')",
       );
       await applyMigrations(pool, FULL_DIR, log);
       assert.deepEqual(
         await recorded(pool),
-        [
-          ...currentMigrationFiles,
-          "legacy-schema.sql",
-          "13-neighborhood-neighbor-cache.sql",
-          "20260925-public-daily-market-view.sql",
-        ].sort(),
+        [...currentMigrationFiles, "external-schema.sql"].sort(),
       );
     } finally {
       await pool.end();

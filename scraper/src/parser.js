@@ -362,8 +362,7 @@ function parseListingDetail(json, fallbackId) {
     favorites: smallInt(json.favorites, 0, 1000000),
     characteristics: {},
     apiStatus: typeof json.status === "string" ? json.status : null,
-    // Keep the source response separately; apiPriceHistory is retained as a
-    // compatibility field but is now the normalized, valid-only timeline.
+    // Preserve source evidence alongside the normalized, valid-only timeline.
     sourcePriceHistory: Array.isArray(json.price_history)
       ? json.price_history.map((entry) => ({ ...entry }))
       : null,

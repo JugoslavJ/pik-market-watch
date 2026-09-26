@@ -113,9 +113,7 @@ function normalizeEvent(event, { now = new Date() } = {}) {
     price = null;
     if (!current) return reject("historical_null_boundary");
   } else {
-    // Search events carry both dealType and the legacy isRent flag. Prefer
-    // the normalized dimension, while accepting the boolean for older event
-    // producers during the contract migration.
+    // An explicit deal dimension takes precedence over the boolean rent flag.
     const quality = normalizePrice(
       price,
       dealTypeOf(event.dealType ?? (event.isRent === true ? "rent" : null)),

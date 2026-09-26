@@ -1,8 +1,6 @@
 "use strict";
 
-// Shared payload/price policy.  Keep this module independent of the database so
-// search cards, detail responses, historical imports and legacy conversion all
-// make the same decisions.
+// Shared price and payload policy for search, detail, and historical evidence.
 
 const PRICE_STATES = Object.freeze({
   VALID: "valid",
@@ -334,11 +332,6 @@ function parseJsonArray(value) {
   }
 }
 
-// Named legacy entrypoint makes the policy explicit for package 05 without a
-// second implementation.  Stored rows use {price, date}; API rows use
-// {price, created_at}; both are handled by normalizePriceHistory().
-const normalizeLegacyPriceHistory = normalizePriceHistory;
-
 module.exports = {
   PRICE_STATES,
   dateFromUnixSeconds,
@@ -348,7 +341,6 @@ module.exports = {
   normalizeDealType,
   normalizeHistoryWithRejections,
   normalizeId,
-  normalizeLegacyPriceHistory,
   normalizePrice,
   normalizePriceHistory,
   priceCurrencyOf,

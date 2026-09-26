@@ -14,34 +14,34 @@ docker compose up -d --build
 
 `.env.example` intentionally leaves `POSTGRES_PASSWORD`, `POSTGRES_MIGRATOR_PASSWORD`, `POSTGRES_APP_PASSWORD`, `POSTGRES_REPORTING_PASSWORD`, `POSTGRES_BACKUP_PASSWORD`, `GRAFANA_ADMIN_PASSWORD`, and `GRAFANA_SECRET_KEY` blank. Set all seven before starting or deploying; the deployment preflight rejects blank and placeholder `change-me*` values. Database passwords are embedded in connection settings, so use URL-safe values such as `openssl rand -hex 24`.
 
-| Setting                                                          |                                    Default | Consumer                                                                                                                               |
-| ---------------------------------------------------------------- | -----------------------------------------: | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`              |                     `olx`, required, `olx` | PostgreSQL bootstrap database.                                                                                                         |
-| `POSTGRES_MIGRATOR_USER`, `POSTGRES_MIGRATOR_PASSWORD`           |                    `olx_migrator`, required | Migration and restore owner role; not used by normal runtime services.                                                                 |
-| `POSTGRES_APP_USER`, `POSTGRES_APP_PASSWORD`                     |                        `olx_app`, required | Scraper and maintenance runtime writer; owns no database objects.                                                                      |
-| `POSTGRES_REPORTING_USER`, `POSTGRES_REPORTING_PASSWORD`          |                 `olx_reporting`, required | Grafana role with SELECT on reporting views and EXECUTE on stable reporting functions only.                                           |
-| `POSTGRES_BACKUP_USER`, `POSTGRES_BACKUP_PASSWORD`                |                    `olx_backup`, required | Dedicated broad-read role used only by `pg_dump`; it is not a Grafana credential.                                                      |
-| `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD`                   |                          `admin`, required | Grafana login.                                                                                                                         |
-| `GRAFANA_SECRET_KEY`                                             |                                   required | Grafana encryption for stored datasource secrets.                                                                                      |
-| `GRAFANA_DOMAIN`                                                 |                                `localhost` | Grafana's externally visible hostname; production must use the Cloudflare hostname.                                                    |
-| `GRAFANA_ROOT_URL`                                               |                   `http://localhost:3000/` | Grafana's externally visible URL; production must be HTTPS and end in `/`.                                                             |
-| `GRAFANA_ENFORCE_DOMAIN`                                         |                                    `false` | Reject unexpected Host headers; set `true` in production.                                                                              |
-| `GRAFANA_COOKIE_SECURE`                                          |                                    `false` | Secure Grafana auth cookies; set `true` in production HTTPS.                                                                           |
-| `GRAFANA_CARTO_API_KEY`                                          |                                      unset | CARTO basemap key for Grafana geomaps; create one at [carto.com/basemaps/apikey](https://carto.com/basemaps/apikey).                   |
-| `GRAFANA_CARTO_VECTOR_STYLE`                                     |                              `dark-matter` | Authenticated CARTO MapLibre vector style: `dark-matter`, `positron`, or `voyager`; recreate Grafana after changing it.                |
-| `GRAFANA_BIND`                                                   |                                `127.0.0.1` | Host interface for Grafana port 3000. Keep this at `127.0.0.1`; cloudflared is the public entry point.                                 |
-| `HEALTH_BIND`                                                    | `127.0.0.1` bare-metal / `0.0.0.0` Compose | Health listener bind address. Compose needs all-interface binding inside the container; the published host port remains loopback-only. |
-| `SCRAPE_INTERVAL_MINUTES`                                        |                                      `720` | Scheduled scraper cadence when the `scrape` profile is enabled.                                                                        |
-| `DETAIL_REFRESH_DAYS`                                            |                                        `7` | Age at which successful detail evidence becomes eligible for refresh.                                                                  |
-| `DETAIL_JOB_LEASE_MINUTES`                                       |                                       `30` | Database lease duration for an in-flight durable detail job (maximum 24 hours).                                                        |
-| `RAW_RESPONSE_RETENTION_COUNT`                                  |                                        `3` | Newest raw search/detail responses retained per request kind and URL. Maintenance removes older rows.                                  |
-| `ANALYTICS_REBUILD_MAX_DAYS`                                     |                                       `31` | Maximum Banja Luka days rebuilt per maintenance transaction.                                                                           |
-| `RUN_ANALYTICS_MAINTENANCE`                                     | `true` bare-metal / `false` scrape Compose | Whether a process publishes the expensive current-market OLAP snapshot after rebuilding daily inventory. The maintenance profile sets this to `true`. |
-| `ABANDONED_RUN_AFTER_MINUTES`                                    |                                      `180` | Age after which startup marks an unfinished `running` scrape as abandoned.                                                             |
-| `RATE_LIMIT_COOLDOWN_MS`                                         |                                    `65000` | Fallback pause when the upstream rate-limit window is low and no reset is advertised.                                                  |
-| `BACKUP_RETENTION_DAYS`                                          |                                       `14` | Days of database and Grafana archives retained by `db-backup`; `0` disables pruning.                                                   |
-| `ALERT_EMAIL_TO`                                                 |                                      unset | Recipient for provisioned alerting. Mail also requires enabling and configuring the `GF_SMTP_*` entries in `docker-compose.yml`.       |
-| `SCRAPE_STALE_AFTER_HOURS`                                       |                                       `26` | Per-search freshness alert and public freshness label; choose a value that covers the actual scrape cadence.                           |
+| Setting                                                  |                                    Default | Consumer                                                                                                                                              |
+| -------------------------------------------------------- | -----------------------------------------: | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`      |                     `olx`, required, `olx` | PostgreSQL bootstrap database.                                                                                                                        |
+| `POSTGRES_MIGRATOR_USER`, `POSTGRES_MIGRATOR_PASSWORD`   |                   `olx_migrator`, required | Migration and restore owner role; not used by normal runtime services.                                                                                |
+| `POSTGRES_APP_USER`, `POSTGRES_APP_PASSWORD`             |                        `olx_app`, required | Scraper and maintenance runtime writer; owns no database objects.                                                                                     |
+| `POSTGRES_REPORTING_USER`, `POSTGRES_REPORTING_PASSWORD` |                  `olx_reporting`, required | Grafana role with SELECT on reporting views and EXECUTE on stable reporting functions only.                                                           |
+| `POSTGRES_BACKUP_USER`, `POSTGRES_BACKUP_PASSWORD`       |                     `olx_backup`, required | Dedicated broad-read role used only by `pg_dump`; it is not a Grafana credential.                                                                     |
+| `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD`           |                          `admin`, required | Grafana login.                                                                                                                                        |
+| `GRAFANA_SECRET_KEY`                                     |                                   required | Grafana encryption for stored datasource secrets.                                                                                                     |
+| `GRAFANA_DOMAIN`                                         |                                `localhost` | Grafana's externally visible hostname; production must use the Cloudflare hostname.                                                                   |
+| `GRAFANA_ROOT_URL`                                       |                   `http://localhost:3000/` | Grafana's externally visible URL; production must be HTTPS and end in `/`.                                                                            |
+| `GRAFANA_ENFORCE_DOMAIN`                                 |                                    `false` | Reject unexpected Host headers; set `true` in production.                                                                                             |
+| `GRAFANA_COOKIE_SECURE`                                  |                                    `false` | Secure Grafana auth cookies; set `true` in production HTTPS.                                                                                          |
+| `GRAFANA_CARTO_API_KEY`                                  |                                      unset | CARTO basemap key for Grafana geomaps; create one at [carto.com/basemaps/apikey](https://carto.com/basemaps/apikey).                                  |
+| `GRAFANA_CARTO_VECTOR_STYLE`                             |                              `dark-matter` | Authenticated CARTO MapLibre vector style: `dark-matter`, `positron`, or `voyager`; recreate Grafana after changing it.                               |
+| `GRAFANA_BIND`                                           |                                `127.0.0.1` | Host interface for Grafana port 3000. Keep this at `127.0.0.1`; cloudflared is the public entry point.                                                |
+| `HEALTH_BIND`                                            | `127.0.0.1` bare-metal / `0.0.0.0` Compose | Health listener bind address. Compose needs all-interface binding inside the container; the published host port remains loopback-only.                |
+| `SCRAPE_INTERVAL_MINUTES`                                |                                      `720` | Scheduled scraper cadence when the `scrape` profile is enabled.                                                                                       |
+| `DETAIL_REFRESH_DAYS`                                    |                                        `7` | Age at which successful detail evidence becomes eligible for refresh.                                                                                 |
+| `DETAIL_JOB_LEASE_MINUTES`                               |                                       `30` | Database lease duration for an in-flight durable detail job (maximum 24 hours).                                                                       |
+| `RAW_RESPONSE_RETENTION_COUNT`                           |                                        `3` | Newest raw search/detail responses retained per request kind and URL. Maintenance removes older rows.                                                 |
+| `ANALYTICS_REBUILD_MAX_DAYS`                             |                                       `31` | Maximum Banja Luka days rebuilt per maintenance transaction.                                                                                          |
+| `RUN_ANALYTICS_MAINTENANCE`                              | `true` bare-metal / `false` scrape Compose | Whether a process publishes the expensive current-market OLAP snapshot after rebuilding daily inventory. The maintenance profile sets this to `true`. |
+| `ABANDONED_RUN_AFTER_MINUTES`                            |                                      `180` | Age after which startup marks an unfinished `running` scrape as abandoned.                                                                            |
+| `RATE_LIMIT_COOLDOWN_MS`                                 |                                    `65000` | Fallback pause when the upstream rate-limit window is low and no reset is advertised.                                                                 |
+| `BACKUP_RETENTION_DAYS`                                  |                                       `14` | Days of database and Grafana archives retained by `db-backup`; `0` disables pruning.                                                                  |
+| `ALERT_EMAIL_TO`                                         |                                      unset | Recipient for provisioned alerting. Mail also requires enabling and configuring the `GF_SMTP_*` entries in `docker-compose.yml`.                      |
+| `SCRAPE_STALE_AFTER_HOURS`                               |                                       `26` | Per-search freshness alert and public freshness label; choose a value that covers the actual scrape cadence.                                          |
 
 For an existing volume, add the four role credentials to `.env`, recreate the
 database service, and apply the role migration once:
@@ -359,9 +359,8 @@ tunnel path.
   `docker compose logs grafana`. From the OCI host, check
   `curl -f http://127.0.0.1:3000/api/health`; then inspect
   `journalctl -u cloudflared -n 100 --no-pager`. Datasource failures usually
-  indicate missing reporting credentials or grants. An error naming
-  `olx_reader` after sync means Grafana still uses the retired datasource login;
-  the roles script removes that role and replaces it with `olx_reporting`.
+  indicate missing reporting credentials or grants. Check that Grafana uses
+  the configured reporting role, `olx_reporting` by default.
   With the current Compose and provisioning files deployed, run these commands
   in the instance's repository directory to align both containers with `.env`
   and reload the datasource (a plain `restart` does not refresh environment):
@@ -375,15 +374,14 @@ tunnel path.
 
   The datasource `olx-postgres` should use `POSTGRES_REPORTING_USER` (default
   `olx_reporting`) and `POSTGRES_REPORTING_PASSWORD`. Set the reporting password
-  in the instance's `.env` if missing; do not recreate the retired `olx_reader`.
+  in the instance's `.env` if missing.
   Use a URL-safe password such as `openssl rand -hex 24`; never print it in
   logs or commit it.
 
 - **Dashboard filters fail and panels report `cannot determine type of empty array`:**
-  older dashboard queries accessed private tables/functions after the Grafana
-  login moved to `olx_reporting`. Failed category/room queries then produced
-  untyped empty arrays in panels. Deploy the current canonical init SQL and
-  updated dashboards together; dashboard arrays use explicit `text[]` casts.
+  check that category and room variables can query the reporting schema.
+  Deploy the current schema and dashboards together; dashboard arrays require
+  explicit `text[]` casts even when no filter options are available.
   From the instance checkout containing these changes, run:
 
   ```bash

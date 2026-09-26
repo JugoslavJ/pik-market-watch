@@ -21,32 +21,15 @@ module.exports = function installRawResponseMethods(Db) {
       diagnostic = null,
     }) {
       const isDiagnostic = diagnostic != null;
-      const hasCanonicalBody =
-        !isDiagnostic &&
-        (requestKind === "detail"
-          ? payload != null || sourcePayload != null
-          : sourcePayload != null);
-      // Search adapters are derived from the original response and therefore
-      // are not written in v2.  Keep detail bodies in `payload` so retained
-      // callers that already select that column remain compatible; the format
-      // discriminator makes the column choice explicit for new readers.
-      const archiveFormat = isDiagnostic
-        ? "diagnostic-v2"
-        : hasCanonicalBody
-          ? "canonical-v2"
-          : "legacy-v1";
-      const storedPayload = isDiagnostic
-        ? null
-        : requestKind === "detail"
-          ? (payload ?? sourcePayload ?? null)
-          : sourcePayload == null
-            ? (payload ?? null)
-            : null;
-      const storedSourcePayload = isDiagnostic
-        ? null
-        : requestKind === "detail"
-          ? null
-          : (sourcePayload ?? null);
+      const archiveFormat = isDiagnostic ? "diagnostic-v2" : "canonical-v2";
+      const storedPayload =
+        !isDiagnostic && requestKind === "detail"
+          ? (sourcePayload ?? payload ?? null)
+          : null;
+      const storedSourcePayload =
+        !isDiagnostic && requestKind === "search"
+          ? (sourcePayload ?? payload ?? null)
+          : null;
       await this.pool.query(
         `INSERT INTO raw_api_responses
            (run_id, article_id, request_kind, request_url, fetched_at, expires_at,
@@ -114,20 +97,22 @@ module.exports = function installRawResponseMethods(Db) {
                 'https://olx.ba/api/listings/' || article_id::text,
                 fetched_at,
                 'infinity'::timestamptz,
-                 'detail-v1', COALESCE(payload, source_payload), NULL,
+                 'detail-v1', payload, NULL,
                  request_metadata, response_metadata, build_version, diagnostic,
                  CASE WHEN diagnostic IS NULL THEN 'canonical-v2' ELSE 'diagnostic-v2' END
            FROM jsonb_to_recordset($1::jsonb) AS r(
              article_id bigint, fetched_at timestamptz, payload jsonb,
-             source_payload jsonb, request_metadata jsonb, response_metadata jsonb,
+             request_metadata jsonb, response_metadata jsonb,
              build_version text, diagnostic jsonb)`,
         [
           JSON.stringify(
             rows.map((row) => ({
               article_id: row.articleId,
               fetched_at: row.fetchedAt || new Date(),
-              payload: row.payload ?? row.sourcePayload ?? null,
-              source_payload: null,
+              payload:
+                row.diagnostic != null
+                  ? null
+                  : (row.sourcePayload ?? row.payload ?? null),
               request_metadata: row.requestMetadata ?? {},
               response_metadata: row.responseMetadata ?? {},
               build_version: String(row.buildVersion || "unknown").slice(

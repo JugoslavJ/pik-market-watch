@@ -43,8 +43,8 @@ async function scrapeSearch(
   if (!api.hasApiFilter(base)) {
     throw new Error(
       `"${search.name}": URL carries no API-recognized filter (${base.search || "(empty query)"}). ` +
-        `Legacy kat= style params are silently IGNORED by olx.ba's API and would return the whole site. ` +
-        `Re-create the search on olx.ba and copy the new-style category_id/cities URL.`,
+        `Unrecognized filter parameters are ignored by olx.ba's API and would return the whole site. ` +
+        `Re-create the search on olx.ba and copy the category_id/cities URL.`,
     );
   }
 

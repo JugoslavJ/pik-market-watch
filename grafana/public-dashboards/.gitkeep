@@ -1,2 +1,0 @@
-# Intentionally empty. Grafana's deletion-enabled retirement provider uses
-# this directory to remove the formerly provisioned public dashboards.

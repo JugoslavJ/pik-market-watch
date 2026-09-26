@@ -1,12 +1,8 @@
 -- Canonical functions baseline.
---
 -- Some SQL-language helpers refer to reporting views created later in the
 -- dependency order. PostgreSQL's dump format uses the same setting while
 -- restoring a complete schema.
 SET check_function_bodies = false;
-
--- Name: analytics_daily_rebuild_window(date); Type: FUNCTION; Schema: public; Owner: -
---
 
 CREATE FUNCTION public.analytics_daily_rebuild_window(p_as_of_day date DEFAULT NULL::date) RETURNS TABLE(from_day date, through_day date, reason text)
     LANGUAGE plpgsql STABLE
@@ -44,19 +40,11 @@ BEGIN
          ELSE 'provisional_today' END;
 END $$;
 
---
--- Name: analytics_sarajevo_day_start(date); Type: FUNCTION; Schema: public; Owner: -
---
-
 CREATE FUNCTION public.analytics_sarajevo_day_start(p_day date) RETURNS timestamp with time zone
     LANGUAGE sql IMMUTABLE PARALLEL SAFE
     AS $$
   SELECT p_day::timestamp AT TIME ZONE 'Europe/Sarajevo'
 $$;
-
---
--- Name: analytics_state_neighborhood(jsonb); Type: FUNCTION; Schema: public; Owner: -
---
 
 CREATE FUNCTION public.analytics_state_neighborhood(p_attributes jsonb) RETURNS text
     LANGUAGE plpgsql STABLE PARALLEL SAFE
@@ -82,23 +70,6 @@ BEGIN
   RETURN COALESCE(neighborhood_of(v_lat, v_lon), '(unmapped)');
 END
 $$;
-
---
--- Name: apply_history_retention(integer); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.apply_history_retention(p_batch_size integer DEFAULT 5000) RETURNS bigint
-    LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'pg_catalog', 'public'
-    AS $$
-BEGIN
-  RETURN public.apply_operational_cleanup(p_batch_size);
-END
-$$;
-
---
--- Name: apply_operational_cleanup(integer); Type: FUNCTION; Schema: public; Owner: -
---
 
 CREATE FUNCTION public.apply_operational_cleanup(p_batch_size integer DEFAULT 5000) RETURNS bigint
     LANGUAGE plpgsql SECURITY DEFINER
@@ -127,10 +98,6 @@ BEGIN
 END
 $_$;
 
---
--- Name: attach_daily_version_refs(); Type: FUNCTION; Schema: public; Owner: -
---
-
 CREATE FUNCTION public.attach_daily_version_refs() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'pg_catalog', 'public'
@@ -145,10 +112,6 @@ BEGIN
   RETURN NEW;
 END
 $$;
-
---
--- Name: attach_history_version_refs(); Type: FUNCTION; Schema: public; Owner: -
---
 
 CREATE FUNCTION public.attach_history_version_refs() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
@@ -165,10 +128,6 @@ BEGIN
 END
 $$;
 
---
--- Name: capture_listing_detail_version(); Type: FUNCTION; Schema: public; Owner: -
---
-
 CREATE FUNCTION public.capture_listing_detail_version() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'pg_catalog', 'public'
@@ -180,10 +139,6 @@ BEGIN
   RETURN NEW;
 END
 $$;
-
---
--- Name: dashboard_numeric(text); Type: FUNCTION; Schema: public; Owner: -
---
 
 CREATE FUNCTION public.dashboard_numeric(p_value text) RETURNS numeric
     LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE
@@ -207,10 +162,6 @@ EXCEPTION
     RETURN NULL;
 END
 $_$;
-
---
--- Name: ensure_analytics_partitions(integer); Type: FUNCTION; Schema: public; Owner: -
---
 
 CREATE FUNCTION public.ensure_analytics_partitions(p_months_ahead integer DEFAULT NULL::integer) RETURNS integer
     LANGUAGE plpgsql SECURITY DEFINER
@@ -333,10 +284,6 @@ BEGIN
 END
 $$;
 
---
--- Name: ensure_listing_detail_version(bigint, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
---
-
 CREATE FUNCTION public.ensure_listing_detail_version(p_article_id bigint, p_valid_from timestamp with time zone DEFAULT now()) RETURNS bigint
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'pg_catalog', 'public'
@@ -405,10 +352,6 @@ BEGIN
 END
 $$;
 
---
--- Name: get_or_create_listing_state_version(text, text[], boolean, numeric, text, jsonb, boolean, boolean); Type: FUNCTION; Schema: public; Owner: -
---
-
 CREATE FUNCTION public.get_or_create_listing_state_version(p_category text, p_category_membership text[], p_is_rent boolean, p_sqm numeric, p_rooms text, p_filter_attributes jsonb, p_membership_inferred boolean, p_attributes_inferred boolean) RETURNS bigint
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'pg_catalog', 'public'
@@ -444,14 +387,9 @@ BEGIN
 END
 $$;
 
-
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
-
---
--- Name: listing_detail_hash(public.listings); Type: FUNCTION; Schema: public; Owner: -
---
 
 CREATE FUNCTION public.listing_detail_hash(p_listing public.listings) RETURNS text
     LANGUAGE sql IMMUTABLE
@@ -488,10 +426,6 @@ CREATE FUNCTION public.listing_detail_hash(p_listing public.listings) RETURNS te
   )::text)
 $$;
 
---
--- Name: listing_state_version_hash(text, text[], boolean, numeric, text, jsonb, boolean, boolean); Type: FUNCTION; Schema: public; Owner: -
---
-
 CREATE FUNCTION public.listing_state_version_hash(p_category text, p_category_membership text[], p_is_rent boolean, p_sqm numeric, p_rooms text, p_filter_attributes jsonb, p_membership_inferred boolean, p_attributes_inferred boolean) RETURNS text
     LANGUAGE sql IMMUTABLE
     AS $_$
@@ -506,10 +440,6 @@ CREATE FUNCTION public.listing_state_version_hash(p_category text, p_category_me
     'attributes_inferred', COALESCE($8, false)
   )::text)
 $_$;
-
---
--- Name: listings_closed_filtered(text[], numeric, numeric, text[]); Type: FUNCTION; Schema: public; Owner: -
---
 
 CREATE FUNCTION public.listings_closed_filtered(p_category text[], p_min_sqm numeric, p_max_sqm numeric, p_neighborhood text[]) RETURNS SETOF public.listings
     LANGUAGE sql STABLE
@@ -527,10 +457,6 @@ CREATE FUNCTION public.listings_closed_filtered(p_category text[], p_min_sqm num
           WHERE c.article_id=l.article_id AND c.category=ANY (p_category)))
 $$;
 
---
--- Name: listings_filtered(text[], numeric, numeric, text[], boolean); Type: FUNCTION; Schema: public; Owner: -
---
-
 CREATE FUNCTION public.listings_filtered(p_category text[], p_min_sqm numeric, p_max_sqm numeric, p_neighborhood text[], p_active_only boolean DEFAULT true) RETURNS SETOF public.listings
     LANGUAGE sql STABLE
     AS $$
@@ -546,10 +472,6 @@ CREATE FUNCTION public.listings_filtered(p_category text[], p_min_sqm numeric, p
         WHERE c.article_id=l.article_id AND c.category=ANY (p_category)))
 $$;
 
---
--- Name: mark_article_olap_dirty(); Type: FUNCTION; Schema: public; Owner: -
---
-
 CREATE FUNCTION public.mark_article_olap_dirty() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
@@ -562,10 +484,6 @@ BEGIN
 END
 $$;
 
---
--- Name: mark_daily_article_dirty(bigint); Type: FUNCTION; Schema: public; Owner: -
---
-
 CREATE FUNCTION public.mark_daily_article_dirty(p_article_id bigint) RETURNS void
     LANGUAGE sql SECURITY DEFINER
     SET search_path TO 'pg_catalog', 'public'
@@ -574,10 +492,6 @@ CREATE FUNCTION public.mark_daily_article_dirty(p_article_id bigint) RETURNS voi
   VALUES ($1, clock_timestamp())
   ON CONFLICT (article_id) DO UPDATE SET marked_at = EXCLUDED.marked_at;
 $_$;
-
---
--- Name: mark_daily_olap_dirty(); Type: FUNCTION; Schema: public; Owner: -
---
 
 CREATE FUNCTION public.mark_daily_olap_dirty() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
@@ -591,10 +505,6 @@ BEGIN
   RETURN NEW;
 END
 $$;
-
---
--- Name: market_daily_filtered(date, date, text[], numeric, numeric, text[], text[], text[]); Type: FUNCTION; Schema: public; Owner: -
---
 
 CREATE FUNCTION public.market_daily_filtered(p_from_day date, p_through_day date, p_category text[] DEFAULT '{}'::text[], p_min_sqm numeric DEFAULT NULL::numeric, p_max_sqm numeric DEFAULT NULL::numeric, p_rooms text[] DEFAULT '{}'::text[], p_deal text[] DEFAULT '{}'::text[], p_neighborhood text[] DEFAULT '{}'::text[]) RETURNS TABLE(day date, inventory_count bigint, priced_count bigint, p25 numeric, median numeric, p75 numeric, estimated_count bigint, stale_count bigint, provisional_day boolean)
     LANGUAGE sql STABLE
@@ -628,9 +538,6 @@ $$;
 -- Runtime publishers connect as olx_app and do not own OLAP relations. Keep
 -- ANALYZE behind a narrowly scoped definer function that accepts only
 -- registered daily-facts partitions.
---
--- Name: analyze_published_olap(text[]); Type: FUNCTION; Schema: public; Owner: -
---
 
 CREATE FUNCTION public.analyze_published_olap(
     p_daily_partitions text[] DEFAULT ARRAY[]::text[]
@@ -681,10 +588,6 @@ $$;
 -- daily fact children; it cannot accept arbitrary relation identifiers.
 REVOKE ALL ON FUNCTION public.analyze_published_olap(text[]) FROM PUBLIC;
 
---
--- Name: neighborhood_of(double precision, double precision); Type: FUNCTION; Schema: public; Owner: -
---
-
 CREATE FUNCTION public.neighborhood_of(p_lat double precision, p_lon double precision) RETURNS text
     LANGUAGE sql STABLE
     AS $$
@@ -714,10 +617,6 @@ CREATE FUNCTION public.neighborhood_of(p_lat double precision, p_lon double prec
   SELECT COALESCE((SELECT name FROM covered), (SELECT name FROM nearby))
 $$;
 
---
--- Name: normalize_listing_daily_flags(); Type: FUNCTION; Schema: public; Owner: -
---
-
 CREATE FUNCTION public.normalize_listing_daily_flags() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -738,90 +637,6 @@ BEGIN
   RETURN NEW;
 END
 $$;
-
---
--- Name: point_in_polygon(double precision, double precision, double precision[]); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.point_in_polygon(p_lat double precision, p_lon double precision, p_poly double precision[]) RETURNS boolean
-    LANGUAGE plpgsql IMMUTABLE
-    AS $$
-DECLARE
-  verts  integer := COALESCE(array_length(p_poly, 1), 0) / 2;
-  px     double precision;
-  py     double precision;
-  qx     double precision;
-  qy     double precision;
-  i      integer;
-  inside boolean := false;
-BEGIN
-  IF verts < 3 OR p_lat IS NULL OR p_lon IS NULL THEN
-    RETURN false;
-  END IF;
-  qx := p_poly[(verts - 1) * 2 + 1];
-  qy := p_poly[(verts - 1) * 2 + 2];
-  FOR i IN 1..verts LOOP
-    px := p_poly[(i - 1) * 2 + 1];
-    py := p_poly[(i - 1) * 2 + 2];
-    IF (py > p_lat) <> (qy > p_lat) THEN
-      IF p_lon < (qx - px) * (p_lat - py) / (qy - py) + px THEN
-        inside := NOT inside;
-      END IF;
-    END IF;
-    qx := px;
-    qy := py;
-  END LOOP;
-  RETURN inside;
-END;
-$$;
-
---
--- Name: polygon_distance_m(double precision, double precision, double precision[]); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.polygon_distance_m(p_lat double precision, p_lon double precision, p_poly double precision[]) RETURNS double precision
-    LANGUAGE plpgsql IMMUTABLE
-    AS $$
-DECLARE
-  verts integer := COALESCE(array_length(p_poly, 1), 0) / 2;
-  kx    double precision := 111320.0 * cos(radians(p_lat));
-  px    double precision := p_lon * kx;
-  py    double precision := p_lat * 111320.0;
-  best  double precision;
-  d     double precision;
-  x1    double precision; y1 double precision;
-  x2    double precision; y2 double precision;
-  dx    double precision; dy double precision;
-  t     double precision;
-  ex    double precision; ey double precision;
-  i     integer;
-BEGIN
-  IF verts < 3 OR p_lat IS NULL OR p_lon IS NULL THEN
-    RETURN NULL;
-  END IF;
-  FOR i IN 1..verts LOOP
-    x1 := p_poly[(i - 1) * 2 + 1] * kx;  y1 := p_poly[(i - 1) * 2 + 2] * 111320.0;
-    x2 := p_poly[i * 2 + 1] * kx;        y2 := p_poly[i * 2 + 2] * 111320.0;
-    dx := x2 - x1;  dy := y2 - y1;
-    IF dx = 0 AND dy = 0 THEN
-      t := 0;
-    ELSE
-      t := ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy);
-      t := GREATEST(0, LEAST(1, t));
-    END IF;
-    ex := x1 + t * dx - px;  ey := y1 + t * dy - py;
-    d := ex * ex + ey * ey;
-    IF best IS NULL OR d < best THEN
-      best := d;
-    END IF;
-  END LOOP;
-  RETURN CASE WHEN best IS NULL THEN NULL ELSE sqrt(best) END;
-END;
-$$;
-
---
--- Name: prevent_history_mutation(); Type: FUNCTION; Schema: public; Owner: -
---
 
 CREATE FUNCTION public.prevent_history_mutation() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
@@ -850,10 +665,6 @@ BEGIN
 END
 $$;
 
---
--- Name: rebuild_listing_daily(date, date); Type: FUNCTION; Schema: public; Owner: -
---
-
 CREATE FUNCTION public.rebuild_listing_daily(p_from_day date, p_through_day date) RETURNS TABLE(from_day date, through_day date, rows_written bigint)
     LANGUAGE plpgsql
     AS $$
@@ -871,9 +682,8 @@ BEGIN
     RAISE EXCEPTION 'invalid listing_daily rebuild range: % through %',
       p_from_day, p_through_day;
   END IF;
-  -- Match the legacy function's lock order.  Ingestion may insert evidence
-  -- while this transaction is running, but its refresh-state update waits for
-  -- this row lock and therefore observes the prefix update after commit.
+  -- Lock the rebuild before refresh state so concurrent ingestion observes
+  -- the acknowledged prefix only after this transaction commits.
   PERFORM pg_advisory_xact_lock(
     hashtextextended('pik-market-watch listing_daily rebuild', 0)
   );
@@ -885,12 +695,12 @@ BEGIN
 
   SELECT *
     INTO v_result
-    FROM rebuild_listing_daily_legacy(v_from, v_through);
+    FROM rebuild_listing_daily_range(v_from, v_through);
 
   -- Only a chunk beginning at or before the earliest dirty day can acknowledge
   -- that prefix.  A chunk wholly after the dirty interval must not erase work
-  -- that was never rebuilt.  The legacy function may already have cleared a
-  -- fully covered range; in that case this update is intentionally a no-op.
+  -- that was never rebuilt. Fully covered ranges are cleared by the range
+  -- rebuild; the conditional update below acknowledges partial prefixes.
   IF v_pending_from IS NOT NULL
      AND v_result.from_day <= v_pending_from
      AND v_result.through_day < v_pending_through THEN
@@ -907,11 +717,7 @@ BEGIN
 END
 $$;
 
---
--- Name: rebuild_listing_daily_legacy(date, date); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.rebuild_listing_daily_legacy(p_from_day date, p_through_day date) RETURNS TABLE(from_day date, through_day date, rows_written bigint)
+CREATE FUNCTION public.rebuild_listing_daily_range(p_from_day date, p_through_day date) RETURNS TABLE(from_day date, through_day date, rows_written bigint)
     LANGUAGE plpgsql
     SET jit TO 'off'
     AS $$
@@ -929,7 +735,6 @@ DECLARE
 
   v_dirty_marked_at timestamptz := clock_timestamp();
   v_full_rebuild boolean;
-
 
 BEGIN
   SELECT (v_from < v_today AND NOT EXISTS (
@@ -952,7 +757,6 @@ BEGIN
     FROM analytics_refresh_state
    WHERE scope = 'listing_daily'
    FOR UPDATE;
-
 
   IF NOT v_full_rebuild AND NOT EXISTS (
     SELECT 1 FROM public.analytics_daily_dirty_articles WHERE article_id > 0
@@ -1307,7 +1111,6 @@ BEGIN
      WHERE scope = 'listing_daily';
   END IF;
 
-
   IF v_pending_from IS NULL
      OR (v_from <= v_pending_from AND v_through >= COALESCE(v_pending_through, v_through)) THEN
     DELETE FROM public.analytics_daily_dirty_articles
@@ -1318,10 +1121,6 @@ BEGIN
 
 END
 $$;
-
---
--- Name: resolve_listing_daily_sparse_state(); Type: FUNCTION; Schema: public; Owner: -
---
 
 CREATE FUNCTION public.resolve_listing_daily_sparse_state() RETURNS trigger
     LANGUAGE plpgsql
@@ -1410,10 +1209,6 @@ BEGIN
 END
 $$;
 
---
--- Name: room_bucket(text); Type: FUNCTION; Schema: public; Owner: -
---
-
 CREATE FUNCTION public.room_bucket(rooms text) RETURNS text
     LANGUAGE sql IMMUTABLE
     AS $$
@@ -1422,10 +1217,6 @@ CREATE FUNCTION public.room_bucket(rooms text) RETURNS text
               WHEN split_part(rooms, '+', 1)::int >= 4 THEN '4+'
               ELSE rooms END;
 $$;
-
---
--- Name: route_analytics_partition_insert(); Type: FUNCTION; Schema: public; Owner: -
---
 
 CREATE FUNCTION public.route_analytics_partition_insert() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
@@ -1538,10 +1329,6 @@ BEGIN
 END
 $_$;
 
---
--- Name: agent_listing_scope(text, text, text[], text[], text, text, text[], text[], text[], text[], text, text, text, text, text, text, text, text, text[], text, boolean); Type: FUNCTION; Schema: reporting; Owner: -
---
-
 CREATE FUNCTION reporting.agent_listing_scope(p_deal text, p_property_type text, p_neighborhoods text[], p_rooms text[], p_min_area text, p_max_area text, p_conditions text[], p_furnishing text[], p_parking text[], p_seller_types text[], p_min_price text, p_max_price text, p_min_rate text, p_max_rate text, p_min_score text, p_max_score text, p_view text, p_pricing_position text, p_review_signals text[], p_analysis_days text, p_apply_result_filters boolean DEFAULT true) RETURNS SETOF olap.current_listing_scores
     LANGUAGE sql STABLE SECURITY DEFINER PARALLEL SAFE
     SET search_path TO 'pg_catalog', 'reporting', 'olap'
@@ -1601,10 +1388,6 @@ CREATE FUNCTION reporting.agent_listing_scope(p_deal text, p_property_type text,
      )
 $$;
 
---
--- Name: buyer_listing_scope(text, text[], text[], text, text, text[], text[], text[], text[], text[], text[], text, text, text, text, text, text, text, boolean); Type: FUNCTION; Schema: reporting; Owner: -
---
-
 CREATE FUNCTION reporting.buyer_listing_scope(p_property_type text, p_neighborhoods text[], p_rooms text[], p_min_area text, p_max_area text, p_conditions text[], p_parking text[], p_garage text[], p_elevator text[], p_floors text[], p_seller_types text[], p_min_price text, p_max_price text, p_min_rate text, p_max_rate text, p_min_score text, p_max_score text, p_listing_selection text, p_apply_result_filters boolean DEFAULT true) RETURNS SETOF olap.current_listing_scores
     LANGUAGE sql STABLE SECURITY DEFINER PARALLEL SAFE
     SET search_path TO 'pg_catalog', 'reporting', 'olap'
@@ -1641,19 +1424,11 @@ CREATE FUNCTION reporting.buyer_listing_scope(p_property_type text, p_neighborho
      ))
 $$;
 
---
--- Name: comparison_currency(text); Type: FUNCTION; Schema: reporting; Owner: -
---
-
 CREATE FUNCTION reporting.comparison_currency(p_currency text) RETURNS text
     LANGUAGE sql IMMUTABLE PARALLEL SAFE
     AS $$
   SELECT CASE WHEN upper(btrim(p_currency)) IN ('KM', 'BAM') THEN 'BAM' END
 $$;
-
---
--- Name: comparison_price_changes_source_for_articles(bigint[]); Type: FUNCTION; Schema: reporting; Owner: -
---
 
 CREATE FUNCTION reporting.comparison_price_changes_source_for_articles(p_article_ids bigint[]) RETURNS SETOF olap.comparison_price_changes
     LANGUAGE sql STABLE PARALLEL SAFE
@@ -1702,10 +1477,6 @@ CREATE FUNCTION reporting.comparison_price_changes_source_for_articles(p_article
      )
 $_$;
 
---
--- Name: comparison_price_reason(numeric, text, text, boolean); Type: FUNCTION; Schema: reporting; Owner: -
---
-
 CREATE FUNCTION reporting.comparison_price_reason(p_price numeric, p_state text, p_currency text, p_is_rent boolean) RETURNS text
     LANGUAGE sql IMMUTABLE PARALLEL SAFE
     AS $$
@@ -1722,10 +1493,6 @@ CREATE FUNCTION reporting.comparison_price_reason(p_price numeric, p_state text,
   END
 $$;
 
---
--- Name: comparison_property_type(text[]); Type: FUNCTION; Schema: reporting; Owner: -
---
-
 CREATE FUNCTION reporting.comparison_property_type(p_categories text[]) RETURNS text
     LANGUAGE sql IMMUTABLE PARALLEL SAFE
     AS $$
@@ -1734,10 +1501,6 @@ CREATE FUNCTION reporting.comparison_property_type(p_categories text[]) RETURNS 
               THEN min(category) END
     FROM unnest(p_categories) category
 $$;
-
---
--- Name: comparison_quality_reason(numeric, text, text, numeric, boolean); Type: FUNCTION; Schema: reporting; Owner: -
---
 
 CREATE FUNCTION reporting.comparison_quality_reason(p_price numeric, p_state text, p_currency text, p_sqm numeric, p_is_rent boolean) RETURNS text
     LANGUAGE sql IMMUTABLE PARALLEL SAFE
@@ -1750,10 +1513,6 @@ CREATE FUNCTION reporting.comparison_quality_reason(p_price numeric, p_state tex
            THEN 'Implausible sale asking rate' END)
 $$;
 
---
--- Name: daily_listing_facts_source_for_days(date[]); Type: FUNCTION; Schema: reporting; Owner: -
---
-
 CREATE FUNCTION reporting.daily_listing_facts_source_for_days(p_days date[]) RETURNS SETOF olap.daily_listing_facts
     LANGUAGE sql STABLE PARALLEL SAFE
     AS $$
@@ -1762,18 +1521,10 @@ CREATE FUNCTION reporting.daily_listing_facts_source_for_days(p_days date[]) RET
    WHERE s.day = ANY (p_days)
 $$;
 
---
--- Name: dashboard_numeric(text); Type: FUNCTION; Schema: reporting; Owner: -
---
-
 CREATE FUNCTION reporting.dashboard_numeric(p_value text) RETURNS numeric
     LANGUAGE sql IMMUTABLE STRICT SECURITY DEFINER
     SET search_path TO 'pg_catalog', 'public', 'pg_temp'
     AS $$ SELECT public.dashboard_numeric(p_value) $$;
-
---
--- Name: lifecycle_cycles_source_for_articles(bigint[]); Type: FUNCTION; Schema: reporting; Owner: -
---
 
 CREATE FUNCTION reporting.lifecycle_cycles_source_for_articles(p_article_ids bigint[]) RETURNS SETOF olap.lifecycle_cycles
     LANGUAGE sql STABLE PARALLEL SAFE
@@ -1782,10 +1533,6 @@ CREATE FUNCTION reporting.lifecycle_cycles_source_for_articles(p_article_ids big
     FROM reporting.lifecycle_cycles_source s
    WHERE s.article_id = ANY (p_article_ids)
 $$;
-
---
--- Name: market_daily_filtered(date, date, text[], numeric, numeric, text[], text[], text[]); Type: FUNCTION; Schema: reporting; Owner: -
---
 
 CREATE FUNCTION reporting.market_daily_filtered(p_from_day date, p_through_day date, p_category text[] DEFAULT '{}'::text[], p_min_sqm numeric DEFAULT NULL::numeric, p_max_sqm numeric DEFAULT NULL::numeric, p_rooms text[] DEFAULT '{}'::text[], p_deal text[] DEFAULT '{}'::text[], p_neighborhood text[] DEFAULT '{}'::text[]) RETURNS TABLE(day date, inventory_count bigint, priced_count bigint, p25 numeric, median numeric, p75 numeric, estimated_count bigint, stale_count bigint, provisional_day boolean)
     LANGUAGE sql STABLE SECURITY DEFINER
@@ -1841,7 +1588,6 @@ BEGIN
 END
 $$;
 
--- Name: nearest_neighborhoods(text, integer); Type: FUNCTION; Schema: reporting; Owner: -
 CREATE FUNCTION reporting.nearest_neighborhoods(p_name text, p_limit integer DEFAULT 3) RETURNS TABLE(neighborhood text, neighbor_rank integer)
     LANGUAGE sql STABLE STRICT
     AS $$
@@ -1852,10 +1598,6 @@ CREATE FUNCTION reporting.nearest_neighborhoods(p_name text, p_limit integer DEF
      AND n.neighbor_rank <= p_limit
    ORDER BY n.neighbor_rank
 $$;
-
---
--- Name: renter_listing_scope(text, text[], text[], text, text, text[], text[], text[], text[], text[], text[], text, text, text, text, text, text, text, boolean); Type: FUNCTION; Schema: reporting; Owner: -
---
 
 CREATE FUNCTION reporting.renter_listing_scope(p_property_type text, p_neighborhoods text[], p_rooms text[], p_min_area text, p_max_area text, p_furnishing text[], p_heating text[], p_parking text[], p_elevator text[], p_floors text[], p_seller_types text[], p_min_price text, p_max_price text, p_min_rate text, p_max_rate text, p_min_score text, p_max_score text, p_listing_selection text, p_apply_result_filters boolean DEFAULT true) RETURNS SETOF olap.current_listing_scores
     LANGUAGE sql STABLE SECURITY DEFINER PARALLEL SAFE
@@ -1893,18 +1635,10 @@ CREATE FUNCTION reporting.renter_listing_scope(p_property_type text, p_neighborh
      ))
 $$;
 
---
--- Name: room_bucket(text); Type: FUNCTION; Schema: reporting; Owner: -
---
-
 CREATE FUNCTION reporting.room_bucket(rooms text) RETURNS text
     LANGUAGE sql IMMUTABLE SECURITY DEFINER
     SET search_path TO 'pg_catalog', 'public', 'pg_temp'
     AS $$ SELECT public.room_bucket(rooms) $$;
-
---
--- Name: validate_olap_contracts(); Type: FUNCTION; Schema: reporting; Owner: -
---
 
 CREATE FUNCTION reporting.validate_olap_contracts() RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER

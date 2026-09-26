@@ -51,8 +51,6 @@ needsDb(
           FROM listing_daily WHERE article_id = 9201`);
       assert.equal(partition.rows[0].physical_table, "listing_daily_2020_11");
       await client.query("SELECT apply_operational_cleanup(5000)");
-      // The legacy name remains safe for older operators and scripts.
-      await client.query("SELECT apply_history_retention(5000)");
       const result = await client.query(`SELECT
         (SELECT count(*)::int FROM listing_daily WHERE article_id = 9201) AS daily,
         (SELECT count(*)::int FROM listing_price_events WHERE article_id = 9201) AS prices,

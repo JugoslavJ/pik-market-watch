@@ -25,19 +25,19 @@ Detail enrichment is a separate, bounded part of a successful search. The queue 
 
 ## Persistence and evidence
 
-| Store | Purpose |
-|---|---|
-| `listings` | Current, one-row-per-article state and the latest known attributes. It retains closed listings. |
-| `search_results` and `saved_searches` | Current membership of each configured search and its identity/category. |
-| `scrape_runs` | Per-search execution outcome, page/card counts, completeness, and failure information. |
-| `raw_api_responses` | Retained search/detail payloads with fetch time, parser version, and request metadata. Maintenance keeps the newest `RAW_RESPONSE_RETENTION_COUNT` responses per request kind and URL; this is operational evidence, not an indefinite archive. |
-| `listing_state_history` | Immutable search sightings, detail updates, closures, and reopenings. `effective_at` is evidence time; `ingested_at` is when this database learned it. |
-| `listing_price_events` | Canonical price boundaries with a value state (`valid`, `unpriced`, `invalid`, or `conflict`), observation/renewal timestamps, effective-time basis, and provenance. |
-| `listing_daily` | OLAP article/day facts used for historical analytics. |
-| `olap.current_listing_scores` | Physical OLAP snapshot used by current-market Grafana panels. |
-| `reporting.current_market_refresh_state` | Current snapshot generation time, row count, duration, and source watermark. |
-| `analytics_refresh_state` | Pending and successful daily-rebuild coverage. |
-| `neighborhoods` | Generated Banja Luka MZ polygons used to resolve listing pins. |
+| Store                                    | Purpose                                                                                                                                                                                                                                         |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `listings`                               | Current, one-row-per-article state and the latest known attributes. It retains closed listings.                                                                                                                                                 |
+| `search_results` and `saved_searches`    | Current membership of each configured search and its identity/category.                                                                                                                                                                         |
+| `scrape_runs`                            | Per-search execution outcome, page/card counts, completeness, and failure information.                                                                                                                                                          |
+| `raw_api_responses`                      | Retained search/detail payloads with fetch time, parser version, and request metadata. Maintenance keeps the newest `RAW_RESPONSE_RETENTION_COUNT` responses per request kind and URL; this is operational evidence, not an indefinite archive. |
+| `listing_state_history`                  | Immutable search sightings, detail updates, closures, and reopenings. `effective_at` is evidence time; `ingested_at` is when this database learned it.                                                                                          |
+| `listing_price_events`                   | Canonical price boundaries with a value state (`valid`, `unpriced`, `invalid`, or `conflict`), observation/renewal timestamps, effective-time basis, and provenance.                                                                            |
+| `listing_daily`                          | OLAP article/day facts used for historical analytics.                                                                                                                                                                                           |
+| `olap.current_listing_scores`            | Physical OLAP snapshot used by current-market Grafana panels.                                                                                                                                                                                   |
+| `reporting.current_market_refresh_state` | Current snapshot generation time, row count, duration, and source watermark.                                                                                                                                                                    |
+| `analytics_refresh_state`                | Pending and successful daily-rebuild coverage.                                                                                                                                                                                                  |
+| `neighborhoods`                          | Generated Banja Luka MZ polygons used to resolve listing pins.                                                                                                                                                                                  |
 
 Canonical price evidence is written through `listing_price_events`; each event
 retains its source, effective time, normalized currency, value state, and
@@ -60,10 +60,11 @@ PostgreSQL initialization runs `db/init/*.sql` only for a new volume. The files
 are ordered by dependency; the migrator records unapplied files and verifies
 their checksums before application services start. Standalone scraper runs
 retain a startup fallback. See [the database guide](../db/README.md) for the
-schema map and change policy. Do not edit applied SQL or generated polygon data
-by hand. The bootstrap database user administers the instance. `olx_app` owns
-application objects and is used by the scraper and restore endpoint;
-`olx_reader` is read-only and is used by Grafana and backups.
+schema map and change policy. Applied SQL is checksum protected; schema changes
+require a verified baseline update or current-schema restore. Regenerate polygon
+data from its geographic sources. The bootstrap user administers the instance.
+`olx_migrator` owns application objects, `olx_app` performs scraper writes,
+`olx_reporting` reads Grafana contracts, and `olx_backup` reads backup data.
 
 ## Dashboards
 

@@ -152,18 +152,6 @@ test("private dashboards expose consistent touch-friendly navigation", () => {
   }
 });
 
-test("externally shared dashboards stay retired", () => {
-  const retiredDirectory = path.join(root, "grafana", "public-dashboards");
-  assert.deepEqual(
-    fs.readdirSync(retiredDirectory).filter((name) => name.endsWith(".json")),
-    [],
-  );
-  assert.equal(
-    fs.existsSync(path.join(root, "scripts", "publish-public-dashboards.sh")),
-    false,
-  );
-});
-
 test("dashboard metric labels match their query grain and evidence semantics", () => {
   const read = (name) =>
     JSON.parse(fs.readFileSync(path.join(dashboardDir, name), "utf8"));
@@ -390,11 +378,10 @@ test("health dashboard exposes per-search and analytics freshness state", () => 
   assert.match(alertProvisioning, /pending_from_day/);
 });
 
-test("retired public reporting boundary is removed", () => {
+test("Grafana reads published reporting contracts with restricted function access", () => {
   assert.doesNotMatch(publicReportingMigration, /dashboard_public/);
   assert.match(publicReportingMigration, /reporting\.freshness/);
   assert.doesNotMatch(roles, /dashboard_public/);
-  assert.match(roles, /DROP ROLE %I.*olx_public_reader/);
   assert.match(
     roles,
     /REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC/,
@@ -495,5 +482,4 @@ test("retired public reporting boundary is removed", () => {
     /RETURNS SETOF reporting\.current_comparison_inputs/,
   );
   assert.match(comparableOlapContract, /FROM olap\.current_listing_scores t/);
-  assert.match(roles, /DROP ROLE %I/);
 });

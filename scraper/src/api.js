@@ -546,10 +546,8 @@ async function fetchDetailsInBatches(articleIds, opts, log = () => {}) {
   return all;
 }
 
-// Query params olx.ba's API actually honors as filters. A rewritten URL with
-// NONE of these returns the ENTIRE site (6.79 M listings when probed with the
-// legacy kat= param — the API silently ignores unknown params), so
-// scrapeSearch() refuses filterless configs loudly instead.
+// Unknown query parameters are ignored by the API. Require a recognized filter
+// so a configured search cannot fetch the entire site.
 const FILTER_PARAMS = [
   "category_id",
   "cities",

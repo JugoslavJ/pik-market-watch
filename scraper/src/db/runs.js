@@ -1,8 +1,6 @@
 "use strict";
 
-// Scrape-run and saved-search persistence. This module is installed onto the
-// compatibility Db facade so callers keep the existing method names while the
-// run lifecycle remains isolated from ingestion and enrichment SQL.
+// Scrape-run and saved-search persistence.
 
 module.exports = function installRunMethods(Db) {
   Object.assign(Db.prototype, {

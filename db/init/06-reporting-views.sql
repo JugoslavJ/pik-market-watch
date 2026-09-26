@@ -1,13 +1,6 @@
 -- Canonical reporting views baseline.
---
--- Name: VIEW listing_state_history_state; Type: COMMENT; Schema: public; Owner: -
---
 
-COMMENT ON VIEW public.listing_state_history_state IS 'Compatibility projection of listing_state_history joined to its canonical state version.';
-
---
--- Name: dashboard_listings; Type: VIEW; Schema: reporting; Owner: -
---
+COMMENT ON VIEW public.listing_state_history_state IS 'Projection of listing_state_history joined to its canonical state version.';
 
 CREATE VIEW reporting.dashboard_listings AS
  SELECT article_id,
@@ -54,16 +47,9 @@ CREATE VIEW reporting.dashboard_listings AS
     renewed_at
    FROM olap.listings;
 
--- Name: dashboard_filter_options; Type: VIEW; Schema: reporting; Owner: -
---
-
 CREATE VIEW reporting.dashboard_filter_options AS
  SELECT filter_name, value, sort_order
    FROM olap.dashboard_filter_options;
-
---
--- Name: price_changes; Type: VIEW; Schema: reporting; Owner: -
---
 
 CREATE VIEW reporting.price_changes AS
  SELECT article_id,
@@ -86,15 +72,7 @@ CREATE VIEW reporting.price_changes AS
     null_boundary
    FROM olap.listing_price_changes;
 
---
--- Name: VIEW listing_daily_state; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON VIEW public.listing_daily_state IS 'Compatibility projection of listing_daily joined to its canonical state version.';
-
---
--- Name: v_active_listings; Type: VIEW; Schema: public; Owner: -
---
+COMMENT ON VIEW public.listing_daily_state IS 'Projection of listing_daily joined to its canonical state version.';
 
 CREATE VIEW public.v_active_listings AS
  SELECT article_id,
@@ -138,19 +116,11 @@ CREATE VIEW public.v_active_listings AS
     renewed_at
    FROM public.v_active_listings_source;
 
---
--- Name: v_listing_exit_economics; Type: VIEW; Schema: public; Owner: -
---
-
 CREATE VIEW public.v_listing_exit_economics AS
  SELECT article_id,
     opening_price,
     days_listed
    FROM public.v_listing_exit_economics_source;
-
---
--- Name: v_market_daily; Type: VIEW; Schema: public; Owner: -
---
 
 CREATE VIEW public.v_market_daily AS
  SELECT day,
@@ -162,10 +132,6 @@ CREATE VIEW public.v_market_daily AS
     provisional_day
    FROM public.v_market_daily_source;
 
---
--- Name: analytics_refresh_state; Type: VIEW; Schema: reporting; Owner: -
---
-
 CREATE VIEW reporting.analytics_refresh_state AS
  SELECT scope,
     pending_from_day,
@@ -174,10 +140,6 @@ CREATE VIEW reporting.analytics_refresh_state AS
     last_successful_refresh_at,
     updated_at
    FROM public.analytics_refresh_state;
-
---
--- Name: comparison_price_changes; Type: VIEW; Schema: reporting; Owner: -
---
 
 CREATE VIEW reporting.comparison_price_changes AS
  SELECT article_id,
@@ -190,10 +152,6 @@ CREATE VIEW reporting.comparison_price_changes AS
     deal,
     currency
    FROM olap.comparison_price_changes;
-
---
--- Name: current_listing_scores; Type: VIEW; Schema: reporting; Owner: -
---
 
 CREATE VIEW reporting.current_listing_scores AS
  SELECT article_id,
@@ -258,10 +216,6 @@ CREATE VIEW reporting.current_listing_scores AS
     benchmark_neighborhoods
    FROM olap.current_listing_scores s;
 
---
--- Name: daily_listing_facts; Type: VIEW; Schema: reporting; Owner: -
---
-
 CREATE VIEW reporting.daily_listing_facts AS
  SELECT d.day,
     d.article_id,
@@ -310,9 +264,6 @@ CREATE VIEW reporting.daily_listing_facts AS
      LEFT JOIN public.listings l ON ((l.article_id = f.article_id)));
 
 -- Historical dashboard queries read the immutable published fact grain.
---
--- Name: daily_listing_facts_olap; Type: VIEW; Schema: reporting; Owner: -
---
 
 CREATE VIEW reporting.daily_listing_facts_olap AS
  SELECT f.day,
@@ -342,10 +293,6 @@ BEGIN
 END
 $$;
 
---
--- Name: evidence_timeline; Type: VIEW; Schema: reporting; Owner: -
---
-
 CREATE VIEW reporting.evidence_timeline AS
  SELECT article_id,
     effective_at,
@@ -358,29 +305,17 @@ CREATE VIEW reporting.evidence_timeline AS
     provenance
    FROM public.v_listing_evidence_timeline;
 
---
--- Name: exit_economics; Type: VIEW; Schema: reporting; Owner: -
---
-
 CREATE VIEW reporting.exit_economics AS
  SELECT article_id,
     opening_price,
     days_listed
    FROM olap.listing_exit_economics;
 
---
--- Name: freshness; Type: VIEW; Schema: reporting; Owner: -
---
-
 CREATE VIEW reporting.freshness AS
  SELECT category,
     configured_searches,
     last_success_at
    FROM olap.public_freshness;
-
---
--- Name: history_contract; Type: VIEW; Schema: reporting; Owner: -
---
 
 CREATE VIEW reporting.history_contract AS
  SELECT article_id,
@@ -392,10 +327,6 @@ CREATE VIEW reporting.history_contract AS
     first_seen,
     closed_at
    FROM public.v_listing_history_contract;
-
---
--- Name: lifecycle_cycles; Type: VIEW; Schema: reporting; Owner: -
---
 
 CREATE VIEW reporting.lifecycle_cycles AS
  SELECT article_id,
@@ -444,10 +375,6 @@ CREATE VIEW reporting.lifecycle_cycles AS
     final_asking_rate_unit
    FROM olap.lifecycle_cycles;
 
---
--- Name: lifecycle_movements; Type: VIEW; Schema: reporting; Owner: -
---
-
 CREATE VIEW reporting.lifecycle_movements AS
  SELECT movement_type,
     event_at,
@@ -482,10 +409,6 @@ CREATE VIEW reporting.lifecycle_movements AS
     historical_floor_num
    FROM olap.lifecycle_movements;
 
---
--- Name: listing_health; Type: VIEW; Schema: reporting; Owner: -
---
-
 CREATE VIEW reporting.listing_health AS
  SELECT article_id,
     closed_at,
@@ -501,10 +424,6 @@ CREATE VIEW reporting.listing_health AS
     last_enrichment_attempted_at
    FROM public.listings;
 
---
--- Name: market_daily; Type: VIEW; Schema: reporting; Owner: -
---
-
 CREATE VIEW reporting.market_daily AS
  SELECT day,
     new_n,
@@ -514,10 +433,6 @@ CREATE VIEW reporting.market_daily AS
     stale_n,
     provisional_day
    FROM olap.market_daily;
-
---
--- Name: olap_health; Type: VIEW; Schema: reporting; Owner: -
---
 
 CREATE VIEW reporting.olap_health AS
  SELECT max(refreshed_at) AS refreshed_at,
@@ -530,10 +445,6 @@ CREATE VIEW reporting.olap_health AS
     (sum(row_count))::bigint AS tracked_rows
    FROM olap.refresh_state;
 
---
--- Name: olap_queue_health; Type: VIEW; Schema: reporting; Owner: -
---
-
 CREATE VIEW reporting.olap_queue_health AS
  SELECT count(*) AS pending_daily_partitions,
     min(day) AS oldest_pending_day,
@@ -542,20 +453,12 @@ CREATE VIEW reporting.olap_queue_health AS
     ((count(*) = 0) OR (min(marked_at) >= (now() - '02:00:00'::interval))) AS daily_queue_healthy
    FROM public.analytics_daily_olap_dirty;
 
---
--- Name: price_event_health; Type: VIEW; Schema: reporting; Owner: -
---
-
 CREATE VIEW reporting.price_event_health AS
  SELECT article_id,
     source,
     ingested_at,
     price_state
    FROM public.listing_price_events;
-
---
--- Name: saved_searches; Type: VIEW; Schema: reporting; Owner: -
---
 
 CREATE VIEW reporting.saved_searches AS
  SELECT search_key,
@@ -568,10 +471,6 @@ CREATE VIEW reporting.saved_searches AS
     new_count,
     drop_count
    FROM public.saved_searches;
-
---
--- Name: scrape_health; Type: VIEW; Schema: reporting; Owner: -
---
 
 CREATE VIEW reporting.scrape_health AS
  SELECT id,
@@ -588,9 +487,6 @@ CREATE VIEW reporting.scrape_health AS
    FROM public.scrape_runs r;
 
 -- Helpers whose return types are canonical reporting views above.
---
--- Name: listings_closed_filtered(text[], numeric, numeric, text[]); Type: FUNCTION; Schema: reporting; Owner: -
---
 
 CREATE FUNCTION reporting.listings_closed_filtered(p_category text[], p_min_sqm numeric, p_max_sqm numeric, p_neighborhood text[]) RETURNS SETOF reporting.dashboard_listings
     LANGUAGE sql STABLE SECURITY DEFINER
@@ -633,9 +529,6 @@ CREATE FUNCTION reporting.exits_closed_filtered(
              WHERE c.article_id = l.article_id
                AND c.category = ANY (p_category)))
 $$;
---
--- Name: listings_filtered(text[], numeric, numeric, text[], boolean); Type: FUNCTION; Schema: reporting; Owner: -
---
 
 CREATE FUNCTION reporting.listings_filtered(p_category text[], p_min_sqm numeric, p_max_sqm numeric, p_neighborhood text[], p_active_only boolean DEFAULT true) RETURNS SETOF reporting.dashboard_listings
     LANGUAGE sql STABLE SECURITY DEFINER
@@ -644,9 +537,6 @@ CREATE FUNCTION reporting.listings_filtered(p_category text[], p_min_sqm numeric
   SELECT l.* FROM public.listings_filtered(
     p_category, p_min_sqm, p_max_sqm, p_neighborhood, p_active_only) l
 $$;
-
--- Name: overview_listings_filtered(text[], numeric, numeric, text[], text[], text[], boolean); Type: FUNCTION; Schema: reporting; Owner: -
---
 
 CREATE FUNCTION reporting.overview_listings_filtered(
     p_category text[], p_min_sqm numeric, p_max_sqm numeric,
@@ -770,12 +660,6 @@ CREATE FUNCTION reporting.overview_sale_segments(
             g.bucket
 $$;
 
-
-
---
--- Name: resolved_price_evidence_for_articles(bigint[]); Type: FUNCTION; Schema: reporting; Owner: -
---
-
 CREATE FUNCTION reporting.resolved_price_evidence_for_articles(p_article_ids bigint[]) RETURNS SETOF reporting.resolved_price_evidence
     LANGUAGE sql STABLE PARALLEL SAFE
     AS $_$
@@ -818,9 +702,6 @@ CREATE FUNCTION reporting.resolved_price_evidence_for_articles(p_article_ids big
 $_$;
 
 -- Filter helper over the canonical price_changes view.
---
--- Name: price_changes_filtered(timestamp with time zone, timestamp with time zone, text[], numeric, numeric, text[], text[], text[]); Type: FUNCTION; Schema: reporting; Owner: -
---
 
 CREATE FUNCTION reporting.price_changes_filtered(p_from timestamp with time zone, p_through timestamp with time zone, p_category text[] DEFAULT '{}'::text[], p_min_sqm numeric DEFAULT NULL::numeric, p_max_sqm numeric DEFAULT NULL::numeric, p_rooms text[] DEFAULT '{}'::text[], p_deal text[] DEFAULT '{}'::text[], p_neighborhood text[] DEFAULT '{}'::text[]) RETURNS SETOF reporting.price_changes
     LANGUAGE sql STABLE SECURITY DEFINER

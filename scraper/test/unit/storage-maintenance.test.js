@@ -49,13 +49,33 @@ test("raw response purge ranks records per request stream", async () => {
   assert.deepEqual(calls[0][1], [3, 1000]);
 });
 
+test("batched detail archives keep original bodies and bodyless diagnostics", async () => {
+  const db = new Db("postgres://unused");
+  let archived;
+  db.pool = {
+    query: async (_sql, [encoded]) => {
+      archived = JSON.parse(encoded);
+      return { rowCount: archived.length };
+    },
+  };
+  const count = await db.archiveDetailResponses([
+    { articleId: 1, payload: { adapted: true }, sourcePayload: { id: 1 } },
+    {
+      articleId: 2,
+      payload: { id: 2 },
+      sourcePayload: { id: 2 },
+      diagnostic: { kind: "http", status: 403 },
+    },
+  ]);
+  assert.equal(count, 2);
+  assert.deepEqual(archived[0].payload, { id: 1 });
+  assert.equal(archived[1].payload, null);
+  assert.deepEqual(archived[1].diagnostic, { kind: "http", status: 403 });
+});
+
 test("maintenance attempts purge and rebuild independently", async () => {
   const db = new Db("postgres://unused");
   const calls = [];
-  db.backfillPublicationEvidence = async () => ({ complete: true });
-  db.backfillPublicationEvidenceFromRaw = async () => ({ complete: true });
-  db.transitionRawResponseRetention = async () => ({ complete: true });
-  db.compactDuplicateRawBodies = async () => 2;
   db.purgeRawResponses = async () => {
     calls.push("purge");
     throw new Error("purge unavailable");
@@ -64,6 +84,7 @@ test("maintenance attempts purge and rebuild independently", async () => {
     calls.push("rebuild");
     throw new Error("rebuild unavailable");
   };
+  db.analyzeAnalyticsPartitions = async () => ({ analyzed: 0 });
   db.recordMaintenanceOutcome = async () => {};
 
   const result = await db.runMaintenanceCycle();
@@ -76,12 +97,10 @@ test("maintenance attempts purge and rebuild independently", async () => {
 test("maintenance excludes synchronous current-market publication", async () => {
   const db = new Db("postgres://unused");
   const calls = [];
-  db.backfillPublicationEvidence = async () => ({ complete: true });
-  db.backfillPublicationEvidenceFromRaw = async () => ({ complete: true });
-  db.transitionRawResponseRetention = async () => ({ complete: true });
-  db.compactDuplicateRawBodies = async () => 0;
+  db.refreshCurrentMarket = async () => calls.push("publish");
   db.purgeRawResponses = async () => 0;
   db.rebuildDailyInventory = async () => ({ rows: [{ rows_written: 1 }] });
+  db.analyzeAnalyticsPartitions = async () => ({ analyzed: 0 });
   db.recordMaintenanceOutcome = async () => {};
 
   await db.runMaintenanceCycle();

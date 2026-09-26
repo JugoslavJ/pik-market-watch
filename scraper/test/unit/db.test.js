@@ -19,10 +19,8 @@ test("rebuildDailyInventory refreshes pending days instead of all history", asyn
         return {
           rows: [
             {
-              pending_from_day: todayInBanjaLuka(),
-              pending_through_day: todayInBanjaLuka(),
-              first_priced_day: "2021-03-22",
-              first_daily_day: "2021-03-22",
+              from_day: todayInBanjaLuka(),
+              through_day: todayInBanjaLuka(),
             },
           ],
         };
@@ -48,10 +46,8 @@ test("rebuildDailyInventory backfills from history when daily coverage is missin
         return {
           rows: [
             {
-              pending_from_day: null,
-              pending_through_day: null,
-              first_priced_day: "2021-03-22",
-              first_daily_day: null,
+              from_day: "2021-03-22",
+              through_day: todayInBanjaLuka(),
             },
           ],
         };
@@ -75,12 +71,8 @@ test("rebuildDailyInventory chunks a bounded maintenance window", async () => {
         return {
           rows: [
             {
-              pending_from_day: null,
-              pending_through_day: null,
-              first_priced_day: "2021-03-22",
-              first_daily_day: null,
-              window_from_day: "2021-03-22",
-              window_through_day: "2021-04-02",
+              from_day: "2021-03-22",
+              through_day: "2021-04-02",
             },
           ],
         };
@@ -95,6 +87,22 @@ test("rebuildDailyInventory chunks a bounded maintenance window", async () => {
   assert.deepEqual(calls[2][1], ["2021-04-01", "2021-04-02"]);
   assert.equal(rebuilt.rows[0].rows_written, 6);
   assert.equal(rebuilt.rows[0].chunks, 2);
+});
+
+test("rebuildDailyInventory rejects a missing database window before writing", async () => {
+  const db = new Db("postgres://unused");
+  let queries = 0;
+  db.pool = {
+    query: async () => {
+      queries += 1;
+      return { rows: [] };
+    },
+  };
+  await assert.rejects(
+    db.rebuildDailyInventory(),
+    /daily rebuild window is unavailable/,
+  );
+  assert.equal(queries, 1);
 });
 
 test("recoverAbandonedRuns closes only stale running runs with structured failure", async () => {

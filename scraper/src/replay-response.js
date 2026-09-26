@@ -34,11 +34,9 @@ async function main() {
     const source =
       row.archive_format === "diagnostic-v2"
         ? null
-        : row.archive_format === "canonical-v2"
-          ? row.request_kind === "search"
-            ? row.source_payload
-            : row.payload
-          : row.source_payload || row.payload;
+        : row.request_kind === "search"
+          ? row.source_payload
+          : row.payload;
     const output = {
       id: Number(row.id),
       requestKind: row.request_kind,
@@ -46,7 +44,7 @@ async function main() {
       fetchedAt: row.fetched_at,
       parserVersion: row.parser_version,
       buildVersion: row.build_version,
-      archiveFormat: row.archive_format || "legacy-v1",
+      archiveFormat: row.archive_format,
       diagnostic: row.diagnostic,
     };
     if (source && row.request_kind === "search") {

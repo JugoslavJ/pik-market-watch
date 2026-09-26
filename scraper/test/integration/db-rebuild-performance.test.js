@@ -17,7 +17,7 @@ test.beforeEach(async () => {
 });
 
 needsDb(
-  "bulk rebuild matches legacy rows and resolves geography per distinct state",
+  "bulk rebuild matches reference rows and resolves geography per distinct state",
   async () => {
     const client = await db.pool.connect();
     try {
@@ -71,7 +71,7 @@ needsDb(
       await client.query(
         "SELECT * FROM reference_rebuild_listing_daily('2026-03-01','2026-04-02')",
       );
-      const legacy = (
+      const reference = (
         await client.query(
           "SELECT to_jsonb(d) - 'resolved_state_version' - 'location' - 'neighborhood' AS row FROM listing_daily_state d ORDER BY article_id,day",
         )
@@ -88,7 +88,7 @@ needsDb(
         )
       ).rows;
       assert.ok(bulk.length > 100);
-      assert.deepEqual(bulk, legacy);
+      assert.deepEqual(bulk, reference);
       const count = (
         await client.query("SELECT last_value FROM pg_temp.geography_calls")
       ).rows[0].last_value;

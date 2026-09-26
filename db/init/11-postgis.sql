@@ -1,5 +1,4 @@
 -- Canonical neighborhood geometry finalization.
---
 -- Polygon rows are loaded by 09-neighborhood-data.sql. The table and spatial
 -- indexes are defined by the canonical baseline before this derived data step.
 

@@ -3,34 +3,31 @@
 `init/` is the canonical current schema. The SQL is split by dependency and
 responsibility for readability.
 
-| File                                  | Responsibility                                                                      |
-| ------------------------------------- | ----------------------------------------------------------------------------------- |
-| `00-core-schemas.sql`                 | Required extensions and application schemas                                         |
-| `01-tables.sql`                       | OLTP tables, OLAP marts, control tables, and sequences                              |
-| `02-constraints.sql`                  | Keys, foreign keys, and table constraints                                           |
-| `03-functions.sql`                    | Ingestion, analytics, geography, partition routing, and trigger helpers             |
-| `04-source-views.sql`                 | Canonical OLTP-to-OLAP source transformations                                       |
-| `05-reporting-functions.sql`          | Dashboard refresh, filtering, comparison, and validation functions                  |
-| `06-reporting-views.sql`              | Stable reporting views used by Grafana                                              |
-| `07-indexes.sql`                      | Operational, spatial, and dashboard indexes                                         |
-| `08-triggers.sql`                     | Evidence normalization and analytics invalidation                                   |
-| `09-neighborhood-data.sql`            | Generated neighborhood seed data                                                    |
-| `10-seed-and-access.sql`              | Initial control rows and reporting grants                                           |
-| `11-postgis.sql`                      | Derived neighborhood geometry validation and finalization                           |
-| `12-pg-stat-statements.sql`           | Performance instrumentation extension (also applied to existing volumes)            |
-| `zz-database-roles.sh`                | Runtime ownership and reader permissions                                            |
+| File                         | Responsibility                                                           |
+| ---------------------------- | ------------------------------------------------------------------------ |
+| `00-core-schemas.sql`        | Required extensions and application schemas                              |
+| `01-tables.sql`              | OLTP tables, OLAP marts, control tables, and sequences                   |
+| `02-constraints.sql`         | Keys, foreign keys, and table constraints                                |
+| `03-functions.sql`           | Ingestion, analytics, geography, partition routing, and trigger helpers  |
+| `04-source-views.sql`        | Canonical OLTP-to-OLAP source transformations                            |
+| `05-reporting-functions.sql` | Dashboard refresh, filtering, comparison, and validation functions       |
+| `06-reporting-views.sql`     | Stable reporting views used by Grafana                                   |
+| `07-indexes.sql`             | Operational, spatial, and dashboard indexes                              |
+| `08-triggers.sql`            | Evidence normalization and analytics invalidation                        |
+| `09-neighborhood-data.sql`   | Generated neighborhood seed data                                         |
+| `10-seed-and-access.sql`     | Initial control rows and reporting grants                                |
+| `11-postgis.sql`             | Derived neighborhood geometry validation and finalization                |
+| `12-pg-stat-statements.sql`  | Performance instrumentation extension (also applied to existing volumes) |
+| `zz-database-roles.sh`       | Runtime ownership and reader permissions                                 |
 
 Fresh volumes execute these files in lexical order. The application runner
 records each filename and checksum in `schema_migrations`, applies missing
 files transactionally, and uses an advisory lock. When Docker has already
 executed the complete init directory, the runner adopts the current schema
-into the ledger instead of replaying its `CREATE` statements. Existing
-volumes from the retired migration chain are supported when their live schema
-matches this current state; retired ledger filenames are preserved.
-
-The listing rate and last-valid-price migrations are folded into the canonical
-table, function, and trigger files. Existing volumes must have applied both
-retired migrations before their baseline checksums can advance to this version.
+into the ledger instead of replaying its `CREATE` statements. Applied files
+are checksum protected: a mismatch stops deployment. Existing volumes must
+match the current baseline or receive a verified current-schema restore.
+Unrelated migration-ledger entries are preserved.
 
 The canonical SQL is the source of truth. To change the schema, update the
 current definitions and regenerate/verify the full baseline. Operational
@@ -59,8 +56,9 @@ transformations and support validation.
 
 `reporting.refresh_dashboard_olap()` publishes a consistent generation of all
 marts and records it in `olap.refresh_state`. The maintenance cycle rebuilds
-pending daily history, refreshes current-market marts, runs operational
-cleanup, and validates reporting contracts. Operational health panels read live
+pending daily history, runs operational cleanup, and analyzes partitions.
+The scraper publishes the current market and validates reporting contracts.
+Operational health panels read live
 run and refresh-control state; analytical panels read published snapshots.
 
 Monthly partitions cover event and daily-history tables. Maintenance creates

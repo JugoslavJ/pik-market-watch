@@ -15,7 +15,7 @@
 #   POSTGRES_USER / POSTGRES_DB                         (bootstrap admin / db)
 #
 # Fresh volumes: docker-entrypoint-initdb.d runs this automatically AFTER the
-# *.sql files ("zz" sorts last), then hands ownership to the app role.
+# *.sql files ("zz" sorts last), then assigns ownership to the migrator role.
 # Existing volumes (apply once per machine, and after every password rotation):
 #   docker compose exec db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
 # ─────────────────────────────────────────────────────────────────────────────
@@ -56,21 +56,6 @@ SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'reporting_user', :'repor
 SELECT format('CREATE ROLE %I LOGIN', :'backup_user')
 WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'backup_user') \gexec
 SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'backup_user', :'backup_pw') \gexec
-
--- The public datasource was retired. Remove the legacy login on existing
--- volumes; fresh volumes never create it.
-SELECT format('REASSIGN OWNED BY %I TO %I', 'olx_public_reader', :'migrator_user')
-WHERE EXISTS (SELECT FROM pg_roles WHERE rolname = 'olx_public_reader') \gexec
-SELECT format('DROP OWNED BY %I', 'olx_public_reader')
-WHERE EXISTS (SELECT FROM pg_roles WHERE rolname = 'olx_public_reader') \gexec
-SELECT format('DROP ROLE %I', 'olx_public_reader')
-WHERE EXISTS (SELECT FROM pg_roles WHERE rolname = 'olx_public_reader') \gexec
--- The former private reader inherited raw-data access. Retire it rather than
--- leaving an old credential with visibility into API payloads.
-SELECT format('DROP OWNED BY %I', 'olx_reader')
-WHERE EXISTS (SELECT FROM pg_roles WHERE rolname = 'olx_reader') \gexec
-SELECT format('DROP ROLE %I', 'olx_reader')
-WHERE EXISTS (SELECT FROM pg_roles WHERE rolname = 'olx_reader') \gexec
 
 -- Hand ownership to the migration role (migrations, restores) -----------------
 -- NOTE: a blanket REASSIGN OWNED BY <admin> aborts on pinned catalog objects

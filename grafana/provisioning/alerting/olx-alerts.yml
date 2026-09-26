@@ -1,10 +1,6 @@
 apiVersion: 1
 
-# ── Provisioned alerting ──────────────────────────────────────────────────────
-# One high-signal rule: the instance DB going silent covers EVERY break in the
-# chain (home scraper dead / olx.ba blocking / sync pipeline broken) — they all
-# end with no fresh status='ok' scrape_runs row.
-#
+# Alerts cover scrape freshness, pending analytics, and OLAP publication health.
 # Delivery needs SMTP (uncomment GF_SMTP_* in docker-compose.yml + set
 # ALERT_EMAIL_* in .env). Without SMTP the rules still evaluate and show their
 # firing/resolving history under Alerting → Alert rules in the UI.

@@ -73,10 +73,7 @@ async function enrichSearchResults({
         })
         .map((p) => p.id);
 
-      // A migration-aware Db claims work with a database lease. The
-      // optional method checks keep the scraper seam compatible with small
-      // test doubles and older one-off callers while all production writes
-      // use the durable path.
+      // Database leases prevent concurrent workers from fetching the same detail.
       if (db.requeueExpiredDetailJobs) await db.requeueExpiredDetailJobs();
       let claimedIds = needDetail;
       if (db.claimDetailJobs) {

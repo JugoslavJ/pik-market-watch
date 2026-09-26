@@ -328,3 +328,24 @@ The cached refresh median was 24.7% lower in this matched trial. The single full
 A live-data comparison found that the 129,068 rows in `olap.public_daily_market` matched an equivalent projection from `olap.daily_listing_facts` exactly: zero rows differed in either `EXCEPT ALL` direction. The duplicate partitioned table occupied 27,131,904 bytes, about 10.5% of the 257,480,383-byte database. Repository and role configuration show the retired public datasource has no active query path to this internal mart.
 
 The migration removes the duplicate relation and its full and incremental refresh writes. Consumers use `olap.daily_listing_facts` directly; no compatibility view remains. The migration was applied on 2026-09-25. `VACUUM FULL` reclaimed about 2 MB from other relations with dead tuples; the removed partitioned table had occupied 27,131,904 bytes. Performance after the change has not yet been measured.
+
+## Current-schema cleanup — completed 2026-09-26
+
+The scraper now obtains its rebuild interval from one call to `analytics_daily_rebuild_window()`. The database owns the calendar and coverage rules; the application only divides the returned interval into bounded batches. Three alternating query profiles on a disposable live-data restore, with JIT disabled, measured:
+
+| Rebuild-window query                           | Median execution |    Three-run range |
+| ---------------------------------------------- | ---------------: | -----------------: |
+| Repeated window calculation and fallback scans |       101.604 ms | 100.761–135.673 ms |
+| Single database window calculation             |        45.710 ms |   44.363–46.227 ms |
+
+The median was 55.0% lower in this trial. The first baseline run included 222 shared disk-read blocks; subsequent reads were warm. These timings measure interval selection, not the daily rebuild or an entire scrape.
+
+Completed price-history and publication backfills, duplicate-body conversion, transition-marker tables, unused geometry helpers, and redundant daily-fact views were removed. The daily range helper has a descriptive name, migration startup loads its ledger in one query, and comments describe current behavior. Stored historical price provenance remains intact. Batched raw-detail diagnostics now consistently omit response bodies, and successful archives retain the original response.
+
+Grafana provisions one dashboard directory and updates its datasource in place. Its password uses the single-expansion environment syntax, preserving literal dollar signs. This follows [Grafana's provisioning rules](https://grafana.com/docs/grafana/latest/administration/provisioning/).
+
+The cleanup was checked on a restored database before local application. Its base schema matched a fresh installation, excluding generated monthly partitions, ownership, and grants. The comparison also caught and corrected a partition-helper branch referring to the removed daily-market table and stale database comments. The live application ran in one checksum-guarded transaction: all 130,639 daily fact rows matched under `EXCEPT ALL` in both directions, and counts of listings, state history, price events, publication evidence, imported prices, and raw responses were unchanged. A pre-cleanup custom-format backup is retained locally at `backups/current-cleanup/before.dump` (14,036,569 bytes).
+
+Validation passed: 156 unit tests, the full database integration suite, the affected integration suites after final cleanup, ESLint, and Markdown links. A subsequent local migrator run was a no-op. The live OLAP refresh at `2026-09-26T15:32:46.476226Z` published generation 231 with all nine marts fresh and consistent. Exact validation found zero missing or unexpected rows in daily facts (130,639), lifecycle cycles (2,034), and lifecycle movements (2,762). The local scraper image was rebuilt, Grafana was recreated successfully, and its datasource health endpoint returned `Database Connection OK`.
+
+Existing installations must match the current canonical checksums or receive a verified current-schema restore; startup does not replay historical upgrade branches. This pass updates the local stack.

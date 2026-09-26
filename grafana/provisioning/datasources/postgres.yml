@@ -3,10 +3,6 @@
 # Connects as the reporting contract role — see db/init/zz-database-roles.sh.
 apiVersion: 1
 
-deleteDatasources:
-  - name: OLX Postgres
-    orgId: 1
-
 datasources:
   - name: OLX Postgres
     uid: olx-postgres
@@ -16,11 +12,9 @@ datasources:
     database: ${POSTGRES_DB}
     user: ${POSTGRES_REPORTING_USER}
     secureJsonData:
-      password: ${POSTGRES_REPORTING_PASSWORD}
+      password: $POSTGRES_REPORTING_PASSWORD
     jsonData:
-      # Required here (not just top-level): the PostgreSQL plugin used by
-      # Grafana >= 12/13 reads jsonData.database and refuses to query without
-      # it ("no default database configured"). Keep both in sync.
+      # The PostgreSQL query backend reads the database from jsonData.
       database: ${POSTGRES_DB}
       sslmode: disable
       postgresVersion: 1600

@@ -1,8 +1,6 @@
 "use strict";
 
-// PostGIS rollout checks. These tests are intentionally runtime-skippable so
-// the legacy stock-PostgreSQL baseline remains testable while the staged
-// migration is being deployed.
+// Neighborhood assignment uses PostGIS containment and distance.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { needsDb, reset, setupDb } = require("../helpers/db.js");
@@ -19,29 +17,9 @@ test.beforeEach(async () => {
   await reset(db.pool);
 });
 
-async function postgisAvailable() {
-  const { rows } = await db.pool.query(`
-    SELECT EXISTS (
-      SELECT 1 FROM pg_extension WHERE extname = 'postgis'
-    ) AS installed,
-    EXISTS (
-      SELECT 1
-        FROM information_schema.columns
-       WHERE table_schema = 'public'
-         AND table_name = 'neighborhoods'
-         AND column_name = 'boundary'
-    ) AS boundary_column`);
-  return rows[0].installed && rows[0].boundary_column;
-}
-
 needsDb(
   "PostGIS neighborhood assignment includes a unique boundary point",
-  async (t) => {
-    if (!(await postgisAvailable())) {
-      t.skip("staged PostGIS boundary migration is not installed");
-      return;
-    }
-
+  async () => {
     const { rows } = await db.pool.query(`
       WITH boundary_points AS (
         SELECT n.name, points.geom AS point
@@ -71,12 +49,7 @@ needsDb(
 
 needsDb(
   "PostGIS neighborhood fallback uses geography metres within five kilometres",
-  async (t) => {
-    if (!(await postgisAvailable())) {
-      t.skip("staged PostGIS boundary migration is not installed");
-      return;
-    }
-
+  async () => {
     // Project a handful of points outside polygon coverage. The candidate
     // query chooses one that is outside every polygon but has a unique nearest
     // boundary within 5 km, making the expected result deterministic.

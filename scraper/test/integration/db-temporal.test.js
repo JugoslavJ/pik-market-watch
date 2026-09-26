@@ -1,7 +1,6 @@
 "use strict";
 
-// Regression coverage for temporal database contracts introduced by
-// 17-temporal-analytics-semantics.sql.
+// Daily inventory, coverage, and evidence obey Sarajevo calendar boundaries.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {

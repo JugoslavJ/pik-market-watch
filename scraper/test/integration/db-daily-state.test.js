@@ -1,7 +1,6 @@
 "use strict";
 
-// Regression coverage for sparse lifecycle rows resolved by
-// 18-daily-sparse-state-resolution.sql.
+// Sparse lifecycle observations preserve resolved attributes and memberships.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { needsDb, reset, setupDb } = require("../helpers/db.js");

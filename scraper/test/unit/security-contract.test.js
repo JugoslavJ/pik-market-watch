@@ -94,7 +94,6 @@ test("database roles separate reporting and backup access", () => {
   assert.match(roles, /REVOKE pg_read_all_data FROM %I.*reporting_user/);
   assert.match(roles, /relkind IN \('v','m'\).*reporting_user/s);
   assert.doesNotMatch(roles, /GRANT pg_read_all_data TO %I.*reporting_user/);
-  assert.match(roles, /DROP ROLE %I.*olx_reader/);
 });
 
 test("database role repair transfers reporting publisher tables to the migrator", () => {

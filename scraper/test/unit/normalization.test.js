@@ -9,7 +9,6 @@ const {
   normalizeArea,
   normalizeHistoryWithRejections,
   normalizeId,
-  normalizeLegacyPriceHistory,
   normalizePrice,
   normalizePriceHistory,
 } = require("../../src/normalization");
@@ -66,13 +65,10 @@ test("history accepts API and stored formats, sorts and exact-deduplicates", () 
     ],
   );
   assert.deepEqual(
-    normalizeLegacyPriceHistory(
-      JSON.stringify([{ price: "50", date: BEFORE }]),
-      {
-        dealType: "rent",
-        now: NOW,
-      },
-    ),
+    normalizePriceHistory(JSON.stringify([{ price: "50", date: BEFORE }]), {
+      dealType: "rent",
+      now: NOW,
+    }),
     [{ price: 50, date: BEFORE }],
   );
 });

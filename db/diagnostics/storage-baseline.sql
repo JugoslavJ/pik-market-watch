@@ -36,7 +36,7 @@ WITH ranked AS (
 )
 SELECT request_kind,
        count(*) AS rows,
-       count(*) FILTER (WHERE expires_at <= now()) AS legacy_expired,
+       count(*) FILTER (WHERE expires_at <= now()) AS expired,
        max(response_rank) AS largest_stream,
        count(*) FILTER (WHERE payload IS NOT DISTINCT FROM source_payload
                          AND payload IS NOT NULL) AS proven_duplicate_bodies,
@@ -46,7 +46,6 @@ SELECT request_kind,
  GROUP BY request_kind
  ORDER BY request_kind;
 
-SELECT * FROM raw_retention_transition;
 
 SELECT date_trunc('day', ingested_at) AS ingestion_day,
        count(*) AS state_events,

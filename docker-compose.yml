@@ -275,7 +275,6 @@ services:
       - grafana:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
-      - ./grafana/public-dashboards:/var/lib/grafana/public-dashboards:ro
     ports:
       # Keep the host-side listener loopback-only. Production deployment
       # rejects any GRAFANA_BIND override; cloudflared is the public entry point.

@@ -46,9 +46,7 @@ function buildSearchObservations(
 
 function buildSearchPriceEvents(cards, { observedAt = new Date() } = {}) {
   return cards.map((card) => {
-    // Price normalization depends on the deal dimension. Keep both fields on
-    // the event because callers that only have the legacy boolean still need
-    // to preserve rent thresholds at the canonical importer boundary.
+    // Price normalization uses the sale or rent threshold for this observation.
     const dealType = card.dealType || (card.isRent ? "rent" : "sale");
     return {
       articleId: Number(card.articleId),

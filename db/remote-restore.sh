@@ -279,10 +279,8 @@ if [ "$was_running" = "1" ]; then
 fi
 restore_ok=1
 
-# Role repair retires olx_reader, but a running Grafana keeps its previously
-# provisioned datasource until startup. Recreate it to load both the current
-# Compose environment and datasource provisioning, even if only bind-mounted
-# files changed. Do not recreate the database we just restored.
+# Recreate Grafana to load the restored database's reporting credentials and
+# datasource configuration from the current Compose environment.
 if ! docker compose up -d --no-deps --force-recreate --wait --wait-timeout 120 grafana; then
   echo "RESTORE_ERROR: database restored, but Grafana refresh failed; check docker compose logs grafana and recreate Grafana (no need to repeat the scrape/restore)" >&2
   exit 1

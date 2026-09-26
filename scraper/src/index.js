@@ -249,12 +249,6 @@ async function main() {
   );
   if (abandonedRuns > 0)
     log(`↻ recovered ${abandonedRuns} abandoned scraper run(s)`);
-  const historyBackfill = await db.backfillLegacyPriceHistory(log);
-  if (!historyBackfill.skipped && historyBackfill.inserted)
-    log(
-      `legacy price history converted · ${historyBackfill.inserted} event(s) ` +
-        `inserted, ${historyBackfill.quarantined || 0} quarantined`,
-    );
   log(
     `database ready · ${config.searches.length} search(es) · ` +
       `interval ${config.intervalMinutes} min`,
