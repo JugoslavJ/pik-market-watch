@@ -26,7 +26,10 @@ test.before(async () => {
   }
   await db.pool.query(
     fs.readFileSync(
-      path.resolve(__dirname, "../../../db/init-lean/02-neighborhoods.sql"),
+      path.resolve(
+        __dirname,
+        "../../../db/init-lean/02-lean-neighborhoods.sql",
+      ),
       "utf8",
     ),
   );

@@ -42,11 +42,11 @@ test("lean first-boot baseline contains its complete minimal schema", () => {
   assert.deepEqual(sqlFiles, [
     "00-extensions.sql",
     "01-lean-schema.sql",
-    "02-neighborhoods.sql",
+    "02-lean-neighborhoods.sql",
     "03-raw-archive.sql",
   ]);
   const neighborhoods = fs.readFileSync(
-    path.join(leanInit, "02-neighborhoods.sql"),
+    path.join(leanInit, "02-lean-neighborhoods.sql"),
     "utf8",
   );
   assert.match(neighborhoods, /count\(\*\) FROM lean\.neighborhoods\) <> 56/);
