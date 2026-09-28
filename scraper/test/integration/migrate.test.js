@@ -116,8 +116,11 @@ needsDb(
         56,
       );
       assert.equal(
-        (await pool.query("SELECT count(*)::int AS n FROM lean.raw_api_responses"))
-          .rows[0].n,
+        (
+          await pool.query(
+            "SELECT count(*)::int AS n FROM lean.raw_api_responses",
+          )
+        ).rows[0].n,
         0,
       );
       await applyMigrations(pool, LEAN_DIR, () =>

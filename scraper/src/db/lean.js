@@ -686,7 +686,10 @@ async function purgeRawResponses(limit = 1000) {
        WHERE p.id=d.id RETURNING p.id
      ) SELECT ((SELECT count(*) FROM deleted_records)+
        (SELECT count(*) FROM deleted_pending))::int AS deleted`;
-    const result = await this.pool.query(sql, [this.rawResponseRetentionCount, cap]);
+    const result = await this.pool.query(sql, [
+      this.rawResponseRetentionCount,
+      cap,
+    ]);
     const count = Number(result.rows[0].deleted);
     deleted += count;
     if (count < cap) return deleted;

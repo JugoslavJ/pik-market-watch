@@ -109,9 +109,14 @@ test("database role repair supports lean-only installs and limits raw archive re
   assert.equal(read("db/init-lean/zz-database-roles.sh"), roles);
   assert.match(roles, /n\.nspname IN \('public', 'lean'\)/);
   assert.match(roles, /GRANT SELECT ON %I\.%I TO %I/);
-  assert.match(roles, /'listing_lifecycle_events','scrape_runs','scrape_run_pages'/);
+  assert.match(
+    roles,
+    /'listing_lifecycle_events','scrape_runs','scrape_run_pages'/,
+  );
   assert.doesNotMatch(
-    roles.match(/n\.nspname = 'lean'[\s\S]*?AND c\.relkind IN \('r','p','v','m'\) \\gexec/)?.[0] || "",
+    roles.match(
+      /n\.nspname = 'lean'[\s\S]*?AND c\.relkind IN \('r','p','v','m'\) \\gexec/,
+    )?.[0] || "",
     /raw_api_responses/,
   );
 });

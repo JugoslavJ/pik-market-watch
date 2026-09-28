@@ -119,8 +119,14 @@ test.before(async () => {
     },
   );
   assert.equal(roleSetup.status, 0, roleSetup.stderr);
-  for (const name of ["01-lean-schema.sql", "02-lean-backfill.sql", "04-lean-lifecycle-events.sql"])
-    await db.pool.query(fs.readFileSync(path.join(root, "db/migrations", name), "utf8"));
+  for (const name of [
+    "01-lean-schema.sql",
+    "02-lean-backfill.sql",
+    "04-lean-lifecycle-events.sql",
+  ])
+    await db.pool.query(
+      fs.readFileSync(path.join(root, "db/migrations", name), "utf8"),
+    );
   url.username = "olx_reporting";
   url.password = "integration-reporting";
   reporting = new Pool({ connectionString: url.toString() });
@@ -129,15 +135,19 @@ test.before(async () => {
 needsDb("staged lean dashboard SQL executes as the Grafana role", async () => {
   assert.equal(leanDashboards.length, 4);
   assert.equal(
-    (await db.pool.query("SELECT to_regclass('lean.neighborhood_stats') AS relation"))
-      .rows[0].relation,
+    (
+      await db.pool.query(
+        "SELECT to_regclass('lean.neighborhood_stats') AS relation",
+      )
+    ).rows[0].relation,
     null,
   );
   for (const { name, dashboard } of leanDashboards) {
     const values = dashboardValues(dashboard, {}, "sale");
     for (const items of Object.values(values))
       for (let index = 0; index < items.length; index++)
-        if (/^'[^']*'$/.test(items[index])) items[index] = items[index].slice(1, -1);
+        if (/^'[^']*'$/.test(items[index]))
+          items[index] = items[index].slice(1, -1);
     for (const variable of dashboard.templating?.list || []) {
       if (variable.type !== "query") continue;
       await reporting.query(interpolate(variable.query, values));
@@ -160,37 +170,61 @@ needsDb("staged lean dashboard SQL executes as the Grafana role", async () => {
   }
 });
 
-needsDb("staged Exits retains both closed cycles after a listing reopens", async () => {
-  const articleId = 999999101;
-  const exits = leanDashboards.find((item) => item.name === "olx-exits.json").dashboard;
-  const values = dashboardValues(exits, {}, "sale");
-  for (const items of Object.values(values))
-    for (let index = 0; index < items.length; index++)
-      if (/^'[^']*'$/.test(items[index])) items[index] = items[index].slice(1, -1);
-  const panelQuery = (id) => interpolate(exits.panels.find((panel) => panel.id === id).targets[0].rawSql, values);
-  await db.pool.query(`INSERT INTO lean.listings(article_id,url,title,deal,property_type,sqm,rooms,price,ppm2,first_seen,last_seen)
-    VALUES ($1,'https://olx.ba/artikal/999999101','reopened apartment','sale','apartments',50,'2',90000,1800,now()-interval '30 days',now())`, [articleId]);
-  try {
-    await db.pool.query(`INSERT INTO lean.listing_lifecycle_events
+needsDb(
+  "staged Exits retains both closed cycles after a listing reopens",
+  async () => {
+    const articleId = 999999101;
+    const exits = leanDashboards.find(
+      (item) => item.name === "olx-exits.json",
+    ).dashboard;
+    const values = dashboardValues(exits, {}, "sale");
+    for (const items of Object.values(values))
+      for (let index = 0; index < items.length; index++)
+        if (/^'[^']*'$/.test(items[index]))
+          items[index] = items[index].slice(1, -1);
+    const panelQuery = (id) =>
+      interpolate(
+        exits.panels.find((panel) => panel.id === id).targets[0].rawSql,
+        values,
+      );
+    await db.pool.query(
+      `INSERT INTO lean.listings(article_id,url,title,deal,property_type,sqm,rooms,price,ppm2,first_seen,last_seen)
+    VALUES ($1,'https://olx.ba/artikal/999999101','reopened apartment','sale','apartments',50,'2',90000,1800,now()-interval '30 days',now())`,
+      [articleId],
+    );
+    try {
+      await db.pool.query(
+        `INSERT INTO lean.listing_lifecycle_events
       (article_id,event_type,occurred_at,opened_at,price,deal,property_type,sqm,rooms,latitude,longitude,title,url)
       VALUES
       ($1,'closed',now()-interval '20 days',now()-interval '30 days',100000,'sale','apartments',50,'2',43.85,18.4,'reopened apartment','https://olx.ba/artikal/999999101'),
       ($1,'reopened',now()-interval '15 days',NULL,NULL,'sale','apartments',50,'2',43.85,18.4,'reopened apartment','https://olx.ba/artikal/999999101'),
       ($1,'closed',now()-interval '5 days',now()-interval '15 days',90000,'sale','apartments',50,'2',43.85,18.4,'reopened apartment','https://olx.ba/artikal/999999101'),
-      ($1,'reopened',now()-interval '2 days',NULL,NULL,'sale','apartments',50,'2',43.85,18.4,'reopened apartment','https://olx.ba/artikal/999999101')`, [articleId]);
-    const count = await reporting.query(panelQuery(1));
-    assert.equal(Number(count.rows[0].closed_30d), 2);
-    const duration = await reporting.query(panelQuery(4));
-    assert.equal(Number(duration.rows[0].median_days_on_market), 10);
-    const recent = await reporting.query(panelQuery(9));
-    assert.equal(recent.rows.filter((row) => row.url.endsWith("999999101")).length, 2);
-    const ratio = await reporting.query(panelQuery(3));
-    assert.equal(Number(ratio.rows[0].exit_ratio), 66.7);
-  } finally {
-    await db.pool.query("DELETE FROM lean.listing_lifecycle_events WHERE article_id=$1", [articleId]);
-    await db.pool.query("DELETE FROM lean.listings WHERE article_id=$1", [articleId]);
-  }
-});
+      ($1,'reopened',now()-interval '2 days',NULL,NULL,'sale','apartments',50,'2',43.85,18.4,'reopened apartment','https://olx.ba/artikal/999999101')`,
+        [articleId],
+      );
+      const count = await reporting.query(panelQuery(1));
+      assert.equal(Number(count.rows[0].closed_30d), 2);
+      const duration = await reporting.query(panelQuery(4));
+      assert.equal(Number(duration.rows[0].median_days_on_market), 10);
+      const recent = await reporting.query(panelQuery(9));
+      assert.equal(
+        recent.rows.filter((row) => row.url.endsWith("999999101")).length,
+        2,
+      );
+      const ratio = await reporting.query(panelQuery(3));
+      assert.equal(Number(ratio.rows[0].exit_ratio), 66.7);
+    } finally {
+      await db.pool.query(
+        "DELETE FROM lean.listing_lifecycle_events WHERE article_id=$1",
+        [articleId],
+      );
+      await db.pool.query("DELETE FROM lean.listings WHERE article_id=$1", [
+        articleId,
+      ]);
+    }
+  },
+);
 test.after(async () => {
   if (reporting) await reporting.end();
   if (db) await db.close();

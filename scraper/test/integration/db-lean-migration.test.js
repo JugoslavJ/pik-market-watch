@@ -33,7 +33,7 @@ needsDb(
   async () => {
     await reset(pool);
     await pool.query(
-      "TRUNCATE lean.price_history,lean.listings,lean.scrape_runs,lean.saved_searches RESTART IDENTITY CASCADE",
+      "TRUNCATE lean.price_history,lean.listings,lean.scrape_runs,lean.saved_searches,lean.neighborhoods RESTART IDENTITY CASCADE",
     );
     await pool.query(
       `INSERT INTO public.saved_searches (search_key,name,url,category)
@@ -118,15 +118,21 @@ needsDb(
   },
 );
 
-needsDb("lean score-removal migration drops the obsolete benchmark cache", async () => {
-  await pool.query(
-    "CREATE MATERIALIZED VIEW lean.neighborhood_stats AS SELECT 1::int AS n",
-  );
-  await pool.query(migration("05-lean-remove-score-generation.sql"));
-  assert.equal(
-    (await pool.query("SELECT to_regclass('lean.neighborhood_stats') AS relation"))
-      .rows[0].relation,
-    null,
-  );
-  await pool.query(migration("05-lean-remove-score-generation.sql"));
-});
+needsDb(
+  "lean score-removal migration drops the obsolete benchmark cache",
+  async () => {
+    await pool.query(
+      "CREATE MATERIALIZED VIEW lean.neighborhood_stats AS SELECT 1::int AS n",
+    );
+    await pool.query(migration("05-lean-remove-score-generation.sql"));
+    assert.equal(
+      (
+        await pool.query(
+          "SELECT to_regclass('lean.neighborhood_stats') AS relation",
+        )
+      ).rows[0].relation,
+      null,
+    );
+    await pool.query(migration("05-lean-remove-score-generation.sql"));
+  },
+);

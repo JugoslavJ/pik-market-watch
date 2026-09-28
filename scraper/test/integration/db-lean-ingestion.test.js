@@ -26,7 +26,16 @@ test.before(async () => {
   }
   await db.pool.query(
     fs.readFileSync(
-      path.resolve(__dirname, "../../../db/migrations/04-lean-lifecycle-events.sql"),
+      path.resolve(__dirname, "../../../db/init-lean/02-neighborhoods.sql"),
+      "utf8",
+    ),
+  );
+  await db.pool.query(
+    fs.readFileSync(
+      path.resolve(
+        __dirname,
+        "../../../db/migrations/04-lean-lifecycle-events.sql",
+      ),
       "utf8",
     ),
   );
