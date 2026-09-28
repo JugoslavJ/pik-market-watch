@@ -28,7 +28,7 @@ x-scraper-runtime: &scraper-runtime
   memswap_limit: 512m
   cpus: 0.50
   volumes:
-    - ./db/init:/db/init:ro
+    - ${DB_INIT_DIR:-./db/init-lean}:/db/init:ro
   networks:
     - backend
 
@@ -98,7 +98,7 @@ services:
       # PostgreSQL 18 images require the parent mount so PGDATA can include
       # the major-version directory used by the new image layout.
       - pgdata:/var/lib/postgresql
-      - ./db/init:/docker-entrypoint-initdb.d:ro # runs on FIRST start only
+      - ${DB_INIT_DIR:-./db/init-lean}:/docker-entrypoint-initdb.d:ro # runs on FIRST start only
       - ./backups:/backups # host-visible dump target
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
@@ -151,6 +151,7 @@ services:
       DATABASE_URL: postgres://${POSTGRES_APP_USER:-olx_app}:${POSTGRES_APP_PASSWORD}@db:5432/${POSTGRES_DB:-olx}
       MIGRATIONS_ON_STARTUP: "0"
       RAW_RESPONSE_RETENTION_COUNT: ${RAW_RESPONSE_RETENTION_COUNT:-3}
+      STORAGE_SCHEMA: ${STORAGE_SCHEMA:-lean}
       ANALYTICS_REBUILD_MAX_DAYS: ${ANALYTICS_REBUILD_MAX_DAYS:-31}
     entrypoint: ["node", "src/maintenance-only.js"]
 
@@ -187,6 +188,7 @@ services:
       DETAIL_REFRESH_DAYS: ${DETAIL_REFRESH_DAYS:-7}
       DETAIL_JOB_LEASE_MINUTES: ${DETAIL_JOB_LEASE_MINUTES:-30}
       RAW_RESPONSE_RETENTION_COUNT: ${RAW_RESPONSE_RETENTION_COUNT:-3}
+      STORAGE_SCHEMA: ${STORAGE_SCHEMA:-lean}
       ANALYTICS_REBUILD_MAX_DAYS: ${ANALYTICS_REBUILD_MAX_DAYS:-31}
       # Publish score/OLAP synchronously after this scraper instance's
       # ingestion and bounded daily reconstruction.
@@ -252,7 +254,7 @@ services:
       # being stored in dashboard JSON.
       GF_GEOMAP_DEFAULT_BASELAYER_CONFIG: >-
         {"type":"maplibre","config":{"url":"https://basemaps.cartocdn.com/gl/${GRAFANA_CARTO_VECTOR_STYLE:-dark-matter}-gl-style/style.json?key=${GRAFANA_CARTO_API_KEY:-}"}}
-      # Consumed by env interpolation in grafana/provisioning/datasources/postgres.yml
+      # Consumed by datasource interpolation in provisioning-lean.
       # (read-only role — Grafana never needs write access)
       POSTGRES_REPORTING_USER: ${POSTGRES_REPORTING_USER:-olx_reporting}
       POSTGRES_REPORTING_PASSWORD: ${POSTGRES_REPORTING_PASSWORD}
@@ -273,8 +275,8 @@ services:
       # GF_SMTP_FROM_ADDRESS: ${GRAFANA_SMTP_FROM}
     volumes:
       - grafana:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./grafana/provisioning-lean:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards-lean:/var/lib/grafana/dashboards:ro
     ports:
       # Keep the host-side listener loopback-only. Production deployment
       # rejects any GRAFANA_BIND override; cloudflared is the public entry point.

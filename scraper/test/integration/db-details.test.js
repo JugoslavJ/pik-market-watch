@@ -236,6 +236,238 @@ needsDb(
 );
 
 needsDb(
+  "listing-state characteristics are shared without changing logical JSONB or null semantics",
+  async () => {
+    const characteristics = {
+      amenities: Array.from({ length: 32 }, (_, i) => ({
+        key: `amenity-${i}`,
+        value: `value-${i}`,
+      })),
+    };
+    const attributes = [
+      { characteristics, title: "first title" },
+      { characteristics, title: "second title" },
+      { characteristics: null, title: "explicit null" },
+      { title: "missing characteristics" },
+    ];
+    const ids = [];
+    for (const filterAttributes of attributes) {
+      const result = await db.pool.query(
+        `SELECT public.get_or_create_listing_state_version(
+                  'apartments', ARRAY['apartments'], false, 80, '2',
+                  $1::jsonb, false, false) AS state_version_id`,
+        [JSON.stringify(filterAttributes)],
+      );
+      ids.push(result.rows[0].state_version_id);
+    }
+
+    const rows = await db.pool.query(
+      `SELECT v.state_version_id, v.filter_attributes,
+              r.characteristic_document_id
+         FROM public.listing_state_versions v
+         JOIN public.listing_state_version_records r USING (state_version_id)
+        WHERE v.state_version_id = ANY($1::bigint[])
+        ORDER BY array_position($1::bigint[], v.state_version_id)`,
+      [ids],
+    );
+    assert.deepEqual(
+      rows.rows.map((row) => row.filter_attributes),
+      attributes,
+    );
+    assert.equal(
+      rows.rows[0].characteristic_document_id,
+      rows.rows[1].characteristic_document_id,
+    );
+    assert.notEqual(
+      rows.rows[2].characteristic_document_id,
+      null,
+      "an explicit JSON null remains present in the logical document",
+    );
+    assert.equal(
+      rows.rows[3].characteristic_document_id,
+      null,
+      "a missing characteristics key remains missing",
+    );
+  },
+);
+
+needsDb(
+  "listing-state logical compatibility view remains writable by the app role",
+  async () => {
+    const attributes = {
+      characteristics: { features: ["balcony", "elevator"] },
+      searchAttributes: { title: "compatibility test" },
+    };
+    const client = await db.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SET LOCAL ROLE olx_app");
+      const result = await client.query(
+        `INSERT INTO public.listing_state_versions
+           (state_hash, category, category_membership, is_rent, sqm, rooms,
+            filter_attributes)
+         VALUES (public.listing_state_version_hash(
+                   'apartments', ARRAY['apartments'], false, 60, '2',
+                   $1::jsonb, false, false),
+                 'apartments', ARRAY['apartments'], false, 60, '2', $1::jsonb)
+         RETURNING state_version_id, filter_attributes`,
+        [JSON.stringify(attributes)],
+      );
+      assert.deepEqual(result.rows[0].filter_attributes, attributes);
+      await client.query("ROLLBACK");
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+);
+
+needsDb(
+  "raw JSON fragments are shared losslessly and reclaimed after their final response",
+  async () => {
+    const shared = {
+      category: { id: 23, name: "Stanovi" },
+      photos: Array.from({ length: 40 }, (_, i) => ({
+        url: `https://img.olx.ba/${i}/large.jpg`,
+      })),
+    };
+    for (const page of [1, 2]) {
+      await db.archiveSearchResponse({
+        requestKind: "search",
+        requestUrl: `https://olx.ba/api/search?category_id=23&page=${page}`,
+        payload: { page, repeated: shared },
+      });
+    }
+    await db.pool.query("SELECT public.compact_raw_api_response_batch(100)");
+
+    const sharedId = (
+      await db.pool.query(
+        `SELECT document_id FROM storage_json_documents
+          WHERE content_hash = encode(sha256(convert_to($1::jsonb::text, 'UTF8')), 'hex')`,
+        [JSON.stringify(shared)],
+      )
+    ).rows[0]?.document_id;
+    assert.ok(sharedId, "the repeated JSON object is interned");
+    const refs = await db.pool.query(
+      `SELECT count(*)::int AS count FROM storage_json_parts WHERE value_id = $1`,
+      [sharedId],
+    );
+    assert.equal(refs.rows[0].count, 2);
+
+    const reconstructed = await db.pool.query(
+      `SELECT source_payload FROM raw_api_responses ORDER BY request_url`,
+    );
+    assert.deepEqual(
+      reconstructed.rows.map((row) => row.source_payload),
+      [1, 2].map((page) => ({ page, repeated: shared })),
+    );
+
+    await db.pool.query(
+      `DELETE FROM raw_api_response_records WHERE request_url LIKE '%page=1'`,
+    );
+    await db.pool.query(
+      "SELECT public.purge_unreferenced_storage_json_documents()",
+    );
+    assert.equal(
+      (
+        await db.pool.query(
+          "SELECT EXISTS (SELECT 1 FROM storage_json_documents WHERE document_id = $1) AS present",
+          [sharedId],
+        )
+      ).rows[0].present,
+      true,
+      "the second response still references the shared object",
+    );
+
+    await db.pool.query(
+      `DELETE FROM raw_api_response_records WHERE request_url LIKE '%page=2'`,
+    );
+    await db.pool.query(
+      "SELECT public.purge_unreferenced_storage_json_documents()",
+    );
+    assert.equal(
+      (
+        await db.pool.query(
+          "SELECT EXISTS (SELECT 1 FROM storage_json_documents WHERE document_id = $1) AS present",
+          [sharedId],
+        )
+      ).rows[0].present,
+      false,
+      "the fragment is reclaimed after the last response expires",
+    );
+  },
+);
+
+needsDb(
+  "raw-response retention ranks pending rows and compacts the retained bodies",
+  async () => {
+    const requestUrl = "https://olx.ba/api/search?category_id=23&retention=1";
+    for (let page = 1; page <= 4; page += 1) {
+      await db.archiveSearchResponse({
+        requestKind: "search",
+        requestUrl,
+        fetchedAt: new Date(Date.now() + page),
+        payload: { page },
+      });
+    }
+
+    assert.equal(await db.purgeRawResponses(1000), 1);
+    const retained = await db.pool.query(
+      `SELECT source_payload FROM raw_api_responses
+        WHERE request_url = $1 ORDER BY fetched_at, id`,
+      [requestUrl],
+    );
+    assert.deepEqual(
+      retained.rows.map((row) => row.source_payload),
+      [{ page: 2 }, { page: 3 }, { page: 4 }],
+    );
+    const physical = await db.pool.query(
+      `SELECT (SELECT count(*)::int FROM raw_api_response_pending
+                WHERE request_url = $1) AS pending,
+              (SELECT count(*)::int FROM raw_api_response_records
+                WHERE request_url = $1) AS compacted`,
+      [requestUrl],
+    );
+    assert.deepEqual(physical.rows[0], { pending: 0, compacted: 3 });
+  },
+);
+
+needsDb(
+  "the logical raw-response view remains writable by the app role",
+  async () => {
+    const client = await db.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SET LOCAL ROLE olx_app");
+      await client.query(
+        `INSERT INTO public.raw_api_responses
+           (request_kind, request_url, parser_version, payload)
+         VALUES ('search', 'https://olx.ba/api/search?legacy=1', 'compat-test',
+                 $1::jsonb)`,
+        [JSON.stringify({ rows: [{ id: 7004 }] })],
+      );
+      const selected = await client.query(
+        `SELECT payload FROM public.raw_api_responses
+          WHERE request_url = 'https://olx.ba/api/search?legacy=1'`,
+      );
+      assert.deepEqual(selected.rows, [{ payload: { rows: [{ id: 7004 }] } }]);
+      await client.query(
+        `DELETE FROM public.raw_api_responses
+          WHERE request_url = 'https://olx.ba/api/search?legacy=1'`,
+      );
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+);
+
+needsDb(
   "scalars are first-wins; renewed_at moves forward; characteristics merge",
   async () => {
     await seed(7002);

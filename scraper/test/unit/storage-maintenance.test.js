@@ -29,6 +29,9 @@ test("raw archive v2 stores one canonical search body and keeps diagnostics body
     JSON.stringify({ data: [{ id: 1 }], meta: { total: 1 } }),
   );
   assert.equal(calls[0][1][12], "canonical-v2");
+  assert.match(calls[0][0], /INSERT INTO raw_api_response_pending/);
+  assert.match(calls[0][0], /parser_version, payload, source_payload/);
+  assert.match(calls[1][0], /INSERT INTO raw_api_response_pending/);
   assert.equal(calls[1][1][6], null, "diagnostics do not retain an empty body");
   assert.equal(calls[1][1][12], "diagnostic-v2");
 });
@@ -49,11 +52,86 @@ test("raw response purge ranks records per request stream", async () => {
   assert.deepEqual(calls[0][1], [3, 1000]);
 });
 
+test("lean raw archive stores listing and run references in lean", async () => {
+  const db = new Db("postgres://unused", { schema: "lean" });
+  const calls = [];
+  db.pool = {
+    query: async (...args) => {
+      calls.push(args);
+      return String(args[0]).includes("to_regclass")
+        ? { rows: [{ ready: true }] }
+        : { rowCount: 1 };
+    },
+  };
+
+  await db.archiveSearchResponse({
+    runId: 81,
+    articleId: 82,
+    requestKind: "detail",
+    requestUrl: "https://olx.ba/api/listings/82",
+    payload: { id: 82 },
+  });
+
+  assert.match(calls[1][0], /INSERT INTO lean\.raw_api_responses/);
+  assert.deepEqual(calls[1][1].slice(0, 2), [81, 82]);
+});
+
+test("lean raw archive retention never calls legacy public storage helpers", async () => {
+  const db = new Db("postgres://unused", { schema: "lean" });
+  const calls = [];
+  db.rawResponseRetentionCount = 3;
+  db.pool = {
+    query: async (...args) => {
+      calls.push(args);
+      return String(args[0]).includes("to_regclass")
+        ? { rows: [{ ready: true }] }
+        : { rowCount: 0, rows: [{ deleted: 0 }] };
+    },
+  };
+
+  const result = await db.runMaintenanceCycle();
+
+  assert.equal(result.ok, true);
+  assert.equal(result.purged, 0);
+  assert.equal(calls.length, 2);
+  assert.match(calls[1][0], /FROM lean\.raw_api_responses/);
+  assert.doesNotMatch(calls[1][0], /public\./);
+});
+
+test("lean raw archive remains compatible before its data migration", async () => {
+  const db = new Db("postgres://unused", { schema: "lean" });
+  let insert;
+  db.pool = {
+    query: async (sql, values) => {
+      if (String(sql).includes("to_regclass"))
+        return { rows: [{ ready: false }] };
+      insert = { sql, values };
+      return { rowCount: 1 };
+    },
+  };
+
+  await db.archiveSearchResponse({
+    runId: 91,
+    articleId: 92,
+    requestUrl: "https://olx.ba/api/search?page=1",
+    payload: { data: [] },
+  });
+
+  assert.match(insert.sql, /INSERT INTO public\.raw_api_response_pending/);
+  assert.deepEqual(insert.values.slice(0, 2), [null, null]);
+  assert.deepEqual(JSON.parse(insert.values[8]), {
+    leanRunId: 91,
+    leanArticleId: 92,
+  });
+});
+
 test("batched detail archives keep original bodies and bodyless diagnostics", async () => {
   const db = new Db("postgres://unused");
   let archived;
+  let archiveSql;
   db.pool = {
-    query: async (_sql, [encoded]) => {
+    query: async (sql, [encoded]) => {
+      archiveSql = sql;
       archived = JSON.parse(encoded);
       return { rowCount: archived.length };
     },
@@ -68,6 +146,8 @@ test("batched detail archives keep original bodies and bodyless diagnostics", as
     },
   ]);
   assert.equal(count, 2);
+  assert.match(archiveSql, /INSERT INTO raw_api_response_pending/);
+  assert.match(archiveSql, /parser_version, payload, source_payload/);
   assert.deepEqual(archived[0].payload, { id: 1 });
   assert.equal(archived[1].payload, null);
   assert.deepEqual(archived[1].diagnostic, { kind: "http", status: 403 });

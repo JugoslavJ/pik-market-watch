@@ -203,6 +203,7 @@ module.exports = {
     3,
     { min: 1 },
   ),
+  storageSchema: (process.env.STORAGE_SCHEMA || "lean").trim(),
   analyticsRebuildMaxDays: integer(
     "ANALYTICS_REBUILD_MAX_DAYS",
     process.env.ANALYTICS_REBUILD_MAX_DAYS,

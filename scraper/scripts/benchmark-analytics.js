@@ -68,9 +68,9 @@ async function seed(pool) {
       [firstId, lastId],
     );
     await pool.query(
-      `INSERT INTO public.listing_state_versions
+      `INSERT INTO public.listing_state_version_records
          (state_hash, category, category_membership, is_rent, sqm, rooms,
-          filter_attributes)
+          filter_attributes_residual)
        SELECT public.listing_state_version_hash(
                 'apartments', ARRAY['apartments'], false, l.sqm, l.rooms,
                 jsonb_build_object('latitude', l.latitude::text,

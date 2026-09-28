@@ -1,0 +1,16 @@
+# Provision the lean dashboard set. Missing dashboards from the former OLX
+# provider are removed from Grafana; the archived JSON remains in the repo
+# through the validation window.
+apiVersion: 1
+
+providers:
+  - name: olx-dashboards
+    orgId: 1
+    folder: OLX
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

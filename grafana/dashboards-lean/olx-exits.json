@@ -1,0 +1,1183 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "red",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      },
+      {
+        "datasource": {
+          "type": "postgres",
+          "uid": "olx-postgres"
+        },
+        "enable": true,
+        "hide": false,
+        "iconColor": "red",
+        "name": "Scraper failures",
+        "rawQuery": true,
+        "rawSql": "SELECT started_at AS time,\n       COALESCE(finished_at, started_at + INTERVAL '15 minutes') AS time_end,\n       COALESCE(NULLIF(left(error, 160), ''), 'run failed') AS text\nFROM lean.scrape_runs\nWHERE status = 'error'\n  AND $__timeFilter(started_at)",
+        "showIn": 0
+      }
+    ]
+  },
+  "description": "Direct views of current listings, recorded price changes, scrape runs, and observed closures in the lean schema. Historical charts use retained event timestamps rather than reconstructed daily inventory.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {
+      "targetBlank": false,
+      "title": "Home",
+      "url": "/d/olx-home"
+    },
+    {
+      "targetBlank": false,
+      "title": "Market overview",
+      "url": "/d/olx-overview"
+    },
+    {
+      "targetBlank": false,
+      "title": "Observed exits",
+      "url": "/d/olx-exits"
+    },
+    {
+      "targetBlank": false,
+      "title": "Data health",
+      "url": "/d/olx-health"
+    }
+  ],
+  "panels": [
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "green",
+                "value": 10
+              }
+            ]
+          },
+          "unit": "short",
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 4
+      },
+      "title": "Closed listings · 30 d",
+      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
+      "type": "stat",
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "closed_30d",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH base AS (SELECT e.id AS event_id,e.article_id,e.title,e.url,e.deal,e.property_type,e.sqm,e.rooms,e.neighborhood,e.latitude,e.longitude,e.price AS closing_price,e.occurred_at AS closed_at,e.opened_at AS cycle_opened_at,CASE WHEN e.sqm>0 THEN e.price/e.sqm END AS closing_ppm2,EXTRACT(EPOCH FROM (e.occurred_at-e.opened_at))/86400 AS days_listed FROM lean.listing_lifecycle_events e WHERE e.event_type='closed' AND (${deal:sqlstring}='All' OR e.deal=CASE WHEN ${deal:sqlstring}='sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${category:sqlstring}='All' OR e.property_type=${category:sqlstring}) AND (${rooms:sqlstring}='All' OR coalesce(e.rooms,'unknown')=${rooms:sqlstring}) AND ('All'=ANY(ARRAY[${neighborhood:sqlstring}]::text[]) OR coalesce(e.neighborhood,'unknown')=ANY(ARRAY[${neighborhood:sqlstring}]::text[])) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR e.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR e.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)), active AS (SELECT l.article_id,l.deal,l.property_type,l.rooms,l.sqm,l.ppm2,l.neighborhood FROM lean.listings l WHERE l.closed_at IS NULL AND (${deal:sqlstring}='All' OR l.deal=CASE WHEN ${deal:sqlstring}='sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${category:sqlstring}='All' OR l.property_type=${category:sqlstring}) AND (${rooms:sqlstring}='All' OR coalesce(l.rooms,'unknown')=${rooms:sqlstring}) AND ('All'=ANY(ARRAY[${neighborhood:sqlstring}]::text[]) OR coalesce(l.neighborhood,'unknown')=ANY(ARRAY[${neighborhood:sqlstring}]::text[])) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)) SELECT count(*) AS closed_30d FROM base WHERE closed_at>now()-INTERVAL '30 days'",
+          "refId": "A"
+        }
+      ],
+      "id": 1
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "suffix: KM/m²",
+          "noValue": "—"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 4
+      },
+      "title": "Median exit KM/m² · closed 30 d",
+      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
+      "type": "stat",
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "median_exit_ppm2",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH base AS (SELECT e.id AS event_id,e.article_id,e.title,e.url,e.deal,e.property_type,e.sqm,e.rooms,e.neighborhood,e.latitude,e.longitude,e.price AS closing_price,e.occurred_at AS closed_at,e.opened_at AS cycle_opened_at,CASE WHEN e.sqm>0 THEN e.price/e.sqm END AS closing_ppm2,EXTRACT(EPOCH FROM (e.occurred_at-e.opened_at))/86400 AS days_listed FROM lean.listing_lifecycle_events e WHERE e.event_type='closed' AND (${deal:sqlstring}='All' OR e.deal=CASE WHEN ${deal:sqlstring}='sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${category:sqlstring}='All' OR e.property_type=${category:sqlstring}) AND (${rooms:sqlstring}='All' OR coalesce(e.rooms,'unknown')=${rooms:sqlstring}) AND ('All'=ANY(ARRAY[${neighborhood:sqlstring}]::text[]) OR coalesce(e.neighborhood,'unknown')=ANY(ARRAY[${neighborhood:sqlstring}]::text[])) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR e.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR e.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)), active AS (SELECT l.article_id,l.deal,l.property_type,l.rooms,l.sqm,l.ppm2,l.neighborhood FROM lean.listings l WHERE l.closed_at IS NULL AND (${deal:sqlstring}='All' OR l.deal=CASE WHEN ${deal:sqlstring}='sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${category:sqlstring}='All' OR l.property_type=${category:sqlstring}) AND (${rooms:sqlstring}='All' OR coalesce(l.rooms,'unknown')=${rooms:sqlstring}) AND ('All'=ANY(ARRAY[${neighborhood:sqlstring}]::text[]) OR coalesce(l.neighborhood,'unknown')=ANY(ARRAY[${neighborhood:sqlstring}]::text[])) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)) SELECT round(percentile_cont(0.5) WITHIN GROUP (ORDER BY closing_ppm2)::numeric,0) AS median_exit_ppm2 FROM base WHERE closed_at>now()-INTERVAL '30 days' AND closing_ppm2>0",
+          "refId": "A"
+        }
+      ],
+      "id": 2
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "percent",
+          "noValue": "—"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 4
+      },
+      "title": "Observed closure share · 30 d",
+      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
+      "type": "stat",
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "exit_ratio",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH base AS (SELECT e.id AS event_id,e.article_id,e.title,e.url,e.deal,e.property_type,e.sqm,e.rooms,e.neighborhood,e.latitude,e.longitude,e.price AS closing_price,e.occurred_at AS closed_at,e.opened_at AS cycle_opened_at,CASE WHEN e.sqm>0 THEN e.price/e.sqm END AS closing_ppm2,EXTRACT(EPOCH FROM (e.occurred_at-e.opened_at))/86400 AS days_listed FROM lean.listing_lifecycle_events e WHERE e.event_type='closed' AND (${deal:sqlstring}='All' OR e.deal=CASE WHEN ${deal:sqlstring}='sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${category:sqlstring}='All' OR e.property_type=${category:sqlstring}) AND (${rooms:sqlstring}='All' OR coalesce(e.rooms,'unknown')=${rooms:sqlstring}) AND ('All'=ANY(ARRAY[${neighborhood:sqlstring}]::text[]) OR coalesce(e.neighborhood,'unknown')=ANY(ARRAY[${neighborhood:sqlstring}]::text[])) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR e.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR e.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)), active AS (SELECT l.article_id,l.deal,l.property_type,l.rooms,l.sqm,l.ppm2,l.neighborhood FROM lean.listings l WHERE l.closed_at IS NULL AND (${deal:sqlstring}='All' OR l.deal=CASE WHEN ${deal:sqlstring}='sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${category:sqlstring}='All' OR l.property_type=${category:sqlstring}) AND (${rooms:sqlstring}='All' OR coalesce(l.rooms,'unknown')=${rooms:sqlstring}) AND ('All'=ANY(ARRAY[${neighborhood:sqlstring}]::text[]) OR coalesce(l.neighborhood,'unknown')=ANY(ARRAY[${neighborhood:sqlstring}]::text[])) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)) SELECT round(100.0*(SELECT count(*) FROM base WHERE closed_at>now()-INTERVAL '30 days')/NULLIF((SELECT count(*) FROM base WHERE closed_at>now()-INTERVAL '30 days')+(SELECT count(*) FROM active),0),1) AS exit_ratio",
+          "refId": "A"
+        }
+      ],
+      "id": 3
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "suffix: days",
+          "noValue": "—"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 4
+      },
+      "title": "Median days on market · closed 30 d",
+      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
+      "type": "stat",
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "median_days_on_market",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH base AS (SELECT e.id AS event_id,e.article_id,e.title,e.url,e.deal,e.property_type,e.sqm,e.rooms,e.neighborhood,e.latitude,e.longitude,e.price AS closing_price,e.occurred_at AS closed_at,e.opened_at AS cycle_opened_at,CASE WHEN e.sqm>0 THEN e.price/e.sqm END AS closing_ppm2,EXTRACT(EPOCH FROM (e.occurred_at-e.opened_at))/86400 AS days_listed FROM lean.listing_lifecycle_events e WHERE e.event_type='closed' AND (${deal:sqlstring}='All' OR e.deal=CASE WHEN ${deal:sqlstring}='sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${category:sqlstring}='All' OR e.property_type=${category:sqlstring}) AND (${rooms:sqlstring}='All' OR coalesce(e.rooms,'unknown')=${rooms:sqlstring}) AND ('All'=ANY(ARRAY[${neighborhood:sqlstring}]::text[]) OR coalesce(e.neighborhood,'unknown')=ANY(ARRAY[${neighborhood:sqlstring}]::text[])) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR e.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR e.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)), active AS (SELECT l.article_id,l.deal,l.property_type,l.rooms,l.sqm,l.ppm2,l.neighborhood FROM lean.listings l WHERE l.closed_at IS NULL AND (${deal:sqlstring}='All' OR l.deal=CASE WHEN ${deal:sqlstring}='sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${category:sqlstring}='All' OR l.property_type=${category:sqlstring}) AND (${rooms:sqlstring}='All' OR coalesce(l.rooms,'unknown')=${rooms:sqlstring}) AND ('All'=ANY(ARRAY[${neighborhood:sqlstring}]::text[]) OR coalesce(l.neighborhood,'unknown')=ANY(ARRAY[${neighborhood:sqlstring}]::text[])) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)) SELECT round(percentile_cont(0.5) WITHIN GROUP (ORDER BY days_listed)::numeric,1) AS median_days_on_market FROM base WHERE closed_at>now()-INTERVAL '30 days'",
+          "refId": "A"
+        }
+      ],
+      "id": 4
+    },
+    {
+      "type": "row",
+      "title": "Observed closure prices",
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [],
+      "id": 5
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "unit": "suffix: KM/m²"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 9,
+        "w": 24,
+        "h": 9
+      },
+      "title": "Final asking KM/m² by observed closure day",
+      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "WITH base AS (SELECT e.id AS event_id,e.article_id,e.title,e.url,e.deal,e.property_type,e.sqm,e.rooms,e.neighborhood,e.latitude,e.longitude,e.price AS closing_price,e.occurred_at AS closed_at,e.opened_at AS cycle_opened_at,CASE WHEN e.sqm>0 THEN e.price/e.sqm END AS closing_ppm2,EXTRACT(EPOCH FROM (e.occurred_at-e.opened_at))/86400 AS days_listed FROM lean.listing_lifecycle_events e WHERE e.event_type='closed' AND (${deal:sqlstring}='All' OR e.deal=CASE WHEN ${deal:sqlstring}='sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${category:sqlstring}='All' OR e.property_type=${category:sqlstring}) AND (${rooms:sqlstring}='All' OR coalesce(e.rooms,'unknown')=${rooms:sqlstring}) AND ('All'=ANY(ARRAY[${neighborhood:sqlstring}]::text[]) OR coalesce(e.neighborhood,'unknown')=ANY(ARRAY[${neighborhood:sqlstring}]::text[])) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR e.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR e.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)), active AS (SELECT l.article_id,l.deal,l.property_type,l.rooms,l.sqm,l.ppm2,l.neighborhood FROM lean.listings l WHERE l.closed_at IS NULL AND (${deal:sqlstring}='All' OR l.deal=CASE WHEN ${deal:sqlstring}='sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${category:sqlstring}='All' OR l.property_type=${category:sqlstring}) AND (${rooms:sqlstring}='All' OR coalesce(l.rooms,'unknown')=${rooms:sqlstring}) AND ('All'=ANY(ARRAY[${neighborhood:sqlstring}]::text[]) OR coalesce(l.neighborhood,'unknown')=ANY(ARRAY[${neighborhood:sqlstring}]::text[])) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)) SELECT date_trunc('day',closed_at) AS time,round(percentile_cont(0.5) WITHIN GROUP (ORDER BY closing_ppm2)::numeric,0) AS \"median exit KM/m²\" FROM base WHERE $__timeFilter(closed_at) GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "id": 6
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 24,
+        "h": 9
+      },
+      "title": "Days on market — closed listings",
+      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
+      "type": "bargauge",
+      "options": {
+        "displayMode": "gradient",
+        "minVizHeight": 10,
+        "minVizWidth": 0,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "color"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH base AS (SELECT e.id AS event_id,e.article_id,e.title,e.url,e.deal,e.property_type,e.sqm,e.rooms,e.neighborhood,e.latitude,e.longitude,e.price AS closing_price,e.occurred_at AS closed_at,e.opened_at AS cycle_opened_at,CASE WHEN e.sqm>0 THEN e.price/e.sqm END AS closing_ppm2,EXTRACT(EPOCH FROM (e.occurred_at-e.opened_at))/86400 AS days_listed FROM lean.listing_lifecycle_events e WHERE e.event_type='closed' AND (${deal:sqlstring}='All' OR e.deal=CASE WHEN ${deal:sqlstring}='sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${category:sqlstring}='All' OR e.property_type=${category:sqlstring}) AND (${rooms:sqlstring}='All' OR coalesce(e.rooms,'unknown')=${rooms:sqlstring}) AND ('All'=ANY(ARRAY[${neighborhood:sqlstring}]::text[]) OR coalesce(e.neighborhood,'unknown')=ANY(ARRAY[${neighborhood:sqlstring}]::text[])) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR e.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR e.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)), active AS (SELECT l.article_id,l.deal,l.property_type,l.rooms,l.sqm,l.ppm2,l.neighborhood FROM lean.listings l WHERE l.closed_at IS NULL AND (${deal:sqlstring}='All' OR l.deal=CASE WHEN ${deal:sqlstring}='sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${category:sqlstring}='All' OR l.property_type=${category:sqlstring}) AND (${rooms:sqlstring}='All' OR coalesce(l.rooms,'unknown')=${rooms:sqlstring}) AND ('All'=ANY(ARRAY[${neighborhood:sqlstring}]::text[]) OR coalesce(l.neighborhood,'unknown')=ANY(ARRAY[${neighborhood:sqlstring}]::text[])) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)) SELECT width_bucket(days_listed,0,180,9)::text AS days_bracket,count(*) AS listings FROM base WHERE closed_at>now()-INTERVAL '90 days' AND days_listed>=0 GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "id": 7,
+      "transformations": [
+        {
+          "id": "rowsToFields",
+          "options": {
+            "nameField": "days_bracket",
+            "valueField": "listings"
+          }
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Recently closed",
+      "gridPos": {
+        "x": 0,
+        "y": 27,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [],
+      "id": 8
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 28,
+        "w": 24,
+        "h": 11
+      },
+      "title": "Recently closed · final recorded ask",
+      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
+      "type": "table",
+      "options": {
+        "cellHeight": "sm",
+        "wrapHeaderText": true,
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH base AS (SELECT e.id AS event_id,e.article_id,e.title,e.url,e.deal,e.property_type,e.sqm,e.rooms,e.neighborhood,e.latitude,e.longitude,e.price AS closing_price,e.occurred_at AS closed_at,e.opened_at AS cycle_opened_at,CASE WHEN e.sqm>0 THEN e.price/e.sqm END AS closing_ppm2,EXTRACT(EPOCH FROM (e.occurred_at-e.opened_at))/86400 AS days_listed FROM lean.listing_lifecycle_events e WHERE e.event_type='closed' AND (${deal:sqlstring}='All' OR e.deal=CASE WHEN ${deal:sqlstring}='sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${category:sqlstring}='All' OR e.property_type=${category:sqlstring}) AND (${rooms:sqlstring}='All' OR coalesce(e.rooms,'unknown')=${rooms:sqlstring}) AND ('All'=ANY(ARRAY[${neighborhood:sqlstring}]::text[]) OR coalesce(e.neighborhood,'unknown')=ANY(ARRAY[${neighborhood:sqlstring}]::text[])) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR e.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR e.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)), active AS (SELECT l.article_id,l.deal,l.property_type,l.rooms,l.sqm,l.ppm2,l.neighborhood FROM lean.listings l WHERE l.closed_at IS NULL AND (${deal:sqlstring}='All' OR l.deal=CASE WHEN ${deal:sqlstring}='sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${category:sqlstring}='All' OR l.property_type=${category:sqlstring}) AND (${rooms:sqlstring}='All' OR coalesce(l.rooms,'unknown')=${rooms:sqlstring}) AND ('All'=ANY(ARRAY[${neighborhood:sqlstring}]::text[]) OR coalesce(l.neighborhood,'unknown')=ANY(ARRAY[${neighborhood:sqlstring}]::text[])) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)) SELECT title,url,neighborhood,rooms,sqm,closing_price AS final_asking_price,closing_ppm2,cycle_opened_at,closed_at,round(days_listed::numeric,1) AS days_listed FROM base ORDER BY closed_at DESC,event_id DESC LIMIT 50",
+          "refId": "A"
+        }
+      ],
+      "id": 9
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "purple",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 39,
+        "w": 24,
+        "h": 11
+      },
+      "title": "Exits by room count",
+      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
+      "type": "bargauge",
+      "options": {
+        "displayMode": "gradient",
+        "minVizHeight": 10,
+        "minVizWidth": 0,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "color"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH base AS (SELECT e.id AS event_id,e.article_id,e.title,e.url,e.deal,e.property_type,e.sqm,e.rooms,e.neighborhood,e.latitude,e.longitude,e.price AS closing_price,e.occurred_at AS closed_at,e.opened_at AS cycle_opened_at,CASE WHEN e.sqm>0 THEN e.price/e.sqm END AS closing_ppm2,EXTRACT(EPOCH FROM (e.occurred_at-e.opened_at))/86400 AS days_listed FROM lean.listing_lifecycle_events e WHERE e.event_type='closed' AND (${deal:sqlstring}='All' OR e.deal=CASE WHEN ${deal:sqlstring}='sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${category:sqlstring}='All' OR e.property_type=${category:sqlstring}) AND (${rooms:sqlstring}='All' OR coalesce(e.rooms,'unknown')=${rooms:sqlstring}) AND ('All'=ANY(ARRAY[${neighborhood:sqlstring}]::text[]) OR coalesce(e.neighborhood,'unknown')=ANY(ARRAY[${neighborhood:sqlstring}]::text[])) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR e.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR e.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)), active AS (SELECT l.article_id,l.deal,l.property_type,l.rooms,l.sqm,l.ppm2,l.neighborhood FROM lean.listings l WHERE l.closed_at IS NULL AND (${deal:sqlstring}='All' OR l.deal=CASE WHEN ${deal:sqlstring}='sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${category:sqlstring}='All' OR l.property_type=${category:sqlstring}) AND (${rooms:sqlstring}='All' OR coalesce(l.rooms,'unknown')=${rooms:sqlstring}) AND ('All'=ANY(ARRAY[${neighborhood:sqlstring}]::text[]) OR coalesce(l.neighborhood,'unknown')=ANY(ARRAY[${neighborhood:sqlstring}]::text[])) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)) SELECT coalesce(rooms,'unknown') AS rooms,count(*) AS exits FROM base WHERE closed_at>now()-INTERVAL '30 days' GROUP BY 1 ORDER BY 2 DESC",
+          "refId": "A"
+        }
+      ],
+      "id": 10,
+      "transformations": [
+        {
+          "id": "rowsToFields",
+          "options": {
+            "nameField": "rooms",
+            "valueField": "exits"
+          }
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Where ads disappear",
+      "gridPos": {
+        "x": 0,
+        "y": 50,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [],
+      "id": 11
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "links": [
+            {
+              "title": "Open ad on olx.ba",
+              "url": "${__data.fields.url}",
+              "targetBlank": true
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 51,
+        "w": 24,
+        "h": 14
+      },
+      "title": "Exit map — click a pin to open the ad",
+      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
+      "type": "geomap",
+      "options": {
+        "basemap": {
+          "type": "default",
+          "label": "Road map"
+        },
+        "controls": {
+          "mouseWheelZoom": true,
+          "showLegend": false,
+          "showScale": false,
+          "zoomDelta": 0.5
+        },
+        "layers": [
+          {
+            "config": {
+              "showLegend": false,
+              "style": {
+                "color": {
+                  "fixed": "dark-red"
+                },
+                "opacity": 0.7,
+                "size": {
+                  "fixed": 5
+                }
+              },
+              "links": [
+                {
+                  "title": "Open ad on olx.ba",
+                  "url": "${__data.fields.url}",
+                  "targetBlank": true
+                }
+              ]
+            },
+            "location": {
+              "mode": "coords",
+              "latitude": "latitude",
+              "longitude": "longitude"
+            },
+            "name": "Exits",
+            "type": "markers"
+          }
+        ],
+        "tooltip": {
+          "mode": "details"
+        },
+        "view": {
+          "id": "fit",
+          "lat": 44.77,
+          "lon": 17.2,
+          "zoom": 14,
+          "allLayers": true,
+          "lastOnly": false
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH base AS (SELECT e.id AS event_id,e.article_id,e.title,e.url,e.deal,e.property_type,e.sqm,e.rooms,e.neighborhood,e.latitude,e.longitude,e.price AS closing_price,e.occurred_at AS closed_at,e.opened_at AS cycle_opened_at,CASE WHEN e.sqm>0 THEN e.price/e.sqm END AS closing_ppm2,EXTRACT(EPOCH FROM (e.occurred_at-e.opened_at))/86400 AS days_listed FROM lean.listing_lifecycle_events e WHERE e.event_type='closed' AND (${deal:sqlstring}='All' OR e.deal=CASE WHEN ${deal:sqlstring}='sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${category:sqlstring}='All' OR e.property_type=${category:sqlstring}) AND (${rooms:sqlstring}='All' OR coalesce(e.rooms,'unknown')=${rooms:sqlstring}) AND ('All'=ANY(ARRAY[${neighborhood:sqlstring}]::text[]) OR coalesce(e.neighborhood,'unknown')=ANY(ARRAY[${neighborhood:sqlstring}]::text[])) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR e.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR e.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)), active AS (SELECT l.article_id,l.deal,l.property_type,l.rooms,l.sqm,l.ppm2,l.neighborhood FROM lean.listings l WHERE l.closed_at IS NULL AND (${deal:sqlstring}='All' OR l.deal=CASE WHEN ${deal:sqlstring}='sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${category:sqlstring}='All' OR l.property_type=${category:sqlstring}) AND (${rooms:sqlstring}='All' OR coalesce(l.rooms,'unknown')=${rooms:sqlstring}) AND ('All'=ANY(ARRAY[${neighborhood:sqlstring}]::text[]) OR coalesce(l.neighborhood,'unknown')=ANY(ARRAY[${neighborhood:sqlstring}]::text[])) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)) SELECT latitude,longitude,title,url,closing_price,days_listed FROM base WHERE closed_at>now()-INTERVAL '90 days' AND latitude IS NOT NULL AND longitude IS NOT NULL",
+          "refId": "A"
+        }
+      ],
+      "id": 12
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 65,
+        "w": 24,
+        "h": 14
+      },
+      "title": "Closed & pinned — click title to open",
+      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
+      "type": "table",
+      "options": {
+        "cellHeight": "sm",
+        "enablePagination": true,
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH base AS (SELECT e.id AS event_id,e.article_id,e.title,e.url,e.deal,e.property_type,e.sqm,e.rooms,e.neighborhood,e.latitude,e.longitude,e.price AS closing_price,e.occurred_at AS closed_at,e.opened_at AS cycle_opened_at,CASE WHEN e.sqm>0 THEN e.price/e.sqm END AS closing_ppm2,EXTRACT(EPOCH FROM (e.occurred_at-e.opened_at))/86400 AS days_listed FROM lean.listing_lifecycle_events e WHERE e.event_type='closed' AND (${deal:sqlstring}='All' OR e.deal=CASE WHEN ${deal:sqlstring}='sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${category:sqlstring}='All' OR e.property_type=${category:sqlstring}) AND (${rooms:sqlstring}='All' OR coalesce(e.rooms,'unknown')=${rooms:sqlstring}) AND ('All'=ANY(ARRAY[${neighborhood:sqlstring}]::text[]) OR coalesce(e.neighborhood,'unknown')=ANY(ARRAY[${neighborhood:sqlstring}]::text[])) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR e.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR e.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)), active AS (SELECT l.article_id,l.deal,l.property_type,l.rooms,l.sqm,l.ppm2,l.neighborhood FROM lean.listings l WHERE l.closed_at IS NULL AND (${deal:sqlstring}='All' OR l.deal=CASE WHEN ${deal:sqlstring}='sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${category:sqlstring}='All' OR l.property_type=${category:sqlstring}) AND (${rooms:sqlstring}='All' OR coalesce(l.rooms,'unknown')=${rooms:sqlstring}) AND ('All'=ANY(ARRAY[${neighborhood:sqlstring}]::text[]) OR coalesce(l.neighborhood,'unknown')=ANY(ARRAY[${neighborhood:sqlstring}]::text[])) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)) SELECT title,url,neighborhood,latitude,longitude,closing_price,closed_at FROM base WHERE closed_at>now()-INTERVAL '90 days' AND latitude IS NOT NULL AND longitude IS NOT NULL ORDER BY closed_at DESC",
+          "refId": "A"
+        }
+      ],
+      "id": 13
+    },
+    {
+      "type": "row",
+      "title": "Exit dynamics",
+      "gridPos": {
+        "x": 0,
+        "y": 79,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [],
+      "id": 14
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "orange",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 80,
+        "w": 24,
+        "h": 10
+      },
+      "title": "Final recorded ask vs cycle opening ask",
+      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
+      "type": "bargauge",
+      "options": {
+        "displayMode": "gradient",
+        "minVizHeight": 10,
+        "minVizWidth": 0,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "color"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH base AS (SELECT e.id AS event_id,e.article_id,e.title,e.url,e.deal,e.property_type,e.sqm,e.rooms,e.neighborhood,e.latitude,e.longitude,e.price AS closing_price,e.occurred_at AS closed_at,e.opened_at AS cycle_opened_at,CASE WHEN e.sqm>0 THEN e.price/e.sqm END AS closing_ppm2,EXTRACT(EPOCH FROM (e.occurred_at-e.opened_at))/86400 AS days_listed FROM lean.listing_lifecycle_events e WHERE e.event_type='closed' AND (${deal:sqlstring}='All' OR e.deal=CASE WHEN ${deal:sqlstring}='sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${category:sqlstring}='All' OR e.property_type=${category:sqlstring}) AND (${rooms:sqlstring}='All' OR coalesce(e.rooms,'unknown')=${rooms:sqlstring}) AND ('All'=ANY(ARRAY[${neighborhood:sqlstring}]::text[]) OR coalesce(e.neighborhood,'unknown')=ANY(ARRAY[${neighborhood:sqlstring}]::text[])) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR e.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR e.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)), active AS (SELECT l.article_id,l.deal,l.property_type,l.rooms,l.sqm,l.ppm2,l.neighborhood FROM lean.listings l WHERE l.closed_at IS NULL AND (${deal:sqlstring}='All' OR l.deal=CASE WHEN ${deal:sqlstring}='sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${category:sqlstring}='All' OR l.property_type=${category:sqlstring}) AND (${rooms:sqlstring}='All' OR coalesce(l.rooms,'unknown')=${rooms:sqlstring}) AND ('All'=ANY(ARRAY[${neighborhood:sqlstring}]::text[]) OR coalesce(l.neighborhood,'unknown')=ANY(ARRAY[${neighborhood:sqlstring}]::text[])) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)) SELECT CASE WHEN b.closing_price<opening.opening_price THEN 'lower' WHEN b.closing_price>opening.opening_price THEN 'higher' ELSE 'same' END AS direction,count(*) AS listings FROM base b JOIN LATERAL (SELECT price AS opening_price FROM lean.price_history WHERE article_id=b.article_id AND price>0 AND observed_at<=b.closed_at ORDER BY CASE WHEN observed_at>=b.cycle_opened_at THEN 0 ELSE 1 END,CASE WHEN observed_at>=b.cycle_opened_at THEN observed_at END ASC NULLS LAST,CASE WHEN observed_at<b.cycle_opened_at THEN observed_at END DESC NULLS LAST,id LIMIT 1) opening ON TRUE WHERE b.closed_at>now()-INTERVAL '90 days' AND b.closing_price IS NOT NULL GROUP BY 1",
+          "refId": "A"
+        }
+      ],
+      "id": 15,
+      "transformations": [
+        {
+          "id": "rowsToFields",
+          "options": {
+            "nameField": "direction",
+            "valueField": "listings"
+          }
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Liquidity deep dive",
+      "gridPos": {
+        "x": 0,
+        "y": 100,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [],
+      "id": 17
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 101,
+        "w": 24,
+        "h": 11
+      },
+      "title": "Days listed vs final asking-price change",
+      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
+      "type": "xychart",
+      "pluginVersion": "13.0.2",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "mapping": "manual",
+        "series": [
+          {
+            "frame": {
+              "matcher": {
+                "id": "byIndex",
+                "options": 0
+              }
+            },
+            "x": {
+              "matcher": {
+                "id": "byName",
+                "options": "days_listed"
+              }
+            },
+            "y": {
+              "matcher": {
+                "id": "byName",
+                "options": "final_change_pct"
+              }
+            }
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH base AS (SELECT e.id AS event_id,e.article_id,e.title,e.url,e.deal,e.property_type,e.sqm,e.rooms,e.neighborhood,e.latitude,e.longitude,e.price AS closing_price,e.occurred_at AS closed_at,e.opened_at AS cycle_opened_at,CASE WHEN e.sqm>0 THEN e.price/e.sqm END AS closing_ppm2,EXTRACT(EPOCH FROM (e.occurred_at-e.opened_at))/86400 AS days_listed FROM lean.listing_lifecycle_events e WHERE e.event_type='closed' AND (${deal:sqlstring}='All' OR e.deal=CASE WHEN ${deal:sqlstring}='sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${category:sqlstring}='All' OR e.property_type=${category:sqlstring}) AND (${rooms:sqlstring}='All' OR coalesce(e.rooms,'unknown')=${rooms:sqlstring}) AND ('All'=ANY(ARRAY[${neighborhood:sqlstring}]::text[]) OR coalesce(e.neighborhood,'unknown')=ANY(ARRAY[${neighborhood:sqlstring}]::text[])) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR e.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR e.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)), active AS (SELECT l.article_id,l.deal,l.property_type,l.rooms,l.sqm,l.ppm2,l.neighborhood FROM lean.listings l WHERE l.closed_at IS NULL AND (${deal:sqlstring}='All' OR l.deal=CASE WHEN ${deal:sqlstring}='sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${category:sqlstring}='All' OR l.property_type=${category:sqlstring}) AND (${rooms:sqlstring}='All' OR coalesce(l.rooms,'unknown')=${rooms:sqlstring}) AND ('All'=ANY(ARRAY[${neighborhood:sqlstring}]::text[]) OR coalesce(l.neighborhood,'unknown')=ANY(ARRAY[${neighborhood:sqlstring}]::text[])) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)) SELECT b.days_listed::float8 AS days_listed, (100.0*(b.closing_price/opening.opening_price-1))::float8 AS final_change_pct,b.title,b.url,b.article_id FROM base b JOIN LATERAL (SELECT price AS opening_price FROM lean.price_history WHERE article_id=b.article_id AND price>0 AND observed_at<=b.closed_at ORDER BY CASE WHEN observed_at>=b.cycle_opened_at THEN 0 ELSE 1 END,CASE WHEN observed_at>=b.cycle_opened_at THEN observed_at END ASC NULLS LAST,CASE WHEN observed_at<b.cycle_opened_at THEN observed_at END DESC NULLS LAST,id LIMIT 1) opening ON TRUE WHERE b.closing_price IS NOT NULL",
+          "refId": "A"
+        }
+      ],
+      "id": 18
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "orange",
+                "value": null
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 112,
+        "w": 24,
+        "h": 11
+      },
+      "title": "Observed closure share by final KM/m² bracket",
+      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
+      "type": "bargauge",
+      "options": {
+        "displayMode": "gradient",
+        "minVizHeight": 10,
+        "minVizWidth": 0,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "color"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH base AS (SELECT e.id AS event_id,e.article_id,e.title,e.url,e.deal,e.property_type,e.sqm,e.rooms,e.neighborhood,e.latitude,e.longitude,e.price AS closing_price,e.occurred_at AS closed_at,e.opened_at AS cycle_opened_at,CASE WHEN e.sqm>0 THEN e.price/e.sqm END AS closing_ppm2,EXTRACT(EPOCH FROM (e.occurred_at-e.opened_at))/86400 AS days_listed FROM lean.listing_lifecycle_events e WHERE e.event_type='closed' AND (${deal:sqlstring}='All' OR e.deal=CASE WHEN ${deal:sqlstring}='sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${category:sqlstring}='All' OR e.property_type=${category:sqlstring}) AND (${rooms:sqlstring}='All' OR coalesce(e.rooms,'unknown')=${rooms:sqlstring}) AND ('All'=ANY(ARRAY[${neighborhood:sqlstring}]::text[]) OR coalesce(e.neighborhood,'unknown')=ANY(ARRAY[${neighborhood:sqlstring}]::text[])) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR e.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR e.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)), active AS (SELECT l.article_id,l.deal,l.property_type,l.rooms,l.sqm,l.ppm2,l.neighborhood FROM lean.listings l WHERE l.closed_at IS NULL AND (${deal:sqlstring}='All' OR l.deal=CASE WHEN ${deal:sqlstring}='sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${category:sqlstring}='All' OR l.property_type=${category:sqlstring}) AND (${rooms:sqlstring}='All' OR coalesce(l.rooms,'unknown')=${rooms:sqlstring}) AND ('All'=ANY(ARRAY[${neighborhood:sqlstring}]::text[]) OR coalesce(l.neighborhood,'unknown')=ANY(ARRAY[${neighborhood:sqlstring}]::text[])) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)) SELECT ppm2_bracket,round(100.0*sum(exits)/NULLIF(sum(exits)+sum(actives),0),1) AS exit_ratio FROM (SELECT (floor(closing_ppm2/1000)*1000)::int AS ppm2_bracket,count(*) AS exits,0::bigint AS actives FROM base WHERE closed_at>now()-INTERVAL '30 days' AND closing_ppm2>0 GROUP BY 1 UNION ALL SELECT (floor(ppm2/1000)*1000)::int,0,count(*) FROM active WHERE ppm2>0 GROUP BY 1) population GROUP BY ppm2_bracket ORDER BY ppm2_bracket",
+          "refId": "A"
+        }
+      ],
+      "id": 19,
+      "transformations": [
+        {
+          "id": "rowsToFields",
+          "options": {
+            "nameField": "ppm2_bracket",
+            "valueField": "exit_ratio"
+          }
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "olx-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 123,
+        "w": 24,
+        "h": 10
+      },
+      "title": "Exit rate by neighbourhood — 30 d",
+      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
+      "type": "table",
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "olx-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH base AS (SELECT e.id AS event_id,e.article_id,e.title,e.url,e.deal,e.property_type,e.sqm,e.rooms,e.neighborhood,e.latitude,e.longitude,e.price AS closing_price,e.occurred_at AS closed_at,e.opened_at AS cycle_opened_at,CASE WHEN e.sqm>0 THEN e.price/e.sqm END AS closing_ppm2,EXTRACT(EPOCH FROM (e.occurred_at-e.opened_at))/86400 AS days_listed FROM lean.listing_lifecycle_events e WHERE e.event_type='closed' AND (${deal:sqlstring}='All' OR e.deal=CASE WHEN ${deal:sqlstring}='sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${category:sqlstring}='All' OR e.property_type=${category:sqlstring}) AND (${rooms:sqlstring}='All' OR coalesce(e.rooms,'unknown')=${rooms:sqlstring}) AND ('All'=ANY(ARRAY[${neighborhood:sqlstring}]::text[]) OR coalesce(e.neighborhood,'unknown')=ANY(ARRAY[${neighborhood:sqlstring}]::text[])) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR e.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR e.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)), active AS (SELECT l.article_id,l.deal,l.property_type,l.rooms,l.sqm,l.ppm2,l.neighborhood FROM lean.listings l WHERE l.closed_at IS NULL AND (${deal:sqlstring}='All' OR l.deal=CASE WHEN ${deal:sqlstring}='sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${category:sqlstring}='All' OR l.property_type=${category:sqlstring}) AND (${rooms:sqlstring}='All' OR coalesce(l.rooms,'unknown')=${rooms:sqlstring}) AND ('All'=ANY(ARRAY[${neighborhood:sqlstring}]::text[]) OR coalesce(l.neighborhood,'unknown')=ANY(ARRAY[${neighborhood:sqlstring}]::text[])) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)) SELECT neighborhood,sum(exits) AS exits_30d,sum(actives) AS active,round(100.0*sum(exits)/NULLIF(sum(exits)+sum(actives),0),1) AS exit_ratio FROM (SELECT coalesce(neighborhood,'unknown') AS neighborhood,count(*) AS exits,0::bigint AS actives FROM base WHERE closed_at>now()-INTERVAL '30 days' GROUP BY 1 UNION ALL SELECT coalesce(neighborhood,'unknown'),0,count(*) FROM active GROUP BY 1) population GROUP BY neighborhood ORDER BY exit_ratio DESC NULLS LAST",
+          "refId": "A"
+        }
+      ],
+      "id": 20
+    }
+  ],
+  "refresh": "2h",
+  "schemaVersion": 39,
+  "tags": [
+    "olx",
+    "real-estate",
+    "responsive"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "postgres",
+          "uid": "olx-postgres"
+        },
+        "definition": "SELECT DISTINCT category AS __value,category AS __text FROM lean.saved_searches WHERE category IS NOT NULL ORDER BY 1",
+        "includeAll": true,
+        "label": "Category",
+        "multi": false,
+        "name": "category",
+        "options": [],
+        "query": "SELECT DISTINCT category AS __value,category AS __text FROM lean.saved_searches WHERE category IS NOT NULL ORDER BY 1",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query",
+        "allValue": "All"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "includeAll": true,
+        "label": "Deal",
+        "multi": false,
+        "name": "deal",
+        "options": [
+          {
+            "selected": false,
+            "text": "Sale",
+            "value": "sell"
+          },
+          {
+            "selected": false,
+            "text": "Rent",
+            "value": "rent"
+          }
+        ],
+        "skipUrlSync": false,
+        "type": "custom",
+        "query": "sell,rent",
+        "sort": 0,
+        "allValue": "All"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "postgres",
+          "uid": "olx-postgres"
+        },
+        "definition": "SELECT DISTINCT coalesce(rooms,'unknown') AS __value,coalesce(rooms,'unknown') AS __text FROM lean.listings WHERE closed_at IS NULL ORDER BY 1",
+        "includeAll": true,
+        "label": "Rooms",
+        "multi": false,
+        "name": "rooms",
+        "options": [],
+        "query": "SELECT DISTINCT coalesce(rooms,'unknown') AS __value,coalesce(rooms,'unknown') AS __text FROM lean.listings WHERE closed_at IS NULL ORDER BY 1",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 2,
+        "type": "query",
+        "allValue": "All"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "postgres",
+          "uid": "olx-postgres"
+        },
+        "definition": "SELECT DISTINCT coalesce(neighborhood,'unknown') AS __value,coalesce(neighborhood,'unknown') AS __text FROM lean.listings WHERE closed_at IS NULL ORDER BY 1",
+        "includeAll": true,
+        "label": "Neighborhood",
+        "multi": true,
+        "name": "neighborhood",
+        "options": [],
+        "query": "SELECT DISTINCT coalesce(neighborhood,'unknown') AS __value,coalesce(neighborhood,'unknown') AS __text FROM lean.listings WHERE closed_at IS NULL ORDER BY 1",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query",
+        "allValue": "All"
+      },
+      {
+        "current": {
+          "value": "0",
+          "selected": false,
+          "text": "0"
+        },
+        "label": "Min m²",
+        "name": "min_sqm",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "value": "99999",
+          "selected": false,
+          "text": "99999"
+        },
+        "label": "Max m²",
+        "name": "max_sqm",
+        "skipUrlSync": false,
+        "type": "textbox"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-90d",
+    "to": "now"
+  },
+  "timezone": "Europe/Sarajevo",
+  "title": "OLX.ba Exits & Price Endings",
+  "uid": "olx-exits",
+  "version": 1,
+  "weekStart": ""
+}

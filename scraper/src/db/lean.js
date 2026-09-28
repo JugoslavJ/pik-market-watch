@@ -1,0 +1,762 @@
+"use strict";
+
+const { computeMedian } = require("../util");
+
+const LIFECYCLE_LOCK = "pik-market-watch lean listing lifecycle";
+
+function uniqueIds(cards) {
+  return [
+    ...new Map(
+      (cards || [])
+        .filter(
+          (card) =>
+            Number.isSafeInteger(Number(card.articleId)) &&
+            Number(card.articleId) > 0,
+        )
+        .map((card) => [Number(card.articleId), card]),
+    ).values(),
+  ];
+}
+
+function rate(price, sqm, deal) {
+  if (
+    deal !== "sale" ||
+    price == null ||
+    sqm == null ||
+    Number(price) < 3000 ||
+    Number(sqm) < 5 ||
+    Number(sqm) > 500
+  )
+    return null;
+  const result = Math.round(Number(price) / Number(sqm));
+  return result >= 1 && result <= 15000 ? result : null;
+}
+
+async function classify(client, ids) {
+  if (!ids.length) return;
+  await client.query(
+    `UPDATE lean.listings l SET
+       property_type = CASE WHEN cardinality(l.search_keys)=0 THEN l.property_type ELSE (
+         SELECT CASE WHEN count(DISTINCT s.category) = 1
+                       AND bool_and(s.category IN ('apartments','houses','vacation_homes'))
+                     THEN min(s.category) ELSE NULL END
+           FROM unnest(l.search_keys) k
+           JOIN lean.saved_searches s ON s.search_key = k
+       ) END,
+       neighborhood = COALESCE(
+         (SELECT n.name FROM lean.neighborhoods n
+           WHERE n.name = NULLIF(BTRIM(l.extra->>'location'), '')
+           LIMIT 1),
+         (SELECT n.name FROM lean.neighborhoods n
+          WHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL
+            AND (ST_Covers(n.boundary, ST_SetSRID(ST_MakePoint(l.longitude, l.latitude), 4326))
+              OR ST_DWithin(n.boundary::geography,
+                ST_SetSRID(ST_MakePoint(l.longitude,l.latitude),4326)::geography,5000))
+          ORDER BY ST_Covers(n.boundary, ST_SetSRID(ST_MakePoint(l.longitude,l.latitude),4326)) DESC,
+            ST_Distance(n.boundary::geography,
+              ST_SetSRID(ST_MakePoint(l.longitude,l.latitude),4326)::geography),n.name
+          LIMIT 1),
+         l.neighborhood)
+     WHERE l.article_id = ANY($1::bigint[])`,
+    [ids],
+  );
+}
+
+async function recordLifecycleEvents(client, ids, eventType) {
+  if (!ids.length) return;
+  await client.query(
+    `INSERT INTO lean.listing_lifecycle_events
+       (article_id,event_type,occurred_at,opened_at,price,deal,property_type,
+        neighborhood,sqm,rooms,latitude,longitude,title,url)
+     SELECT l.article_id,$2::text,
+            CASE WHEN $2='closed' THEN l.closed_at ELSE l.last_seen END,
+            CASE WHEN $2='closed' THEN COALESCE((
+              SELECT max(e.occurred_at) FROM lean.listing_lifecycle_events e
+               WHERE e.article_id=l.article_id AND e.event_type='reopened'
+                 AND e.occurred_at<=l.closed_at
+            ),l.first_seen) ELSE NULL END,
+            CASE WHEN $2='closed' THEN l.closing_price ELSE l.price END,
+            l.deal,l.property_type,l.neighborhood,l.sqm,l.rooms,
+            l.latitude,l.longitude,l.title,l.url
+       FROM lean.listings l WHERE l.article_id=ANY($1::bigint[])
+     ON CONFLICT (article_id,event_type,occurred_at) DO NOTHING`,
+    [ids, eventType],
+  );
+}
+
+async function registerSavedSearch({ searchKey, name, url, category }) {
+  await this.pool.query(
+    `INSERT INTO lean.saved_searches (search_key,name,url,category)
+     VALUES ($1,$2,$3,$4)
+     ON CONFLICT (search_key) DO UPDATE SET name=EXCLUDED.name,url=EXCLUDED.url,category=EXCLUDED.category`,
+    [searchKey, name, url, category ?? null],
+  );
+}
+
+async function startRun(searchKey) {
+  const result = await this.pool.query(
+    "INSERT INTO lean.scrape_runs (search_key) VALUES ($1) RETURNING id",
+    [searchKey],
+  );
+  return Number(result.rows[0].id);
+}
+
+async function recoverAbandonedRuns(minutes) {
+  const result = await this.pool.query(
+    `UPDATE lean.scrape_runs SET finished_at=now(),status='error',is_complete=false,
+       error='scraper process stopped before run completion',
+       failure_reason='abandoned run recovered at startup'
+     WHERE status='running' AND finished_at IS NULL
+       AND started_at < now()-make_interval(mins => $1::int)`,
+    [minutes],
+  );
+  return result.rowCount;
+}
+
+async function finishRun(runId, outcome) {
+  await this.pool.query(
+    `UPDATE lean.scrape_runs SET finished_at=now(),status=$2,pages=$3,cards=$4,error=$5,
+       is_complete=$6,failure_reason=$7,truncation_reason=$8 WHERE id=$1`,
+    [
+      runId,
+      outcome.status,
+      outcome.pages ?? null,
+      outcome.cards ?? null,
+      outcome.error ?? null,
+      outcome.isComplete === true,
+      outcome.failureReason ?? null,
+      outcome.truncationReason ?? null,
+    ],
+  );
+}
+
+async function hasRecentFinishedRun(minutes, searchKey = null) {
+  const result = await this.pool.query(
+    `SELECT 1 FROM lean.scrape_runs WHERE status='ok' AND is_complete
+       AND finished_at > now()-make_interval(mins => $1::int)
+       AND ($2::text IS NULL OR search_key=$2) LIMIT 1`,
+    [Math.max(0, Math.round(minutes || 0)), searchKey],
+  );
+  return result.rowCount > 0;
+}
+
+async function commitSearchIngestion(payload) {
+  const cards = uniqueIds(payload.cards);
+  const ids = cards.map((card) => Number(card.articleId));
+  const searchKey = payload.membership?.searchKey ?? payload.search.searchKey;
+  const client = await this.pool.connect();
+  const originalQuery = client.query.bind(client);
+  if (payload.queryCounter)
+    client.query = (...args) => {
+      payload.queryCounter.count = (payload.queryCounter.count || 0) + 1;
+      return originalQuery(...args);
+    };
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [
+      LIFECYCLE_LOCK,
+    ]);
+    await client.query(
+      `INSERT INTO lean.saved_searches (search_key,name,url,category)
+       VALUES ($1,$2,$3,$4)
+       ON CONFLICT (search_key) DO UPDATE SET name=EXCLUDED.name,url=EXCLUDED.url,category=EXCLUDED.category`,
+      [
+        searchKey,
+        payload.search.name,
+        payload.search.url,
+        payload.search.category ?? null,
+      ],
+    );
+    const previous = await client.query(
+      "SELECT article_id,price,ppm2,deal,closed_at FROM lean.listings WHERE article_id=ANY($1::bigint[]) FOR UPDATE",
+      [ids],
+    );
+    const byId = new Map(
+      previous.rows.map((row) => [Number(row.article_id), row]),
+    );
+    const newIds = ids.filter((id) => !byId.has(id));
+    const observations = cards.map((card) => {
+      const deal = card.dealType === "rent" || card.isRent ? "rent" : "sale";
+      const validPrice =
+        card.pricePresent !== false &&
+        card.priceState !== "invalid" &&
+        card.priceState !== "unpriced" &&
+        card.price != null;
+      const prior = byId.get(Number(card.articleId));
+      const price = validPrice
+        ? card.price
+        : prior?.deal !== deal
+          ? null
+          : (prior?.price ?? null);
+      const sqm = card.sqm ?? null;
+      return {
+        article_id: Number(card.articleId),
+        url: card.url,
+        title: card.title,
+        deal,
+        sqm,
+        rooms: card.rooms ?? null,
+        price,
+        price_text: card.priceText ?? null,
+        currency: card.priceCurrency || "BAM",
+        ppm2: rate(price, sqm ?? null, deal),
+        latitude: card.latitude ?? null,
+        longitude: card.longitude ?? null,
+        seller_type: card.sellerType ?? null,
+        renewed_at: card.renewedAt ?? null,
+        api_status: card.apiStatus ?? null,
+        extra: {
+          latest_price_state:
+            card.priceState ?? (validPrice ? "valid" : "unpriced"),
+        },
+        valid_price: validPrice,
+      };
+    });
+    if (observations.length) {
+      await client.query(
+        `INSERT INTO lean.listings
+           (article_id,url,title,deal,sqm,rooms,price,price_text,currency,ppm2,
+            latitude,longitude,seller_type,renewed_at,api_status,extra,search_keys)
+         SELECT article_id,url,title,deal,sqm,rooms,price,price_text,currency,ppm2,
+                latitude,longitude,seller_type,renewed_at,api_status,extra,ARRAY[$2::text]
+           FROM jsonb_to_recordset($1::jsonb) AS i(
+             article_id bigint,url text,title text,deal text,sqm numeric,rooms text,
+             price numeric,price_text text,currency text,ppm2 integer,
+             latitude float8,longitude float8,seller_type text,
+             renewed_at timestamptz,api_status text,extra jsonb,valid_price boolean)
+         ON CONFLICT (article_id) DO UPDATE SET
+           url=EXCLUDED.url,title=EXCLUDED.title,deal=EXCLUDED.deal,
+           sqm=COALESCE(EXCLUDED.sqm,lean.listings.sqm),
+           rooms=COALESCE(EXCLUDED.rooms,lean.listings.rooms),
+           price=EXCLUDED.price,
+           price_text=COALESCE(EXCLUDED.price_text,lean.listings.price_text),
+           currency=EXCLUDED.currency,
+           ppm2=CASE WHEN EXCLUDED.deal='sale' AND EXCLUDED.price>=3000
+                       AND COALESCE(EXCLUDED.sqm,lean.listings.sqm) BETWEEN 5 AND 500
+                       AND round(EXCLUDED.price/NULLIF(COALESCE(EXCLUDED.sqm,lean.listings.sqm),0)) BETWEEN 1 AND 15000
+                     THEN round(EXCLUDED.price/NULLIF(COALESCE(EXCLUDED.sqm,lean.listings.sqm),0))::int
+                     ELSE NULL END,
+           latitude=COALESCE(EXCLUDED.latitude,lean.listings.latitude),
+           longitude=COALESCE(EXCLUDED.longitude,lean.listings.longitude),
+           seller_type=COALESCE(EXCLUDED.seller_type,lean.listings.seller_type),
+           renewed_at=GREATEST(EXCLUDED.renewed_at,lean.listings.renewed_at),
+           api_status=COALESCE(EXCLUDED.api_status,lean.listings.api_status),
+           extra=lean.listings.extra || EXCLUDED.extra,
+           search_keys=CASE WHEN $2::text=ANY(lean.listings.search_keys)
+                            THEN lean.listings.search_keys
+                            ELSE array_append(lean.listings.search_keys,$2::text) END,
+           last_seen=now(),closed_at=NULL,closing_price=NULL`,
+        [JSON.stringify(observations), searchKey],
+      );
+      await classify(client, ids);
+      await recordLifecycleEvents(
+        client,
+        previous.rows
+          .filter((row) => row.closed_at != null)
+          .map((row) => Number(row.article_id)),
+        "reopened",
+      );
+    }
+    const changed = observations.filter((item) => {
+      if (!item.valid_price) return false;
+      const prior = byId.get(item.article_id);
+      return (
+        !prior ||
+        prior.deal !== item.deal ||
+        Number(prior.price) !== Number(item.price)
+      );
+    });
+    if (changed.length) {
+      await client.query(
+        `INSERT INTO lean.price_history (article_id,observed_at,price,currency,source)
+         SELECT article_id,now(),price,currency,'search'
+           FROM jsonb_to_recordset($1::jsonb) AS i(
+             article_id bigint,price numeric,currency text)`,
+        [JSON.stringify(changed)],
+      );
+    }
+    const removed = await client.query(
+      `UPDATE lean.listings SET search_keys=array_remove(search_keys,$1::text)
+        WHERE $1::text=ANY(search_keys) AND NOT (article_id=ANY($2::bigint[]))
+        RETURNING article_id`,
+      [searchKey, ids],
+    );
+    const removedIds = removed.rows.map((row) => Number(row.article_id));
+    let closedCount = 0;
+    if (removedIds.length) {
+      await classify(client, removedIds);
+      const closed = await client.query(
+        `UPDATE lean.listings SET closed_at=now(),closing_price=price
+          WHERE article_id=ANY($1::bigint[]) AND cardinality(search_keys)=0 AND closed_at IS NULL
+          RETURNING article_id`,
+        [removedIds],
+      );
+      closedCount = closed.rowCount;
+      await recordLifecycleEvents(
+        client,
+        closed.rows.map((row) => Number(row.article_id)),
+        "closed",
+      );
+    }
+    const currentRates = new Map(
+      (
+        await client.query(
+          "SELECT article_id,ppm2 FROM lean.listings WHERE article_id=ANY($1::bigint[])",
+          [ids],
+        )
+      ).rows.map((row) => [Number(row.article_id), row.ppm2]),
+    );
+    const dropCount = observations.filter((item) => {
+      const prior = byId.get(item.article_id);
+      const current = currentRates.get(item.article_id);
+      return (
+        item.valid_price &&
+        prior?.ppm2 != null &&
+        current != null &&
+        Number(current) < Number(prior.ppm2)
+      );
+    }).length;
+    const median = computeMedian(
+      observations
+        .filter(
+          (item) =>
+            item.valid_price && Number(currentRates.get(item.article_id)) > 0,
+        )
+        .map((item) => Number(currentRates.get(item.article_id))),
+    );
+    const run = payload.run || {};
+    await client.query(
+      `UPDATE lean.saved_searches SET last_scraped_at=now(),listing_count=$2,
+         median_ppm2=$3,new_count=$4,drop_count=$5 WHERE search_key=$1`,
+      [
+        searchKey,
+        run.listingCount ?? cards.length,
+        median,
+        newIds.length,
+        dropCount,
+      ],
+    );
+    await client.query(
+      `UPDATE lean.scrape_runs SET finished_at=now(),status=$2,pages=$3,cards=$4,
+         error=NULL,is_complete=$5,failure_reason=NULL,truncation_reason=NULL WHERE id=$1`,
+      [
+        payload.runId,
+        run.status || "ok",
+        run.pages ?? null,
+        run.cards ?? cards.length,
+        run.isComplete !== false,
+      ],
+    );
+    await client.query("COMMIT");
+    return { newCount: newIds.length, dropCount, closedCount, newIds, median };
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function closeUnseenListings(activeKeys) {
+  if (!activeKeys.length) return 0;
+  const client = await this.pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [
+      LIFECYCLE_LOCK,
+    ]);
+    const removed = await client.query(
+      `UPDATE lean.listings l SET search_keys=(
+         SELECT COALESCE(array_agg(k ORDER BY k),'{}'::text[])
+           FROM unnest(l.search_keys) k WHERE k=ANY($1::text[]))
+       WHERE EXISTS (SELECT 1 FROM unnest(l.search_keys) k WHERE NOT k=ANY($1::text[]))
+       RETURNING article_id`,
+      [activeKeys],
+    );
+    if (removed.rowCount)
+      await classify(
+        client,
+        removed.rows.map((row) => Number(row.article_id)),
+      );
+    const closed = await client.query(
+      `UPDATE lean.listings SET closed_at=now(),closing_price=price
+        WHERE closed_at IS NULL AND cardinality(search_keys)=0 RETURNING article_id`,
+    );
+    await recordLifecycleEvents(
+      client,
+      closed.rows.map((row) => Number(row.article_id)),
+      "closed",
+    );
+    await client.query("COMMIT");
+    return closed.rowCount;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function enrichListings(rows) {
+  if (!rows?.length) return;
+  const archived = rows.filter((row) => row.sourcePayload);
+  if (archived.length)
+    await this.archiveDetailResponses(
+      archived.map((row) => ({
+        articleId: row.articleId,
+        sourcePayload: row.sourcePayload,
+        requestMetadata: row.sourceRequestMetadata,
+        responseMetadata: row.sourceResponseMetadata,
+        buildVersion: row.sourceBuildVersion,
+      })),
+    );
+  const client = await this.pool.connect();
+  try {
+    await client.query("BEGIN");
+    for (const row of rows) {
+      const old = await client.query(
+        "SELECT price,deal FROM lean.listings WHERE article_id=$1 FOR UPDATE",
+        [row.articleId],
+      );
+      if (!old.rowCount) continue;
+      const prior = old.rows[0];
+      const deal =
+        row.dealType === "rent" || row.isRent === true
+          ? "rent"
+          : row.dealType === "sale" || row.isRent === false
+            ? "sale"
+            : prior.deal;
+      const validPrice =
+        row.pricePresent !== false &&
+        row.priceState !== "invalid" &&
+        row.priceState !== "unpriced" &&
+        row.price != null;
+      const price = validPrice
+        ? row.price
+        : deal !== prior.deal
+          ? null
+          : prior.price;
+      const extra = {};
+      for (const key of [
+        "roomsDetail",
+        "bathrooms",
+        "floorsTotal",
+        "unitLevels",
+        "heating",
+        "furnished",
+        "garage",
+        "plotSqm",
+        "orientation",
+        "views",
+        "favorites",
+        "characteristics",
+        "apiPriceHistory",
+      ]) {
+        if (row[key] != null)
+          extra[key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)] =
+            row[key];
+      }
+      extra.latest_price_state =
+        row.priceState ?? (validPrice ? "valid" : "unpriced");
+      await client.query(
+        `UPDATE lean.listings SET deal=$2,price=$3,
+           currency=COALESCE($4,currency),
+           price_text=COALESCE($5,price_text),
+           sqm=COALESCE(sqm,$6),
+           ppm2=CASE WHEN $2='sale' AND $3::numeric>=3000
+                      AND COALESCE(sqm,$6) BETWEEN 5 AND 500
+                      AND round($3::numeric/NULLIF(COALESCE(sqm,$6),0)) BETWEEN 1 AND 15000
+                     THEN round($3::numeric/NULLIF(COALESCE(sqm,$6),0))::int
+                     ELSE NULL END,
+           latitude=COALESCE(latitude,$7),longitude=COALESCE(longitude,$8),
+           seller_type=COALESCE($9,seller_type),condition=COALESCE($10,condition),
+           parking=COALESCE($11,parking),elevator=COALESCE($12,elevator),
+           floor_num=COALESCE($13,floor_num),year_built=COALESCE($14,year_built),
+           published_at=COALESCE(published_at,$15),
+           renewed_at=GREATEST(renewed_at,$16),
+           api_status=COALESCE($17,api_status),
+           extra=extra || $18::jsonb,
+           details_fetched_at=now(),last_enrichment_attempted_at=now()
+         WHERE article_id=$1`,
+        [
+          row.articleId,
+          deal,
+          price,
+          row.priceCurrency ?? null,
+          row.priceText ?? null,
+          row.sqm ?? null,
+          row.latitude ?? null,
+          row.longitude ?? null,
+          row.sellerType ?? null,
+          row.condition ?? null,
+          row.parking ?? null,
+          row.elevator ?? null,
+          row.floorNum ?? null,
+          row.yearBuilt ?? null,
+          row.publishedAt ?? null,
+          row.renewedAt ?? null,
+          row.apiStatus ?? null,
+          JSON.stringify(extra),
+        ],
+      );
+      await classify(client, [Number(row.articleId)]);
+      if (
+        validPrice &&
+        (deal !== prior.deal || Number(price) !== Number(prior.price))
+      ) {
+        await client.query(
+          `INSERT INTO lean.price_history (article_id,price,currency,source)
+           VALUES ($1,$2,COALESCE($3,'BAM'),'detail')`,
+          [row.articleId, price, row.priceCurrency ?? null],
+        );
+      }
+    }
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function enrichmentQueue(
+  ids,
+  limit,
+  { refreshDays = 7, retryAfterMinutes = 720 } = {},
+) {
+  if (!ids?.length || !(limit > 0)) return { pending: [], total: 0 };
+  const result = await this.pool.query(
+    `SELECT l.article_id::bigint AS id,
+       (l.latitude IS NULL OR l.longitude IS NULL) AS unpinned,
+       (l.sqm IS NULL AND l.price IS NOT NULL AND l.deal='sale') AS missing_sqm,
+       (l.details_fetched_at IS NULL) AS never_detailed,
+       (l.details_fetched_at <= now()-make_interval(days => $3::int)) AS stale,
+       EXISTS (SELECT 1 FROM lean.price_history p WHERE p.article_id=l.article_id
+         AND p.source='search' AND p.observed_at > COALESCE(l.details_fetched_at,'-infinity')) AS price_changed,
+       count(*) OVER () AS pool_total
+     FROM lean.listings l
+     WHERE l.closed_at IS NULL AND l.article_id=ANY($1::bigint[])
+       AND (l.last_enrichment_attempted_at IS NULL OR
+            l.last_enrichment_attempted_at <= now()-make_interval(mins => $4::int))
+       AND (l.latitude IS NULL OR l.longitude IS NULL OR
+            (l.sqm IS NULL AND l.price IS NOT NULL AND l.deal='sale')
+            OR l.details_fetched_at IS NULL
+            OR l.details_fetched_at <= now()-make_interval(days => $3::int)
+            OR EXISTS (SELECT 1 FROM lean.price_history p WHERE p.article_id=l.article_id
+              AND p.source='search' AND p.observed_at > l.details_fetched_at))
+     ORDER BY (l.details_fetched_at IS NULL) DESC,
+       l.last_enrichment_attempted_at ASC NULLS FIRST,l.article_id
+     LIMIT $2`,
+    [ids, limit, refreshDays, retryAfterMinutes],
+  );
+  return {
+    pending: result.rows.map((item) => ({
+      id: Number(item.id),
+      unpinned: item.unpinned,
+      missingSqm: item.missing_sqm,
+      neverDetailed: item.never_detailed,
+      stale: item.stale,
+      priceChanged: item.price_changed,
+    })),
+    total: result.rows.length ? Number(result.rows[0].pool_total) : 0,
+  };
+}
+
+async function markDetailAttempts(ids) {
+  if (!ids?.length) return;
+  await this.pool.query(
+    "UPDATE lean.listings SET last_enrichment_attempted_at=now() WHERE article_id=ANY($1::bigint[])",
+    [ids],
+  );
+}
+
+async function getListingsNeedingDetails(onlyActive = true, options = {}) {
+  const result = await this.pool.query(
+    `SELECT article_id AS "articleId",url FROM lean.listings
+      WHERE ($1::boolean=false OR closed_at IS NULL)
+        AND (latitude IS NULL OR longitude IS NULL OR
+             (sqm IS NULL AND price IS NOT NULL AND deal='sale')
+             OR details_fetched_at IS NULL OR
+             details_fetched_at <= now()-make_interval(days => $2::int))
+      ORDER BY details_fetched_at ASC NULLS FIRST,article_id`,
+    [onlyActive, options.refreshDays ?? 7],
+  );
+  return result.rows;
+}
+
+async function recordScrapePageManifest(page) {
+  const rejectionList = Array.isArray(page.parseRejections)
+    ? page.parseRejections.slice(0, 100)
+    : [];
+  await this.pool.query(
+    `INSERT INTO lean.scrape_run_pages
+       (run_id,page_number,attempt,fetched_at,request_url,response_state,
+        expected_total,expected_last_page,response_page,response_per_page,
+        raw_item_count,parsed_item_count,duplicate_item_count,
+        parse_rejection_count,parse_rejections,error,is_authoritative)
+     VALUES ($1,$2,$3,$4::timestamptz,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
+             $15::jsonb,$16,$17)
+     ON CONFLICT (run_id,page_number,attempt) DO UPDATE SET
+       fetched_at=EXCLUDED.fetched_at,request_url=EXCLUDED.request_url,
+       response_state=EXCLUDED.response_state,
+       expected_total=EXCLUDED.expected_total,
+       expected_last_page=EXCLUDED.expected_last_page,
+       response_page=EXCLUDED.response_page,
+       response_per_page=EXCLUDED.response_per_page,
+       raw_item_count=EXCLUDED.raw_item_count,
+       parsed_item_count=EXCLUDED.parsed_item_count,
+       duplicate_item_count=EXCLUDED.duplicate_item_count,
+       parse_rejection_count=EXCLUDED.parse_rejection_count,
+       parse_rejections=EXCLUDED.parse_rejections,error=EXCLUDED.error,
+       is_authoritative=EXCLUDED.is_authoritative`,
+    [
+      page.runId,
+      page.pageNumber,
+      page.attempt ?? 1,
+      page.fetchedAt ?? new Date(),
+      page.requestUrl,
+      page.responseState,
+      page.expectedTotal ?? null,
+      page.expectedLastPage ?? null,
+      page.responsePage ?? null,
+      page.responsePerPage ?? null,
+      Math.max(0, Number(page.rawItemCount) || 0),
+      Math.max(0, Number(page.parsedItemCount) || 0),
+      Math.max(0, Number(page.duplicateItemCount) || 0),
+      rejectionList.length,
+      JSON.stringify(rejectionList),
+      page.error == null ? null : String(page.error).slice(0, 1000),
+      Boolean(page.isAuthoritative),
+    ],
+  );
+  if (page.isAuthoritative && !rejectionList.length) return;
+  await this.archiveSearchResponse({
+    runId: page.runId,
+    requestKind: "search",
+    requestUrl: page.requestUrl,
+    fetchedAt: page.fetchedAt,
+    diagnostic: {
+      kind: "page_manifest",
+      pageNumber: page.pageNumber,
+      attempt: page.attempt,
+      responseState: page.responseState,
+      expectedTotal: page.expectedTotal,
+      expectedLastPage: page.expectedLastPage,
+      responsePage: page.responsePage,
+      rawItemCount: page.rawItemCount,
+      parsedItemCount: page.parsedItemCount,
+      parseRejections: rejectionList,
+      error: page.error,
+    },
+  });
+}
+
+async function purgeRawResponses(limit = 1000) {
+  const cap = Math.max(1, Math.floor(Number(limit) || 1));
+  let deleted = 0;
+  const archive = await this.rawArchiveTarget();
+  for (;;) {
+    const sql = archive.leanArchive
+      ? `WITH ranked AS (
+       SELECT id,expires_at,row_number() OVER (
+         PARTITION BY request_kind,request_url ORDER BY fetched_at DESC,id DESC) AS rank
+       FROM ${archive.table}
+     ), doomed AS (
+       SELECT id FROM ranked WHERE rank>$1 OR expires_at<=now() LIMIT $2
+     ), deleted AS (
+       DELETE FROM ${archive.table} r USING doomed d
+       WHERE r.id=d.id RETURNING r.id
+     ) SELECT count(*)::int AS deleted FROM deleted`
+      : `WITH all_responses AS (
+       SELECT id,request_kind,request_url,fetched_at,expires_at FROM public.raw_api_response_records
+       UNION ALL
+       SELECT id,request_kind,request_url,fetched_at,expires_at FROM public.raw_api_response_pending
+     ), ranked AS (
+       SELECT id,expires_at,row_number() OVER (
+         PARTITION BY request_kind,request_url ORDER BY fetched_at DESC,id DESC) AS rank
+       FROM all_responses
+     ), doomed AS (
+       SELECT id FROM ranked WHERE rank>$1 OR expires_at<=now() LIMIT $2
+     ), deleted_records AS (
+       DELETE FROM public.raw_api_response_records r USING doomed d
+       WHERE r.id=d.id RETURNING r.id
+     ), deleted_pending AS (
+       DELETE FROM public.raw_api_response_pending p USING doomed d
+       WHERE p.id=d.id RETURNING p.id
+     ) SELECT ((SELECT count(*) FROM deleted_records)+
+       (SELECT count(*) FROM deleted_pending))::int AS deleted`;
+    const result = await this.pool.query(sql, [this.rawResponseRetentionCount, cap]);
+    const count = Number(result.rows[0].deleted);
+    deleted += count;
+    if (count < cap) return deleted;
+  }
+}
+
+async function runMaintenanceCycle({ log = () => {} } = {}) {
+  const result = { ok: true, errors: {} };
+  const operations = [["purged", () => this.purgeRawResponses()]];
+  if (!(await this.rawArchiveTarget()).leanArchive) {
+    operations.push(
+      [
+        "compacted",
+        async () =>
+          Number(
+            (
+              await this.pool.query(
+                "SELECT public.compact_raw_api_response_batch($1) AS rows",
+                [5000],
+              )
+            ).rows[0].rows,
+          ),
+      ],
+      [
+        "reclaimed",
+        async () =>
+          Number(
+            (
+              await this.pool.query(
+                "SELECT public.purge_unreferenced_storage_json_documents() AS rows",
+              )
+            ).rows[0].rows,
+          ),
+      ],
+    );
+  }
+  for (const [name, operation] of operations) {
+    try {
+      result[name] = await operation();
+      log(`${name} completed`);
+    } catch (error) {
+      result.ok = false;
+      result.errors[name] = String(error.message || error);
+      log(`${name} failed: ${result.errors[name]}`);
+    }
+  }
+  return result;
+}
+
+module.exports = {
+  methods: {
+    registerSavedSearch,
+    startRun,
+    recoverAbandonedRuns,
+    finishRun,
+    hasRecentFinishedRun,
+    commitSearchIngestion,
+    closeUnseenListings,
+    enrichListings,
+    enrichmentQueue,
+    markDetailAttempts,
+    getListingsNeedingDetails,
+    enqueueDetailJobs: async () => 0,
+    claimDetailJobs: async (ids, limit) =>
+      (ids || []).slice(0, limit).map((articleId) => ({ articleId })),
+    completeDetailJobs: async () => 0,
+    requeueExpiredDetailJobs: async () => 0,
+    recordDetailJobOutcome: async () => 0,
+    recordScrapePageManifest,
+    purgeRawResponses,
+    runMaintenanceCycle,
+  },
+};

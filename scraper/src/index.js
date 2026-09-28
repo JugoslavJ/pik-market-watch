@@ -25,6 +25,7 @@ const state = {
 };
 
 async function publishSynchronousOlap(db) {
+  if (db.schema === "lean") return { skipped: true, reason: "lean schema" };
   if (!config.runAnalyticsMaintenance) {
     return { skipped: true, reason: "disabled by configuration" };
   }
@@ -237,6 +238,7 @@ function startHealthServer() {
 async function main() {
   const db = new Db(config.databaseUrl, {
     rawResponseRetentionCount: config.rawResponseRetentionCount,
+    schema: config.storageSchema,
   });
   await db.waitUntilReady();
   if (config.migrationsOnStartup) {

@@ -13,27 +13,44 @@ module.exports = function installMaintenanceMethods(Db) {
       const cap = Math.max(1, Math.floor(Number(limit) || 1));
       for (;;) {
         const result = await this.pool.query(
-          `WITH ranked AS (
+          `WITH all_responses AS (
+           SELECT id, request_kind, request_url, fetched_at, expires_at
+             FROM raw_api_response_records
+           UNION ALL
+           SELECT id, request_kind, request_url, fetched_at, expires_at
+             FROM raw_api_response_pending
+         ), ranked AS (
            SELECT id,
+                  request_kind,
+                  request_url,
+                  expires_at,
                   row_number() OVER (
                     PARTITION BY request_kind, request_url
                     ORDER BY fetched_at DESC, id DESC
                   ) AS response_rank
-             FROM raw_api_responses
+             FROM all_responses
          ), doomed AS (
            SELECT ranked.id
              FROM ranked
-             JOIN raw_api_responses raw ON raw.id = ranked.id
-            WHERE ranked.response_rank > $1 OR raw.expires_at <= now()
+            WHERE ranked.response_rank > $1 OR ranked.expires_at <= now()
             ORDER BY ranked.id
             LIMIT $2
+         ), deleted_records AS (
+           DELETE FROM raw_api_response_records r USING doomed
+            WHERE r.id = doomed.id
+            RETURNING r.id
+         ), deleted_pending AS (
+           DELETE FROM raw_api_response_pending p USING doomed
+            WHERE p.id = doomed.id
+            RETURNING p.id
          )
-         DELETE FROM raw_api_responses r USING doomed
-          WHERE r.id = doomed.id`,
+         SELECT ((SELECT count(*) FROM deleted_records) +
+                 (SELECT count(*) FROM deleted_pending))::int AS deleted`,
           [this.rawResponseRetentionCount, cap],
         );
-        deleted += result.rowCount;
-        if (result.rowCount < cap) {
+        const batchDeleted = Number(result.rows?.[0]?.deleted || 0);
+        deleted += batchDeleted;
+        if (batchDeleted < cap) {
           // Keep operational cleanup on the same independent maintenance path
           // as raw expiry; a failed analytics rebuild must not postpone it.
           await this.pool.query("SELECT public.ensure_analytics_partitions()");

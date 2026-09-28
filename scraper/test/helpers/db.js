@@ -32,7 +32,9 @@ function ensureSchema(pool) {
 /** Wipe all data tables (schema objects stay). Keeps tests order-independent. */
 async function reset(pool) {
   await pool.query(`TRUNCATE listings, price_history, saved_searches,
-                            search_results, scrape_runs, raw_api_responses,
+                            search_results, scrape_runs, raw_api_response_records,
+                            raw_api_response_pending,
+                            storage_json_parts, storage_json_documents,
                             scrape_run_pages,
                             listing_state_history, listing_price_events,
                             listing_daily, analytics_daily_coverage,

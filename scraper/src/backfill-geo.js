@@ -27,6 +27,7 @@ const log = makeLogger("backfill");
 
   const db = new Db(config.databaseUrl, {
     rawResponseRetentionCount: config.rawResponseRetentionCount,
+    schema: config.storageSchema,
   });
   await db.waitUntilReady();
 

@@ -104,6 +104,18 @@ test("database role repair transfers reporting publisher tables to the migrator"
   );
 });
 
+test("database role repair supports lean-only installs and limits raw archive reads", () => {
+  const roles = read("db/init/zz-database-roles.sh");
+  assert.equal(read("db/init-lean/zz-database-roles.sh"), roles);
+  assert.match(roles, /n\.nspname IN \('public', 'lean'\)/);
+  assert.match(roles, /GRANT SELECT ON %I\.%I TO %I/);
+  assert.match(roles, /'listing_lifecycle_events','scrape_runs','scrape_run_pages'/);
+  assert.doesNotMatch(
+    roles.match(/n\.nspname = 'lean'[\s\S]*?AND c\.relkind IN \('r','p','v','m'\) \\gexec/)?.[0] || "",
+    /raw_api_responses/,
+  );
+});
+
 test("restore input and identifiers are bounded and cleaned up", () => {
   const restore = read("db/remote-restore.sh");
   assert.match(restore, /umask 077/);

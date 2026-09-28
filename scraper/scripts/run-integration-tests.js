@@ -95,6 +95,8 @@ try {
     "olx",
     "-c",
     "SELECT to_regclass('public.listing_state_versions') IS NOT NULL " +
+      "AND to_regclass('public.listing_state_version_records') IS NOT NULL " +
+      "AND to_regclass('public.raw_api_response_pending') IS NOT NULL " +
       "AND to_regclass('reporting.current_comparison_inputs') IS NOT NULL " +
       "AND to_regprocedure('reporting.refresh_dashboard_olap(boolean)') IS NOT NULL;",
   ]);

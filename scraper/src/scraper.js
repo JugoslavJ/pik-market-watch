@@ -139,6 +139,7 @@ async function scrapeSearch(
 
     const newCount = Number(stats?.newCount || 0);
     const dropCount = Number(stats?.dropCount || 0);
+    const closedCount = Number(stats?.closedCount || 0);
     const median = stats?.median ?? null;
     const ids = allCards.map((c) => c.articleId).filter(Boolean);
 
@@ -156,6 +157,7 @@ async function scrapeSearch(
     log(
       `✔ "${search.name}" — ${allCards.length} listings on ${pagesDone} page(s); ` +
         `${newCount} new, ${dropCount} price drop(s), median ${median ?? "—"} KM/m²` +
+        (db.schema === "lean" ? `, ${closedCount} closed` : "") +
         `, ${enrichedCount} enriched`,
     );
     return {

@@ -10,6 +10,7 @@ const applyMigrations = require("./migrate");
 async function main() {
   const db = new Db(config.databaseUrl, {
     rawResponseRetentionCount: config.rawResponseRetentionCount,
+    schema: config.storageSchema,
   });
   let lease;
   try {

@@ -19,8 +19,15 @@ const SCRAPE_CYCLE_LOCK = "pik-market-watch scrape cycle";
 const ANALYTICS_MAINTENANCE_LOCK = "pik-market-watch analytics maintenance";
 
 class Db {
-  constructor(connectionString, { rawResponseRetentionCount = 3 } = {}) {
+  constructor(
+    connectionString,
+    { rawResponseRetentionCount = 3, schema = "public" } = {},
+  ) {
+    if (schema !== "public" && schema !== "lean")
+      throw new Error(`Unsupported storage schema: ${schema}`);
     this.pool = new Pool({ connectionString, max: 5 });
+    this.schema = schema;
+    if (schema === "lean") Object.assign(this, require("./db/lean").methods);
     this.rawResponseRetentionCount = Math.max(
       1,
       Number(rawResponseRetentionCount) || 3,

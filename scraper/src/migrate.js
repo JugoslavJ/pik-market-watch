@@ -13,6 +13,31 @@ function migrationChecksum(sql) {
 }
 
 async function schemaIsCurrent(client) {
+  const lean = await client.query(`
+    SELECT
+      to_regclass('lean.neighborhoods') IS NOT NULL
+      AND to_regclass('lean.saved_searches') IS NOT NULL
+      AND to_regclass('lean.listings') IS NOT NULL
+      AND to_regclass('lean.price_history') IS NOT NULL
+      AND to_regclass('lean.listing_lifecycle_events') IS NOT NULL
+      AND to_regclass('lean.scrape_runs') IS NOT NULL
+      AND to_regclass('lean.raw_api_responses') IS NOT NULL
+      AND to_regclass('lean.scrape_run_pages') IS NOT NULL
+      AND to_regclass('lean.neighborhood_stats') IS NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM pg_class c
+        JOIN pg_namespace n ON n.oid=c.relnamespace
+        WHERE n.nspname='lean' AND c.relkind='m'
+      )
+      AND (SELECT count(*) = 4 FROM information_schema.columns
+            WHERE table_schema='lean' AND table_name='listings'
+              AND column_name IN ('price_text','published_at','details_fetched_at','api_status'))
+      AND EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema='lean' AND table_name='scrape_runs'
+                     AND column_name='is_complete')
+      AS current_schema`);
+  if (lean.rows[0].current_schema) return true;
+
   const result = await client.query(`
     SELECT to_regclass('olap.refresh_state') IS NOT NULL
        AND to_regclass('public.analytics_daily_olap_dirty') IS NOT NULL
@@ -46,6 +71,27 @@ async function schemaIsCurrent(client) {
                ]))
        AND lower(pg_get_viewdef(to_regclass('reporting.olap_health'))) LIKE '%count(*) = 9%'
        AND to_regclass('public.listing_state_versions') IS NOT NULL
+       AND to_regclass('public.listing_state_version_records') IS NOT NULL
+       AND to_regclass('public.listing_state_characteristic_documents') IS NOT NULL
+       AND to_regprocedure('public.intern_listing_state_characteristic(jsonb)') IS NOT NULL
+       AND to_regclass('public.raw_api_response_records') IS NOT NULL
+       AND to_regclass('public.raw_api_response_pending') IS NOT NULL
+       AND to_regclass('public.storage_json_documents') IS NOT NULL
+       AND to_regclass('public.storage_json_parts') IS NOT NULL
+       AND to_regprocedure('public.storage_json_value(bigint)') IS NOT NULL
+       AND to_regprocedure('public.storage_json_intern(jsonb)') IS NOT NULL
+       AND to_regprocedure('public.compact_raw_api_response_batch(integer)') IS NOT NULL
+       AND to_regprocedure('public.purge_unreferenced_storage_json_documents()') IS NOT NULL
+       AND EXISTS (
+             SELECT 1 FROM pg_class
+              WHERE oid = to_regclass('public.listing_state_versions')
+                AND relkind = 'v'
+           )
+       AND EXISTS (
+             SELECT 1 FROM pg_class
+              WHERE oid = to_regclass('public.raw_api_responses')
+                AND relkind = 'v'
+           )
        AND to_regclass('public.listing_detail_versions') IS NOT NULL
        AND to_regclass('public.listing_state_history_state') IS NOT NULL
        AND NOT EXISTS (

@@ -54,9 +54,9 @@ async function seed(pool) {
       ids,
     );
     await pool.query(
-      `INSERT INTO public.listing_state_versions
+      `INSERT INTO public.listing_state_version_records
          (state_hash, category, category_membership, is_rent, sqm, rooms,
-          filter_attributes)
+          filter_attributes_residual)
        SELECT public.listing_state_version_hash(
                 'apartments', ARRAY['apartments'], false, 50 + (g % 80), '2',
                 jsonb_build_object('title', 'state-' || g), false, false),

@@ -60,9 +60,11 @@ PostgreSQL initialization runs `db/init/*.sql` only for a new volume. The files
 are ordered by dependency; the migrator records unapplied files and verifies
 their checksums before application services start. Standalone scraper runs
 retain a startup fallback. See [the database guide](../db/README.md) for the
-schema map and change policy. Applied SQL is checksum protected; schema changes
-require a verified baseline update or current-schema restore. Regenerate polygon
-data from its geographic sources. The bootstrap user administers the instance.
+schema map and change policy. Applied SQL is checksum protected. Preserve
+applied files and checksums; add ordered conversion files for transactional
+upgrades. Other baseline drift requires a verified current-schema restore.
+Regenerate polygon data from its geographic sources. The bootstrap user
+administers the instance.
 `olx_migrator` owns application objects, `olx_app` performs scraper writes,
 `olx_reporting` reads Grafana contracts, and `olx_backup` reads backup data.
 
