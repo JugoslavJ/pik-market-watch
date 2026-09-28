@@ -21,7 +21,7 @@ docker compose up -d --build
 | `POSTGRES_APP_USER`, `POSTGRES_APP_PASSWORD`             |                        `olx_app`, required | Scraper and maintenance runtime writer; owns no database objects.                                                                                     |
 | `POSTGRES_REPORTING_USER`, `POSTGRES_REPORTING_PASSWORD` |                  `olx_reporting`, required | Grafana role with SELECT on reporting views and EXECUTE on stable reporting functions only.                                                           |
 | `POSTGRES_BACKUP_USER`, `POSTGRES_BACKUP_PASSWORD`       |                     `olx_backup`, required | Dedicated broad-read role used only by `pg_dump`; it is not a Grafana credential.                                                                     |
-| `DB_INIT_DIR`                                            |                            `./db/init` | First-boot database SQL and role bootstrap. After the Phase 6 archive migration, use `./db/init-lean` for new volumes and the lean migrator contract. |
+| `DB_INIT_DIR`                                            |                                `./db/init` | First-boot database SQL and role bootstrap. After the Phase 6 archive migration, use `./db/init-lean` for new volumes and the lean migrator contract. |
 | `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD`           |                          `admin`, required | Grafana login.                                                                                                                                        |
 | `GRAFANA_SECRET_KEY`                                     |                                   required | Grafana encryption for stored datasource secrets.                                                                                                     |
 | `GRAFANA_DOMAIN`                                         |                                `localhost` | Grafana's externally visible hostname; production must use the Cloudflare hostname.                                                                   |
@@ -33,7 +33,7 @@ docker compose up -d --build
 | `GRAFANA_BIND`                                           |                                `127.0.0.1` | Host interface for Grafana port 3000. Keep this at `127.0.0.1`; cloudflared is the public entry point.                                                |
 | `HEALTH_BIND`                                            | `127.0.0.1` bare-metal / `0.0.0.0` Compose | Health listener bind address. Compose needs all-interface binding inside the container; the published host port remains loopback-only.                |
 | `SCRAPE_INTERVAL_MINUTES`                                |                                      `720` | Scheduled scraper cadence when the `scrape` profile is enabled.                                                                                       |
-| `STORAGE_SCHEMA`                                         |                                    `lean` | Schema used for current listing, price, lifecycle, and scrape-run writes.                                                                             |
+| `STORAGE_SCHEMA`                                         |                                     `lean` | Schema used for current listing, price, lifecycle, and scrape-run writes.                                                                             |
 | `DETAIL_REFRESH_DAYS`                                    |                                        `7` | Age at which successful detail evidence becomes eligible for refresh.                                                                                 |
 | `DETAIL_JOB_LEASE_MINUTES`                               |                                       `30` | Database lease duration for an in-flight durable detail job (maximum 24 hours).                                                                       |
 | `RAW_RESPONSE_RETENTION_COUNT`                           |                                        `3` | Newest raw search/detail responses retained per request kind and URL. Maintenance removes older rows.                                                 |
@@ -255,16 +255,15 @@ overlap it deliberately with backup windows; locking cannot make competing I/O
 free. `OLAP_RECONCILE_TIMEOUT_MS` defaults to 15 minutes and bounds lock waits,
 refresh, and validation statements.
 
-Historical evidence, daily inventory, OLAP history, and scrape runs are retained
-without an age limit. Their partition metadata has no retention period, and the
-maintenance cycle cannot age-prune those tables. Maintenance still expires raw
-response bodies and prunes maintenance execution logs. Do not delete mart history independently. After
-a large full refresh or restore, run `ANALYZE` on the `olap` tables. Normal
-autovacuum handles incremental replacements; investigate dead tuples and index
-growth monthly with `pg_stat_user_tables` and `pg_total_relation_size`. Use
-`VACUUM (ANALYZE)`, never routine `VACUUM FULL`, while dashboards are online.
-Backups must include both OLTP and OLAP schemas, although OLAP can be rebuilt
-from the canonical sources after recovery.
+The lean database retains current listings, price history, lifecycle events,
+scrape runs, and raw response/page archives. It does not publish daily inventory
+or OLAP score history. Maintenance applies the raw response retention policy;
+listing and price history are not age-pruned. After a large restore, run
+`ANALYZE` on `lean.listings` and `lean.price_history`. Normal autovacuum handles
+incremental updates; investigate dead tuples and index growth with
+`pg_stat_user_tables` and `pg_total_relation_size`. Use `VACUUM (ANALYZE)`, never
+routine `VACUUM FULL`, while dashboards are online. Backups must include `lean`
+and `public` (PostGIS and `schema_migrations`).
 
 ## Backup and restore
 
@@ -273,10 +272,11 @@ The `db-backup` service makes a custom-format PostgreSQL dump and a compressed G
 To make an additional database dump:
 
 ```bash
-docker compose exec -T db pg_dump -U olx_reader -Fc -f /backups/manual.dump olx
+docker compose exec -T db pg_dump -U olx_backup -Fc -f /backups/manual.dump olx
 ```
 
-Use the configured database and reader names if they differ from the defaults. Verify any dump before depending on it:
+Use the configured `POSTGRES_BACKUP_USER` and `POSTGRES_DB` if they differ from
+the defaults. Verify any dump before depending on it:
 
 ```bash
 docker compose exec -T db pg_restore -l /backups/manual.dump
@@ -284,16 +284,17 @@ docker compose exec -T db pg_restore -l /backups/manual.dump
 
 A restore overwrites database objects and should be performed during a
 maintenance window. Use `db/remote-restore.sh` for normal synchronized
-recovery: it validates ownership, resets all application schemas, filters
+recovery: it accepts current `lean` and legacy `public` listing archives,
+validates ownership, resets `lean`, `public`, `reporting`, and `olap`, filters
 schema-level TOC entries, restores transactionally, and retries the preserved
-snapshot after a failure. Do not run `pg_restore --clean` directly now that
-objects cross `public`, `reporting`, and `olap`; archive
-drop order cannot safely represent those dependencies. After a restore,
-reapply reader privileges and restart clients:
+snapshot after a failure. Do not run `pg_restore --clean` directly; objects can
+cross the `lean`, `public`, `reporting`, and `olap` schemas, so archive drop
+order cannot safely represent those dependencies. After a restore, repair role
+privileges and restart clients:
 
 The database service sets `max_locks_per_transaction=512` because the
-transactional schema reset traverses the full public/reporting/OLAP dependency
-graph. Keep that setting when deploying the restore endpoint; reverting to the
+transactional schema reset traverses the application schema dependency graph.
+Keep that setting when deploying the restore endpoint; reverting to the
 PostgreSQL default can fail with `out of shared memory` before the archive is
 restored.
 

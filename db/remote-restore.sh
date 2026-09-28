@@ -115,7 +115,7 @@ if ! docker compose exec -T db pg_restore -l /backups/olx-sync-incoming.dump >/d
   echo "RESTORE_ERROR: archive failed pg_restore integrity check" >&2
   exit 1
 fi
-if ! docker compose exec -T db sh -c 'pg_restore -l /backups/olx-sync-incoming.dump | grep -q "TABLE DATA public listings"'; then
+if ! docker compose exec -T db sh -c 'pg_restore -l /backups/olx-sync-incoming.dump | grep -Eq "TABLE DATA (lean|public) listings"'; then
   echo "RESTORE_ERROR: archive is missing listings data" >&2
   exit 1
 fi
@@ -149,7 +149,7 @@ drifted=$(docker compose exec -T db sh -c "
     pg_restore -l '/backups/olx-sync-incoming.dump' |
     grep -v '^;' | grep -v 'DEFAULT ACL' |
     grep -v ' EXTENSION - ' | grep -v ' COMMENT - EXTENSION ' |
-    grep -vE ' SCHEMA - (public|reporting|olap|tiger|topology) ' |
+    grep -vE ' SCHEMA - (lean|public|reporting|olap|tiger|topology) ' |
     grep -vE ' (COMMENT|ACL) - SCHEMA ' |
     awk '\$NF != \"$migrator_user\" {print \$NF}' | sort -u")
 if [ -n "$drifted" ]; then
@@ -200,12 +200,12 @@ build_toc() {
      # schema-level entries carry the source schema's owner (ALTER ... OWNER
      # TO <bootstrap admin>) and cannot be replayed by $app_user; the reset
      # block already created the schema with the right owner and grants
-     grep -ve 'SCHEMA - public' -e 'SCHEMA - reporting' -e 'SCHEMA - olap' \
+     grep -ve 'SCHEMA - lean' -e 'SCHEMA - public' -e 'SCHEMA - reporting' -e 'SCHEMA - olap' \
           -e 'SCHEMA - tiger' -e 'SCHEMA - topology' \
           -e 'COMMENT - SCHEMA' -e 'ACL - SCHEMA' \
           '$2' > '$2.f' || :
      mv '$2.f' '$2'
-     test -s '$2' && grep -q 'TABLE DATA public listings' '$2'
+     test -s '$2' && grep -Eq 'TABLE DATA (lean|public) listings' '$2'
   "
 }
 
@@ -215,6 +215,7 @@ if ! build_toc /backups/olx-sync-incoming.dump /tmp/toc.use; then
 fi
 reset_schemas() {
   docker compose exec -T db psql -v ON_ERROR_STOP=1 -U "$boot_user" -d "$db_name" -q -c "
+    DROP SCHEMA IF EXISTS lean CASCADE;
     -- PostGIS lives in public and is extension-owned by the bootstrap role.
     -- Recreate it after the application schemas are reset; it is deliberately
     -- absent from the app-role pg_restore TOC.
@@ -223,6 +224,7 @@ reset_schemas() {
     DROP SCHEMA IF EXISTS olap CASCADE;
     DROP SCHEMA IF EXISTS public CASCADE;
     CREATE SCHEMA public AUTHORIZATION \"$migrator_user\";
+    CREATE SCHEMA lean AUTHORIZATION \"$migrator_user\";
     CREATE SCHEMA reporting AUTHORIZATION \"$migrator_user\";
     CREATE SCHEMA olap AUTHORIZATION \"$migrator_user\";
     CREATE EXTENSION IF NOT EXISTS postgis;

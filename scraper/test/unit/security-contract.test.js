@@ -135,13 +135,16 @@ test("restore input and identifiers are bounded and cleaned up", () => {
   assert.match(restore, /LOCK=\/tmp\/olx-restore\.lock/);
   assert.match(restore, /DROP SCHEMA IF EXISTS reporting CASCADE/);
   assert.match(restore, /DROP SCHEMA IF EXISTS olap CASCADE/);
+  assert.match(restore, /DROP SCHEMA IF EXISTS lean CASCADE/);
+  assert.match(restore, /CREATE SCHEMA lean AUTHORIZATION/);
+  assert.match(restore, /TABLE DATA \(lean\|public\) listings/);
   assert.match(restore, /reset_schemas && docker compose exec/);
   assert.doesNotMatch(restore, /pg_restore -U[^\n]*--clean/);
   assert.match(restore, /SCHEMA - tiger/);
   assert.match(restore, /SCHEMA - topology/);
   assert.match(
     restore,
-    /grep -vE ' SCHEMA - \(public\|reporting\|olap\|tiger\|topology\) '/,
+    /grep -vE ' SCHEMA - \(lean\|public\|reporting\|olap\|tiger\|topology\) '/,
   );
   assert.match(restore, /grep -vE ' \(COMMENT\|ACL\) - SCHEMA '/);
   assert.match(restore, /grep -ve ' ACL '/);
