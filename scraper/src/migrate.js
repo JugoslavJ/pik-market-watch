@@ -33,6 +33,34 @@ async function schemaIsCurrent(client) {
             WHERE table_schema='lean' AND table_name='listings'
               AND column_name IN ('price_text','published_at','details_fetched_at','api_status'))
       AND EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema='lean' AND table_name='listings'
+                     AND column_name='first_seen' AND data_type='date')
+      AND EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema='lean' AND table_name='listings'
+                     AND column_name='published_at' AND data_type='date')
+      AND (SELECT count(*) = 2 FROM information_schema.columns
+            WHERE table_schema='lean' AND table_name='listings'
+              AND column_name IN ('closed_at','renewed_at') AND data_type='date')
+      AND (SELECT count(*) = 2 FROM information_schema.columns
+            WHERE table_schema='lean' AND table_name='listing_lifecycle_events'
+              AND column_name IN ('occurred_at','opened_at') AND data_type='date')
+      AND NOT EXISTS (
+        SELECT 1 FROM pg_constraint c
+         WHERE c.conrelid=to_regclass('lean.listing_lifecycle_events')
+           AND c.contype='u'
+           AND (SELECT array_agg(a.attname::text ORDER BY a.attname::text)
+                  FROM unnest(c.conkey) AS k(attnum)
+                  JOIN pg_attribute a
+                    ON a.attrelid=c.conrelid AND a.attnum=k.attnum)
+               = ARRAY['article_id','event_type','occurred_at']::text[]
+      )
+      AND EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema='lean' AND table_name='price_history'
+                     AND column_name='price_date' AND data_type='date')
+      AND NOT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_schema='lean' AND table_name='price_history'
+                         AND column_name='observed_at')
+      AND EXISTS (SELECT 1 FROM information_schema.columns
                    WHERE table_schema='lean' AND table_name='scrape_runs'
                      AND column_name='is_complete')
       AS current_schema`);

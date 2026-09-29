@@ -96,9 +96,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "active",
           "values": false
         },
@@ -159,9 +157,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "new_7d",
           "values": false
         },
@@ -176,7 +172,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND (${deal:sqlstring} = 'All' OR l.deal = CASE WHEN ${deal:sqlstring} = 'sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${rooms:sqlstring} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms:sqlstring}) AND ('All' = ANY (ARRAY[${neighborhood:sqlstring}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood:sqlstring}]::text[])) AND (${category:sqlstring} = 'All' OR EXISTS (SELECT 1 FROM lean.saved_searches ss WHERE ss.search_key = ANY(l.search_keys) AND ss.category = ${category:sqlstring})) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)) SELECT count(*) AS new_7d FROM base WHERE first_seen>now()-INTERVAL '7 days'",
+          "rawSql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND (${deal:sqlstring} = 'All' OR l.deal = CASE WHEN ${deal:sqlstring} = 'sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${rooms:sqlstring} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms:sqlstring}) AND ('All' = ANY (ARRAY[${neighborhood:sqlstring}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood:sqlstring}]::text[])) AND (${category:sqlstring} = 'All' OR EXISTS (SELECT 1 FROM lean.saved_searches ss WHERE ss.search_key = ANY(l.search_keys) AND ss.category = ${category:sqlstring})) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)) SELECT count(*) AS new_7d FROM base WHERE first_seen >= (now() AT TIME ZONE 'Europe/Sarajevo')::date - 7",
           "refId": "A"
         }
       ],
@@ -222,9 +218,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "drops",
           "values": false
         },
@@ -239,7 +233,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH prices AS (SELECT article_id, observed_at, price, lag(price) OVER (PARTITION BY article_id ORDER BY observed_at, id) AS previous_price FROM lean.price_history WHERE price IS NOT NULL), cuts AS (SELECT article_id, observed_at, previous_price, price, previous_price - price AS reduction FROM prices WHERE previous_price > price) SELECT count(DISTINCT c.article_id) AS drops FROM cuts c JOIN lean.listings l USING(article_id) WHERE l.closed_at IS NULL AND (${deal:sqlstring} = 'All' OR l.deal = CASE WHEN ${deal:sqlstring} = 'sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${rooms:sqlstring} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms:sqlstring}) AND ('All' = ANY (ARRAY[${neighborhood:sqlstring}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood:sqlstring}]::text[])) AND (${category:sqlstring} = 'All' OR EXISTS (SELECT 1 FROM lean.saved_searches ss WHERE ss.search_key = ANY(l.search_keys) AND ss.category = ${category:sqlstring})) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric) AND c.observed_at>now()-INTERVAL '7 days'",
+          "rawSql": "WITH prices AS (SELECT article_id, price_date, price, lag(price) OVER (PARTITION BY article_id ORDER BY price_date, id) AS previous_price FROM lean.price_history WHERE price IS NOT NULL AND source='api_price_history'), cuts AS (SELECT article_id, price_date, previous_price, price, previous_price - price AS reduction FROM prices WHERE previous_price > price) SELECT count(DISTINCT c.article_id) AS drops FROM cuts c JOIN lean.listings l USING(article_id) WHERE l.closed_at IS NULL AND (${deal:sqlstring} = 'All' OR l.deal = CASE WHEN ${deal:sqlstring} = 'sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${rooms:sqlstring} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms:sqlstring}) AND ('All' = ANY (ARRAY[${neighborhood:sqlstring}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood:sqlstring}]::text[])) AND (${category:sqlstring} = 'All' OR EXISTS (SELECT 1 FROM lean.saved_searches ss WHERE ss.search_key = ANY(l.search_keys) AND ss.category = ${category:sqlstring})) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric) AND c.price_date >= (now() AT TIME ZONE 'Europe/Sarajevo')::date - 7",
           "refId": "A"
         }
       ],
@@ -285,9 +279,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "median_sale_ppm2",
           "values": false
         },
@@ -348,9 +340,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "median_rent",
           "values": false
         },
@@ -407,8 +397,8 @@
         "w": 24,
         "h": 9
       },
-      "title": "Median observed price-change KM/m² by day",
-      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
+      "title": "Median reported sale price KM/m² by day",
+      "description": "Daily median across sale listings active at day end. Each listing carries forward its latest detail-reported price; historical KM/m² uses current area.",
       "type": "timeseries",
       "options": {
         "legend": {
@@ -429,7 +419,7 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT date_trunc('day', p.observed_at) AS time, percentile_cont(0.25) WITHIN GROUP (ORDER BY p.price / NULLIF(l.sqm,0)) AS p25, percentile_cont(0.5) WITHIN GROUP (ORDER BY p.price / NULLIF(l.sqm,0)) AS median, percentile_cont(0.75) WITHIN GROUP (ORDER BY p.price / NULLIF(l.sqm,0)) AS p75, count(*) AS observations FROM lean.price_history p JOIN lean.listings l USING(article_id) WHERE l.deal = 'sale' AND l.sqm > 0 AND p.price > 0 AND p.observed_at >= now() - INTERVAL '90 days' AND $__timeFilter(p.observed_at) GROUP BY 1 ORDER BY 1",
+          "rawSql": "WITH days AS (SELECT g.day::date AS day FROM generate_series(GREATEST(date($__timeFrom() AT TIME ZONE 'Europe/Sarajevo'), (now() AT TIME ZONE 'Europe/Sarajevo')::date - 89), LEAST(date($__timeTo() AT TIME ZONE 'Europe/Sarajevo'), (now() AT TIME ZONE 'Europe/Sarajevo')::date), INTERVAL '1 day') AS g(day)), openings AS (SELECT article_id, first_seen AS opened_at FROM lean.listings UNION ALL SELECT article_id, occurred_at AS opened_at FROM lean.listing_lifecycle_events WHERE event_type = 'reopened'), cycles AS (SELECT o.article_id, o.opened_at, c.closed_at FROM openings o LEFT JOIN LATERAL (SELECT min(e.occurred_at) AS closed_at FROM lean.listing_lifecycle_events e WHERE e.article_id = o.article_id AND e.event_type = 'closed' AND e.occurred_at > o.opened_at) c ON TRUE), daily AS (SELECT d.day, p.price / NULLIF(l.sqm, 0) AS ppm2 FROM days d JOIN cycles c ON c.opened_at < d.day + 1 AND (c.closed_at IS NULL OR c.closed_at >= d.day + 1) JOIN lean.listings l ON l.article_id = c.article_id AND l.deal = 'sale' AND l.sqm > 0 JOIN LATERAL (SELECT ph.price FROM lean.price_history ph WHERE ph.article_id = l.article_id AND ph.source='api_price_history' AND ph.price_date <= d.day AND ph.price > 0 ORDER BY ph.price_date DESC LIMIT 1) p ON TRUE) SELECT day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time, percentile_cont(0.25) WITHIN GROUP (ORDER BY ppm2) AS p25, percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) AS median, percentile_cont(0.75) WITHIN GROUP (ORDER BY ppm2) AS p75, count(*) AS listings FROM daily GROUP BY day ORDER BY day",
           "refId": "A"
         }
       ],
@@ -473,9 +463,7 @@
         "namePlacement": "auto",
         "orientation": "horizontal",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": true
         },
@@ -564,7 +552,7 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "WITH days AS (SELECT generate_series(date($__timeFrom() AT TIME ZONE 'Europe/Sarajevo'), date($__timeTo() AT TIME ZONE 'Europe/Sarajevo'), INTERVAL '1 day')::date AS day), movements AS (SELECT (first_seen AT TIME ZONE 'Europe/Sarajevo')::date AS day, 1 AS new_n, 0 AS closed_n FROM lean.listings UNION ALL SELECT (closed_at AT TIME ZONE 'Europe/Sarajevo')::date, 0, 1 FROM lean.listings WHERE closed_at IS NOT NULL) SELECT d.day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time, COALESCE(sum(m.new_n),0)::int AS new_n, COALESCE(sum(m.closed_n),0)::int AS closed_n FROM days d LEFT JOIN movements m USING(day) GROUP BY d.day ORDER BY d.day",
+          "rawSql": "WITH days AS (SELECT generate_series(date($__timeFrom() AT TIME ZONE 'Europe/Sarajevo'), date($__timeTo() AT TIME ZONE 'Europe/Sarajevo'), INTERVAL '1 day')::date AS day), movements AS (SELECT first_seen AS day, 1 AS new_n, 0 AS closed_n FROM lean.listings UNION ALL SELECT closed_at, 0, 1 FROM lean.listings WHERE closed_at IS NOT NULL) SELECT d.day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time, COALESCE(sum(m.new_n),0)::int AS new_n, COALESCE(sum(m.closed_n),0)::int AS closed_n FROM days d LEFT JOIN movements m USING(day) GROUP BY d.day ORDER BY d.day",
           "refId": "A"
         }
       ],
@@ -602,9 +590,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -760,9 +746,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -825,9 +809,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -878,9 +860,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -893,7 +873,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH prices AS (SELECT article_id, observed_at, price, lag(price) OVER (PARTITION BY article_id ORDER BY observed_at, id) AS previous_price FROM lean.price_history WHERE price IS NOT NULL), cuts AS (SELECT article_id, observed_at, previous_price, price, previous_price - price AS reduction FROM prices WHERE previous_price > price) SELECT l.title,l.url,c.previous_price AS was,c.price AS now,c.reduction,c.observed_at FROM cuts c JOIN lean.listings l USING(article_id) WHERE l.closed_at IS NULL AND (${deal:sqlstring} = 'All' OR l.deal = CASE WHEN ${deal:sqlstring} = 'sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${rooms:sqlstring} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms:sqlstring}) AND ('All' = ANY (ARRAY[${neighborhood:sqlstring}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood:sqlstring}]::text[])) AND (${category:sqlstring} = 'All' OR EXISTS (SELECT 1 FROM lean.saved_searches ss WHERE ss.search_key = ANY(l.search_keys) AND ss.category = ${category:sqlstring})) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric) ORDER BY c.observed_at DESC LIMIT 25",
+          "rawSql": "WITH prices AS (SELECT article_id, price_date, price, lag(price) OVER (PARTITION BY article_id ORDER BY price_date, id) AS previous_price FROM lean.price_history WHERE price IS NOT NULL AND source='api_price_history'), cuts AS (SELECT article_id, price_date, previous_price, price, previous_price - price AS reduction FROM prices WHERE previous_price > price) SELECT l.title,l.url,c.previous_price AS was,c.price AS now,c.reduction,c.price_date FROM cuts c JOIN lean.listings l USING(article_id) WHERE l.closed_at IS NULL AND (${deal:sqlstring} = 'All' OR l.deal = CASE WHEN ${deal:sqlstring} = 'sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${rooms:sqlstring} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms:sqlstring}) AND ('All' = ANY (ARRAY[${neighborhood:sqlstring}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood:sqlstring}]::text[])) AND (${category:sqlstring} = 'All' OR EXISTS (SELECT 1 FROM lean.saved_searches ss WHERE ss.search_key = ANY(l.search_keys) AND ss.category = ${category:sqlstring})) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric) ORDER BY c.price_date DESC LIMIT 25",
           "refId": "A"
         }
       ],
@@ -1021,9 +1001,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "actives",
           "values": false
         },
@@ -1038,7 +1016,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH prices AS (SELECT article_id, observed_at, price, lag(price) OVER (PARTITION BY article_id ORDER BY observed_at, id) AS previous_price FROM lean.price_history WHERE price IS NOT NULL), cuts AS (SELECT article_id, observed_at, previous_price, price, previous_price - price AS reduction FROM prices WHERE previous_price > price) SELECT count(DISTINCT c.article_id) AS actives FROM cuts c JOIN lean.listings l USING(article_id) WHERE l.closed_at IS NULL AND (${deal:sqlstring} = 'All' OR l.deal = CASE WHEN ${deal:sqlstring} = 'sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${rooms:sqlstring} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms:sqlstring}) AND ('All' = ANY (ARRAY[${neighborhood:sqlstring}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood:sqlstring}]::text[])) AND (${category:sqlstring} = 'All' OR EXISTS (SELECT 1 FROM lean.saved_searches ss WHERE ss.search_key = ANY(l.search_keys) AND ss.category = ${category:sqlstring})) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)",
+          "rawSql": "WITH prices AS (SELECT article_id, price_date, price, lag(price) OVER (PARTITION BY article_id ORDER BY price_date, id) AS previous_price FROM lean.price_history WHERE price IS NOT NULL AND source='api_price_history'), cuts AS (SELECT article_id, price_date, previous_price, price, previous_price - price AS reduction FROM prices WHERE previous_price > price) SELECT count(DISTINCT c.article_id) AS actives FROM cuts c JOIN lean.listings l USING(article_id) WHERE l.closed_at IS NULL AND (${deal:sqlstring} = 'All' OR l.deal = CASE WHEN ${deal:sqlstring} = 'sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${rooms:sqlstring} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms:sqlstring}) AND ('All' = ANY (ARRAY[${neighborhood:sqlstring}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood:sqlstring}]::text[])) AND (${category:sqlstring} = 'All' OR EXISTS (SELECT 1 FROM lean.saved_searches ss WHERE ss.search_key = ANY(l.search_keys) AND ss.category = ${category:sqlstring})) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)",
           "refId": "A"
         }
       ],
@@ -1084,9 +1062,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "median_cut",
           "values": false
         },
@@ -1101,7 +1077,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH prices AS (SELECT article_id, observed_at, price, lag(price) OVER (PARTITION BY article_id ORDER BY observed_at, id) AS previous_price FROM lean.price_history WHERE price IS NOT NULL), cuts AS (SELECT article_id, observed_at, previous_price, price, previous_price - price AS reduction FROM prices WHERE previous_price > price) SELECT round(percentile_cont(0.5) WITHIN GROUP (ORDER BY reduction)::numeric,0) AS median_cut FROM cuts WHERE reduction>0",
+          "rawSql": "WITH prices AS (SELECT article_id, price_date, price, lag(price) OVER (PARTITION BY article_id ORDER BY price_date, id) AS previous_price FROM lean.price_history WHERE price IS NOT NULL AND source='api_price_history'), cuts AS (SELECT article_id, price_date, previous_price, price, previous_price - price AS reduction FROM prices WHERE previous_price > price) SELECT round(percentile_cont(0.5) WITHIN GROUP (ORDER BY reduction)::numeric,0) AS median_cut FROM cuts WHERE reduction>0",
           "refId": "A"
         }
       ],
@@ -1146,9 +1122,7 @@
         "namePlacement": "auto",
         "orientation": "horizontal",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": true
         },
@@ -1211,9 +1185,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -1285,9 +1257,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "gross_yield_pct",
           "values": false
         },
@@ -1348,9 +1318,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "change_pct",
           "values": false
         },
@@ -1365,7 +1333,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH weeks AS (SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE first_seen >= date_trunc('week', now())) AS current_week, percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE first_seen >= date_trunc('week', now()) - INTERVAL '7 days' AND first_seen < date_trunc('week', now())) AS prior_week FROM lean.listings WHERE deal = 'sale' AND ppm2 > 0) SELECT round((100 * (current_week / NULLIF(prior_week,0) - 1))::numeric,1) AS change_pct FROM weeks",
+          "rawSql": "WITH weeks AS (SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE first_seen >= date_trunc('week', now() AT TIME ZONE 'Europe/Sarajevo')::date) AS current_week, percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE first_seen >= date_trunc('week', now() AT TIME ZONE 'Europe/Sarajevo')::date - 7 AND first_seen < date_trunc('week', now() AT TIME ZONE 'Europe/Sarajevo')::date) AS prior_week FROM lean.listings WHERE deal = 'sale' AND ppm2 > 0) SELECT round((100 * (current_week / NULLIF(prior_week,0) - 1))::numeric,1) AS change_pct FROM weeks",
           "refId": "A"
         }
       ],
@@ -1410,9 +1378,7 @@
         "namePlacement": "auto",
         "orientation": "horizontal",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": true
         },
@@ -1475,9 +1441,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -1540,9 +1504,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -1591,9 +1553,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -1646,9 +1606,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -1670,11 +1628,7 @@
   ],
   "refresh": "2h",
   "schemaVersion": 39,
-  "tags": [
-    "olx",
-    "real-estate",
-    "responsive"
-  ],
+  "tags": ["olx", "real-estate", "responsive"],
   "templating": {
     "list": [
       {
@@ -1699,7 +1653,7 @@
         "skipUrlSync": false,
         "sort": 1,
         "type": "query",
-        "allValue": "All"
+        "allValue": "'All'"
       },
       {
         "current": {
@@ -1727,7 +1681,7 @@
         "type": "custom",
         "query": "sell,rent",
         "sort": 0,
-        "allValue": "All"
+        "allValue": "'All'"
       },
       {
         "current": {
@@ -1751,7 +1705,7 @@
         "skipUrlSync": false,
         "sort": 2,
         "type": "query",
-        "allValue": "All"
+        "allValue": "'All'"
       },
       {
         "current": {
@@ -1775,7 +1729,7 @@
         "skipUrlSync": false,
         "sort": 1,
         "type": "query",
-        "allValue": "All"
+        "allValue": "'All'"
       },
       {
         "current": {

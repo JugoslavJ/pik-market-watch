@@ -44,6 +44,15 @@ test.before(async () => {
   );
   await db.pool.query(
     fs.readFileSync(
+      path.resolve(
+        __dirname,
+        "../../../db/migrations/09-date-based-price-history.sql",
+      ),
+      "utf8",
+    ),
+  );
+  await db.pool.query(
+    fs.readFileSync(
       path.resolve(__dirname, "../../../db/init-lean/03-raw-archive.sql"),
       "utf8",
     ),
@@ -135,24 +144,24 @@ needsDb(
   },
 );
 
-needsDb("lean price history records changed prices once", async () => {
-  await commit(SEARCH_A, [card(9102, 100000)]);
-  await commit(SEARCH_A, [card(9102, 100000)]);
-  await commit(SEARCH_A, [card(9102, 90000)]);
-  await commit(SEARCH_A, [card(9102, 90000)]);
+needsDb(
+  "lean price history keeps one search price per local date",
+  async () => {
+    await commit(SEARCH_A, [card(9102, 100000)]);
+    await commit(SEARCH_A, [card(9102, 100000)]);
+    await commit(SEARCH_A, [card(9102, 90000)]);
+    await commit(SEARCH_A, [card(9102, 90000)]);
 
-  const row = await listing(9102);
-  assert.equal(row.price, "90000.00");
-  assert.equal(row.deal, "sale");
-  const history = await db.pool.query(
-    "SELECT price, source FROM lean.price_history WHERE article_id = $1 ORDER BY id",
-    [9102],
-  );
-  assert.deepEqual(history.rows, [
-    { price: "100000.00", source: "search" },
-    { price: "90000.00", source: "search" },
-  ]);
-});
+    const row = await listing(9102);
+    assert.equal(row.price, "90000.00");
+    assert.equal(row.deal, "sale");
+    const history = await db.pool.query(
+      "SELECT price, source FROM lean.price_history WHERE article_id = $1 ORDER BY id",
+      [9102],
+    );
+    assert.deepEqual(history.rows, [{ price: "90000.00", source: "search" }]);
+  },
+);
 
 needsDb(
   "lean neighborhood keeps an exact known source location ahead of pin fallback",
@@ -278,6 +287,39 @@ needsDb("lean global closure records an exit only once", async () => {
   );
   assert.deepEqual(events.rows, [{ event_type: "closed" }]);
 });
+
+needsDb(
+  "lean history keeps the latest reported price per Banja Luka day",
+  async () => {
+    await commit(SEARCH_A, [card(9106, 125000)]);
+    const earlier = Math.floor(Date.parse("2025-04-01T02:00:00Z") / 1000);
+    const later = Math.floor(Date.parse("2025-04-01T18:00:00Z") / 1000);
+    await db.enrichListings([
+      {
+        articleId: 9106,
+        dealType: "sale",
+        price: 124000,
+        sqm: 60,
+        apiPriceHistory: [
+          { date: earlier, price: 126000 },
+          { date: later, price: 124000 },
+        ],
+      },
+    ]);
+    const prices = await db.pool.query(
+      `SELECT to_char(price_date,'YYYY-MM-DD') AS price_date,price,source
+         FROM lean.price_history
+      WHERE article_id=9106 AND source='api_price_history'`,
+    );
+    assert.deepEqual(prices.rows, [
+      {
+        price_date: "2025-04-01",
+        price: "124000.00",
+        source: "api_price_history",
+      },
+    ]);
+  },
+);
 
 needsDb(
   "lean ingestion rolls back every write when finishing a run fails",

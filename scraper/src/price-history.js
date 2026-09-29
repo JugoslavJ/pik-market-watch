@@ -14,6 +14,7 @@ const {
 
 const MAX_UNIX_SECONDS = 4102444800; // 2100-01-01
 const VALID_STATES = new Set(Object.values(PRICE_STATES).concat("conflict"));
+// Banja Luka uses the Bosnia and Herzegovina IANA zone, Europe/Sarajevo.
 const BANJA_LUKA_DAY_FORMATTER = new Intl.DateTimeFormat("en-CA", {
   timeZone: "Europe/Sarajevo",
   year: "numeric",
@@ -272,7 +273,7 @@ async function recordPriceEvents(pool, events, options = {}) {
     }
 
     // Search runs are periodic observations, not price-history assertions.
-    // Keep at most one unchanged search price per Sarajevo day, while still
+    // Keep at most one unchanged search price per Banja Luka day, while still
     // appending a new row for a new day or a changed canonical value. Compare
     // with the latest event from any source: a detail event between two
     // same-day search observations must not make the second search look like

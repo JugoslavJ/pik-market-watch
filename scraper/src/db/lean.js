@@ -69,7 +69,8 @@ async function recordLifecycleEvents(client, ids, eventType) {
        (article_id,event_type,occurred_at,opened_at,price,deal,property_type,
         neighborhood,sqm,rooms,latitude,longitude,title,url)
      SELECT l.article_id,$2::text,
-            CASE WHEN $2='closed' THEN l.closed_at ELSE l.last_seen END,
+            CASE WHEN $2='closed' THEN l.closed_at
+                 ELSE (l.last_seen AT TIME ZONE 'Europe/Sarajevo')::date END,
             CASE WHEN $2='closed' THEN COALESCE((
               SELECT max(e.occurred_at) FROM lean.listing_lifecycle_events e
                WHERE e.article_id=l.article_id AND e.event_type='reopened'
@@ -79,7 +80,7 @@ async function recordLifecycleEvents(client, ids, eventType) {
             l.deal,l.property_type,l.neighborhood,l.sqm,l.rooms,
             l.latitude,l.longitude,l.title,l.url
        FROM lean.listings l WHERE l.article_id=ANY($1::bigint[])
-     ON CONFLICT (article_id,event_type,occurred_at) DO NOTHING`,
+`,
     [ids, eventType],
   );
 }
@@ -218,7 +219,9 @@ async function commitSearchIngestion(payload) {
            (article_id,url,title,deal,sqm,rooms,price,price_text,currency,ppm2,
             latitude,longitude,seller_type,renewed_at,api_status,extra,search_keys)
          SELECT article_id,url,title,deal,sqm,rooms,price,price_text,currency,ppm2,
-                latitude,longitude,seller_type,renewed_at,api_status,extra,ARRAY[$2::text]
+                latitude,longitude,seller_type,
+                (renewed_at AT TIME ZONE 'Europe/Sarajevo')::date,
+                api_status,extra,ARRAY[$2::text]
            FROM jsonb_to_recordset($1::jsonb) AS i(
              article_id bigint,url text,title text,deal text,sqm numeric,rooms text,
              price numeric,price_text text,currency text,ppm2 integer,
@@ -268,10 +271,12 @@ async function commitSearchIngestion(payload) {
     });
     if (changed.length) {
       await client.query(
-        `INSERT INTO lean.price_history (article_id,observed_at,price,currency,source)
-         SELECT article_id,now(),price,currency,'search'
+        `INSERT INTO lean.price_history (article_id,price_date,price,currency,source)
+         SELECT article_id,(now() AT TIME ZONE 'Europe/Sarajevo')::date,price,currency,'search'
            FROM jsonb_to_recordset($1::jsonb) AS i(
-             article_id bigint,price numeric,currency text)`,
+             article_id bigint,price numeric,currency text)
+           ON CONFLICT (article_id,price_date,source) DO UPDATE
+             SET price=EXCLUDED.price,currency=EXCLUDED.currency`,
         [JSON.stringify(changed)],
       );
     }
@@ -286,7 +291,9 @@ async function commitSearchIngestion(payload) {
     if (removedIds.length) {
       await classify(client, removedIds);
       const closed = await client.query(
-        `UPDATE lean.listings SET closed_at=now(),closing_price=price
+        `UPDATE lean.listings
+            SET closed_at=(now() AT TIME ZONE 'Europe/Sarajevo')::date,
+                closing_price=price
           WHERE article_id=ANY($1::bigint[]) AND cardinality(search_keys)=0 AND closed_at IS NULL
           RETURNING article_id`,
         [removedIds],
@@ -379,7 +386,9 @@ async function closeUnseenListings(activeKeys) {
         removed.rows.map((row) => Number(row.article_id)),
       );
     const closed = await client.query(
-      `UPDATE lean.listings SET closed_at=now(),closing_price=price
+      `UPDATE lean.listings
+          SET closed_at=(now() AT TIME ZONE 'Europe/Sarajevo')::date,
+              closing_price=price
         WHERE closed_at IS NULL AND cardinality(search_keys)=0 RETURNING article_id`,
     );
     await recordLifecycleEvents(
@@ -472,8 +481,10 @@ async function enrichListings(rows) {
            seller_type=COALESCE($9,seller_type),condition=COALESCE($10,condition),
            parking=COALESCE($11,parking),elevator=COALESCE($12,elevator),
            floor_num=COALESCE($13,floor_num),year_built=COALESCE($14,year_built),
-           published_at=COALESCE(published_at,$15),
-           renewed_at=GREATEST(renewed_at,$16),
+           published_at=COALESCE(published_at,($15::timestamptz AT TIME ZONE 'Europe/Sarajevo')::date),
+           first_seen=COALESCE(published_at,($15::timestamptz AT TIME ZONE 'Europe/Sarajevo')::date,first_seen),
+           renewed_at=GREATEST(renewed_at,
+             ($16::timestamptz AT TIME ZONE 'Europe/Sarajevo')::date),
            api_status=COALESCE($17,api_status),
            extra=extra || $18::jsonb,
            details_fetched_at=now(),last_enrichment_attempted_at=now()
@@ -500,16 +511,43 @@ async function enrichListings(rows) {
         ],
       );
       await classify(client, [Number(row.articleId)]);
-      if (
-        validPrice &&
-        (deal !== prior.deal || Number(price) !== Number(prior.price))
-      ) {
+      const apiHistory = (row.apiPriceHistory || []).map((event, ordinal) => ({
+        article_id: Number(row.articleId),
+        reported_at: event.date,
+        price: event.price,
+        currency: event.currency ?? row.priceCurrency ?? null,
+        ordinal: ordinal + 1,
+      }));
+      if (apiHistory.length) {
         await client.query(
-          `INSERT INTO lean.price_history (article_id,price,currency,source)
-           VALUES ($1,$2,COALESCE($3,'BAM'),'detail')`,
-          [row.articleId, price, row.priceCurrency ?? null],
+          `WITH events AS (
+             SELECT article_id,reported_at,price,currency,
+                    (to_timestamp(reported_at) AT TIME ZONE 'Europe/Sarajevo')::date AS price_date,
+                    ordinal
+               FROM jsonb_to_recordset($1::jsonb) AS e(
+                    article_id bigint,reported_at bigint,price numeric,
+                    currency text,ordinal bigint)
+              WHERE reported_at IS NOT NULL AND price>0
+           ), daily AS (
+             SELECT DISTINCT ON (article_id,price_date)
+                    article_id,price_date,price,currency
+               FROM events
+              ORDER BY article_id,price_date,reported_at DESC,ordinal DESC
+           )
+           INSERT INTO lean.price_history (article_id,price_date,price,currency,source)
+           SELECT article_id,price_date,price,COALESCE(NULLIF(BTRIM(currency),''),'BAM'),
+                  'api_price_history'
+             FROM daily
+           ON CONFLICT (article_id,price_date,source) DO UPDATE
+             SET price=EXCLUDED.price,currency=EXCLUDED.currency,source=EXCLUDED.source`,
+          [JSON.stringify(apiHistory)],
         );
       }
+      await client.query(
+        `DELETE FROM lean.price_history
+          WHERE article_id=$1 AND source='search'`,
+        [row.articleId],
+      );
     }
     await client.query("COMMIT");
   } catch (error) {
@@ -533,7 +571,7 @@ async function enrichmentQueue(
        (l.details_fetched_at IS NULL) AS never_detailed,
        (l.details_fetched_at <= now()-make_interval(days => $3::int)) AS stale,
        EXISTS (SELECT 1 FROM lean.price_history p WHERE p.article_id=l.article_id
-         AND p.source='search' AND p.observed_at > COALESCE(l.details_fetched_at,'-infinity')) AS price_changed,
+           AND p.source='search' AND p.price_date >= COALESCE((l.details_fetched_at AT TIME ZONE 'Europe/Sarajevo')::date,'-infinity'::date)) AS price_changed,
        count(*) OVER () AS pool_total
      FROM lean.listings l
      WHERE l.closed_at IS NULL AND l.article_id=ANY($1::bigint[])
@@ -544,7 +582,7 @@ async function enrichmentQueue(
             OR l.details_fetched_at IS NULL
             OR l.details_fetched_at <= now()-make_interval(days => $3::int)
             OR EXISTS (SELECT 1 FROM lean.price_history p WHERE p.article_id=l.article_id
-              AND p.source='search' AND p.observed_at > l.details_fetched_at))
+              AND p.source='search' AND p.price_date >= (l.details_fetched_at AT TIME ZONE 'Europe/Sarajevo')::date))
      ORDER BY (l.details_fetched_at IS NULL) DESC,
        l.last_enrichment_attempted_at ASC NULLS FIRST,l.article_id
      LIMIT $2`,

@@ -14,6 +14,37 @@ const migration = (name) =>
     "utf8",
   );
 
+async function restorePreDateLeanSchema(pool) {
+  await pool.query(`
+    DROP INDEX lean.lean_price_history_article_date_source_uidx;
+    ALTER TABLE lean.price_history DROP COLUMN price_date;
+    ALTER TABLE lean.price_history
+      ADD COLUMN observed_at timestamptz NOT NULL DEFAULT now();
+    CREATE INDEX lean_price_history_article_idx
+      ON lean.price_history (article_id, observed_at DESC);
+
+    ALTER TABLE lean.listings
+      ALTER COLUMN first_seen DROP DEFAULT,
+      ALTER COLUMN first_seen TYPE timestamptz
+        USING first_seen::timestamp AT TIME ZONE 'Europe/Sarajevo',
+      ALTER COLUMN published_at TYPE timestamptz
+        USING published_at::timestamp AT TIME ZONE 'Europe/Sarajevo',
+      ALTER COLUMN closed_at TYPE timestamptz
+        USING closed_at::timestamp AT TIME ZONE 'Europe/Sarajevo',
+      ALTER COLUMN renewed_at TYPE timestamptz
+        USING renewed_at::timestamp AT TIME ZONE 'Europe/Sarajevo';
+    ALTER TABLE lean.listing_lifecycle_events
+      ALTER COLUMN occurred_at TYPE timestamptz
+        USING occurred_at::timestamp AT TIME ZONE 'Europe/Sarajevo',
+      ALTER COLUMN opened_at TYPE timestamptz
+        USING opened_at::timestamp AT TIME ZONE 'Europe/Sarajevo';
+    ALTER TABLE lean.listing_lifecycle_events
+      ADD CONSTRAINT listing_lifecycle_events_article_id_event_type_occurred_at_key
+      UNIQUE (article_id, event_type, occurred_at);
+    DROP INDEX IF EXISTS lean.lean_listings_first_seen_idx;
+  `);
+}
+
 test.before(async () => {
   if (!process.env.TEST_DATABASE_URL) return;
   pool = new Pool({ connectionString: process.env.TEST_DATABASE_URL });
@@ -35,6 +66,7 @@ needsDb(
     await pool.query(
       "TRUNCATE lean.price_history,lean.listings,lean.scrape_runs,lean.saved_searches,lean.neighborhoods RESTART IDENTITY CASCADE",
     );
+    await restorePreDateLeanSchema(pool);
     await pool.query(
       `INSERT INTO public.saved_searches (search_key,name,url,category)
      VALUES ('lean-test-search','Test search','https://olx.ba/pretraga?category_id=23','apartments')`,
@@ -115,6 +147,7 @@ needsDb(
       pool.query(migration("02-lean-backfill.sql")),
       /requires all target tables to be empty/,
     );
+    await pool.query(migration("09-date-based-price-history.sql"));
   },
 );
 

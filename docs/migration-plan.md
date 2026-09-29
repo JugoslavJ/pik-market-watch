@@ -345,6 +345,7 @@ This is application code, not SQL — hand this to the coding agent working in
 (`docker compose run --rm scraper node src/index.js --once`) against the
 `lean` schema with the old schema left in place but not written to anymore.
 Confirm:
+
 - `lean.listings` row count moves sensibly (new/closed counts match what
   `scrape_runs`/logs report).
 - `lean.price_history` gets new rows only for listings whose price actually
@@ -364,33 +365,23 @@ scores; per-listing asking rate (`ppm2`) remains available as price per area.
 Suggested mapping (adjust panel-by-panel, this is a starting point for the
 agent doing the port, not a literal 1:1 spec):
 
-| Old dashboard concept | New query target |
-|---|---|
-| `reporting.dashboard_listings` (unfiltered inventory) | `SELECT * FROM lean.listings WHERE closed_at IS NULL` |
-| `reporting.market_daily` / `daily_listing_facts_olap` (trend) | Compute directly from `lean.price_history` with a `date_trunc('day', observed_at)` `GROUP BY`, or add a small `lean.market_daily` materialized view if a trend panel needs day-grain history that pure `listings` snapshot can't provide (see note below) |
-| `reporting.scrape_health` | `SELECT * FROM lean.scrape_runs ORDER BY started_at DESC LIMIT N` |
-| `reporting.exit_economics` / `lifecycle_cycles` / `lifecycle_movements` | Query `lean.listing_lifecycle_events` where `event_type='closed'`; each event stores its cycle open/close times, closing price, and event-time listing dimensions. Current active inventory remains in `lean.listings`. |
-| `reporting.price_changes` / `comparison_price_changes` | `SELECT * FROM lean.price_history WHERE article_id = ANY(...) ORDER BY observed_at` |
-| `reporting.olap_health` / `olap_queue_health` / `analytics_refresh_state` | Delete these panels entirely — there is no OLAP refresh pipeline in this design, so there is nothing to report health on |
+| Old dashboard concept                                                     | New query target                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `reporting.dashboard_listings` (unfiltered inventory)                     | `SELECT * FROM lean.listings WHERE closed_at IS NULL`                                                                                                                                                                   |
+| `reporting.market_daily` / `daily_listing_facts_olap` (trend)             | Compute directly from `lean.price_history.price_date`, carrying each listing's latest detail-reported price forward in the query. No materialized view or daily snapshot table is needed.                               |
+| `reporting.scrape_health`                                                 | `SELECT * FROM lean.scrape_runs ORDER BY started_at DESC LIMIT N`                                                                                                                                                       |
+| `reporting.exit_economics` / `lifecycle_cycles` / `lifecycle_movements`   | Query `lean.listing_lifecycle_events` where `event_type='closed'`; each event stores its cycle open/close dates, closing price, and event-time listing dimensions. Current active inventory remains in `lean.listings`. |
+| `reporting.price_changes` / `comparison_price_changes`                    | `SELECT * FROM lean.price_history WHERE article_id = ANY(...) ORDER BY price_date`                                                                                                                                      |
+| `reporting.olap_health` / `olap_queue_health` / `analytics_refresh_state` | Delete these panels entirely — there is no OLAP refresh pipeline in this design, so there is nothing to report health on                                                                                                |
 
-**Note on `market_daily` history:** the old design's day-grain
-history (`olap.market_daily`, `olap.lifecycle_cycles`) exists because the old
-schema keeps a reconstructable daily snapshot even for listings with sparse
-observations. This lean design does **not** reconstruct that — it only keeps
-current state (`lean.listings`) and price-change events
-(`lean.price_history`) plus closure/reopen events. The closure events preserve
-each known listing cycle and its duration, while not restoring sparse daily
-state reconstruction. If "new listings per day" panels need historical
-values during periods that had no observations, either:
-(a) accept they'll be derived from observed `first_seen` and
-`lean.listing_lifecycle_events` timestamps (works for days listings appeared
-and closed, but not sparse-history reconstruction for gaps), or
-(b) tell the agent to add a `lean.market_daily` table populated by a simple
-daily cron insert (`INSERT INTO lean.market_daily SELECT current_date,
-count(*) FILTER (WHERE first_seen::date = current_date), ...`), which is
-still far cheaper than the old reconstruction pipeline.
-Confirm which of these the dashboard owner actually wants before deleting
-those panels.
+**Note on daily history:** the lean design does not store a reconstructed
+inventory snapshot or materialized market trend. It stores the latest
+source-reported price for each listing and calendar date as one `price_date`
+row per listing and source. Grafana derives
+daily price medians by carrying the latest detail-reported price forward in
+the query, while `first_seen` uses the listing's publication date and closure
+events retain their event dates. Scrape-run and enrichment retry clocks keep
+timestamps because the scraper uses subday timing for recovery and scheduling.
 
 **Validation:** open each rebuilt dashboard, confirm every panel renders
 with data, and spot-check 2–3 numbers against the old dashboard's current
@@ -536,7 +527,7 @@ Phase 0.
   events) are queryable. Lean-only reopen times from before the lifecycle
   upgrade use `last_seen` as an approximation.
 - **Multi-search membership history over time.** `search_keys` on
-  `lean.listings` only tracks *current* membership, not "was in search A on
+  `lean.listings` only tracks _current_ membership, not "was in search A on
   day N, dropped, rejoined." If that matters, `lean.price_history`-style
   append-only membership-change log would need to be added back
   specifically for that, not for the whole schema.

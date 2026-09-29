@@ -46,10 +46,18 @@ has now been applied to the live database.
    non-extension application objects from `public`; and preserves
    `public.schema_migrations` and PostgreSQL extension objects. This cleanup
    was applied on 2026-09-28 after a disposable-restore dry run.
+9. Run `09-date-based-price-history.sql` once with writers stopped and a
+   verified backup available. It changes listing publication, first-seen,
+   renewal, closure, and lifecycle-event values plus price-history dates to
+   local `DATE` values, keeps only the latest API-reported price per listing
+   and day, and removes scrape-time detail price rows. Scraper run, detail
+   refresh, and archive-retention clocks remain timestamps. The
+   regular Compose migrator applies the equivalent
+   `db/init-lean/04-date-based-price-history.sql`; do not run both paths.
 
 `lean.listing_lifecycle_events` keeps each closure and reopen as a separate
-row, keyed by article, event type, and event time. A closure row keeps its
-cycle's `opened_at`, `occurred_at` closure time, final asking price when valid,
+row, keyed by article, event type, and event date. A closure row keeps its
+cycle's `opened_at` date, `occurred_at` closure date, final asking price when valid,
 and event-time deal, type, neighborhood, size, and room values. Coordinates,
 title, and URL are copied from the legacy current row during historical
 backfill; the old source does not have location/title snapshots for each cycle.
@@ -76,8 +84,12 @@ asking price.
 
 The source `public.listings` table has no `currency` column. The copy uses the
 latest valid price event matching its current price and normalizes `KM` to
-`BAM`; otherwise it defaults to `BAM`. `lean.price_history` preserves every
-valid non-null price event, its ID, evidence time, and original `source`.
+`BAM`; otherwise it defaults to `BAM`. `lean.price_history` keeps one row per
+listing, reported date, and source. When the API reports multiple prices on
+one date, the latest report wins and replaces earlier prices for that day.
+Detail API price history uses the reported Banja Luka calendar date; search-price markers keep their local
+observation date only to trigger detail refreshes. The daily market and exit
+opening-price charts use API-reported history, not search-time observations.
 `property_type` derives from the current search memberships via
 `reporting.comparison_property_type`, with the recorded closing category used
 for listings that have no current search membership; `neighborhood` follows the current

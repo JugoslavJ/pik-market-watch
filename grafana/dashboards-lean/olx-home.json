@@ -95,9 +95,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "active",
           "values": false
         },
@@ -158,9 +156,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "median_sale_ppm2",
           "values": false
         },
@@ -221,9 +217,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "median_rent",
           "values": false
         },
@@ -285,9 +279,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "gross_yield_pct",
           "values": false
         },
@@ -349,9 +341,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "exit_ratio",
           "values": false
         },
@@ -366,7 +356,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT round(100.0 * count(*) FILTER (WHERE closed_at > now()-INTERVAL '30 days') / NULLIF(count(*) FILTER (WHERE closed_at IS NULL OR closed_at > now()-INTERVAL '30 days'),0),1) AS exit_ratio FROM lean.listings",
+          "rawSql": "SELECT round(100.0 * count(*) FILTER (WHERE closed_at > (now() AT TIME ZONE 'Europe/Sarajevo')::date - 30) / NULLIF(count(*) FILTER (WHERE closed_at IS NULL OR closed_at > (now() AT TIME ZONE 'Europe/Sarajevo')::date - 30),0),1) AS exit_ratio FROM lean.listings",
           "refId": "A"
         }
       ],
@@ -417,9 +407,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "change_pct",
           "values": false
         },
@@ -500,9 +488,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "minutes_since_success",
           "values": false
         },
@@ -571,9 +557,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "failed_24h",
           "values": false
         },
@@ -634,9 +618,7 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "cards_24h",
           "values": false
         },
@@ -715,7 +697,7 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "WITH days AS (SELECT generate_series(date($__timeFrom() AT TIME ZONE 'Europe/Sarajevo'), date($__timeTo() AT TIME ZONE 'Europe/Sarajevo'), INTERVAL '1 day')::date AS day), movements AS (SELECT (first_seen AT TIME ZONE 'Europe/Sarajevo')::date AS day, 1 AS new_n, 0 AS closed_n FROM lean.listings UNION ALL SELECT (closed_at AT TIME ZONE 'Europe/Sarajevo')::date, 0, 1 FROM lean.listings WHERE closed_at IS NOT NULL) SELECT d.day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time, COALESCE(sum(m.new_n),0)::int AS new_n, COALESCE(sum(m.closed_n),0)::int AS closed_n FROM days d LEFT JOIN movements m USING(day) GROUP BY d.day ORDER BY d.day",
+          "rawSql": "WITH days AS (SELECT generate_series(date($__timeFrom() AT TIME ZONE 'Europe/Sarajevo'), date($__timeTo() AT TIME ZONE 'Europe/Sarajevo'), INTERVAL '1 day')::date AS day), movements AS (SELECT first_seen AS day, 1 AS new_n, 0 AS closed_n FROM lean.listings UNION ALL SELECT closed_at, 0, 1 FROM lean.listings WHERE closed_at IS NOT NULL) SELECT d.day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time, COALESCE(sum(m.new_n),0)::int AS new_n, COALESCE(sum(m.closed_n),0)::int AS closed_n FROM days d LEFT JOIN movements m USING(day) GROUP BY d.day ORDER BY d.day",
           "refId": "A"
         }
       ],
@@ -767,7 +749,7 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "WITH flow AS (WITH days AS (SELECT generate_series(date($__timeFrom() AT TIME ZONE 'Europe/Sarajevo'), date($__timeTo() AT TIME ZONE 'Europe/Sarajevo'), INTERVAL '1 day')::date AS day), movements AS (SELECT (first_seen AT TIME ZONE 'Europe/Sarajevo')::date AS day, 1 AS new_n, 0 AS closed_n FROM lean.listings UNION ALL SELECT (closed_at AT TIME ZONE 'Europe/Sarajevo')::date, 0, 1 FROM lean.listings WHERE closed_at IS NOT NULL) SELECT d.day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time, COALESCE(sum(m.new_n),0)::int AS new_n, COALESCE(sum(m.closed_n),0)::int AS closed_n FROM days d LEFT JOIN movements m USING(day) GROUP BY d.day ORDER BY d.day) SELECT time,round(100.0*closed_n/NULLIF((SELECT count(*) FROM lean.listings l WHERE l.first_seen<=flow.time AND (l.closed_at IS NULL OR l.closed_at>flow.time)),0),2) AS \"closed / observed active %\" FROM flow ORDER BY time",
+          "rawSql": "WITH flow AS (WITH days AS (SELECT generate_series(date($__timeFrom() AT TIME ZONE 'Europe/Sarajevo'), date($__timeTo() AT TIME ZONE 'Europe/Sarajevo'), INTERVAL '1 day')::date AS day), movements AS (SELECT first_seen AS day, 1 AS new_n, 0 AS closed_n FROM lean.listings UNION ALL SELECT closed_at, 0, 1 FROM lean.listings WHERE closed_at IS NOT NULL) SELECT d.day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time, COALESCE(sum(m.new_n),0)::int AS new_n, COALESCE(sum(m.closed_n),0)::int AS closed_n FROM days d LEFT JOIN movements m USING(day) GROUP BY d.day ORDER BY d.day) SELECT time,round(100.0*closed_n/NULLIF((SELECT count(*) FROM lean.listings l WHERE l.first_seen<=flow.time AND (l.closed_at IS NULL OR l.closed_at >= (flow.time AT TIME ZONE 'Europe/Sarajevo')::date)),0),2) AS \"closed / observed active %\" FROM flow ORDER BY time",
           "refId": "A"
         }
       ],
@@ -776,11 +758,7 @@
   ],
   "refresh": "2h",
   "schemaVersion": 39,
-  "tags": [
-    "olx",
-    "home",
-    "responsive"
-  ],
+  "tags": ["olx", "home", "responsive"],
   "templating": {
     "list": []
   },

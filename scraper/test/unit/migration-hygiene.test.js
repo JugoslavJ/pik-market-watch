@@ -44,6 +44,7 @@ test("lean first-boot baseline contains its complete minimal schema", () => {
     "01-lean-schema.sql",
     "02-lean-neighborhoods.sql",
     "03-raw-archive.sql",
+    "04-date-based-price-history.sql",
   ]);
   const neighborhoods = fs.readFileSync(
     path.join(leanInit, "02-lean-neighborhoods.sql"),
@@ -57,4 +58,13 @@ test("lean first-boot baseline contains its complete minimal schema", () => {
   );
   assert.match(schema, /CREATE TABLE lean\.listing_lifecycle_events/);
   assert.doesNotMatch(schema, /neighborhood_stats|CREATE MATERIALIZED VIEW/);
+  const daily = fs.readFileSync(
+    path.join(leanInit, "04-date-based-price-history.sql"),
+    "utf8",
+  );
+  assert.match(daily, /ALTER COLUMN occurred_at TYPE date/);
+  assert.match(daily, /ALTER COLUMN opened_at TYPE date/);
+  assert.match(daily, /PARTITION BY article_id, price_date, source/);
+  assert.match(daily, /observed_at DESC, id DESC/);
+  assert.match(daily, /DROP COLUMN observed_at/);
 });

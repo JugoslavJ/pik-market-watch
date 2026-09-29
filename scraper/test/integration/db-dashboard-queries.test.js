@@ -123,6 +123,7 @@ test.before(async () => {
     "01-lean-schema.sql",
     "02-lean-backfill.sql",
     "04-lean-lifecycle-events.sql",
+    "09-date-based-price-history.sql",
   ])
     await db.pool.query(
       fs.readFileSync(path.join(root, "db/migrations", name), "utf8"),
