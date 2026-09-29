@@ -24,19 +24,6 @@ const state = {
   searches: config.searches.map((s) => ({ name: s.name })),
 };
 
-async function publishSynchronousOlap(db) {
-  if (db.schema === "lean") return { skipped: true, reason: "lean schema" };
-  if (!config.runAnalyticsMaintenance) {
-    return { skipped: true, reason: "disabled by configuration" };
-  }
-  try {
-    return await db.refreshCurrentMarket((message) => log(`olap: ${message}`));
-  } catch (error) {
-    log(`✖ synchronous OLAP publication failed: ${error.message || error}`);
-    return { error: error.message || String(error) };
-  }
-}
-
 async function runAllUnlocked(db) {
   if (!config.searches.length) {
     log(
@@ -47,17 +34,14 @@ async function runAllUnlocked(db) {
     // Housekeeping has no upstream dependency. A deployment with no searches
     // configured must still cap and purge live raw archives.
     const maintenance = await db.runMaintenanceCycle({
-      maxDays: config.analyticsRebuildMaxDays,
       log: (message) => log(`maintenance: ${message}`),
     });
-    const olap = await publishSynchronousOlap(db);
     return {
       okRuns: 0,
       failedRuns: 0,
       skipped: 0,
       totalCards: 0,
       maintenance,
-      olap,
     };
   }
 
@@ -159,7 +143,6 @@ async function runAllUnlocked(db) {
   // Retention and analytics have separate outcomes. A failed upstream search,
   // failed rebuild, or skipped cycle must not suppress raw cleanup.
   const maintenance = await db.runMaintenanceCycle({
-    maxDays: config.analyticsRebuildMaxDays,
     log: (message) => log(`maintenance: ${message}`),
   });
   if (!maintenance.ok)
@@ -167,10 +150,8 @@ async function runAllUnlocked(db) {
       `✖ maintenance had independent failures: ${JSON.stringify(maintenance.errors)}`,
     );
 
-  const olap = await publishSynchronousOlap(db);
-
   state.lastRunAt = new Date().toISOString();
-  return { okRuns, failedRuns, skipped, totalCards, maintenance, olap };
+  return { okRuns, failedRuns, skipped, totalCards, maintenance };
 }
 
 async function runAll(db) {
@@ -238,7 +219,6 @@ function startHealthServer() {
 async function main() {
   const db = new Db(config.databaseUrl, {
     rawResponseRetentionCount: config.rawResponseRetentionCount,
-    schema: config.storageSchema,
   });
   await db.waitUntilReady();
   if (config.migrationsOnStartup) {

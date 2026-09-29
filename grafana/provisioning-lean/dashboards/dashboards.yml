@@ -1,6 +1,5 @@
 # Provision the lean dashboard set. Missing dashboards from the former OLX
-# provider are removed from Grafana; the archived JSON remains in the repo
-# through the validation window.
+# provider are removed from Grafana.
 apiVersion: 1
 
 providers:

@@ -2,8 +2,6 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const path = require("node:path");
 const Db = require("../../src/db");
 const { ensureSchema, needsDb } = require("../helpers/db");
 
@@ -11,52 +9,9 @@ let db;
 
 test.before(async () => {
   if (!process.env.TEST_DATABASE_URL) return;
-  db = new Db(process.env.TEST_DATABASE_URL, { schema: "lean" });
+  db = new Db(process.env.TEST_DATABASE_URL);
   await db.waitUntilReady();
   await ensureSchema(db.pool);
-  if (
-    !(await db.pool.query("SELECT to_regclass('lean.listings') AS relation"))
-      .rows[0].relation
-  ) {
-    const schemaSql = fs.readFileSync(
-      path.resolve(__dirname, "../../../db/migrations/01-lean-schema.sql"),
-      "utf8",
-    );
-    await db.pool.query(schemaSql);
-  }
-  await db.pool.query(
-    fs.readFileSync(
-      path.resolve(
-        __dirname,
-        "../../../db/init-lean/02-lean-neighborhoods.sql",
-      ),
-      "utf8",
-    ),
-  );
-  await db.pool.query(
-    fs.readFileSync(
-      path.resolve(
-        __dirname,
-        "../../../db/migrations/04-lean-lifecycle-events.sql",
-      ),
-      "utf8",
-    ),
-  );
-  await db.pool.query(
-    fs.readFileSync(
-      path.resolve(
-        __dirname,
-        "../../../db/migrations/09-date-based-price-history.sql",
-      ),
-      "utf8",
-    ),
-  );
-  await db.pool.query(
-    fs.readFileSync(
-      path.resolve(__dirname, "../../../db/init-lean/03-raw-archive.sql"),
-      "utf8",
-    ),
-  );
 });
 
 test.after(async () => {

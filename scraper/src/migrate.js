@@ -1,6 +1,6 @@
 "use strict";
 
-// Apply the canonical db/init SQL files once. The files describe the complete
+// Apply the canonical db/init-lean SQL files once. The files describe the complete
 // current schema; they are not a chain of forward migrations.
 
 const fs = require("fs");
@@ -66,74 +66,14 @@ async function schemaIsCurrent(client) {
       AS current_schema`);
   if (lean.rows[0].current_schema) return true;
 
-  const result = await client.query(`
-    SELECT to_regclass('olap.refresh_state') IS NOT NULL
-       AND to_regclass('public.analytics_daily_olap_dirty') IS NOT NULL
-       AND to_regclass('public.olap_article_dirty') IS NOT NULL
-       AND to_regprocedure('reporting.refresh_dashboard_olap(boolean)') IS NOT NULL
-       AND to_regprocedure('public.mark_article_olap_dirty()') IS NOT NULL
-       AND to_regclass('public.neighborhood_neighbor_cache') IS NOT NULL
-       AND to_regprocedure('public.rebuild_neighborhood_neighbor_cache()') IS NOT NULL
-       AND to_regprocedure('public.rebuild_listing_daily_range(date,date)') IS NOT NULL
-       AND to_regclass('reporting.current_comparison_inputs') IS NOT NULL
-       AND to_regclass('reporting.daily_listing_facts_olap') IS NOT NULL
-       AND to_regprocedure('public.analyze_published_olap(text[])') IS NOT NULL
-       AND to_regprocedure('public.room_bucket(text)') IS NOT NULL
-       AND to_regprocedure('public.sale_ppm2(numeric,numeric,boolean)') IS NOT NULL
-       AND pg_get_functiondef(to_regprocedure('public.set_listing_rates()'))
-             LIKE '%NEW.price := OLD.price%'
-       AND EXISTS (
-             SELECT 1 FROM pg_trigger
-              WHERE tgrelid = to_regclass('public.listings')
-                AND tgname = 'listings_set_rates'
-                AND NOT tgisinternal
-           )
-       AND (SELECT count(*) = 9
-              FROM information_schema.columns
-             WHERE table_schema = 'olap'
-               AND table_name = 'daily_listing_facts'
-               AND column_name = ANY(ARRAY[
-                 'category', 'category_memberships', 'rooms', 'sqm', 'location',
-                 'membership_inferred', 'attributes_inferred',
-                 'stale_observation', 'provisional_day'
-               ]))
-       AND lower(pg_get_viewdef(to_regclass('reporting.olap_health'))) LIKE '%count(*) = 9%'
-       AND to_regclass('public.listing_state_versions') IS NOT NULL
-       AND to_regclass('public.listing_state_version_records') IS NOT NULL
-       AND to_regclass('public.listing_state_characteristic_documents') IS NOT NULL
-       AND to_regprocedure('public.intern_listing_state_characteristic(jsonb)') IS NOT NULL
-       AND to_regclass('public.raw_api_response_records') IS NOT NULL
-       AND to_regclass('public.raw_api_response_pending') IS NOT NULL
-       AND to_regclass('public.storage_json_documents') IS NOT NULL
-       AND to_regclass('public.storage_json_parts') IS NOT NULL
-       AND to_regprocedure('public.storage_json_value(bigint)') IS NOT NULL
-       AND to_regprocedure('public.storage_json_intern(jsonb)') IS NOT NULL
-       AND to_regprocedure('public.compact_raw_api_response_batch(integer)') IS NOT NULL
-       AND to_regprocedure('public.purge_unreferenced_storage_json_documents()') IS NOT NULL
-       AND EXISTS (
-             SELECT 1 FROM pg_class
-              WHERE oid = to_regclass('public.listing_state_versions')
-                AND relkind = 'v'
-           )
-       AND EXISTS (
-             SELECT 1 FROM pg_class
-              WHERE oid = to_regclass('public.raw_api_responses')
-                AND relkind = 'v'
-           )
-       AND to_regclass('public.listing_detail_versions') IS NOT NULL
-       AND to_regclass('public.listing_state_history_state') IS NOT NULL
-       AND NOT EXISTS (
-             SELECT 1
-               FROM information_schema.columns
-              WHERE table_schema = 'public'
-                AND table_name IN ('listing_state_history', 'listing_daily')
-                AND column_name IN (
-                  'category', 'category_membership', 'category_memberships',
-                  'is_rent', 'sqm', 'rooms', 'filter_attributes',
-                  'membership_inferred', 'attributes_inferred'
-                )
-           ) AS current_schema`);
-  return result.rows[0].current_schema;
+  const legacy = await client.query(`
+    SELECT to_regclass('public.listings') IS NOT NULL
+        OR to_regclass('olap.refresh_state') IS NOT NULL AS present`);
+  if (legacy.rows[0].present)
+    throw new Error(
+      "Legacy public/OLAP databases are no longer supported; migrate to the lean baseline before deploying",
+    );
+  return false;
 }
 
 async function applyMigrations(pool, dir, log = () => {}) {

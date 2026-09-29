@@ -1,11 +1,5 @@
 apiVersion: 1
 
-deleteRules:
-  - orgId: 1
-    uid: olx-analytics-pending-26h
-  - orgId: 1
-    uid: olx-dashboard-olap-stale
-
 # Alerts cover scrape and search freshness on the lean schema.
 # Delivery needs SMTP (uncomment GF_SMTP_* in docker-compose.yml + set
 # ALERT_EMAIL_* in .env). Without SMTP the rules still evaluate and show their

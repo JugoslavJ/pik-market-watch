@@ -7,19 +7,14 @@
 module.exports = function installRawResponseMethods(Db) {
   Object.assign(Db.prototype, {
     async rawArchiveTarget() {
-      if (this.schema !== "lean")
-        return { table: "raw_api_response_pending", leanArchive: false };
       this._leanRawArchiveReady ??= this.pool
         .query(
           "SELECT to_regclass('lean.raw_api_responses') IS NOT NULL AS ready",
         )
         .then((result) => Boolean(result.rows[0]?.ready));
-      if (await this._leanRawArchiveReady)
-        return { table: "lean.raw_api_responses", leanArchive: true };
-      return {
-        table: "public.raw_api_response_pending",
-        leanArchive: false,
-      };
+      if (!(await this._leanRawArchiveReady))
+        throw new Error("lean.raw_api_responses is not installed");
+      return { table: "lean.raw_api_responses" };
     },
   });
 
@@ -48,16 +43,7 @@ module.exports = function installRawResponseMethods(Db) {
         !isDiagnostic && requestKind === "search"
           ? (sourcePayload ?? payload ?? null)
           : null;
-      const { table, leanArchive } = await this.rawArchiveTarget();
-      const archiveMetadata = { ...requestMetadata };
-      let archiveRunId = runId ?? null;
-      let archiveArticleId = articleId ?? null;
-      if (this.schema === "lean" && !leanArchive) {
-        archiveMetadata.leanRunId = runId ?? null;
-        archiveMetadata.leanArticleId = articleId ?? null;
-        archiveRunId = null;
-        archiveArticleId = null;
-      }
+      const { table } = await this.rawArchiveTarget();
       await this.pool.query(
         `INSERT INTO ${table}
            (run_id, article_id, request_kind, request_url, fetched_at, expires_at,
@@ -68,8 +54,8 @@ module.exports = function installRawResponseMethods(Db) {
                   $7::jsonb, $8::jsonb,
                   $9::jsonb, $10::jsonb, $11, $12::jsonb, $13)`,
         [
-          archiveRunId,
-          archiveArticleId,
+          runId ?? null,
+          articleId ?? null,
           requestKind,
           requestUrl,
           fetchedAt,
@@ -78,7 +64,7 @@ module.exports = function installRawResponseMethods(Db) {
           storedSourcePayload == null
             ? null
             : JSON.stringify(storedSourcePayload),
-          JSON.stringify(archiveMetadata),
+          JSON.stringify(requestMetadata ?? {}),
           JSON.stringify(responseMetadata ?? {}),
           String(buildVersion || "unknown").slice(0, 128),
           diagnostic == null ? null : JSON.stringify(diagnostic),
@@ -117,33 +103,13 @@ module.exports = function installRawResponseMethods(Db) {
         (row) => row && row.articleId != null,
       );
       if (!rows.length) return 0;
-      const { table, leanArchive } = await this.rawArchiveTarget();
-      if (this.schema === "lean" && !leanArchive) {
-        for (const row of rows) {
-          await this.archiveSearchResponse({
-            articleId: row.articleId,
-            requestKind: "detail",
-            requestUrl: `https://olx.ba/api/listings/${row.articleId}`,
-            fetchedAt: row.fetchedAt,
-            payload: row.sourcePayload ?? row.payload,
-            sourcePayload: row.sourcePayload ?? row.payload,
-            requestMetadata: {
-              ...(row.requestMetadata ?? {}),
-              leanArticleId: row.articleId,
-            },
-            responseMetadata: row.responseMetadata ?? {},
-            buildVersion: row.buildVersion,
-            diagnostic: row.diagnostic ?? null,
-          });
-        }
-        return rows.length;
-      }
+      const { table } = await this.rawArchiveTarget();
       const result = await this.pool.query(
         `INSERT INTO ${table}
            (run_id, article_id, request_kind, request_url, fetched_at, expires_at,
             parser_version, payload, source_payload, request_metadata,
             response_metadata, build_version, diagnostic, archive_format)
-         SELECT NULL, article_id, 'detail',
+           SELECT NULL, article_id, 'detail',
                 'https://olx.ba/api/listings/' || article_id::text,
                 fetched_at,
                 'infinity'::timestamptz,

@@ -1,8 +1,6 @@
 "use strict";
 
-// Run operational cleanup and daily analytics maintenance without scraping.
-// OLAP publication belongs to the scraper instance and is intentionally not
-// part of this scheduled maintenance process.
+// Run lean raw-archive retention without scraping.
 const config = require("./config");
 const Db = require("./db");
 const applyMigrations = require("./migrate");
@@ -10,12 +8,11 @@ const applyMigrations = require("./migrate");
 async function main() {
   const db = new Db(config.databaseUrl, {
     rawResponseRetentionCount: config.rawResponseRetentionCount,
-    schema: config.storageSchema,
   });
   let lease;
   try {
     await db.waitUntilReady();
-    lease = await db.tryAcquireAnalyticsMaintenanceLease();
+    lease = await db.tryAcquireLeanMaintenanceLease();
     if (!lease) {
       console.log("[maintenance] another maintenance run is active; skipping");
       return;
@@ -24,11 +21,8 @@ async function main() {
       await applyMigrations(db.pool, config.migrationsDir, (message) =>
         console.log(`[maintenance] ${message}`),
       );
-    console.log(
-      "[maintenance] running independent cleanup and analytics tasks",
-    );
+    console.log("[maintenance] running lean archive retention");
     const result = await db.runMaintenanceCycle({
-      maxDays: config.analyticsRebuildMaxDays,
       log: (message) => console.log(`[maintenance] ${message}`),
     });
     console.log(

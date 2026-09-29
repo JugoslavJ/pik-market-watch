@@ -1,85 +1,62 @@
 # Architecture and data model
 
-The stack collects configured OLX search results, stores current state and durable evidence in PostgreSQL, and serves provisioned Grafana dashboards. It is designed for market observation: an asking price or a listing disappearance is not a verified transaction.
+The scraper stores OLX listing state and evidence in PostgreSQL's `lean`
+schema. Grafana reads the same lean tables through a read-only role. The
+database keeps current listing state, observed price history, closure/reopen
+events, scrape runs, retained API responses, and page manifests.
 
 ## Runtime
 
-`scraper/src/index.js` is the production entrypoint. In Compose, the
-profile-only `migrator` job first applies the unapplied files in `db/init/` and
-the scraper waits for its successful completion. The scraper's
-`MIGRATIONS_ON_STARTUP` fallback remains enabled for bare-metal runs. After the
-schema gate it marks stale `running` rows as abandoned, starts the health
-endpoint, and runs every configured
-search. Each cycle holds a session-level PostgreSQL advisory lease so a second
-scraper process skips rather than fetching the same cycle. Without `--once`, it
-repeats at `SCRAPE_INTERVAL_MINUTES` and never overlaps cycles.
-`src/migrate-only.js` applies migrations without scraping, `src/maintenance-only.js`
-runs operational cleanup and analytics maintenance, and `src/replay-response.js` replays a
-retained response without writes.
+Compose gates the scraper and maintenance job on the one-shot `migrator`.
+That job applies the ordered `db/init-lean/` baseline and records checksums in
+`public.schema_migrations`. The scraper's startup migration fallback uses the
+same baseline for standalone runs. Search cycles use an advisory lease,
+preserve membership after incomplete searches, and only close listings after
+authoritative results.
 
-Searches come from `/config/searches.json`, unless `SEARCH_URLS` is set. Each URL is normalized to a stable search key. The scraper converts it to the OLX JSON search endpoint, fetches page 1 first, then fetches later pages in paced concurrent waves. A blank first page, failed page, or incomplete pagination marks the run unsuccessful; its prior result membership is retained. A cycle with no cards skips the closing pass. These guards prevent a blocked or changed upstream response from mass-closing listings.
+The scraper enriches current listing rows from detail responses and records
+source-reported price changes. Lean archive maintenance applies the configured
+raw-response retention policy. `replay-response.js` reads retained responses
+without writing listing or price data.
 
-For a complete search, one ingestion transaction updates the current listing, search membership, run statistics, search observations, canonical price events, and reopen/close transitions caused by that search. A cycle-level closing pass then closes listings no longer returned by any configured search. Successful cycles rebuild the dirty article cohort for pending daily inventory and trim raw search responses. The scraper profile defers current-market OLAP publication to the separate maintenance job, which publishes the score and dashboard marts outside the scrape transaction.
+## Storage
 
-Detail enrichment is a separate, bounded part of a successful search. The queue prioritizes active rows that have never had a successful detail fetch, are stale, have changed price, or still lack a pin or sale area. Search cards provide the inexpensive facts; detail requests fill richer attributes. `detail_jobs` keeps durable claim leases, retry timing and terminal outcomes alongside the scheduling hint on `listings`.
+| Table | Contents |
+| --- | --- |
+| `lean.listings` | Current listing attributes, current search membership, and present closure state |
+| `lean.saved_searches` | Configured search identities and latest scrape summaries |
+| `lean.scrape_runs` | Per-search run results and completeness state |
+| `lean.price_history` | Source-reported asking prices by listing, date, and source |
+| `lean.listing_lifecycle_events` | Append-only closure and reopen events with event-time snapshots |
+| `lean.neighborhoods` | Banja Luka neighborhood boundaries used to classify map pins |
+| `lean.raw_api_responses` | Retained search/detail payloads and request diagnostics |
+| `lean.scrape_run_pages` | Page-level response, parse, and completeness evidence |
 
-## Persistence and evidence
-
-| Store                                    | Purpose                                                                                                                                                                                                                                         |
-| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `listings`                               | Current, one-row-per-article state and the latest known attributes. It retains closed listings.                                                                                                                                                 |
-| `search_results` and `saved_searches`    | Current membership of each configured search and its identity/category.                                                                                                                                                                         |
-| `scrape_runs`                            | Per-search execution outcome, page/card counts, completeness, and failure information.                                                                                                                                                          |
-| `raw_api_responses`                      | Retained search/detail payloads with fetch time, parser version, and request metadata. Maintenance keeps the newest `RAW_RESPONSE_RETENTION_COUNT` responses per request kind and URL; this is operational evidence, not an indefinite archive. |
-| `listing_state_history`                  | Immutable search sightings, detail updates, closures, and reopenings. `effective_at` is evidence time; `ingested_at` is when this database learned it.                                                                                          |
-| `listing_price_events`                   | Canonical price boundaries with a value state (`valid`, `unpriced`, `invalid`, or `conflict`), observation/renewal timestamps, effective-time basis, and provenance.                                                                            |
-| `listing_daily`                          | OLAP article/day facts used for historical analytics.                                                                                                                                                                                           |
-| `olap.current_listing_scores`            | Physical OLAP snapshot used by current-market Grafana panels.                                                                                                                                                                                   |
-| `reporting.current_market_refresh_state` | Current snapshot generation time, row count, duration, and source watermark.                                                                                                                                                                    |
-| `analytics_refresh_state`                | Pending and successful daily-rebuild coverage.                                                                                                                                                                                                  |
-| `neighborhoods`                          | Generated Banja Luka MZ polygons used to resolve listing pins.                                                                                                                                                                                  |
-
-Canonical price evidence is written through `listing_price_events`; each event
-retains its source, effective time, normalized currency, value state, and
-provenance. Duplicate evidence is idempotent by article, effective time,
-normalized price, and state.
-
-The scraper writes OLTP current/evidence tables in `public`; Grafana reads OLAP facts exposed through `reporting`. `reporting.current_listing_scores_source` is the canonical OLTP-to-OLAP transformation and is evaluated only by `reporting.refresh_current_market()`. The stable `reporting.current_listing_scores` dashboard contract reads the physical snapshot, so panel concurrency never reconstructs event history. `listing_daily` answers historical questions by reconstructing state at each Banja Luka calendar-day boundary. It carries explicit `membership_inferred`, `attributes_inferred`, `stale_observation`, and `provisional_day` flags. Historical membership and attributes can be inferred when observations are sparse; today is provisional and active inventory can be carried through the configured 14-day observation window. Treat flagged values as estimates, not direct daily captures.
-
-## Listing lifecycle and details
-
-A listing opens when it is first observed. Complete search membership updates `last_seen`; when it disappears from all currently configured searches, the closing pass sets `closed_at` and freezes the last asking price, price per square metre, and category. A later sighting reopens the listing. Listings absent because a search failed are deliberately not closed.
-
-The closing price is the last observed asking price, not a sale price. `published_at` and `renewed_at` come from source data when available; they differ from local observation time. Detail values include seller type, characteristics, counters, source status, and source price history. Stable scalar detail facts are generally first-wins, characteristics are merged, and a successful detail request updates `details_fetched_at`. Coverage varies by listing and by what OLX exposes.
-
-Price quality is explicit. A valid price without valid area can remain price evidence but has no price-per-square-metre value. Dashboard measures therefore exclude unsuitable rows where their query requires a valid price, area, or detail attribute.
-
-## Database ownership and migrations
-
-PostgreSQL initialization runs `db/init/*.sql` only for a new volume. The files
-are ordered by dependency; the migrator records unapplied files and verifies
-their checksums before application services start. Standalone scraper runs
-retain a startup fallback. See [the database guide](../db/README.md) for the
-schema map and change policy. Applied SQL is checksum protected. Preserve
-applied files and checksums; add ordered conversion files for transactional
-upgrades. Other baseline drift requires a verified current-schema restore.
-Regenerate polygon data from its geographic sources. The bootstrap user
-administers the instance.
-`olx_migrator` owns application objects, `olx_app` performs scraper writes,
-`olx_reporting` reads Grafana contracts, and `olx_backup` reads backup data.
+The application does not maintain OLAP marts, reconstructed daily inventory,
+listing scores, or historical attribute snapshots. Dashboard trend panels
+derive their summaries from retained observed dates. A closure is an observed
+listing exit, not a confirmed sale; its price is the last observed asking
+price.
 
 ## Dashboards
 
-Grafana provisions a read-only PostgreSQL datasource and seven dashboard definitions from `grafana/dashboards/`:
+Grafana provisions four dashboards from `grafana/dashboards-lean/`:
 
-- **OLX.ba Home** summarizes current market and scraper health without market filters.
-- **OLX.ba Market Overview** shows active inventory, asking-price trends, search-derived market flow, maps, segments, and selected detail coverage. Its Category, Deal, Rooms, m², and Neighborhood variables scope applicable panels.
-- **OLX.ba Exits & Price Endings** examines closed listings. Exit values are final observed asking values; they are not sales. It uses the same market filters.
-- **OLX Scraper Health** shows run outcomes, freshness, throughput, errors, and data-quality coverage. Its Category variable scopes search-related panels, not the market dataset.
-- **Buyer**, **Renter**, and **Agent** provide private persona workflows backed by the shared comparison contract.
+- **Home** summarizes current market and scraper health.
+- **Overview** reports active inventory, asking prices, trends, maps, and
+  listing attributes.
+- **Exits** analyzes observed listing closures using lifecycle events.
+- **Health** reports scrape outcomes, freshness, and data quality.
 
-Dashboard formulas are query-specific: comparable-looking ratios can use different scopes and denominators. Read panel titles and query aliases as the authoritative definition. Daily inventory and flow are estimates built from stored evidence, and raw/detailed-data coverage limits map, segmentation, and attribute panels.
+Dashboard SQL queries the lean tables directly. Grafana connects with the
+read-only `olx_reporting` role. The `olx_app` role writes scraper data;
+`olx_migrator` owns schema changes; and `olx_backup` is used by database
+backups.
 
 ## Geography
 
-`geo/banja-luka-mz-final.geojson` is the final source for generated `db/init/09-neighborhood-data.sql`. `neighborhood_of(lat, lon)` uses polygon containment, deterministic priority on shared borders, then a nearest-polygon fallback within 5 km. A missing pin is reported as `(no pin)`; a pin outside the supported coverage is `(unmapped)`. See [geo/README.md](../geo/README.md) and [DATA.md](../DATA.md) for the reproducible chain and attribution.
+`geo/banja-luka-mz-final.geojson` is the source for the generated
+`db/init-lean/02-lean-neighborhoods.sql` seed. Regenerate it with
+`node geo/scripts/gen-lean-sql.js`. The PostGIS polygons support point
+containment and a nearest-boundary fallback within five kilometres. See
+[the geography workflow](../geo/README.md) and [data provenance](../DATA.md).

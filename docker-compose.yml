@@ -56,9 +56,8 @@ services:
       - max_wal_size=4GB
       - -c
       - checkpoint_timeout=15min
-      # Schema replacement restores cascade through the public, reporting,
-      # and OLAP object graph in one transaction. The default lock budget is
-      # too small for the current ~250-object graph.
+      # The synchronized restore uses one transaction for lean application
+      # objects and their PostGIS extension dependencies.
       - -c
       - max_locks_per_transaction=512
       - -c
@@ -81,10 +80,10 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-olx}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: ${POSTGRES_DB:-olx}
-      # Runtime least-privilege roles (db/init/zz-database-roles.sh):
+      # Runtime least-privilege roles (db/init-lean/zz-database-roles.sh):
       #   *MIGRATOR* owns schema/objects — migrations and restores only
       #   *APP*      runtime writer — scraper and maintenance
-      #   *REPORTING* reporting views/functions only — Grafana
+      #   *REPORTING* read-only lean-table access — Grafana
       #   *BACKUP*   broad read-only — pg_dump only
       POSTGRES_MIGRATOR_USER: ${POSTGRES_MIGRATOR_USER:-olx_migrator}
       POSTGRES_MIGRATOR_PASSWORD: ${POSTGRES_MIGRATOR_PASSWORD:?set POSTGRES_MIGRATOR_PASSWORD in .env}
@@ -131,13 +130,10 @@ services:
     environment:
       DATABASE_URL: postgres://${POSTGRES_MIGRATOR_USER:-olx_migrator}:${POSTGRES_MIGRATOR_PASSWORD}@db:5432/${POSTGRES_DB:-olx}
       MIGRATION_ADMIN_DATABASE_URL: postgres://${POSTGRES_USER:-olx}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-olx}
-      OLAP_RECONCILE_TIMEOUT_MS: ${OLAP_RECONCILE_TIMEOUT_MS:-900000}
     entrypoint: ["node", "src/migrate-only.js"]
 
-  # Run operational cleanup and daily analytics independently from upstream scraping.
-  # Invoke on a host scheduler with --profile maintenance. Maintenance and
-  # olap-reconcile share an application advisory lease, so overlapping runs
-  # serialize or skip instead of competing for database resources.
+  # Run lean raw-archive retention independently from upstream scraping.
+  # Invoke on a host scheduler with --profile maintenance.
   maintenance:
     <<: *scraper-runtime
     profiles: ["maintenance"]
@@ -151,22 +147,7 @@ services:
       DATABASE_URL: postgres://${POSTGRES_APP_USER:-olx_app}:${POSTGRES_APP_PASSWORD}@db:5432/${POSTGRES_DB:-olx}
       MIGRATIONS_ON_STARTUP: "0"
       RAW_RESPONSE_RETENTION_COUNT: ${RAW_RESPONSE_RETENTION_COUNT:-3}
-      STORAGE_SCHEMA: ${STORAGE_SCHEMA:-lean}
-      ANALYTICS_REBUILD_MAX_DAYS: ${ANALYTICS_REBUILD_MAX_DAYS:-31}
     entrypoint: ["node", "src/maintenance-only.js"]
-
-  olap-reconcile:
-    <<: *scraper-runtime
-    profiles: ["maintenance"]
-    restart: "no"
-    depends_on:
-      db:
-        condition: service_healthy
-      migrator:
-        condition: service_completed_successfully
-    environment:
-      DATABASE_URL: postgres://${POSTGRES_APP_USER:-olx_app}:${POSTGRES_APP_PASSWORD}@db:5432/${POSTGRES_DB:-olx}
-    entrypoint: ["node", "src/olap-reconcile.js"]
 
   scraper:
     <<: *scraper-runtime
@@ -188,11 +169,6 @@ services:
       DETAIL_REFRESH_DAYS: ${DETAIL_REFRESH_DAYS:-7}
       DETAIL_JOB_LEASE_MINUTES: ${DETAIL_JOB_LEASE_MINUTES:-30}
       RAW_RESPONSE_RETENTION_COUNT: ${RAW_RESPONSE_RETENTION_COUNT:-3}
-      STORAGE_SCHEMA: ${STORAGE_SCHEMA:-lean}
-      ANALYTICS_REBUILD_MAX_DAYS: ${ANALYTICS_REBUILD_MAX_DAYS:-31}
-      # Publish score/OLAP synchronously after this scraper instance's
-      # ingestion and bounded daily reconstruction.
-      RUN_ANALYTICS_MAINTENANCE: ${RUN_ANALYTICS_MAINTENANCE:-1}
       ABANDONED_RUN_AFTER_MINUTES: ${ABANDONED_RUN_AFTER_MINUTES:-180}
       HEALTH_BIND: ${HEALTH_BIND:-0.0.0.0}
     volumes:
@@ -260,7 +236,7 @@ services:
       POSTGRES_REPORTING_PASSWORD: ${POSTGRES_REPORTING_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-olx}
       SCRAPE_STALE_AFTER_HOURS: ${SCRAPE_STALE_AFTER_HOURS:-26}
-      # Consumed by provisioning/alerting/olx-alerts.yml (alert mail recipient).
+      # Consumed by provisioning-lean/alerting/olx-alerts.yml (alert mail recipient).
       # Grafana 13 fatal-VALIDATES email receivers during provisioning: an empty
       # address makes the container exit (deploys stuck unhealthy). The
       # placeholder keeps boot safe; set a real ALERT_EMAIL_TO in .env to arm

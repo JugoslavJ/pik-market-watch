@@ -5,36 +5,9 @@ const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 
-const init = path.resolve(__dirname, "../../../db/init");
 const leanInit = path.resolve(__dirname, "../../../db/init-lean");
 
-test("init contains the current canonical schema and ordered extensions", () => {
-  const sqlFiles = fs
-    .readdirSync(init)
-    .filter((name) => name.endsWith(".sql"))
-    .sort();
-  assert.deepEqual(sqlFiles, [
-    "00-core-schemas.sql",
-    "01-storage-json.sql",
-    "01-tables.sql",
-    "02-constraints.sql",
-    "03-functions.sql",
-    "03-z-state-attribute-storage.sql",
-    "03-zz-storage-json.sql",
-    "04-source-views.sql",
-    "05-reporting-functions.sql",
-    "06-reporting-views.sql",
-    "07-indexes.sql",
-    "08-triggers.sql",
-    "09-neighborhood-data.sql",
-    "10-seed-and-access.sql",
-    "11-postgis.sql",
-    "12-pg-stat-statements.sql",
-    "13-raw-json-storage.sql",
-  ]);
-});
-
-test("lean first-boot baseline contains its complete minimal schema", () => {
+test("lean baseline contains the complete installed schema", () => {
   const sqlFiles = fs
     .readdirSync(leanInit)
     .filter((name) => name.endsWith(".sql"))

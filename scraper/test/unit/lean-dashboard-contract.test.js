@@ -14,12 +14,6 @@ test("staged lean dashboards keep four identities and only query lean relations"
     const source = fs.readFileSync(path.join(dir, file), "utf8");
     const dashboard = JSON.parse(source);
     assert.equal(file, `${dashboard.uid}.json`);
-    assert.ok(
-      (dashboard.links || []).every(
-        (link) => !["Agent", "Buyer", "Renter"].includes(link.title),
-      ),
-      `${file}: retired persona dashboard links must be absent`,
-    );
     assert.doesNotMatch(
       source,
       /\b(?:reporting|olap)\.|analytics_refresh_state|current_listing_scores/,

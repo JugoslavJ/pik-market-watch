@@ -52,16 +52,14 @@ test("Compose targets PostgreSQL 18", () => {
   );
 });
 
-test("scraper publishes OLAP and maintenance does not", () => {
-  assert.match(
+test("Compose provisions only the lean schema and dashboard assets", () => {
+  assert.match(compose, /DB_INIT_DIR:-\.\/db\/init-lean/);
+  assert.match(compose, /grafana\/provisioning-lean/);
+  assert.match(compose, /grafana\/dashboards-lean/);
+  assert.doesNotMatch(
     compose,
-    /scraper:[\s\S]*RUN_ANALYTICS_MAINTENANCE: \$\{RUN_ANALYTICS_MAINTENANCE:-1\}/,
+    /olap-reconcile|STORAGE_SCHEMA|RUN_ANALYTICS_MAINTENANCE/,
   );
-  const maintenance = compose.slice(
-    compose.indexOf("  maintenance:"),
-    compose.indexOf("  olap-reconcile:"),
-  );
-  assert.doesNotMatch(maintenance, /RUN_ANALYTICS_MAINTENANCE/);
 });
 
 test("deployment runs migration job before publishing the stack", () => {

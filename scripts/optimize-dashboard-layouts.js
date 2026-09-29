@@ -1,19 +1,16 @@
 "use strict";
 
-// Keep classic Grafana dashboards readable without relying on a second,
+// Keep the lean Grafana dashboards readable without relying on a second,
 // breakpoint-specific layout (which schemaVersion 41 does not provide).
 // Summary stats use at least eight columns; data-dense panels get a full row.
 const fs = require("node:fs");
 const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
-const directories = [path.join(root, "grafana", "dashboards")];
+const directories = [path.join(root, "grafana", "dashboards-lean")];
 
 const privateLinks = [
   ["Home", "/d/olx-home"],
-  ["Buyer", "/d/olx-buyer"],
-  ["Renter", "/d/olx-renter"],
-  ["Agent", "/d/olx-agent"],
   ["Market overview", "/d/olx-overview"],
   ["Observed exits", "/d/olx-exits"],
   ["Data health", "/d/olx-health"],

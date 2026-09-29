@@ -1,4 +1,4 @@
-# Grafana reads the migrated tables through the reporting role.
+# Grafana reads the lean tables through its read-only database role.
 apiVersion: 1
 
 datasources:

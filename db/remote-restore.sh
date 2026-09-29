@@ -12,13 +12,9 @@
 # schemas -> restore (atomic) -> on failure roll back to the previous snapshot
 # -> restart scraper.
 #
-# Why schemas are dropped instead of relying on pg_restore --clean: the instance never
-# runs migrations (no scraper), so home and instance schemas can drift (e.g. a
-# migration renamed a function's signature). Stale instance-side functions
-# that depend on a dumped table make --clean's plain DROP TABLE fail without
-# CASCADE, and the dump cannot drop what it does not contain. Dropping the
-# application schemas removes any drift. OLAP introduced cross-schema
-# dependencies, so pg_restore's archive order cannot safely clean schemas.
+# Why schemas are dropped instead of relying on pg_restore --clean: the dump
+# replaces the lean application schema as a single restore unit, while public
+# extension objects are recreated by the bootstrap administrator.
 #
 # No client-controlled input is ever evaluated: the dump path is fixed and
 # the archive must pass pg_restore -l and contain the listings data.
@@ -39,7 +35,7 @@ if [ "$MAX_BYTES" -le 0 ]; then
   echo "RESTORE_ERROR: OLX_SYNC_MAX_BYTES must be greater than zero" >&2
   exit 1
 fi
-# Restore as the least-privileged OWNING role (db/init/zz-database-roles.sh):
+# Restore as the least-privileged OWNING role (db/init-lean/zz-database-roles.sh):
 # it must own the restored objects. Names come from .env.
 migrator_user="$(sed -n 's/^POSTGRES_MIGRATOR_USER=//p' "$REPO_DIR/.env" 2>/dev/null | tr -d '\r')"
 migrator_user="${migrator_user:-olx_migrator}"
@@ -115,7 +111,7 @@ if ! docker compose exec -T db pg_restore -l /backups/olx-sync-incoming.dump >/d
   echo "RESTORE_ERROR: archive failed pg_restore integrity check" >&2
   exit 1
 fi
-if ! docker compose exec -T db sh -c 'pg_restore -l /backups/olx-sync-incoming.dump | grep -Eq "TABLE DATA (lean|public) listings"'; then
+if ! docker compose exec -T db sh -c 'pg_restore -l /backups/olx-sync-incoming.dump | grep -Eq "TABLE DATA lean listings"'; then
   echo "RESTORE_ERROR: archive is missing listings data" >&2
   exit 1
 fi
@@ -149,7 +145,7 @@ drifted=$(docker compose exec -T db sh -c "
     pg_restore -l '/backups/olx-sync-incoming.dump' |
     grep -v '^;' | grep -v 'DEFAULT ACL' |
     grep -v ' EXTENSION - ' | grep -v ' COMMENT - EXTENSION ' |
-    grep -vE ' SCHEMA - (lean|public|reporting|olap|tiger|topology) ' |
+    grep -vE ' SCHEMA - (lean|public|tiger|topology) ' |
     grep -vE ' (COMMENT|ACL) - SCHEMA ' |
     awk '\$NF != \"$migrator_user\" {print \$NF}' | sort -u")
 if [ -n "$drifted" ]; then
@@ -178,7 +174,7 @@ fi
 # build_toc <container-archive-path> <output-list>: filter the TOC to entries
 # this restore may execute. ACL entries are omitted because extension ACLs can
 # reference extension-owned functions absent after reset; the canonical role
-# repair reapplies supported application/reporting grants and defaults.
+# repair reapplies the lean writer and Grafana reader grants.
 build_toc() {
   docker compose exec -T db sh -c "
      pg_restore -l '$1' > /tmp/toc.all || exit 1
@@ -200,12 +196,12 @@ build_toc() {
      # schema-level entries carry the source schema's owner (ALTER ... OWNER
      # TO <bootstrap admin>) and cannot be replayed by $app_user; the reset
      # block already created the schema with the right owner and grants
-     grep -ve 'SCHEMA - lean' -e 'SCHEMA - public' -e 'SCHEMA - reporting' -e 'SCHEMA - olap' \
+     grep -ve 'SCHEMA - lean' -e 'SCHEMA - public' \
           -e 'SCHEMA - tiger' -e 'SCHEMA - topology' \
           -e 'COMMENT - SCHEMA' -e 'ACL - SCHEMA' \
           '$2' > '$2.f' || :
      mv '$2.f' '$2'
-     test -s '$2' && grep -Eq 'TABLE DATA (lean|public) listings' '$2'
+     test -s '$2' && grep -Eq 'TABLE DATA lean listings' '$2'
   "
 }
 
@@ -220,17 +216,12 @@ reset_schemas() {
     -- Recreate it after the application schemas are reset; it is deliberately
     -- absent from the app-role pg_restore TOC.
     DROP EXTENSION IF EXISTS postgis CASCADE;
-    DROP SCHEMA IF EXISTS reporting CASCADE;
-    DROP SCHEMA IF EXISTS olap CASCADE;
     DROP SCHEMA IF EXISTS public CASCADE;
     CREATE SCHEMA public AUTHORIZATION \"$migrator_user\";
     CREATE SCHEMA lean AUTHORIZATION \"$migrator_user\";
-    CREATE SCHEMA reporting AUTHORIZATION \"$migrator_user\";
-    CREATE SCHEMA olap AUTHORIZATION \"$migrator_user\";
     CREATE EXTENSION IF NOT EXISTS postgis;
     CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
-    GRANT ALL ON SCHEMA public TO \"$app_user\";
-      GRANT USAGE ON SCHEMA reporting TO \"$reporting_user\";"
+    GRANT USAGE ON SCHEMA public TO \"$app_user\";"
 }
 
 if ! reset_schemas; then
@@ -265,15 +256,14 @@ if [ "$restore_failed" = "1" ]; then
   fi
   exit 1
 fi
-# Belt & braces: FUTURE tables created by migrations must stay readable by
-# Grafana even if some future dump ever lacks the app-role defaults.
+# Belt & braces: future public tables retain the app-role defaults.
 docker compose exec -T db psql -U "$migrator_user" -d "$db_name" -q \
   -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO \"$app_user\";
       ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO \"$app_user\";" \
   || echo "RESTORE_WARN: could not re-assert writer default privileges (non-fatal)" >&2
 
 # Schema replacement removes object grants. Re-run the canonical role repair so
-# the writer and reporting contracts are restored before the scraper restarts.
+# lean writer and Grafana reader grants are restored before clients restart.
 docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
 
 if [ "$was_running" = "1" ]; then
@@ -281,8 +271,7 @@ if [ "$was_running" = "1" ]; then
 fi
 restore_ok=1
 
-# Recreate Grafana to load the restored database's reporting credentials and
-# datasource configuration from the current Compose environment.
+# Recreate Grafana to reconnect to the restored lean database.
 if ! docker compose up -d --no-deps --force-recreate --wait --wait-timeout 120 grafana; then
   echo "RESTORE_ERROR: database restored, but Grafana refresh failed; check docker compose logs grafana and recreate Grafana (no need to repeat the scrape/restore)" >&2
   exit 1

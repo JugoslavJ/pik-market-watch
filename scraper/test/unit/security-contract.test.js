@@ -89,24 +89,16 @@ test("backup publication is verified before atomic rename", () => {
 });
 
 test("database roles separate reporting and backup access", () => {
-  const roles = read("db/init/zz-database-roles.sh");
+  const roles = read("db/init-lean/zz-database-roles.sh");
   assert.match(roles, /GRANT pg_read_all_data TO %I.*backup_user/);
   assert.match(roles, /REVOKE pg_read_all_data FROM %I.*reporting_user/);
-  assert.match(roles, /relkind IN \('v','m'\).*reporting_user/s);
+  assert.match(roles, /GRANT SELECT ON %I\.%I TO %I/);
+  assert.match(roles, /n\.nspname = 'lean'/);
   assert.doesNotMatch(roles, /GRANT pg_read_all_data TO %I.*reporting_user/);
 });
 
-test("database role repair transfers reporting publisher tables to the migrator", () => {
-  const roles = read("db/init/zz-database-roles.sh");
-  assert.match(
-    roles,
-    /n\.nspname = 'reporting'\s+AND c\.relkind IN \('r','p','v','m','f','S'\)/,
-  );
-});
-
-test("database role repair supports lean-only installs and limits raw archive reads", () => {
-  const roles = read("db/init/zz-database-roles.sh");
-  assert.equal(read("db/init-lean/zz-database-roles.sh"), roles);
+test("lean database role repair limits Grafana to direct lean reads", () => {
+  const roles = read("db/init-lean/zz-database-roles.sh");
   assert.match(roles, /n\.nspname IN \('public', 'lean'\)/);
   assert.match(roles, /GRANT SELECT ON %I\.%I TO %I/);
   assert.match(
@@ -133,18 +125,16 @@ test("restore input and identifiers are bounded and cleaned up", () => {
   assert.match(restore, /rm -f "\$incoming" "\$incoming_partial"/);
   assert.match(restore, /trap on_exit EXIT/);
   assert.match(restore, /LOCK=\/tmp\/olx-restore\.lock/);
-  assert.match(restore, /DROP SCHEMA IF EXISTS reporting CASCADE/);
-  assert.match(restore, /DROP SCHEMA IF EXISTS olap CASCADE/);
   assert.match(restore, /DROP SCHEMA IF EXISTS lean CASCADE/);
   assert.match(restore, /CREATE SCHEMA lean AUTHORIZATION/);
-  assert.match(restore, /TABLE DATA \(lean\|public\) listings/);
+  assert.match(restore, /TABLE DATA lean listings/);
   assert.match(restore, /reset_schemas && docker compose exec/);
   assert.doesNotMatch(restore, /pg_restore -U[^\n]*--clean/);
   assert.match(restore, /SCHEMA - tiger/);
   assert.match(restore, /SCHEMA - topology/);
   assert.match(
     restore,
-    /grep -vE ' SCHEMA - \(lean\|public\|reporting\|olap\|tiger\|topology\) '/,
+    /grep -vE ' SCHEMA - \(lean\|public\|tiger\|topology\) '/,
   );
   assert.match(restore, /grep -vE ' \(COMMENT\|ACL\) - SCHEMA '/);
   assert.match(restore, /grep -ve ' ACL '/);

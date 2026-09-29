@@ -20,17 +20,13 @@ function requiredId() {
 
 async function main() {
   const id = requiredId();
-  const db = new Db(config.databaseUrl, { schema: config.storageSchema });
+  const db = new Db(config.databaseUrl);
   await db.waitUntilReady();
   try {
     const result = await db.pool.query(
       `SELECT id, request_kind, request_url, fetched_at, parser_version,
               build_version, archive_format, source_payload, payload, diagnostic
-         FROM ${
-           config.storageSchema === "lean"
-             ? "lean.raw_api_responses"
-             : "raw_api_responses"
-         } WHERE id = $1`,
+         FROM lean.raw_api_responses WHERE id = $1`,
       [id],
     );
     if (!result.rowCount) throw new Error(`raw response ${id} was not found`);

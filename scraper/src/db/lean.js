@@ -693,37 +693,18 @@ async function recordScrapePageManifest(page) {
 async function purgeRawResponses(limit = 1000) {
   const cap = Math.max(1, Math.floor(Number(limit) || 1));
   let deleted = 0;
-  const archive = await this.rawArchiveTarget();
+  const { table } = await this.rawArchiveTarget();
   for (;;) {
-    const sql = archive.leanArchive
-      ? `WITH ranked AS (
+    const sql = `WITH ranked AS (
        SELECT id,expires_at,row_number() OVER (
          PARTITION BY request_kind,request_url ORDER BY fetched_at DESC,id DESC) AS rank
-       FROM ${archive.table}
+       FROM ${table}
      ), doomed AS (
        SELECT id FROM ranked WHERE rank>$1 OR expires_at<=now() LIMIT $2
      ), deleted AS (
-       DELETE FROM ${archive.table} r USING doomed d
+       DELETE FROM ${table} r USING doomed d
        WHERE r.id=d.id RETURNING r.id
-     ) SELECT count(*)::int AS deleted FROM deleted`
-      : `WITH all_responses AS (
-       SELECT id,request_kind,request_url,fetched_at,expires_at FROM public.raw_api_response_records
-       UNION ALL
-       SELECT id,request_kind,request_url,fetched_at,expires_at FROM public.raw_api_response_pending
-     ), ranked AS (
-       SELECT id,expires_at,row_number() OVER (
-         PARTITION BY request_kind,request_url ORDER BY fetched_at DESC,id DESC) AS rank
-       FROM all_responses
-     ), doomed AS (
-       SELECT id FROM ranked WHERE rank>$1 OR expires_at<=now() LIMIT $2
-     ), deleted_records AS (
-       DELETE FROM public.raw_api_response_records r USING doomed d
-       WHERE r.id=d.id RETURNING r.id
-     ), deleted_pending AS (
-       DELETE FROM public.raw_api_response_pending p USING doomed d
-       WHERE p.id=d.id RETURNING p.id
-     ) SELECT ((SELECT count(*) FROM deleted_records)+
-       (SELECT count(*) FROM deleted_pending))::int AS deleted`;
+     ) SELECT count(*)::int AS deleted FROM deleted`;
     const result = await this.pool.query(sql, [
       this.rawResponseRetentionCount,
       cap,
@@ -737,33 +718,6 @@ async function purgeRawResponses(limit = 1000) {
 async function runMaintenanceCycle({ log = () => {} } = {}) {
   const result = { ok: true, errors: {} };
   const operations = [["purged", () => this.purgeRawResponses()]];
-  if (!(await this.rawArchiveTarget()).leanArchive) {
-    operations.push(
-      [
-        "compacted",
-        async () =>
-          Number(
-            (
-              await this.pool.query(
-                "SELECT public.compact_raw_api_response_batch($1) AS rows",
-                [5000],
-              )
-            ).rows[0].rows,
-          ),
-      ],
-      [
-        "reclaimed",
-        async () =>
-          Number(
-            (
-              await this.pool.query(
-                "SELECT public.purge_unreferenced_storage_json_documents() AS rows",
-              )
-            ).rows[0].rows,
-          ),
-      ],
-    );
-  }
   for (const [name, operation] of operations) {
     try {
       result[name] = await operation();

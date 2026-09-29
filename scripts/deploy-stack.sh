@@ -114,10 +114,9 @@ docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
 echo "▶ Applying database migrations"
 docker compose --profile migrate run --build --rm migrator
 
-# The reporting schema is created by the migrator. Re-run the idempotent role
-# helper now so an existing volume receives the reporting grants; fresh volumes
-# already execute it after bootstrap SQL.
-echo "▶ Applying reporting grants"
+# Re-run the idempotent role helper so both fresh and existing volumes have
+# the current lean writer and Grafana reader grants.
+echo "▶ Applying database role grants"
 docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
 
 echo "▶ docker compose up -d --build (build output below, if any)"

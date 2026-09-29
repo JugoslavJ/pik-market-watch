@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 "use strict";
-// Runs the DB-backed integration tests against a throwaway canonical PostGIS
+// Runs the DB-backed lean integration tests against a throwaway PostGIS
 // container. Requires Docker. Usage: npm run test:integration
 //
 //   1. removes any stale olx-pg-test container
-//   2. starts the pinned PostGIS/PostgreSQL 18 image with db/init mounted
+//   2. starts the pinned PostGIS/PostgreSQL 18 image with db/init-lean mounted
 //      as Docker's canonical bootstrap on TEST_DB_PORT
 //      (default 55432)
 //   3. waits until it accepts connections
@@ -18,7 +18,8 @@ const path = require("node:path");
 
 const NAME = "olx-pg-test";
 const PORT = process.env.TEST_DB_PORT || "55432";
-const INIT_DIR = path.resolve(__dirname, "..", "..", "db", "init");
+const INIT_DIR = path.resolve(__dirname, "..", "..", "db", "init-lean");
+const LEAN_TESTS = new Set(["db-lean-ingestion.test.js", "migrate.test.js"]);
 const IMAGE =
   process.env.TEST_POSTGRES_IMAGE ||
   "ghcr.io/baosystems/postgis:18-3.6@sha256:4117c8beae9081e76a23a1577c64d05260a61fb0a3c212f37596054ef4c190d8";
@@ -94,11 +95,11 @@ try {
     "-d",
     "olx",
     "-c",
-    "SELECT to_regclass('public.listing_state_versions') IS NOT NULL " +
-      "AND to_regclass('public.listing_state_version_records') IS NOT NULL " +
-      "AND to_regclass('public.raw_api_response_pending') IS NOT NULL " +
-      "AND to_regclass('reporting.current_comparison_inputs') IS NOT NULL " +
-      "AND to_regprocedure('reporting.refresh_dashboard_olap(boolean)') IS NOT NULL;",
+    "SELECT to_regclass('lean.listings') IS NOT NULL " +
+      "AND to_regclass('lean.listing_lifecycle_events') IS NOT NULL " +
+      "AND to_regclass('lean.raw_api_responses') IS NOT NULL " +
+      "AND to_regclass('lean.scrape_run_pages') IS NOT NULL " +
+      "AND to_regclass('olap.refresh_state') IS NULL;",
   ]);
   if (contract.status !== 0 || contract.stdout.trim() !== "t") {
     throw new Error(
@@ -113,7 +114,7 @@ try {
   // versions and platforms.
   const files = fs
     .readdirSync(path.resolve("test", "integration"))
-    .filter((file) => file.endsWith(".test.js"))
+    .filter((file) => LEAN_TESTS.has(file))
     .filter(
       (file) =>
         !process.env.TEST_FILE_PATTERN ||

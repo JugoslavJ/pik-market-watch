@@ -9,12 +9,12 @@ const path = require("path");
 
 const SEARCHES_FILE = process.env.SEARCHES_FILE || "/config/searches.json";
 
-// Where db/init migrations live: container mount first, repo checkout second.
+// Where the lean baseline lives: container mount first, repo checkout second.
 const MIGRATIONS_DIR =
   [
     process.env.MIGRATIONS_DIR,
     "/db/init",
-    path.join(__dirname, "..", "..", "db", "init"),
+    path.join(__dirname, "..", "..", "db", "init-lean"),
   ].find((d) => d && fs.existsSync(d)) || null;
 
 function integer(
@@ -163,7 +163,7 @@ module.exports = {
     process.env.MIGRATIONS_ON_STARTUP,
     true,
   ),
-  migrationsDir: MIGRATIONS_DIR, // db/init/*.sql applied on startup
+  migrationsDir: MIGRATIONS_DIR, // db/init-lean/*.sql applied on startup
   normalizeSearchKey, // stable per-search primary key
   intervalMinutes: integer(
     "SCRAPE_INTERVAL_MINUTES",
@@ -202,20 +202,6 @@ module.exports = {
     process.env.RAW_RESPONSE_RETENTION_COUNT,
     3,
     { min: 1 },
-  ),
-  storageSchema: (process.env.STORAGE_SCHEMA || "lean").trim(),
-  analyticsRebuildMaxDays: integer(
-    "ANALYTICS_REBUILD_MAX_DAYS",
-    process.env.ANALYTICS_REBUILD_MAX_DAYS,
-    31,
-    { min: 1, max: 366 },
-  ),
-  // The scraper publishes the OLAP snapshot synchronously after ingestion and
-  // bounded daily reconstruction. The maintenance profile does not publish it.
-  runAnalyticsMaintenance: boolean(
-    "RUN_ANALYTICS_MAINTENANCE",
-    process.env.RUN_ANALYTICS_MAINTENANCE,
-    true,
   ),
   geoConcurrency: integer("GEO_CONCURRENCY", process.env.GEO_CONCURRENCY, 2, {
     min: 1,

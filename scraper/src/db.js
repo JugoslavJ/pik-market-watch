@@ -4,30 +4,18 @@
 // one transaction boundary. Historical imports use the same event writer.
 
 const { Pool } = require("pg");
-const { recordPriceEvents } = require("./price-history");
-const installRunMethods = require("./db/runs");
 const installRawResponseMethods = require("./db/raw-responses");
-const installEnrichmentMethods = require("./db/enrichment");
-const installIngestionMethods = require("./db/ingestion");
-const installLifecycleMethods = require("./db/lifecycle");
-const installMaintenanceMethods = require("./db/maintenance");
 
 // Search ingestion and the periodic lifecycle sweep both mutate the current
 // membership and closure state.  Serializing them with one advisory lock
 // keeps a closure from racing a sighting that is being committed.
 const SCRAPE_CYCLE_LOCK = "pik-market-watch scrape cycle";
-const ANALYTICS_MAINTENANCE_LOCK = "pik-market-watch analytics maintenance";
+const LEAN_MAINTENANCE_LOCK = "pik-market-watch lean maintenance";
 
 class Db {
-  constructor(
-    connectionString,
-    { rawResponseRetentionCount = 3, schema = "public" } = {},
-  ) {
-    if (schema !== "public" && schema !== "lean")
-      throw new Error(`Unsupported storage schema: ${schema}`);
+  constructor(connectionString, { rawResponseRetentionCount = 3 } = {}) {
     this.pool = new Pool({ connectionString, max: 5 });
-    this.schema = schema;
-    if (schema === "lean") Object.assign(this, require("./db/lean").methods);
+    Object.assign(this, require("./db/lean").methods);
     this.rawResponseRetentionCount = Math.max(
       1,
       Number(rawResponseRetentionCount) || 3,
@@ -85,12 +73,12 @@ class Db {
   }
 
   /** Acquire a process-wide lease so duplicate maintenance jobs skip cleanly. */
-  async tryAcquireAnalyticsMaintenanceLease() {
+  async tryAcquireLeanMaintenanceLease() {
     const client = await this.pool.connect();
     try {
       const result = await client.query(
         "SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS acquired",
-        [ANALYTICS_MAINTENANCE_LOCK],
+        [LEAN_MAINTENANCE_LOCK],
       );
       if (!result.rows[0]?.acquired) {
         client.release();
@@ -104,7 +92,7 @@ class Db {
           try {
             await client.query(
               "SELECT pg_advisory_unlock(hashtextextended($1, 0))",
-              [ANALYTICS_MAINTENANCE_LOCK],
+              [LEAN_MAINTENANCE_LOCK],
             );
           } finally {
             client.release();
@@ -117,21 +105,11 @@ class Db {
     }
   }
 
-  /** Shared canonical price-event facade used by ingestion and backfills. */
-  recordPriceEvents(events, options) {
-    return recordPriceEvents(this.pool, events, options);
-  }
-
   close() {
     return this.pool.end();
   }
 }
 
-installRunMethods(Db);
 installRawResponseMethods(Db);
-installEnrichmentMethods(Db);
-installIngestionMethods(Db);
-installLifecycleMethods(Db);
-installMaintenanceMethods(Db);
 
 module.exports = Db;

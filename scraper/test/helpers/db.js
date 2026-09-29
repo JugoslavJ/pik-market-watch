@@ -11,9 +11,16 @@ const Db = require("../../src/db");
 /** Skip decorator for suites that need a database. */
 const needsDb = process.env.TEST_DATABASE_URL ? test : test.skip;
 
-// Repo checkout location of db/init — mounted at /db/init inside containers,
+// Repo checkout location of db/init-lean — mounted at /db/init inside containers,
 // but tests may also run from a plain `npm install`ed working copy.
-const MIGRATIONS_DIR = path.resolve(__dirname, "..", "..", "..", "db", "init");
+const MIGRATIONS_DIR = path.resolve(
+  __dirname,
+  "..",
+  "..",
+  "..",
+  "db",
+  "init-lean",
+);
 
 /**
  * Ensure the schema exists (and is current) by running the project's own
@@ -31,31 +38,9 @@ function ensureSchema(pool) {
 
 /** Wipe all data tables (schema objects stay). Keeps tests order-independent. */
 async function reset(pool) {
-  await pool.query(`TRUNCATE listings, price_history, saved_searches,
-                            search_results, scrape_runs, raw_api_response_records,
-                            raw_api_response_pending,
-                            storage_json_parts, storage_json_documents,
-                            scrape_run_pages,
-                            listing_state_history, listing_price_events,
-                            listing_daily, analytics_daily_coverage,
-                            analytics_daily_dirty_articles,
-                            analytics_daily_olap_dirty
-                            RESTART IDENTITY CASCADE`);
-  await pool.query(`TRUNCATE olap.current_listing_scores,
-    olap.daily_listing_facts,
-    olap.lifecycle_cycles,
-    olap.lifecycle_movements,
-    olap.comparison_price_changes,
-    olap.listings,
-    olap.listing_categories,
-    olap.dashboard_filter_options,
-    olap.market_daily,
-    olap.listing_price_changes,
-    olap.listing_exit_economics`);
-  await pool.query(`UPDATE analytics_refresh_state
-                       SET pending_from_day = NULL, pending_through_day = NULL,
-                           completed_through_day = NULL,
-                           last_successful_refresh_at = NULL, updated_at = now()`);
+  await pool.query(`TRUNCATE lean.price_history, lean.listing_lifecycle_events,
+    lean.listings, lean.saved_searches, lean.scrape_runs,
+    lean.raw_api_responses, lean.scrape_run_pages RESTART IDENTITY CASCADE`);
 }
 
 /** Fresh Db wired to TEST_DATABASE_URL with the schema ensured (suite bootstrap). */
