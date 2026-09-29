@@ -4,10 +4,7 @@
 
 const api = require("./api");
 const { sleep } = require("./util");
-const {
-  buildSearchObservations,
-  buildSearchPriceEvents,
-} = require("./search-lifecycle");
+const { buildSearchObservations } = require("./search-lifecycle");
 const { harvestSearchPages } = require("./search/harvest");
 const { pagesInWave } = require("./search/outcomes");
 const { enrichSearchResults } = require("./search/enrichment");
@@ -118,7 +115,6 @@ async function scrapeSearch(
         category: search.category,
         runId,
       }),
-      priceEvents: buildSearchPriceEvents(allCards),
       membership: {
         searchKey: search.searchKey,
         articleIds: allCards.map((c) => c.articleId),
@@ -130,7 +126,6 @@ async function scrapeSearch(
         cards: allCards.length,
         listingCount: allCards.length,
       },
-      analytics: { invalidateFrom: new Date() },
     });
     // commitSearchIngestion owns the authoritative ingestion/run transaction.
     // From this point on, detail enrichment is best-effort and cannot change

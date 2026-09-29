@@ -43,7 +43,7 @@ docker compose up -d --build
 | `SCRAPE_STALE_AFTER_HOURS`                               |                                       `26` | Per-search freshness alert and public freshness label; choose a value that covers the actual scrape cadence.                                          |
 
 For an existing volume, add the four role credentials to `.env`, recreate the
-database service, and apply the role migration once:
+database service, and run the role bootstrap script once:
 
 ```bash
 docker compose up -d db
@@ -141,14 +141,12 @@ you have already run the migrator successfully, use
 
 The first command shows service health. The `scraper` service exists only when the `scrape` profile is enabled; add `COMPOSE_PROFILES=scrape` to `.env` to schedule it locally. A one-off `compose run` is safe for manual collection because it does not inherit the service restart policy.
 
-Migrations run through the profile-only `migrator` job and are tracked by
-filename plus a SHA-256 checksum. The `scrape` profile activates that job as a
-completed dependency before the scraper starts. An edited applied file fails
-the migration job. The
-scraper keeps a startup migration fallback for bare-metal runs; Compose sets
-`MIGRATIONS_ON_STARTUP=0` because the deployment gate already ran. Do not run
-a tracked migration manually as the bootstrap user: application objects must
-remain owned by `olx_app` (or the configured app role).
+The profile-only `migrator` job verifies the lean baseline by filename and
+SHA-256 checksum. The `scrape` profile waits for that job before starting the
+scraper. An edited applied file fails the migration job. Bare-metal runs keep
+a startup migration fallback; Compose sets `MIGRATIONS_ON_STARTUP=0` because
+the deployment gate already ran. Run the job with the configured migration
+role so application objects keep the intended ownership.
 
 Detail backfill is separate from normal collection:
 
@@ -268,7 +266,7 @@ tunnel path.
 - **No current data or a failing health endpoint:** inspect `docker compose logs scraper` and `scrape_runs`. A cycle is unhealthy only after `HEALTH_FAILURE_THRESHOLD` fully failed cycles; partial success resets the streak. Check an upstream response with `docker compose --profile scrape run --rm scraper node scripts/check-api.js`. A blank first page, page failure, or incomplete pagination is intentionally not a successful result set.
 - **Listings were not closed:** closures require a non-empty cycle and complete search results. Failed searches retain membership and a zero-card cycle skips the closing pass by design.
 - **Stale detail fields or sparse dashboard segments:** detail fetches are capped and source attributes are optional. Check `details_fetched_at`, `last_enrichment_attempted_at`, and the health dashboard’s coverage panels; use a bounded backfill where appropriate.
-- **Migration or ownership error:** run the roles script as shown above, then restart affected clients. Inspect `schema_migrations` and apply normal migrations with `migrate-only.js`; do not repair ownership by applying schema files as the bootstrap user.
+- **Migration or ownership error:** run the role bootstrap script as shown above, then restart affected clients. Inspect `schema_migrations` and rerun the Compose `migrator` job with the configured migration role.
 - **Grafana is unavailable:** verify `GRAFANA_SECRET_KEY`, the configured
   `GRAFANA_ROOT_URL`/domain settings, `systemctl status cloudflared`, and
   `docker compose logs grafana`. From the OCI host, check

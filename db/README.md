@@ -18,8 +18,9 @@ The numbered SQL files run in lexical order:
 
 The migrator records each SQL file and checksum in `public.schema_migrations`,
 adopts an already initialized lean schema, and rejects changes to applied
-files. Schema changes for an existing deployment belong in new, ordered
-forward migrations or a verified database restore.
+files. Add future schema changes as new ordered SQL files under `init-lean/`;
+never edit an applied file. The same canonical directory bootstraps fresh
+databases and applies appended changes to existing lean deployments.
 
 `remote-restore.sh` handles synchronized lean database restores. PostgreSQL
 extension objects in `public` remain installed by the database bootstrap.

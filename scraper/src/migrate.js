@@ -1,7 +1,7 @@
 "use strict";
 
-// Apply the canonical db/init-lean SQL files once. The files describe the complete
-// current schema; they are not a chain of forward migrations.
+// Apply the ordered canonical db/init-lean SQL files and record their checksums.
+// Keep applied files immutable; append a new file for each schema change.
 
 const fs = require("fs");
 const path = require("path");

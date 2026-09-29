@@ -7,10 +7,7 @@ const {
   normalizeHistoryWithRejections,
 } = require("../../src/normalization");
 const { parseSearchItem, parseListingDetail } = require("../../src/parser");
-const {
-  buildSearchObservations,
-  buildSearchPriceEvents,
-} = require("../../src/search-lifecycle");
+const { buildSearchObservations } = require("../../src/search-lifecycle");
 
 test("currency requires source evidence and preserves foreign/conflicting assertions", () => {
   assert.equal(priceCurrencyOf({ price: 600 }), null);
@@ -38,7 +35,6 @@ test("search and detail carry currency into assertion and state evidence", () =>
   };
   const card = parseSearchItem(payload);
   assert.equal(card.priceCurrency, "BAM");
-  assert.equal(buildSearchPriceEvents([card])[0].provenance.currency, "BAM");
   assert.equal(
     buildSearchObservations([card], {
       searchKey: "test",
@@ -96,5 +92,4 @@ test("missing source deal type remains explicit unknown price evidence", () => {
     display_price: "150.000 KM",
   });
   assert.equal(card.dealType, null);
-  assert.equal(buildSearchPriceEvents([card])[0].provenance.dealType, null);
 });

@@ -5,7 +5,7 @@
 #   olx_migrator LOGIN  owns the database/schema/objects and is used only by
 #                       migrations and restores.
 #   olx_app LOGIN       runtime writer used by the scraper and maintenance.
-#   olx_reporting LOGIN SELECT-only reporting contract used by Grafana.
+#   olx_reporting LOGIN SELECT-only access to lean data used by Grafana.
 #   olx_backup LOGIN    pg_dump-only broad read role; never used by Grafana.
 #
 # Passwords come from the environment (never hardcode them here):
@@ -77,69 +77,40 @@ FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'public'
   AND pg_get_userbyid(p.proowner) IN (:'admin_user', :'app_user') \gexec
 
--- Reporting objects are owned by the migration role, never by the runtime
--- login. This also repairs fresh-volume ownership after bootstrap SQL runs.
-SELECT format('ALTER SCHEMA reporting OWNER TO %I', :'migrator_user')
-WHERE to_regnamespace('reporting') IS NOT NULL \gexec
-SELECT format('ALTER SCHEMA olap OWNER TO %I', :'migrator_user')
-WHERE to_regnamespace('olap') IS NOT NULL \gexec
 SELECT format('ALTER SCHEMA lean OWNER TO %I', :'migrator_user')
 WHERE to_regnamespace('lean') IS NOT NULL \gexec
-SELECT format('ALTER TABLE %I.%I OWNER TO %I', n.nspname, c.relname, :'migrator_user')
-FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-WHERE n.nspname = 'olap'
-  AND c.relkind IN ('r','p','v','m','f','S')
-  AND pg_get_userbyid(c.relowner) IN (:'admin_user', :'app_user') \gexec
--- Reporting is normally a view-only contract, but current_market_refresh_state
--- is a publisher table. Transfer it too so custom-format sync dumps remain
--- restorable by olx_migrator.
-SELECT format('ALTER TABLE %I.%I OWNER TO %I', n.nspname, c.relname, :'migrator_user')
-FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-WHERE n.nspname = 'reporting'
-  AND c.relkind IN ('r','p','v','m','f','S')
-  AND pg_get_userbyid(c.relowner) IN (:'admin_user', :'app_user') \gexec
-SELECT format('ALTER FUNCTION %I.%I(%s) OWNER TO %I', n.nspname, p.proname,
-              pg_get_function_identity_arguments(p.oid), :'migrator_user')
-FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-WHERE n.nspname = 'reporting'
-  AND pg_get_userbyid(p.proowner) IN (:'admin_user', :'app_user') \gexec
 
--- Runtime writer: it can mutate whichever application schemas are installed,
--- including a lean-only fresh baseline, but owns nothing. --------------------
+-- Runtime writer can modify the lean application schema and migration ledger,
+-- but owns no database objects. ---------------------------------------------
 SELECT format('GRANT USAGE ON SCHEMA %s TO %I',
               string_agg(format('%I', nspname), ', '), :'app_user')
-FROM pg_namespace WHERE nspname IN ('public','lean','olap','reporting') \gexec
+FROM pg_namespace WHERE nspname IN ('public','lean') \gexec
 SELECT format('GRANT ALL ON ALL TABLES IN SCHEMA %s TO %I',
               string_agg(format('%I', nspname), ', '), :'app_user')
-FROM pg_namespace WHERE nspname IN ('public','lean','olap','reporting') \gexec
+FROM pg_namespace WHERE nspname IN ('public','lean') \gexec
 SELECT format('GRANT ALL ON ALL SEQUENCES IN SCHEMA %s TO %I',
               string_agg(format('%I', nspname), ', '), :'app_user')
-FROM pg_namespace WHERE nspname IN ('public','lean','olap','reporting') \gexec
+FROM pg_namespace WHERE nspname IN ('public','lean') \gexec
 SELECT format('GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA %s TO %I',
               string_agg(format('%I', nspname), ', '), :'app_user')
-FROM pg_namespace WHERE nspname IN ('public','lean','olap','reporting') \gexec
+FROM pg_namespace WHERE nspname IN ('public','lean') \gexec
 
--- Reporting: explicit views/functions only. Never inherit pg_read_all_data. ---
+-- Grafana: explicit lean reads only. Never inherit pg_read_all_data. ---------
 SELECT format('REVOKE pg_read_all_data FROM %I', :'reporting_user') \gexec
 SELECT format('REVOKE ALL ON SCHEMA %s FROM %I',
               string_agg(format('%I', nspname), ', '), :'reporting_user')
-FROM pg_namespace WHERE nspname IN ('public','lean','olap') \gexec
+FROM pg_namespace WHERE nspname IN ('public','lean') \gexec
 SELECT format('REVOKE ALL ON ALL TABLES IN SCHEMA %s FROM %I',
               string_agg(format('%I', nspname), ', '), :'reporting_user')
-FROM pg_namespace WHERE nspname IN ('public','lean','olap','reporting') \gexec
+FROM pg_namespace WHERE nspname IN ('public','lean') \gexec
 SELECT format('REVOKE ALL ON ALL SEQUENCES IN SCHEMA %s FROM %I',
               string_agg(format('%I', nspname), ', '), :'reporting_user')
-FROM pg_namespace WHERE nspname IN ('public','lean','olap','reporting') \gexec
+FROM pg_namespace WHERE nspname IN ('public','lean') \gexec
 SELECT format('REVOKE ALL ON ALL FUNCTIONS IN SCHEMA %s FROM %I',
               string_agg(format('%I', nspname), ', '), :'reporting_user')
-FROM pg_namespace WHERE nspname IN ('public','lean','reporting') \gexec
-SELECT format('GRANT USAGE ON SCHEMA reporting TO %I', :'reporting_user')
-WHERE to_regnamespace('reporting') IS NOT NULL \gexec
+FROM pg_namespace WHERE nspname IN ('public','lean') \gexec
 SELECT format('GRANT USAGE ON SCHEMA lean TO %I', :'reporting_user')
 WHERE to_regnamespace('lean') IS NOT NULL \gexec
-SELECT format('GRANT SELECT ON %I.%I TO %I', n.nspname, c.relname, :'reporting_user')
-FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-WHERE n.nspname = 'reporting' AND c.relkind IN ('v','m') \gexec
 SELECT format('GRANT SELECT ON %I.%I TO %I', n.nspname, c.relname, :'reporting_user')
 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
 WHERE n.nspname = 'lean'
@@ -149,19 +120,16 @@ WHERE n.nspname = 'lean'
 SELECT format('GRANT EXECUTE ON FUNCTION %I.%I(%s) TO %I', n.nspname, p.proname,
               pg_get_function_identity_arguments(p.oid), :'reporting_user')
 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-WHERE n.nspname = 'reporting' AND p.provolatile <> 'v' \gexec
+WHERE n.nspname = 'lean' AND p.provolatile <> 'v' \gexec
 
 SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA %I GRANT ALL ON TABLES TO %I', :'migrator_user', nspname, :'app_user')
 FROM pg_namespace WHERE nspname IN ('public','lean') \gexec
 SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA %I GRANT ALL ON SEQUENCES TO %I', :'migrator_user', nspname, :'app_user')
 FROM pg_namespace WHERE nspname IN ('public','lean') \gexec
 
--- Reporting objects are created by the migrator after this bootstrap runs.
--- Give the read-only Grafana role access to future reporting views/functions.
-SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA reporting GRANT SELECT ON TABLES TO %I', :'migrator_user', :'reporting_user')
-WHERE to_regnamespace('reporting') IS NOT NULL \gexec
-SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA reporting GRANT EXECUTE ON FUNCTIONS TO %I', :'migrator_user', :'reporting_user')
-WHERE to_regnamespace('reporting') IS NOT NULL \gexec
+-- Grant read access to future lean tables created by the migration role.
+SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA lean GRANT SELECT ON TABLES TO %I', :'migrator_user', :'reporting_user')
+WHERE to_regnamespace('lean') IS NOT NULL \gexec
 
 REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC;
 SELECT format('GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA %I TO %I', 'public', :'app_user') \gexec
@@ -175,19 +143,6 @@ FROM pg_namespace WHERE nspname IN ('public','lean') \gexec
 SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA %I GRANT EXECUTE ON FUNCTIONS TO %I',
               :'migrator_user', nspname, :'app_user')
 FROM pg_namespace WHERE nspname IN ('public','lean') \gexec
-SELECT format('REVOKE ALL ON SCHEMA reporting FROM PUBLIC')
-WHERE to_regnamespace('reporting') IS NOT NULL \gexec
-SELECT format('REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA reporting FROM PUBLIC')
-WHERE to_regnamespace('reporting') IS NOT NULL \gexec
-SELECT format('GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA reporting TO %I', :'app_user')
-WHERE to_regnamespace('reporting') IS NOT NULL \gexec
-SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA reporting REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC',
-              :'migrator_user')
-WHERE to_regnamespace('reporting') IS NOT NULL \gexec
-SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA reporting GRANT EXECUTE ON FUNCTIONS TO %I',
-              :'migrator_user', :'app_user')
-WHERE to_regnamespace('reporting') IS NOT NULL \gexec
-
 -- Connect must be granted explicitly: any role created LATER starts closed ---
 -- (defense in depth — today's roles are granted above, tomorrow's won't be).
 SELECT format('REVOKE CONNECT ON DATABASE %I FROM PUBLIC', :'db_name') \gexec
@@ -197,7 +152,7 @@ SELECT format('GRANT CONNECT ON DATABASE %I TO %I', :'db_name', :'reporting_user
 SELECT format('GRANT CONNECT ON DATABASE %I TO %I', :'db_name', :'backup_user') \gexec
 SELECT format('GRANT pg_read_all_data TO %I', :'backup_user') \gexec
 
--- Reporting guard-rails: dashboards/alerts run as this role, so a ------------
+-- Grafana guard-rails: dashboards/alerts use this role, so a -----------------
 -- runaway query or wedged session must not eat the shared work_mem /
 -- connection budget. LIMIT 30 sits under max_connections=40 (app pool max 5
 -- + admin headroom); 60 s comfortably covers the heaviest analytics views.
@@ -206,5 +161,5 @@ SELECT format('ALTER ROLE %I SET idle_in_transaction_session_timeout = %L', :'re
 SELECT format('ALTER ROLE %I WITH CONNECTION LIMIT %s', :'reporting_user', 30) \gexec
 SQL
 
-  echo "zz-database-roles: ensured migrator/writer/reporting/backup roles."
+  echo "zz-database-roles: ensured migrator/writer/Grafana/backup roles."
 )

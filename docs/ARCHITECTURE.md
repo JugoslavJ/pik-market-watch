@@ -32,11 +32,9 @@ without writing listing or price data.
 | `lean.raw_api_responses` | Retained search/detail payloads and request diagnostics |
 | `lean.scrape_run_pages` | Page-level response, parse, and completeness evidence |
 
-The application does not maintain OLAP marts, reconstructed daily inventory,
-listing scores, or historical attribute snapshots. Dashboard trend panels
-derive their summaries from retained observed dates. A closure is an observed
-listing exit, not a confirmed sale; its price is the last observed asking
-price.
+Dashboard trends derive their summaries from observed prices, lifecycle
+events, and scrape runs. A closure is an observed listing exit, not a confirmed
+sale; its price is the last observed asking price.
 
 ## Dashboards
 
