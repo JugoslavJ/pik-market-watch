@@ -24,8 +24,8 @@ x-scraper-runtime: &scraper-runtime
   pids_limit: 32
   # Keep all scraper and one-shot maintenance/migration jobs in the same
   # bounded resource class so scheduled jobs cannot starve dashboard traffic.
-  mem_limit: 512m
-  memswap_limit: 512m
+  mem_limit: 768m
+  memswap_limit: 768m
   cpus: 0.50
   volumes:
     - ${DB_INIT_DIR:-./db/init-lean}:/db/init:ro
@@ -41,8 +41,8 @@ services:
     security_opt:
       - no-new-privileges:true
     pids_limit: 100 # max_connections forks (40) + background workers
-    # Initial analytics allocation: PostgreSQL receives 1.25 of the host's
-    # 2 OCPU and 2 GiB RAM while leaving CPU and memory for Grafana and jobs.
+    # Cap PostgreSQL at 0.75 OCPU and 2 GiB RAM on the 2 OCPU / 12 GiB VM,
+    # leaving headroom for Grafana, jobs, and the host OS.
     # The 40-connection cap covers the scraper pool, Grafana pool, and tools.
     command:
       - postgres
@@ -106,7 +106,7 @@ services:
       retries: 12
     mem_limit: 2g
     memswap_limit: 2g # hit OOM decisively instead of swapping into latency spikes
-    cpus: 1.25
+    cpus: 0.75
     logging: *logging
     # Deliberately NO cap_drop/read_only here: the first-boot entrypoint chowns
     # PGDATA. Isolation comes from attaching db to the backend network ONLY.
@@ -204,6 +204,7 @@ services:
       db:
         condition: service_healthy
     environment:
+      GOMEMLIMIT: 1536MiB # leave room within the 2 GiB limit for non-heap memory
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
       GF_ANALYTICS_REPORTUSAGE_ENABLED: "false" # no usage telemetry
@@ -261,8 +262,8 @@ services:
         host_ip: ${GRAFANA_BIND:-127.0.0.1}
         protocol: tcp
         mode: host
-    mem_limit: 768m
-    memswap_limit: 768m # hit OOM decisively instead of swapping into latency spikes
+    mem_limit: 2g
+    memswap_limit: 2g # hit OOM decisively instead of swapping into latency spikes
     cpus: 1.0
     logging: *logging
     networks:
@@ -304,6 +305,7 @@ services:
     entrypoint: ["sh", "/usr/local/bin/backup.sh"]
     mem_limit: 256m
     memswap_limit: 256m # hit OOM decisively instead of swapping into latency spikes
+    cpus: 0.25
     logging: *logging
     networks:
       - backend

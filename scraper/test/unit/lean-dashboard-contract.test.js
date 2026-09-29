@@ -42,8 +42,36 @@ test("staged lean dashboards keep four identities and only query lean relations"
     for (const panel of dashboard.panels.filter(
       (item) => item.type !== "row",
     )) {
-      assert.equal(panel.datasource.uid, "olx-postgres", `${file}:${panel.id}`);
       assert.equal(panel.targets.length, 1, `${file}:${panel.id}`);
+      const target = panel.targets[0];
+      if (panel.datasource.uid === "-- Dashboard --") {
+        assert.equal(
+          panel.datasource.type,
+          "datasource",
+          `${file}:${panel.id}`,
+        );
+        assert.equal(target.datasource.uid, "-- Dashboard --");
+        assert.equal(target.refId, "A");
+        assert.equal(target.rawSql, undefined);
+        const sourcePanel = dashboard.panels.find(
+          (candidate) => candidate.id === target.panelId,
+        );
+        assert.ok(sourcePanel, `${file}:${panel.id}: missing source panel`);
+        assert.equal(sourcePanel.datasource.uid, "olx-postgres");
+        assert.match(
+          sourcePanel.targets[0].rawSql,
+          new RegExp(`\\bAS\\s+${panel.options.reduceOptions.fields}\\b`, "i"),
+          `${file}:${panel.id}: source is missing selected field`,
+        );
+      } else {
+        assert.equal(
+          panel.datasource.uid,
+          "olx-postgres",
+          `${file}:${panel.id}`,
+        );
+        assert.equal(target.datasource.uid, "olx-postgres");
+        assert.ok(target.rawSql, `${file}:${panel.id}: missing SQL`);
+      }
       if (panel.type === "stat")
         assert.ok(panel.options.reduceOptions.fields, `${file}:${panel.id}`);
     }

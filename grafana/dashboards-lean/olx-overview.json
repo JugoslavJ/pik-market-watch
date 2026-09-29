@@ -111,7 +111,7 @@
           },
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND (${deal:sqlstring} = 'All' OR l.deal = CASE WHEN ${deal:sqlstring} = 'sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${rooms:sqlstring} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms:sqlstring}) AND ('All' = ANY (ARRAY[${neighborhood:sqlstring}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood:sqlstring}]::text[])) AND (${category:sqlstring} = 'All' OR EXISTS (SELECT 1 FROM lean.saved_searches ss WHERE ss.search_key = ANY(l.search_keys) AND ss.category = ${category:sqlstring})) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)) SELECT count(*) AS active FROM base",
+          "rawSql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND (${deal:sqlstring} = 'All' OR l.deal = CASE WHEN ${deal:sqlstring} = 'sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${rooms:sqlstring} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms:sqlstring}) AND ('All' = ANY (ARRAY[${neighborhood:sqlstring}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood:sqlstring}]::text[])) AND (${category:sqlstring} = 'All' OR EXISTS (SELECT 1 FROM lean.saved_searches ss WHERE ss.search_key = ANY(l.search_keys) AND ss.category = ${category:sqlstring})) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)) SELECT count(*) AS active,\n  count(*) FILTER (WHERE first_seen >= (now() AT TIME ZONE 'Europe/Sarajevo')::date - 7) AS new_7d,\n  round(percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE deal='sale' AND ppm2>0)::numeric,0) AS median_sale_ppm2,\n  round(percentile_cont(0.5) WITHIN GROUP (ORDER BY price) FILTER (WHERE deal='rent' AND price>0)::numeric,0) AS median_rent\nFROM base",
           "refId": "A"
         }
       ],
@@ -119,8 +119,8 @@
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
+        "type": "datasource",
+        "uid": "-- Dashboard --"
       },
       "fieldConfig": {
         "defaults": {
@@ -167,12 +167,10 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
+            "type": "datasource",
+            "uid": "-- Dashboard --"
           },
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND (${deal:sqlstring} = 'All' OR l.deal = CASE WHEN ${deal:sqlstring} = 'sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${rooms:sqlstring} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms:sqlstring}) AND ('All' = ANY (ARRAY[${neighborhood:sqlstring}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood:sqlstring}]::text[])) AND (${category:sqlstring} = 'All' OR EXISTS (SELECT 1 FROM lean.saved_searches ss WHERE ss.search_key = ANY(l.search_keys) AND ss.category = ${category:sqlstring})) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)) SELECT count(*) AS new_7d FROM base WHERE first_seen >= (now() AT TIME ZONE 'Europe/Sarajevo')::date - 7",
+          "panelId": 1,
           "refId": "A"
         }
       ],
@@ -241,8 +239,8 @@
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
+        "type": "datasource",
+        "uid": "-- Dashboard --"
       },
       "fieldConfig": {
         "defaults": {
@@ -289,12 +287,10 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
+            "type": "datasource",
+            "uid": "-- Dashboard --"
           },
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND (${deal:sqlstring} = 'All' OR l.deal = CASE WHEN ${deal:sqlstring} = 'sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${rooms:sqlstring} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms:sqlstring}) AND ('All' = ANY (ARRAY[${neighborhood:sqlstring}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood:sqlstring}]::text[])) AND (${category:sqlstring} = 'All' OR EXISTS (SELECT 1 FROM lean.saved_searches ss WHERE ss.search_key = ANY(l.search_keys) AND ss.category = ${category:sqlstring})) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)) SELECT round(percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)::numeric,0) AS median_sale_ppm2 FROM base WHERE deal='sale' AND ppm2>0",
+          "panelId": 1,
           "refId": "A"
         }
       ],
@@ -302,8 +298,8 @@
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
+        "type": "datasource",
+        "uid": "-- Dashboard --"
       },
       "fieldConfig": {
         "defaults": {
@@ -350,12 +346,10 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
+            "type": "datasource",
+            "uid": "-- Dashboard --"
           },
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND (${deal:sqlstring} = 'All' OR l.deal = CASE WHEN ${deal:sqlstring} = 'sell' THEN 'sale' ELSE ${deal:sqlstring} END) AND (${rooms:sqlstring} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms:sqlstring}) AND ('All' = ANY (ARRAY[${neighborhood:sqlstring}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood:sqlstring}]::text[])) AND (${category:sqlstring} = 'All' OR EXISTS (SELECT 1 FROM lean.saved_searches ss WHERE ss.search_key = ANY(l.search_keys) AND ss.category = ${category:sqlstring})) AND (NULLIF(${min_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm:sqlstring}, '')::numeric) AND (NULLIF(${max_sqm:sqlstring}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm:sqlstring}, '')::numeric)) SELECT round(percentile_cont(0.5) WITHIN GROUP (ORDER BY price)::numeric,0) AS median_rent FROM base WHERE deal='rent' AND price>0",
+          "panelId": 1,
           "refId": "A"
         }
       ],
@@ -419,7 +413,7 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "WITH days AS (SELECT g.day::date AS day FROM generate_series(GREATEST(date($__timeFrom() AT TIME ZONE 'Europe/Sarajevo'), (now() AT TIME ZONE 'Europe/Sarajevo')::date - 89), LEAST(date($__timeTo() AT TIME ZONE 'Europe/Sarajevo'), (now() AT TIME ZONE 'Europe/Sarajevo')::date), INTERVAL '1 day') AS g(day)), openings AS (SELECT article_id, first_seen AS opened_at FROM lean.listings UNION ALL SELECT article_id, occurred_at AS opened_at FROM lean.listing_lifecycle_events WHERE event_type = 'reopened'), cycles AS (SELECT o.article_id, o.opened_at, c.closed_at FROM openings o LEFT JOIN LATERAL (SELECT min(e.occurred_at) AS closed_at FROM lean.listing_lifecycle_events e WHERE e.article_id = o.article_id AND e.event_type = 'closed' AND e.occurred_at > o.opened_at) c ON TRUE), daily AS (SELECT d.day, p.price / NULLIF(l.sqm, 0) AS ppm2 FROM days d JOIN cycles c ON c.opened_at < d.day + 1 AND (c.closed_at IS NULL OR c.closed_at >= d.day + 1) JOIN lean.listings l ON l.article_id = c.article_id AND l.deal = 'sale' AND l.sqm > 0 JOIN LATERAL (SELECT ph.price FROM lean.price_history ph WHERE ph.article_id = l.article_id AND ph.source='api_price_history' AND ph.price_date <= d.day AND ph.price > 0 ORDER BY ph.price_date DESC LIMIT 1) p ON TRUE) SELECT day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time, percentile_cont(0.25) WITHIN GROUP (ORDER BY ppm2) AS p25, percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) AS median, percentile_cont(0.75) WITHIN GROUP (ORDER BY ppm2) AS p75, count(*) AS listings FROM daily GROUP BY day ORDER BY day",
+          "rawSql": "WITH bounds AS (\n  SELECT GREATEST(date($__timeFrom() AT TIME ZONE 'Europe/Sarajevo'), (now() AT TIME ZONE 'Europe/Sarajevo')::date - 89) AS start_day,\n         LEAST(date($__timeTo() AT TIME ZONE 'Europe/Sarajevo'), (now() AT TIME ZONE 'Europe/Sarajevo')::date) AS end_day\n), openings AS (\n  SELECT article_id, first_seen AS opened_at FROM lean.listings\n  UNION ALL\n  SELECT article_id, occurred_at AS opened_at FROM lean.listing_lifecycle_events WHERE event_type = 'reopened'\n), cycles AS (\n  SELECT o.article_id, o.opened_at, c.closed_at\n  FROM openings o\n  LEFT JOIN LATERAL (\n    SELECT min(e.occurred_at) AS closed_at\n    FROM lean.listing_lifecycle_events e\n    WHERE e.article_id = o.article_id AND e.event_type = 'closed' AND e.occurred_at > o.opened_at\n  ) c ON TRUE\n), price_spans AS (\n  SELECT ph.article_id, ph.price, ph.price_date,\n         lead(ph.price_date) OVER (PARTITION BY ph.article_id ORDER BY ph.price_date) AS next_date\n  FROM lean.price_history ph\n  WHERE ph.source = 'api_price_history' AND ph.price > 0\n), daily AS (\n  SELECT d.day::date AS day, p.price / NULLIF(l.sqm, 0) AS ppm2\n  FROM price_spans p\n  CROSS JOIN bounds b\n  JOIN LATERAL generate_series(\n    GREATEST(p.price_date, b.start_day),\n    LEAST(COALESCE(p.next_date - 1, b.end_day), b.end_day),\n    INTERVAL '1 day'\n  ) AS d(day) ON TRUE\n  JOIN cycles c ON c.article_id = p.article_id AND c.opened_at < d.day::date + 1 AND (c.closed_at IS NULL OR c.closed_at >= d.day::date + 1)\n  JOIN lean.listings l ON l.article_id = c.article_id AND l.deal = 'sale' AND l.sqm > 0\n)\nSELECT day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time,\n       percentile_cont(0.25) WITHIN GROUP (ORDER BY ppm2) AS p25,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) AS median,\n       percentile_cont(0.75) WITHIN GROUP (ORDER BY ppm2) AS p75,\n       count(*) AS listings\nFROM daily GROUP BY day ORDER BY day",
           "refId": "A"
         }
       ],
