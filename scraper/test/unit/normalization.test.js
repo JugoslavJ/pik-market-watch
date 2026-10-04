@@ -10,7 +10,6 @@ const {
   normalizeHistoryWithRejections,
   normalizeId,
   normalizePrice,
-  normalizePriceHistory,
 } = require("../../src/normalization");
 const { parseListingDetail, parseSearchItem } = require("../../src/parser");
 
@@ -58,17 +57,21 @@ test("history accepts API and stored formats, sorts and exact-deduplicates", () 
     { price: 4000, created_at: BEFORE - 20 },
   ];
   assert.deepEqual(
-    normalizePriceHistory(entries, { dealType: "sale", now: NOW }),
+    normalizeHistoryWithRejections(entries, { dealType: "sale", now: NOW })
+      .events,
     [
       { price: 4000, date: BEFORE - 20 },
       { price: 3000, date: BEFORE },
     ],
   );
   assert.deepEqual(
-    normalizePriceHistory(JSON.stringify([{ price: "50", date: BEFORE }]), {
-      dealType: "rent",
-      now: NOW,
-    }),
+    normalizeHistoryWithRejections(
+      JSON.stringify([{ price: "50", date: BEFORE }]),
+      {
+        dealType: "rent",
+        now: NOW,
+      },
+    ).events,
     [{ price: 50, date: BEFORE }],
   );
 });

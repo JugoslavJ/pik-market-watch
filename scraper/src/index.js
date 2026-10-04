@@ -140,8 +140,7 @@ async function runAllUnlocked(db) {
     }
   }
 
-  // Retention and analytics have separate outcomes. A failed upstream search,
-  // failed rebuild, or skipped cycle must not suppress raw cleanup.
+  // A failed upstream search or skipped cycle must not suppress raw cleanup.
   const maintenance = await db.runMaintenanceCycle({
     log: (message) => log(`maintenance: ${message}`),
   });
@@ -155,8 +154,8 @@ async function runAllUnlocked(db) {
 }
 
 async function runAll(db) {
-  const lease = await db.tryAcquireCycleLease?.();
-  if (db.tryAcquireCycleLease && !lease) {
+  const lease = await db.tryAcquireCycleLease();
+  if (!lease) {
     if (config.runOnce) {
       log(
         "✖ one-shot scrape could not acquire the cycle lease — another scraper is running",
@@ -180,7 +179,7 @@ async function runAll(db) {
     return await runAllUnlocked(db);
   } finally {
     await lease
-      ?.release()
+      .release()
       .catch((err) => log(`cycle lease release failed: ${err.message || err}`));
   }
 }

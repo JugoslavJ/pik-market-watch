@@ -184,18 +184,16 @@ module.exports = {
     max: 65535,
   }),
   healthBind: (process.env.HEALTH_BIND || "127.0.0.1").trim() || "127.0.0.1",
-  maxGeoFetches: integer("MAX_GEO_FETCHES", process.env.MAX_GEO_FETCHES, 25), // /api/listings detail calls per run
+  maxDetailFetches: integer(
+    "MAX_DETAIL_FETCHES",
+    process.env.MAX_DETAIL_FETCHES,
+    25,
+  ), // /api/listings detail calls per run
   detailRefreshDays: integer(
     "DETAIL_REFRESH_DAYS",
     process.env.DETAIL_REFRESH_DAYS,
     7,
     { min: 1 },
-  ),
-  detailJobLeaseMinutes: integer(
-    "DETAIL_JOB_LEASE_MINUTES",
-    process.env.DETAIL_JOB_LEASE_MINUTES,
-    30,
-    { min: 1, max: 24 * 60 },
   ),
   rawResponseRetentionCount: integer(
     "RAW_RESPONSE_RETENTION_COUNT",
@@ -203,10 +201,15 @@ module.exports = {
     3,
     { min: 1 },
   ),
-  geoConcurrency: integer("GEO_CONCURRENCY", process.env.GEO_CONCURRENCY, 2, {
-    min: 1,
-  }), // parallel detail calls
-  geoDelayMs: integer("GEO_DELAY_MS", process.env.GEO_DELAY_MS, 1200), // politeness gap between batches
+  detailConcurrency: integer(
+    "DETAIL_CONCURRENCY",
+    process.env.DETAIL_CONCURRENCY,
+    2,
+    {
+      min: 1,
+    },
+  ), // parallel detail calls
+  detailDelayMs: integer("DETAIL_DELAY_MS", process.env.DETAIL_DELAY_MS, 1200), // politeness gap between batches
   rateLimitCooldownMs: integer(
     "RATE_LIMIT_COOLDOWN_MS",
     process.env.RATE_LIMIT_COOLDOWN_MS,

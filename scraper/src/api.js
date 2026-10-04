@@ -561,8 +561,7 @@ function hasApiFilter(apiUrl) {
   return FILTER_PARAMS.some((p) => apiUrl.searchParams.has(p));
 }
 
-// Exported surface = what callers actually consume. API_ORIGIN stays
-// internal; ApiError is public for durable outcome classification.
+// API_ORIGIN stays internal; callers receive structured ApiError diagnostics.
 module.exports = {
   ApiError,
   RateBudget,

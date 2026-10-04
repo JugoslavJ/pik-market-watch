@@ -1,7 +1,7 @@
 # OLX dashboard viewer
 
 React, selectively imported Apache ECharts, TanStack Query and MapLibre GL render
-the four source dashboards (71 panels). Superset supplies login, permissions and the reporting API. Viewer navigation
+the four dashboards (71 panels). Superset supplies login, permissions and the reporting API. Viewer navigation
 contains only the four dashboards. Source definitions live in `superset/dashboards/`.
 
 Build and run with the existing service:
@@ -56,7 +56,7 @@ available. Browser data is never stored in persistent local storage.
 ```sh
 npm ci
 npm run build
-node ../superset/tests/check-viewer.cjs
+npm run test:browser
 node ../superset/tests/benchmark-viewer.cjs
 docker compose --profile superset --profile superset-ops run --rm --no-deps \
   --entrypoint python -v ./superset/validate_viewer.py:/app/validate_viewer.py:ro \
@@ -64,7 +64,8 @@ docker compose --profile superset --profile superset-ops run --rm --no-deps \
 ```
 
 Run the Docker command from the repository root. Browser scripts use installed
-Edge on Windows and the existing ignored Playwright installation in
-`data/superset-validation`; they read the login secret without printing it.
+Edge on Windows. Install Playwright with
+`npm install --prefix data/superset-validation --no-save playwright` from the
+repository root; they read the login secret without printing it.
 See [performance measurements](../superset/PERFORMANCE.md) for methodology and
 the remaining distance from the 100–200 ms target.

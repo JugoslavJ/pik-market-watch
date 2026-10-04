@@ -1,4 +1,4 @@
-"""Exercise deployment modes and failed backup/cutover behavior without live services."""
+"""Exercise Superset deployment gates and backup failures without live services."""
 import os
 from pathlib import Path
 import shutil
@@ -11,13 +11,13 @@ if not (ROOT / "scripts/deploy-stack.sh").exists():
     ROOT = Path("/repo")
 
 
-class TransitionContracts(unittest.TestCase):
+class DeploymentContracts(unittest.TestCase):
     def test_shell_assets_have_valid_syntax(self):
         for shell, file in [("bash", "scripts/deploy-stack.sh"),
                             ("bash", "scripts/superset-readiness.sh"),
                             ("bash", str(Path(__file__).resolve().parents[1] / "init.sh")),
                             ("bash", str(Path(__file__).resolve().parents[1] / "run-alert-checker.sh")),
-                            ("sh", "scripts/lib/dashboard-stack.sh"),
+                            ("sh", "scripts/lib/superset-stack.sh"),
                             ("sh", "db/backup.sh"), ("sh", "db/remote-restore.sh")]:
             result = subprocess.run([shell, "-n", str(ROOT / file)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -28,7 +28,7 @@ class TransitionContracts(unittest.TestCase):
         (self.root / "scripts/lib").mkdir(parents=True)
         (self.root / "config").mkdir()
         (self.root / "config/searches.json").write_text("{}")
-        for name in ("deploy-stack.sh", "superset-readiness.sh", "lib/dashboard-stack.sh"):
+        for name in ("deploy-stack.sh", "superset-readiness.sh", "lib/superset-stack.sh"):
             shutil.copy(ROOT / "scripts" / name, self.root / "scripts" / name)
         self.bin = self.root / "bin"
         self.bin.mkdir()
@@ -44,19 +44,17 @@ esac
         docker.chmod(0o755)
         self.env = {**os.environ, "PATH": str(self.bin) + ":" + os.environ["PATH"],
                     "DEPLOY_DIR": str(self.root), "COMMAND_LOG": str(self.root / "commands")}
-        for key in ("DASHBOARD_MODE", "COMPOSE_PROFILES", "COMPOSE_FILE", "SUPERSET_ROOT_URL", "SUPERSET_DOMAIN", "SUPERSET_COOKIE_SECURE"):
+        for key in ("COMPOSE_PROFILES", "COMPOSE_FILE", "SUPERSET_ROOT_URL", "SUPERSET_DOMAIN", "SUPERSET_COOKIE_SECURE"):
             self.env.pop(key, None)
 
     def tearDown(self):
         self.tmp.cleanup()
 
-    def configure(self, mode):
+    def configure(self):
         secrets = ["POSTGRES_PASSWORD", "POSTGRES_MIGRATOR_PASSWORD", "POSTGRES_APP_PASSWORD",
                    "POSTGRES_REPORTING_PASSWORD", "POSTGRES_BACKUP_PASSWORD",
                    "SUPERSET_META_PASSWORD", "SUPERSET_ADMIN_PASSWORD", "SUPERSET_SECRET_KEY"]
         lines = [f"{key}=fixture-secret" for key in secrets]
-        if mode:
-            lines.append(f"DASHBOARD_MODE={mode}")
         lines.extend(["SUPERSET_BIND=127.0.0.1", "SUPERSET_DOMAIN=dashboard.example.com",
                       "SUPERSET_ROOT_URL=https://dashboard.example.com/", "SUPERSET_COOKIE_SECURE=true"])
         (self.root / ".env").write_text("\n".join(lines) + "\n")
@@ -66,26 +64,20 @@ esac
                               env=self.env, capture_output=True, text=True)
 
     def test_superset_preflight_checks_configuration(self):
-        self.configure("superset")
-        result = self.run_deploy("--check")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual((self.root / "commands").read_text().strip(), "compose config --quiet")
-
-    def test_existing_host_defaults_to_superset(self):
-        self.configure(None)
+        self.configure()
         result = self.run_deploy("--check")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.root / "commands").read_text().strip(), "compose config --quiet")
 
     def test_public_bind_fails_before_any_docker_operation(self):
-        self.configure("superset")
+        self.configure()
         file = self.root / ".env"
         file.write_text(file.read_text().replace("SUPERSET_BIND=127.0.0.1", "SUPERSET_BIND=0.0.0.0"))
         self.assertNotEqual(self.run_deploy("--check").returncode, 0)
         self.assertFalse((self.root / "commands").exists())
 
     def test_failed_viewer_parity_gate_prevents_publication(self):
-        self.configure("superset")
+        self.configure()
         self.env["MOCK_FAIL_PARITY"] = "1"
         result = self.run_deploy()
         self.assertNotEqual(result.returncode, 0)
@@ -94,7 +86,7 @@ esac
         self.assertNotIn("superset-access --publish", commands)
 
     def test_deploy_builds_before_starting_and_checks_before_publication(self):
-        self.configure("superset")
+        self.configure()
         result = self.run_deploy()
         self.assertEqual(result.returncode, 0, result.stderr)
         commands = (self.root / "commands").read_text()
@@ -102,21 +94,13 @@ esac
         self.assertLess(commands.index("compose build superset"), commands.index("up -d --build db db-backup superset"))
         self.assertLess(commands.index("benchmark_viewer.py"), commands.index("superset-access --publish"))
 
-    def test_only_the_new_dashboard_profile_is_selected(self):
-        self.configure("superset")
-        command = '. scripts/lib/dashboard-stack.sh; configure_dashboard_stack; printf "%s|%s|" "$COMPOSE_FILE" "$COMPOSE_PROFILES"; dashboard_services'
+    def test_superset_profile_and_services_are_selected(self):
+        self.configure()
+        command = '. scripts/lib/superset-stack.sh; configure_superset_stack; printf "%s|%s|" "$COMPOSE_FILE" "$COMPOSE_PROFILES"; stack_services'
         result = subprocess.run(["sh", "-c", command], cwd=self.root, env=self.env,
                                 capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout.strip(), "docker-compose.yml|superset|superset")
-
-    def test_unsupported_modes_are_rejected_before_docker_operations(self):
-        for mode in ("other", "parallel"):
-            self.configure(mode)
-            result = self.run_deploy("--check")
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn("Only Superset is supported", result.stderr)
-            self.assertFalse((self.root / "commands").exists())
+        self.assertEqual(result.stdout.strip(), "docker-compose.yml|superset|db db-backup superset superset-alert-check")
 
 
 class BackupContracts(unittest.TestCase):
@@ -135,7 +119,6 @@ class BackupContracts(unittest.TestCase):
             file.chmod(0o755)
         self.env = {**os.environ, "PATH": str(self.root / "bin") + ":" + os.environ["PATH"],
                     "BACKUP_DIR": str(self.root / "backups"), "SUPERSET_HOME": str(self.root / "home"),
-                    "DASHBOARD_MODE": "superset",
                     "BACKUP_RETENTION_DAYS": "0", "SUPERSET_META_DB": "superset_meta"}
 
     def tearDown(self):

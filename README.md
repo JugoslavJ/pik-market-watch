@@ -9,12 +9,13 @@ The `scrape` profile is optional. It can run on the same machine as the dashboar
 ```bash
 cp .env.example .env
 cp config/searches.example.json config/searches.json
+docker volume create olx-price-ext_pgdata_pg18
 docker compose up -d --build
 docker compose run --rm superset-seed
 docker compose run --rm superset-access
 ```
 
-Set strong values for the PostgreSQL and Superset secrets in `.env` before starting. The example selects `DASHBOARD_MODE=superset` and `COMPOSE_PROFILES=superset`, starting PostgreSQL, Superset, the alert checker, and the backup sidecar. To also schedule scraping, use `COMPOSE_PROFILES=superset,scrape`, or run a one-off scrape:
+Set strong values for the PostgreSQL and Superset secrets in `.env` before starting. The volume command uses the default `POSTGRES_VOLUME_NAME`; use your configured name if different. The example selects `COMPOSE_PROFILES=superset`, starting PostgreSQL, Superset, the alert checker, and the backup sidecar. To also schedule scraping, use `COMPOSE_PROFILES=superset,scrape`, or run a one-off scrape:
 
 ```bash
 docker compose --profile scrape run --rm scraper node src/index.js --once
@@ -38,7 +39,7 @@ Open the dashboards at `http://127.0.0.1:3000/`; sign in with the Superset accou
 
 The [React viewer](dashboard-viewer/README.md) renders all 71 source panels and keeps existing charts visible during updates. Superset supplies authentication, permissions and the read-only reporting API. Metadata lives in `superset_meta`; analytical queries use `olx_reporting`.
 
-Superset is the only dashboard provider and `superset` is the only dashboard mode. Definitions in `superset/dashboards/` supply the SQL/panel contract. The [instance deployment runbook](docs/SUPERSET_CUTOVER.md) covers port 3000, viewer access, backups and HTTPS verification.
+Superset supplies the dashboard service. Definitions in `superset/dashboards/` supply the SQL/panel contract. The [instance deployment runbook](docs/DEPLOYMENT.md) covers port 3000, viewer access, backups and HTTPS verification.
 
 ## Configure searches
 
@@ -64,10 +65,9 @@ npm run test:integration
 npm run replay:response -- --id=123
 npm run lint
 npm run format:check
-npm run lint:syntax
 ```
 
-`npm run fixtures` refreshes recorded mapper fixtures and `node scripts/check-api.js` is a live API probe. The integration suite uses a disposable PostgreSQL container.
+`npm run fixtures` refreshes recorded API fixtures and `node scripts/check-api.js` is a live API probe. The integration suite uses a disposable PostgreSQL container.
 
 ## Documentation
 

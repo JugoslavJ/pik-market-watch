@@ -1,7 +1,6 @@
 "use strict";
 //
-// Search writes, lifecycle transitions and canonical evidence are committed at
-// one transaction boundary. Historical imports use the same event writer.
+// Search writes and lifecycle transitions share one transaction boundary.
 
 const { Pool } = require("pg");
 const installRawResponseMethods = require("./db/raw-responses");

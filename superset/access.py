@@ -1,4 +1,4 @@
-"""Assign scoped viewer access; publishing is an explicit cutover action."""
+"""Assign scoped viewer access; publication follows deployment readiness checks."""
 
 import argparse
 import json

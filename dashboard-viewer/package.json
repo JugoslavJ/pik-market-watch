@@ -1,12 +1,12 @@
 {
-  "name": "olx-dashboard-viewer",
+  "name": "pik-market-watch-dashboard-viewer",
   "private": true,
   "version": "1.0.0",
   "type": "module",
   "scripts": {
     "build": "vite build",
     "dev": "vite",
-    "test": "node ../superset/tests/check-viewer.cjs"
+    "test:browser": "node ../superset/tests/check-viewer.cjs"
   },
   "dependencies": {
     "@tanstack/react-query": "5.104.1",

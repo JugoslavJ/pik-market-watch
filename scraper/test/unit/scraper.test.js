@@ -6,7 +6,8 @@
 // the real parser and stats math stay in the loop on purpose.
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { scrapeSearch, pagesInWave } = require("../../src/scraper");
+const { scrapeSearch } = require("../../src/scraper");
+const { pagesInWave } = require("../../src/search/outcomes");
 const { RATE_RESERVE, RateBudget } = require("../../src/api");
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
@@ -44,9 +45,9 @@ const baseCfg = (overrides) => ({
   pageDelayMs: 0,
   perPage: 40,
   apiTimeoutMs: 5,
-  maxGeoFetches: 25,
-  geoConcurrency: 2,
-  geoDelayMs: 0,
+  maxDetailFetches: 25,
+  detailConcurrency: 2,
+  detailDelayMs: 0,
   ...overrides,
 });
 
@@ -73,13 +74,16 @@ function fakeDb(queueImpl) {
     async archiveSearchResponse(row) {
       rec.archived = [...(rec.archived || []), row];
     },
+    async archiveResponseDiagnostic(row) {
+      rec.diagnostics = [...(rec.diagnostics || []), row];
+    },
     async recordScrapePageManifest(row) {
       rec.pageManifests.push(row);
     },
     async commitSearchIngestion(payload) {
       rec.savedCards = payload.cards;
       rec.upserts.push({ ...payload.search, ...payload.run });
-      rec.refreshed.push(payload.membership.articleIds);
+      rec.refreshed.push(payload.cards.map((card) => card.articleId));
       // The real commitSearchIngestion finalizes a successful run in the same
       // transaction as the authoritative ingestion. Mirror that contract so
       // the double-finalization regression is visible in these unit tests.
@@ -458,7 +462,7 @@ test("enrichment merge: null/empty detail fields never clobber known facts", asy
   assert.equal(row.apiPriceHistory, undefined);
 });
 
-test("durable detail jobs claim work and record success or retryable failure", async () => {
+test("detail failures retain diagnostics while successful details are enriched", async () => {
   const db = fakeDb(() => ({
     pending: [
       { id: 50, unpinned: false, missingSqm: false, neverDetailed: true },
@@ -466,21 +470,6 @@ test("durable detail jobs claim work and record success or retryable failure", a
     ],
     total: 2,
   }));
-  const claims = [];
-  const outcomes = [];
-  db.requeueExpiredDetailJobs = async () => 0;
-  db.claimDetailJobs = async (ids, limit, options) => {
-    claims.push({ ids, limit, options });
-    return ids.map((articleId, index) => ({
-      articleId,
-      attemptCount: index + 1,
-      leaseUntil: new Date(),
-    }));
-  };
-  db.recordDetailJobOutcome = async (articleId, outcome) => {
-    outcomes.push({ articleId, ...outcome });
-  };
-
   const fetchPage = pageFetcher({
     1: {
       items: [rawCard(50), rawCard(51)],
@@ -510,27 +499,18 @@ test("durable detail jobs claim work and record success or retryable failure", a
   );
 
   assert.equal(result.enriched, 1);
-  assert.deepEqual(claims, [
-    {
-      ids: [50, 51],
-      limit: 2,
-      options: { leaseMinutes: 30, allowSucceeded: true },
-    },
-  ]);
+  assert.deepEqual(db.rec.detailAttempts, [50, 51]);
   assert.deepEqual(
-    outcomes.map(({ articleId, outcome, httpStatus }) => ({
-      articleId,
-      outcome,
-      httpStatus,
-    })),
-    [
-      { articleId: 51, outcome: "retryable_failure", httpStatus: 503 },
-      { articleId: 50, outcome: "success", httpStatus: undefined },
-    ],
+    db.rec.enriched.map((row) => row.articleId),
+    [50],
   );
+  assert.equal(db.rec.diagnostics.length, 1);
+  assert.equal(db.rec.diagnostics[0].articleId, 51);
+  assert.equal(db.rec.diagnostics[0].error.status, 503);
+  assert.deepEqual(db.rec.finishedRuns, [{ status: "ok", pages: 1, cards: 2 }]);
 });
 
-test("MAX_GEO_FETCHES=0 disables the enrichment pass entirely", async () => {
+test("MAX_DETAIL_FETCHES=0 disables the enrichment pass entirely", async () => {
   let queueCalled = false;
   const db = fakeDb(() => {
     queueCalled = true;
@@ -541,7 +521,7 @@ test("MAX_GEO_FETCHES=0 disables the enrichment pass entirely", async () => {
   });
   const res = await run(
     db,
-    { maxGeoFetches: 0 },
+    { maxDetailFetches: 0 },
     { fetchSearchPage: fetchPage },
   );
 

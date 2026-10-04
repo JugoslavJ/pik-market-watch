@@ -183,7 +183,9 @@ services:
       MIGRATIONS_ON_STARTUP: ${MIGRATIONS_ON_STARTUP:-0}
       SCRAPE_INTERVAL_MINUTES: ${SCRAPE_INTERVAL_MINUTES:-720}
       DETAIL_REFRESH_DAYS: ${DETAIL_REFRESH_DAYS:-7}
-      DETAIL_JOB_LEASE_MINUTES: ${DETAIL_JOB_LEASE_MINUTES:-30}
+      MAX_DETAIL_FETCHES: ${MAX_DETAIL_FETCHES:-25}
+      DETAIL_CONCURRENCY: ${DETAIL_CONCURRENCY:-2}
+      DETAIL_DELAY_MS: ${DETAIL_DELAY_MS:-1200}
       RAW_RESPONSE_RETENTION_COUNT: ${RAW_RESPONSE_RETENTION_COUNT:-3}
       ABANDONED_RUN_AFTER_MINUTES: ${ABANDONED_RUN_AFTER_MINUTES:-180}
       HEALTH_BIND: ${HEALTH_BIND:-0.0.0.0}
@@ -330,7 +332,7 @@ services:
     cpus: 0.5
     networks: [backend]
 
-  # Invoke every 15 minutes from the host scheduler. The checker stores its
+  # Runs every 15 minutes in the alert-checker service. The checker stores its
   # hold/firing state in superset_home and posts transitions only when a
   # webhook is configured.
   superset-alert-check:
@@ -397,7 +399,6 @@ services:
       PGDATABASE: ${POSTGRES_DB:-olx}
       SUPERSET_META_DB: ${SUPERSET_META_DB:-superset_meta}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
-      DASHBOARD_MODE: ${DASHBOARD_MODE:-superset}
     volumes:
       - ./backups:/backups
       - ./db/backup.sh:/usr/local/bin/backup.sh:ro
@@ -425,12 +426,8 @@ services:
       start_period: 5m
 
 volumes:
-  # Explicit names: Compose derives them from the repo FOLDER name when left
-  # implicit, so renaming olx-price-ext → pik-market-watch would otherwise
-  # abandon the existing database volumes on the next `up`.
+  # Stable deployed volume identities preserve data across checkout renames.
   pgdata:
-    # PostgreSQL 18 uses a new volume after the 16 -> 18 logical migration.
-    # The old olx-price-ext_pgdata volume is intentionally retained for rollback.
     name: ${POSTGRES_VOLUME_NAME:-olx-price-ext_pgdata_pg18}
     external: true
   superset_home:

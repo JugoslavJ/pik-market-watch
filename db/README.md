@@ -3,7 +3,11 @@
 `init-lean/` is the sole first-boot schema baseline. Compose mounts it for both
 PostgreSQL initialization and the checksum-managed migrator. The scraper writes
 to the `lean` schema; `public` contains PostgreSQL extension objects and the
-migration ledger.
+migration ledger. Compose uses an external PostgreSQL volume selected by
+`POSTGRES_VOLUME_NAME` (default `olx-price-ext_pgdata_pg18`). Create that volume
+with `docker volume create olx-price-ext_pgdata_pg18` before first startup.
+The deployed database and Superset home volume names remain stable across
+checkout renames.
 
 The numbered SQL files run in lexical order:
 

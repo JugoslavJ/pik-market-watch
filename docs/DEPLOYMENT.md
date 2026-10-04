@@ -8,21 +8,20 @@ permissions, canonical datasets and the read-only reporting API.
 - Host listener: `127.0.0.1:3000`.
 - Superset container/network listener: `8088`.
 - `/` opens Market Overview; navigation contains Home, Overview, Exits and Health.
-- The existing public hostname and Cloudflare origin `http://127.0.0.1:3000`
-  can stay unchanged. If the tunnel was moved to 8088, change it back to 3000.
+- Cloudflare Tunnel forwards the public dashboard hostname to
+  `http://127.0.0.1:3000`.
 
 Source JSON in `superset/dashboards/` supplies the SQL/panel contract for all
 71 panels and their native Superset charts.
 
 ## Prepare the instance
 
-1. Back up the current `olx` database, Superset metadata (if already present),
+1. Back up the current `olx` database, Superset metadata,
    and application state. Keep the existing `SUPERSET_SECRET_KEY` when upgrading
    an existing Superset installation.
 2. In the instance's ignored `.env`, use the current dashboard hostname:
 
    ```dotenv
-   DASHBOARD_MODE=superset
    COMPOSE_PROFILES=superset
    SUPERSET_BIND=127.0.0.1
    SUPERSET_DOMAIN=dashboards.example.com
@@ -31,11 +30,8 @@ Source JSON in `superset/dashboards/` supplies the SQL/panel contract for all
    ```
 
    Configure the required metadata, reporting, backup and administrator
-   credentials from `.env.example`. Preflight requires `superset` as the
-   dashboard mode.
-3. Commit the complete implementation, including `dashboard-viewer/`,
-   `superset/`, deployment helpers and the additive query-index migration.
-   GitHub Actions ships tracked files only. Preserve the instance's ignored
+   credentials from `.env.example`.
+3. GitHub Actions ships tracked files only. Preserve the instance's ignored
    `.env`, search configuration and data volumes.
 4. Configure the GitHub production environment's existing OCI deployment
    secrets and pinned host key as described in [OPERATIONS.md](OPERATIONS.md).
@@ -67,7 +63,7 @@ The deployment fails if its migration, startup or acceptance gates fail.
 
 ## Verify the actual viewer
 
-Readiness checks the new presentation's data path:
+Readiness checks the viewer data path:
 
 ```bash
 bash scripts/superset-readiness.sh --snapshot
@@ -75,7 +71,7 @@ curl -f http://127.0.0.1:3000/health
 systemctl status cloudflared
 ```
 
-The gate compares 266 results across all 71 panels against the source SQL,
+The gate compares all 71 panels against the source SQL,
 benchmarks all four authenticated dashboard APIs (default and room-filtered
 market/exit states), checks temporary viewer permissions and revoked access,
 and verifies backups. API p95 budgets remain 2 seconds fresh / 1 second cached.
@@ -85,8 +81,8 @@ Through the existing public HTTPS hostname, verify:
 
 - `/` opens the viewer after login, and navigation shows only four dashboards.
 - A real `OLX Viewer` account can open each board, with Secure session cookies.
-- Native filters and chart clicks intersect; clearing restores the prior data.
-- Old chart values remain visible during updates; expired sessions offer sign-in.
+- Sidebar filters and chart clicks intersect; clearing restores the prior data.
+- Previous chart values remain visible during updates; expired sessions offer sign-in.
 - Maps fetch vector tiles, listing links work, and CSV/sorting work on tables.
 - Phone layouts, notification firing/recovery, and a complete scrape/sync cycle.
 

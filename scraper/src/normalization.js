@@ -241,41 +241,7 @@ function historyDate(entry) {
   return normalizeUnixSeconds(entry.created_at ?? entry.date);
 }
 
-/**
- * Normalize API and stored history into sorted, exact-deduplicated events.
- * Invalid prices/timestamps are omitted from the canonical timeline.  The
- * caller can use normalizeHistoryWithRejections when quarantine information is
- * needed; no import timestamp is ever substituted.
- */
-function normalizePriceHistory(history, { dealType, now = Date.now() } = {}) {
-  const input = Array.isArray(history) ? history : parseJsonArray(history);
-  if (!input) return [];
-  const currentSeconds = Math.floor(new Date(now).getTime() / 1000);
-  const events = [];
-  for (const entry of input) {
-    const date = historyDate(entry);
-    if (date === null || date > currentSeconds) continue;
-    const quality = normalizePrice(entry.price, dealType);
-    if (quality.state !== PRICE_STATES.VALID) continue;
-    const currency = priceCurrencyOf(entry);
-    events.push({
-      price: quality.price,
-      date,
-      ...(currency ? { currency } : {}),
-    });
-  }
-
-  const seen = new Set();
-  return events
-    .sort((a, b) => a.date - b.date || a.price - b.price)
-    .filter((event) => {
-      const key = `${event.date}:${event.price}:${event.currency || ""}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-}
-
+// Normalize history with explicit rejection reasons and exact deduplication.
 function normalizeHistoryWithRejections(
   history,
   { dealType, now = Date.now() } = {},
@@ -342,6 +308,5 @@ module.exports = {
   normalizeHistoryWithRejections,
   normalizeId,
   normalizePrice,
-  normalizePriceHistory,
   priceCurrencyOf,
 };

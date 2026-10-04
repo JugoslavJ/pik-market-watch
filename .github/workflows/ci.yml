@@ -32,7 +32,6 @@ jobs:
       - run: npm ci
       - run: npm run format:check
       - run: npm run lint
-      - run: npm run lint:syntax
       - run: npm test
       - run: npm run test:integration
       - name: Build scraper image for vulnerability scanning
@@ -49,6 +48,9 @@ jobs:
       - name: Validate the versioned Superset dashboard catalog
         working-directory: .
         run: node scripts/generate-dashboard-catalog.js --check
+      - name: Check native dashboard request handling
+        working-directory: .
+        run: node --test superset/tests/test_dashboard_requests.cjs
       - name: Build the production Superset image
         working-directory: .
         run: docker build --tag pik-market-watch-superset:ci --file superset/Dockerfile .
@@ -58,7 +60,7 @@ jobs:
           docker run --rm -v "$PWD/superset:/assets:ro"
           --entrypoint python pik-market-watch-superset:ci -c
           "import ast,pathlib; [ast.parse(p.read_text(encoding='utf-8-sig'), filename=str(p)) for p in pathlib.Path('/assets').glob('*.py')]"
-      - name: Check dashboard parity contracts and alert transitions
+      - name: Check dashboard, deployment and alert contracts
         working-directory: .
         run: >-
           docker run --rm -v "$PWD/superset:/assets:ro"

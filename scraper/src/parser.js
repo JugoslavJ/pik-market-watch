@@ -144,10 +144,6 @@ const CHAR_CODE_HANDLERS = {
 };
 
 /** Article id from a listing URL (/artikal/<id>…). */
-function extractArticleId(url) {
-  const m = String(url || "").match(/\/artikal\/(\d+)/i);
-  return m && normalizeId(m[1]) !== null ? m[1] : null;
-}
 
 // ── shared bits ──────────────────────────────────────────────────────────────
 
@@ -404,12 +400,7 @@ function parseListingDetail(json, fallbackId) {
   return detail;
 }
 
-// Public surface = what callers consume: db.js (extractArticleId), scraper.js
-// (parseSearchItem), api.js (parseListingDetail), scripts/check-api.js +
-// unit tests (parseSearchPage). inBiH/numOrNull/CHAR_CODE_HANDLERS/BIH_BBOX
-// stay module-internal — no external consumer.
 module.exports = {
-  extractArticleId,
   PARSER_BUILD_VERSION,
   parseSearchItem,
   parseSearchItems,

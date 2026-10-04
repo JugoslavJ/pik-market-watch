@@ -23,8 +23,8 @@ for f in .env config/searches.json; do
   fi
 done
 
-. scripts/lib/dashboard-stack.sh
-configure_dashboard_stack
+. scripts/lib/superset-stack.sh
+configure_superset_stack
 case "${1:-}" in ''|--check) ;; *) echo "Usage: deploy-stack.sh [--check]" >&2; exit 2 ;; esac
 
 require_secret() {
@@ -61,12 +61,10 @@ validate_origin() {
     echo "✗ ${prefix}_COOKIE_SECURE must be true in production." >&2; exit 1
   fi
 }
-if [ "$HAS_SUPERSET" = true ]; then
-  validate_origin SUPERSET
-fi
+validate_origin SUPERSET
 docker compose config --quiet
 if [ "${1:-}" = --check ]; then
-  echo "✓ Production preflight passed ($DASHBOARD_MODE); no services changed."
+  echo "✓ Production preflight passed (Superset); no services changed."
   exit 0
 fi
 
@@ -102,22 +100,18 @@ docker compose --profile migrate run --build --rm migrator
 echo "▶ Applying database role grants"
 docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
 
-if [ "$HAS_SUPERSET" = true ]; then
-  echo "▶ Upgrading Superset metadata and syncing security permissions"
-  docker compose run --build --rm superset-init
-fi
+echo "▶ Upgrading Superset metadata and syncing security permissions"
+docker compose run --build --rm superset-init
 
 # Build the dashboard service and its scheduled alert checker.
 docker compose build superset superset-alert-check
 
-# These names come only from the validated mode helper.
+# These names come only from the shared Superset helper.
 read -r -a services <<< "$(stack_services)"
-echo "▶ Starting $DASHBOARD_MODE dashboard stack"
+echo "▶ Starting Superset dashboard stack"
 docker compose up -d --build "${services[@]}"
-if [ "$HAS_SUPERSET" = true ]; then
-  docker compose run --build --rm superset-seed
-  docker compose run --rm superset-access
-fi
+docker compose run --build --rm superset-seed
+docker compose run --rm superset-access
 
 echo "▶ Taking and verifying a fresh database and application-state backup"
 docker compose run --rm --no-deps db-backup --once
@@ -142,5 +136,5 @@ done
 
 bash scripts/superset-readiness.sh
 docker compose run --rm superset-access --publish
-echo "✓ Stack healthy — deployed ${GIT_SHA:-unknown} ($DASHBOARD_MODE)."
-echo "  React dashboards use 127.0.0.1:3000; the existing port-3000 tunnel origin can stay."
+echo "✓ Stack healthy — deployed ${GIT_SHA:-unknown} (Superset)."
+echo "  React dashboards use the Cloudflare Tunnel origin at 127.0.0.1:3000."

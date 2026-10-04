@@ -27,9 +27,9 @@ function nativeViz(panel) {
 const lines = [
   "# Superset dashboard catalog", "",
   "Generated from `superset/dashboards/*.json` and the Superset alert checker by `scripts/generate-dashboard-catalog.js`.", "",
-  "Every row identifies its source owner and exact query for same-snapshot comparison. Each native chart is named Owner / source panel on a Superset dashboard with the same title. superset/parity.py translates source variables and time macros and preserves the grouping and widths, with chart heights adjusted for readable labels. Maps use dark CARTO vector basemaps. Production comparison and acceptance remain separate gates.", "",
-  "| Owner / source panel | Source time and filters | Unit / links | Superset target | Expected result / comparison query | Status |",
-  "|---|---|---|---|---|---|",
+  "Every row identifies its source owner and exact query for same-snapshot comparison. Each native chart is named Owner / source panel on a Superset dashboard with the same title. superset/parity.py translates source variables and time macros and preserves the grouping and widths, with chart heights adjusted for readable labels. Maps use dark CARTO vector basemaps. Deployment readiness validates the viewer against these queries.", "",
+  "| Owner / source panel | Source time and filters | Unit / links | Superset target | Expected result / comparison query |",
+  "|---|---|---|---|---|",
 ];
 let count = 0;
 for (const file of fs.readdirSync(dir).filter((name) => name.endsWith(".json")).sort()) {
@@ -63,7 +63,7 @@ for (const file of fs.readdirSync(dir).filter((name) => name.endsWith(".json")).
     const panelTime = panel.timeFrom ? `${panel.timeFrom} to now` : dashboardTime;
     const filters = `vars: ${vars}; time: ${panelTime}; panel time shift: ${panel.timeShift || "none"}`;
     const compare = `<details><summary>SQL</summary><code>${queryCell(query)}</code></details>`;
-    lines.push(`| \`${inline(owner)} / ${inline(title)}\` | ${inline(filters)} | ${inline(unit)} / ${inline(links)} | \`${targetDataset(dashboard, panel) + " / " + nativeViz(panel)}\` | ${compare} | native counterpart implemented; production comparison pending |`);
+    lines.push(`| \`${inline(owner)} / ${inline(title)}\` | ${inline(filters)} | ${inline(unit)} / ${inline(links)} | \`${targetDataset(dashboard, panel) + " / " + nativeViz(panel)}\` | ${compare} |`);
     count += 1;
   }
 }
@@ -71,8 +71,8 @@ const alerts = [
   ["No successful scrape in 26 h", "10m", "count(ok runs) < 1", "SELECT count(*)::int AS ok_runs FROM lean.scrape_runs WHERE status = 'ok' AND started_at > now() - interval '26 hours';"],
   ["Saved search stale or failing", "15m", "count(stale searches) >= 1", "SELECT ss.search_key, ss.name, success.finished_at AS last_success_at FROM lean.saved_searches ss LEFT JOIN LATERAL (SELECT r.finished_at FROM lean.scrape_runs r WHERE r.search_key = ss.search_key AND r.status = 'ok' AND r.is_complete = TRUE AND r.finished_at IS NOT NULL ORDER BY r.finished_at DESC LIMIT 1) success ON TRUE WHERE success.finished_at IS NULL OR success.finished_at < now() - interval '26 hours';"],
 ];
-lines.push("", "## Alert predicates", "", "| Owner / rule | Evaluation | Superset target | Expected result / comparison query | Status |", "|---|---|---|---|---|");
-for (const [title, hold, threshold, query] of alerts) lines.push(`| \`Pipeline / ${title}\` | \`15 min scheduled check; hold ${hold}; ${threshold}\` | \`scheduled checker + Health dashboard\` | <details><summary>SQL</summary><code>${queryCell(query)}</code></details> | checker implemented; production comparison pending |`);
+lines.push("", "## Alert predicates", "", "| Owner / rule | Evaluation | Superset target | Expected result / comparison query | Status |", "|---|---|---|---|");
+for (const [title, hold, threshold, query] of alerts) lines.push(`| \`Pipeline / ${title}\` | \`15 min scheduled check; hold ${hold}; ${threshold}\` | \`scheduled checker + Health dashboard\` | <details><summary>SQL</summary><code>${queryCell(query)}</code></details> |`);
 lines.push("", `**Inventory:** ${count} non-row panels and ${alerts.length} alert rules.`, "", "Closure semantics: observed listing exit, not confirmed sale; snapshot price is the last recorded asking price. All monetary datasets return BAM values only and label rent values as monthly rent. Operational datasets bypass chart caching (-1 second timeout); market datasets use a 10-minute cache.", "");
 const rendered = lines.join("\n");
 if (process.argv.includes("--check")) {

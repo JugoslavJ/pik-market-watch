@@ -19,7 +19,6 @@ const path = require("node:path");
 const NAME = "olx-pg-test";
 const PORT = process.env.TEST_DB_PORT || "55432";
 const INIT_DIR = path.resolve(__dirname, "..", "..", "db", "init-lean");
-const LEAN_TESTS = new Set(["db-lean-ingestion.test.js", "migrate.test.js"]);
 const IMAGE =
   process.env.TEST_POSTGRES_IMAGE ||
   "ghcr.io/baosystems/postgis:18-3.6@sha256:4117c8beae9081e76a23a1577c64d05260a61fb0a3c212f37596054ef4c190d8";
@@ -116,7 +115,7 @@ try {
   // versions and platforms.
   const files = fs
     .readdirSync(path.resolve("test", "integration"))
-    .filter((file) => LEAN_TESTS.has(file))
+    .filter((file) => file.endsWith(".test.js"))
     .filter(
       (file) =>
         !process.env.TEST_FILE_PATTERN ||

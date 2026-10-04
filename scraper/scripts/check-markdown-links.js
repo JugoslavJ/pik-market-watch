@@ -10,7 +10,19 @@ const markdown = [];
 
 function walk(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === ".git" || entry.name === "node_modules") continue;
+    if (
+      [
+        ".git",
+        ".codex",
+        "node_modules",
+        "data",
+        "backups",
+        "logs",
+        "dist",
+        "coverage",
+      ].includes(entry.name)
+    )
+      continue;
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) walk(full);
     else if (entry.isFile() && entry.name.toLowerCase().endsWith(".md"))

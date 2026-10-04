@@ -7,7 +7,6 @@ const {
   normalizeHistoryWithRejections,
 } = require("../../src/normalization");
 const { parseSearchItem, parseListingDetail } = require("../../src/parser");
-const { buildSearchObservations } = require("../../src/search-lifecycle");
 
 test("currency requires source evidence and preserves foreign/conflicting assertions", () => {
   assert.equal(priceCurrencyOf({ price: 600 }), null);
@@ -25,7 +24,7 @@ test("currency requires source evidence and preserves foreign/conflicting assert
   );
 });
 
-test("search and detail carry currency into assertion and state evidence", () => {
+test("search and detail retain source currency evidence", () => {
   const payload = {
     id: 123,
     title: "Rental apartment",
@@ -35,13 +34,6 @@ test("search and detail carry currency into assertion and state evidence", () =>
   };
   const card = parseSearchItem(payload);
   assert.equal(card.priceCurrency, "BAM");
-  assert.equal(
-    buildSearchObservations([card], {
-      searchKey: "test",
-      category: "apartments",
-    })[0].filterAttributes.currency,
-    "BAM",
-  );
   assert.equal(parseListingDetail(payload).priceCurrency, "BAM");
   assert.equal(
     parseListingDetail({ ...payload, display_price: undefined }).priceCurrency,

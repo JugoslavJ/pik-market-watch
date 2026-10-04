@@ -9,10 +9,13 @@ Create local configuration and searches before starting the stack:
 ```bash
 cp .env.example .env
 cp config/searches.example.json config/searches.json
+docker volume create olx-price-ext_pgdata_pg18
 docker compose up -d --build
 docker compose run --rm superset-seed
 docker compose run --rm superset-access
 ```
+
+The volume command uses the default `POSTGRES_VOLUME_NAME`; use your configured name if different.
 
 `.env.example` intentionally leaves passwords and secret keys blank. Set `POSTGRES_PASSWORD`, the four `POSTGRES_*_PASSWORD` role credentials, `SUPERSET_META_PASSWORD`, `SUPERSET_ADMIN_PASSWORD`, and `SUPERSET_SECRET_KEY` before starting or deploying. The deployment preflight rejects blank and placeholder `change-me*` values. Use distinct credentials and URL-safe database passwords such as `openssl rand -hex 24`.
 
@@ -33,7 +36,6 @@ docker compose run --rm superset-access
 | `HEALTH_BIND`                                            | `127.0.0.1` bare-metal / `0.0.0.0` Compose | Health listener bind address. Compose needs all-interface binding inside the container; the published host port remains loopback-only.                |
 | `SCRAPE_INTERVAL_MINUTES`                                |                                      `720` | Scheduled scraper cadence when the `scrape` profile is enabled.                                                                                       |
 | `DETAIL_REFRESH_DAYS`                                    |                                        `7` | Age at which successful detail evidence becomes eligible for refresh.                                                                                 |
-| `DETAIL_JOB_LEASE_MINUTES`                               |                                       `30` | Database lease duration for an in-flight durable detail job (maximum 24 hours).                                                                       |
 | `RAW_RESPONSE_RETENTION_COUNT`                           |                                        `3` | Newest raw search/detail responses retained per request kind and URL. Maintenance removes older rows.                                                 |
 | `ABANDONED_RUN_AFTER_MINUTES`                            |                                      `180` | Age after which startup marks an unfinished `running` scrape as abandoned.                                                                            |
 | `RATE_LIMIT_COOLDOWN_MS`                                 |                                    `65000` | Fallback pause when the upstream rate-limit window is low and no reset is advertised.                                                                 |
@@ -54,7 +56,7 @@ writer/reporting grants, and creates or repairs the separately owned
 `superset_meta` database. Do this before starting dashboard services or the
 scraper with the new credentials.
 
-Search configuration is read from `config/searches.json`; `SEARCH_URLS` is an environment override for a bare scraper process or an explicit `docker compose run -e SEARCH_URLS=...` invocation. The scraper also accepts `SCRAPE_USER_AGENT`, `HEALTH_PORT`, and pacing/health variables (`MAX_PAGES`, `CONCURRENCY`, `PAGE_DELAY_MS`, `API_PER_PAGE`, `API_TIMEOUT_MS`, `MAX_GEO_FETCHES`, `GEO_CONCURRENCY`, `GEO_DELAY_MS`, `SCRAPE_MIN_GAP_MINUTES`, `ABANDONED_RUN_AFTER_MINUTES`, `DETAIL_JOB_LEASE_MINUTES`, and `HEALTH_FAILURE_THRESHOLD`). Compose injects `ABANDONED_RUN_AFTER_MINUTES` and `DETAIL_JOB_LEASE_MINUTES`; pass the other tuning variables explicitly with `docker compose run -e NAME=value` or set them in a supported deployment change.
+Search configuration is read from `config/searches.json`; `SEARCH_URLS` is an environment override for a bare scraper process or an explicit `docker compose run -e SEARCH_URLS=...` invocation. The scraper also accepts `SCRAPE_USER_AGENT`, `HEALTH_PORT`, and pacing/health variables (`MAX_PAGES`, `CONCURRENCY`, `PAGE_DELAY_MS`, `API_PER_PAGE`, `API_TIMEOUT_MS`, `MAX_DETAIL_FETCHES`, `DETAIL_CONCURRENCY`, `DETAIL_DELAY_MS`, `SCRAPE_MIN_GAP_MINUTES`, `ABANDONED_RUN_AFTER_MINUTES`, and `HEALTH_FAILURE_THRESHOLD`). Compose injects `ABANDONED_RUN_AFTER_MINUTES`, `MAX_DETAIL_FETCHES`, `DETAIL_CONCURRENCY`, and `DETAIL_DELAY_MS`; pass the other tuning variables explicitly with `docker compose run -e NAME=value` or set them in a supported deployment change.
 
 The React dashboards use `http://127.0.0.1:3000/` locally. Production uses Cloudflare HTTPS → Cloudflare Tunnel → cloudflared → `http://127.0.0.1:3000` → Superset. There is no public OCI 80/443
 ingress requirement; port 3000 stays on loopback. Superset uses port 8088 only inside the container/network.
@@ -62,7 +64,6 @@ ingress requirement; port 3000 stays on loopback. Superset uses port 8088 only i
 Set these values in the instance's ignored `.env`, using the existing public dashboard hostname:
 
 ```dotenv
-DASHBOARD_MODE=superset
 COMPOSE_PROFILES=superset
 SUPERSET_BIND=127.0.0.1
 SUPERSET_DOMAIN=dashboards.example.com
@@ -70,7 +71,7 @@ SUPERSET_ROOT_URL=https://dashboards.example.com/
 SUPERSET_COOKIE_SECURE=true
 ```
 
-Keep the existing `SUPERSET_SECRET_KEY` and reporting/metadata credentials. `superset` is the only supported dashboard mode. Before manual Compose commands, source `scripts/lib/dashboard-stack.sh` and call `configure_dashboard_stack`.
+Keep the existing `SUPERSET_SECRET_KEY` and reporting/metadata credentials. Before manual Compose commands, source `scripts/lib/superset-stack.sh` and call `configure_superset_stack`.
 
 ## Cloudflare Tunnel
 
@@ -83,7 +84,7 @@ journalctl -u cloudflared -n 100 --no-pager
 curl -I https://dashboards.example.com/
 ```
 
-Verify HTTPS sign-in, Secure cookies and the four viewer dashboards. Optional Cloudflare Access can protect the hostname. See [the deployment runbook](SUPERSET_CUTOVER.md).
+Verify HTTPS sign-in, Secure cookies and the four viewer dashboards. Optional Cloudflare Access can protect the hostname. See [the deployment runbook](DEPLOYMENT.md).
 
 ## Dashboard access
 
@@ -113,7 +114,7 @@ The maintenance profile waits for the migrator job. For an explicit run after
 you have already run the migrator successfully, use
 `docker compose --profile maintenance run --build --rm --no-deps maintenance`.
 
-The first command shows service health. The `scraper` service exists only when the `scrape` profile is enabled; add `COMPOSE_PROFILES=scrape` to `.env` to schedule it locally. A one-off `compose run` is safe for manual collection because it does not inherit the service restart policy.
+The first command shows service health. The `scraper` service exists only when the `scrape` profile is enabled; use `COMPOSE_PROFILES=superset,scrape` to `.env` to schedule it locally. A one-off `compose run` is safe for manual collection because it does not inherit the service restart policy.
 
 The profile-only `migrator` job verifies the lean baseline by filename and
 SHA-256 checksum. The `scrape` profile waits for that job before starting the
@@ -125,12 +126,12 @@ role so application objects keep the intended ownership.
 Detail backfill is separate from normal collection:
 
 ```bash
-docker compose --profile scrape run --rm scraper node src/backfill-geo.js
-docker compose --profile scrape run --rm scraper node src/backfill-geo.js --all
-docker compose --profile scrape run --rm scraper node src/backfill-geo.js --max=100
+docker compose --profile scrape run --rm scraper node src/backfill-details.js
+docker compose --profile scrape run --rm scraper node src/backfill-details.js --all
+docker compose --profile scrape run --rm scraper node src/backfill-details.js --max=100
 ```
 
-The default backfill targets recently active rows; `--all` includes closed
+The default backfill targets open listings with missing pins, floor area, or missing/stale details; `--all` includes closed
 history. The maintenance profile applies raw-response retention without making
 OLX requests. The default is the newest three responses per request kind and
 URL; run maintenance hourly on the host. To inspect a retained response offline, run
@@ -142,8 +143,8 @@ retain the bounded source payload and request metadata; diagnostic records
 retain bounded failure metadata without a successful body.
 
 The lean database retains current listings, price history, lifecycle events,
-scrape runs, and raw response/page archives. It does not publish daily inventory
-or generated score history. Maintenance applies the raw response retention policy;
+scrape runs, and raw response/page archives. Dashboards derive inventory summaries
+from these facts. Maintenance applies the raw response retention policy;
 listing and price history are not age-pruned. After a large restore, run
 `ANALYZE` on `lean.listings` and `lean.price_history`. Normal autovacuum handles
 incremental updates; investigate dead tuples and index growth with
@@ -212,7 +213,7 @@ pwsh -File scripts\sync-to-instance.ps1
 pwsh -File scripts\register-sync-task.ps1
 ```
 
-The restore endpoint receives and validates the archive, audits ownership, saves a rollback snapshot, pauses a running scraper, restores only the `olx` application schemas in a transaction, restores the prior snapshot on failure when available, reasserts role grants, and resumes the writer. It leaves `superset_meta` untouched, then refreshes only the selected dashboards and runs the Superset seed's chart checks when Superset is active before reporting success. If a dashboard refresh fails, the restored `olx` data remains in place; repair the dashboard service without repeating the scrape/restore. Input is capped at `OLX_SYNC_MAX_BYTES` (default 512 MiB) and the temporary incoming file is removed on every exit path. Its `RESTORE_OK` or `RESTORE_ERROR` output is the protocol consumed by the PowerShell script. A holder of the restore SSH key has database-administrator-equivalent capability over application data, even though the key is restricted to a forced command and has no interactive shell; protect and rotate it accordingly.
+The restore endpoint receives and validates the archive, audits ownership, saves a rollback snapshot, pauses a running scraper, restores only the `olx` application schemas in a transaction, restores the prior snapshot on failure when available, reasserts role grants, and resumes the writer. It leaves `superset_meta` untouched, then refreshes Superset, reseeds datasets and charts, and reapplies viewer permissions before reporting success. If a dashboard refresh fails, the restored `olx` data remains in place; repair the dashboard service without repeating the scrape/restore. Input is capped at `OLX_SYNC_MAX_BYTES` (default 512 MiB) and the temporary incoming file is removed on every exit path. Its `RESTORE_OK` or `RESTORE_ERROR` output is the protocol consumed by the PowerShell script. A holder of the restore SSH key has database-administrator-equivalent capability over application data, even though the key is restricted to a forced command and has no interactive shell; protect and rotate it accordingly.
 
 Recovery should be rehearsed periodically against a disposable PostgreSQL
 instance: verify representative data, expected tables, ownership, reader
@@ -222,8 +223,8 @@ access, malformed/oversized input rejection, rollback, and writer restart.
 
 The GitHub Actions workflow tests pushes to `main` (except documentation/geography-only changes) and deploys successful main or manually dispatched runs. Deployment is restricted to the `main` ref and the protected GitHub `production` environment. Configure environment secrets `OCI_HOST`, `OCI_USER`, `OCI_SSH_PRIVATE_KEY`, and mandatory pinned `OCI_KNOWN_HOSTS`. `OCI_SSH_PRIVATE_KEY` must be a separate deployment key whose `authorized_keys` entry permits the workflow’s remote shell commands; never use the forced-command restore key from the home-machine sync. Set the production environment’s deployment branch rule to `main` and consider a required reviewer.
 
-CI builds the scraper and Superset images, verifies the migration matrix and
-Superset Python assets, and runs Trivy v0.74.0 via the pinned Trivy action
+CI builds the scraper and Superset images, runs the database integration suite, native request tests and
+Superset Python contracts, and runs Trivy v0.74.0 via the pinned Trivy action
 against the scraper OS and application layers. Fixable HIGH/CRITICAL findings are
 currently reported without failing the workflow while the image baseline is
 tuned; revisit the policy after reviewing real findings.
@@ -244,7 +245,7 @@ tunnel path.
 ## Diagnosis
 
 - **No current data or a failing health endpoint:** inspect `docker compose logs scraper` and `scrape_runs`. A cycle is unhealthy only after `HEALTH_FAILURE_THRESHOLD` fully failed cycles; partial success resets the streak. Check an upstream response with `docker compose --profile scrape run --rm scraper node scripts/check-api.js`. A blank first page, page failure, or incomplete pagination is intentionally not a successful result set.
-- **Listings were not closed:** closures require a non-empty cycle and complete search results. Failed searches retain membership and a zero-card cycle skips the closing pass by design.
+- **Listings were not closed:** complete authoritative search results close listings whose membership disappears, including verified empty searches. Failed or incomplete searches retain membership. The separate cycle-wide sweep skips zero-card cycles.
 - **Stale detail fields or sparse dashboard segments:** detail fetches are capped and source attributes are optional. Check `details_fetched_at`, `last_enrichment_attempted_at`, and the health dashboard’s coverage panels; use a bounded backfill where appropriate.
 - **Migration or ownership error:** run the role bootstrap script as shown above, then restart affected clients. Inspect `schema_migrations` and rerun the Compose `migrator` job with the configured migration role.
 - **Dashboard unavailable:** check `docker compose logs --tail=100 superset`, `curl -f http://127.0.0.1:3000/health`, `systemctl status cloudflared`, and the reporting credentials/grants. Recreate Superset when environment settings change; a restart does not update them.

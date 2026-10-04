@@ -144,7 +144,7 @@ async function hasRecentFinishedRun(minutes, searchKey = null) {
 async function commitSearchIngestion(payload) {
   const cards = uniqueIds(payload.cards);
   const ids = cards.map((card) => Number(card.articleId));
-  const searchKey = payload.membership?.searchKey ?? payload.search.searchKey;
+  const searchKey = payload.search.searchKey;
   const client = await this.pool.connect();
   const originalQuery = client.query.bind(client);
   if (payload.queryCounter)
@@ -744,12 +744,6 @@ module.exports = {
     enrichmentQueue,
     markDetailAttempts,
     getListingsNeedingDetails,
-    enqueueDetailJobs: async () => 0,
-    claimDetailJobs: async (ids, limit) =>
-      (ids || []).slice(0, limit).map((articleId) => ({ articleId })),
-    completeDetailJobs: async () => 0,
-    requeueExpiredDetailJobs: async () => 0,
-    recordDetailJobOutcome: async () => 0,
     recordScrapePageManifest,
     purgeRawResponses,
     runMaintenanceCycle,

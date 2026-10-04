@@ -5,7 +5,7 @@
 // and writes them (pretty-printed) into test/fixtures/. Machines without a
 // local Node install can run it through Docker (same image as production):
 //   docker run --rm -v "/abs/path/to/scraper:/app" -w /app \
-//     node:24-bookworm-slim npm run fixtures
+//     node:26-bookworm-slim npm run fixtures
 //
 // Re-running this occasionally is a cheap drift alarm: if olx.ba changes the
 // payload shape, the unit tests against these fixtures break immediately.
@@ -17,7 +17,7 @@ const path = require("path");
 // validation with a loud Cloudflare-challenge error.
 const { fetchJson } = require("../src/api");
 
-// Mirrors the first configured search (config/searches.json): Stanovi BL.
+// Banja Luka apartment search used by the recorded parser fixture.
 const SEARCH_URL =
   "https://olx.ba/api/search?category_id=23&canton=11&cities=79&per_page=40&page=1";
 const LISTING_ID = 69441462; // stable older Banja Luka ad with rich attributes

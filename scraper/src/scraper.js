@@ -4,9 +4,7 @@
 
 const api = require("./api");
 const { sleep } = require("./util");
-const { buildSearchObservations } = require("./search-lifecycle");
 const { harvestSearchPages } = require("./search/harvest");
-const { pagesInWave } = require("./search/outcomes");
 const { enrichSearchResults } = require("./search/enrichment");
 
 /**
@@ -89,7 +87,6 @@ async function scrapeSearch(
 
     const harvested = await harvestSearchPages({
       db,
-      search,
       cfg,
       base,
       runId,
@@ -110,15 +107,6 @@ async function scrapeSearch(
         category: search.category ?? null,
       },
       cards: allCards,
-      stateObservations: buildSearchObservations(allCards, {
-        searchKey: search.searchKey,
-        category: search.category,
-        runId,
-      }),
-      membership: {
-        searchKey: search.searchKey,
-        articleIds: allCards.map((c) => c.articleId),
-      },
       run: {
         status: "ok",
         isComplete: true,
@@ -152,7 +140,7 @@ async function scrapeSearch(
     log(
       `✔ "${search.name}" — ${allCards.length} listings on ${pagesDone} page(s); ` +
         `${newCount} new, ${dropCount} price drop(s), median ${median ?? "—"} KM/m²` +
-        (db.schema === "lean" ? `, ${closedCount} closed` : "") +
+        `, ${closedCount} closed` +
         `, ${enrichedCount} enriched`,
     );
     return {
@@ -177,4 +165,4 @@ async function scrapeSearch(
   }
 }
 
-module.exports = { scrapeSearch, pagesInWave };
+module.exports = { scrapeSearch };

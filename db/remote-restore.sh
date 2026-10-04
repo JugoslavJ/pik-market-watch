@@ -74,8 +74,8 @@ was_running=0   # EXIT trap restarts the scraper if we stop it and then fail
 restore_ok=0
 
 cd "$REPO_DIR"
-. scripts/lib/dashboard-stack.sh
-configure_dashboard_stack
+. scripts/lib/superset-stack.sh
+configure_superset_stack
 
 LOCK=/tmp/olx-restore.lock
 if ! mkdir "$LOCK" 2>/dev/null; then
@@ -273,18 +273,17 @@ if [ "$was_running" = "1" ]; then
 fi
 restore_ok=1
 
-# Reconnect only the active dashboards to the restored OLX database. The metadata
+# Reconnect Superset to the restored OLX database. The metadata
 # database is outside the restore TOC and must remain untouched.
-set -- $(dashboard_services)
-if ! docker compose up -d --no-deps --force-recreate --wait --wait-timeout 120 "$@"; then
-  echo "RESTORE_ERROR: database restored, but dashboard refresh failed; check active dashboard logs and recreate them (no need to repeat the scrape/restore)" >&2
+if ! docker compose up -d --no-deps --force-recreate --wait --wait-timeout 120 superset; then
+  echo "RESTORE_ERROR: database restored, but dashboard refresh failed; check Superset logs and recreate the service (no need to repeat the scrape/restore)" >&2
   exit 1
 fi
-if [ "$HAS_SUPERSET" = true ] && ! docker compose run --rm superset-seed; then
+if ! docker compose run --rm superset-seed; then
   echo "RESTORE_ERROR: Superset is healthy but a representative chart query failed; rerun docker compose run --rm superset-seed (no need to repeat the scrape/restore)" >&2
   exit 1
 fi
-if [ "$HAS_SUPERSET" = true ] && ! docker compose run --rm superset-access; then
+if ! docker compose run --rm superset-access; then
   echo "RESTORE_ERROR: data and charts restored, but viewer permissions could not be refreshed; rerun superset-access" >&2
   exit 1
 fi

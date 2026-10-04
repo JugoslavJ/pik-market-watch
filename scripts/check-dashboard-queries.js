@@ -1,7 +1,7 @@
 "use strict";
 
-// Emit a read-only SQL smoke script for every staged source dashboard query. Pipe into
-// psql with ON_ERROR_STOP=1 against a populated database after the backfill.
+// Emit a read-only SQL smoke script for every dashboard query. Pipe into
+// psql with ON_ERROR_STOP=1 against a populated database with the current schema.
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -55,10 +55,6 @@ for (const file of fs
   for (const variable of dashboard.templating?.list || [])
     if (variable.type === "query")
       queries.push([`variable-${variable.name}`, variable.query]);
-  for (const annotation of dashboard.annotations?.list || []) {
-    const sql = annotation.rawSql || annotation.target?.rawSql;
-    if (sql) queries.push([`annotation-${annotation.name || "unnamed"}`, sql]);
-  }
   for (const panel of dashboard.panels || [])
     for (const target of panel.targets || [])
       if (target.rawSql) queries.push([`panel-${panel.id}`, target.rawSql]);
@@ -70,4 +66,4 @@ for (const file of fs
     count++;
   }
 }
-process.stderr.write(`Emitted ${count} staged source dashboard queries.\n`);
+process.stderr.write(`Emitted ${count} dashboard queries.\n`);

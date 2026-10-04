@@ -13,7 +13,7 @@ This directory contains the source data and reproducible tooling for the Banja L
 | `scripts/gen-lean-sql.js` | Generates `../db/init-lean/02-lean-neighborhoods.sql` from the final GeoJSON. |
 | `osm/` | Overpass queries and responses used while naming/georeferencing the trace. |
 
-Coordinates are WGS84 `[longitude, latitude]`. Polygon rings are closed and counter-clockwise in GeoJSON. The seed stores flattened longitude/latitude pairs and uses ray casting; its 5 km nearest-polygon fallback is intended to handle pins just outside a traced boundary, not to establish legal boundaries.
+Coordinates are WGS84 `[longitude, latitude]`. Polygon rings are closed and counter-clockwise in GeoJSON. The seed converts longitude/latitude pairs into PostGIS polygons. Listing assignment uses polygon containment; its 5 km nearest-polygon fallback is intended to handle pins just outside a traced boundary, not to establish legal boundaries.
 
 ## Regenerate the seed
 
@@ -25,6 +25,6 @@ node sweep.js ../banja-luka-mz-final.geojson
 node gen-lean-sql.js
 ```
 
-`merge.js` rewrites the final GeoJSON and `gen-lean-sql.js` rewrites the generated SQL, so review both changes. If using `repair.js`, copy the target GeoJSON first, run the repair on that copy, inspect it with `sweep.js`, and only then replace the final source and regenerate SQL. Do not hand-edit `db/init-lean/02-lean-neighborhoods.sql`.
+`merge.js` rewrites the final GeoJSON and `gen-lean-sql.js` rewrites the generated SQL, so review both changes. If using `repair.js`, copy the target GeoJSON first, run the repair on that copy, inspect it with `sweep.js`, and only then replace the final source and regenerate SQL. Applied SQL baselines are checksum protected. For a database already initialized, ship boundary updates in a new ordered SQL migration rather than changing an applied seed.
 
 See [DATA.md](../DATA.md) for source attribution and licensing constraints.

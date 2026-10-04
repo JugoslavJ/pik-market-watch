@@ -1,7 +1,6 @@
 "use strict";
 
 const { PARSER_BUILD_VERSION } = require("../parser");
-const { detailJobOutcome } = require("./outcomes");
 
 async function enrichSearchResults({
   db,
@@ -22,10 +21,10 @@ async function enrichSearchResults({
   // rotate through instead of squatting on the head and starving the rest.
   let enrichedCount = 0;
   try {
-    if (cfg.maxGeoFetches > 0 && ids.length) {
+    if (cfg.maxDetailFetches > 0 && ids.length) {
       const { pending, total } = await db.enrichmentQueue(
         ids,
-        cfg.maxGeoFetches,
+        cfg.maxDetailFetches,
         {
           refreshDays: cfg.detailRefreshDays ?? 7,
           retryAfterMinutes: Math.max(1, cfg.intervalMinutes ?? 720),
@@ -73,57 +72,32 @@ async function enrichSearchResults({
         })
         .map((p) => p.id);
 
-      // Database leases prevent concurrent workers from fetching the same detail.
-      if (db.requeueExpiredDetailJobs) await db.requeueExpiredDetailJobs();
-      let claimedIds = needDetail;
-      if (db.claimDetailJobs) {
-        const claims = await db.claimDetailJobs(needDetail, needDetail.length, {
-          leaseMinutes: cfg.detailJobLeaseMinutes ?? 30,
-          // A successful detail visit becomes eligible again when the
-          // listing is stale or has a new resolved price. The enrichment
-          // query supplies that eligibility; the queue keeps terminal
-          // failures excluded until an operator re-enqueues them.
-          allowSucceeded: true,
-        });
-        claimedIds = claims.map((claim) => claim.articleId);
-      }
-      await db.markDetailAttempts(claimedIds);
+      await db.markDetailAttempts(needDetail);
 
       log(
         `⌖ enriching ${pending.length}/${total} pending listing(s) ` +
           `(${unpinnedN} without pin, ${missingSqmN} without m², ` +
           `${neverDetailedN} never detailed, ${staleN} stale, ` +
           `${priceChangedN} changed price)` +
-          (claimedIds.length ? ` · ${claimedIds.length} detail call(s)` : ""),
+          (needDetail.length ? ` · ${needDetail.length} detail call(s)` : ""),
       );
 
       const details = await fetchDetailsInBatches(
-        claimedIds,
+        needDetail,
         {
           timeoutMs: cfg.apiTimeoutMs,
-          concurrency: cfg.geoConcurrency,
-          delayMs: cfg.geoDelayMs,
+          concurrency: cfg.detailConcurrency,
+          delayMs: cfg.detailDelayMs,
           rateBudget,
           wait: pace,
-          onError: db.recordDetailJobOutcome
-            ? async (articleId, error) => {
-                await db.recordDetailJobOutcome(articleId, {
-                  outcome: detailJobOutcome(error),
-                  error: error?.message || String(error),
-                  httpStatus: Number.isInteger(error?.status)
-                    ? error.status
-                    : null,
-                });
-                if (db.archiveResponseDiagnostic)
-                  await db.archiveResponseDiagnostic({
-                    runId,
-                    articleId,
-                    requestKind: "detail",
-                    error,
-                    buildVersion: PARSER_BUILD_VERSION,
-                  });
-              }
-            : undefined,
+          onError: (articleId, error) =>
+            db.archiveResponseDiagnostic({
+              runId,
+              articleId,
+              requestKind: "detail",
+              error,
+              buildVersion: PARSER_BUILD_VERSION,
+            }),
         },
         log,
       );
@@ -146,15 +120,6 @@ async function enrichSearchResults({
 
       if (successfulRows.size)
         await db.enrichListings([...successfulRows.values()]);
-      if (db.completeDetailJobs) {
-        await db.completeDetailJobs([...successfulRows.keys()]);
-      } else if (db.recordDetailJobOutcome) {
-        await Promise.all(
-          [...successfulRows.keys()].map((articleId) =>
-            db.recordDetailJobOutcome(articleId, { outcome: "success" }),
-          ),
-        );
-      }
       enrichedCount = successfulRows.size;
       log(`⌖ enriched ${enrichedCount}/${targets.length} listing(s)`);
     }

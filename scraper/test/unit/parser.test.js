@@ -8,7 +8,6 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const {
-  extractArticleId,
   parseSearchItem,
   parseSearchItems,
   parseSearchPage,
@@ -19,31 +18,20 @@ const FIXTURES = path.join(__dirname, "..", "fixtures");
 const load = (name) =>
   JSON.parse(fs.readFileSync(path.join(FIXTURES, name), "utf8"));
 
-let searchPage = null,
-  listing = null;
-try {
-  searchPage = load("api-search-page1.json");
-  listing = load("api-listing-detail.json");
-} catch (_) {
-  /* bare checkout without fixtures — synthetic tests still run */
-}
-const withFixtures = searchPage && listing ? test : test.skip;
+const searchPage = load("api-search-page1.json");
 
 // ── recorded payloads ────────────────────────────────────────────────────────
 
-withFixtures(
-  "parseSearchPage: recorded Stanovi-BL page keeps meta + cards",
-  () => {
-    const { cards, meta } = parseSearchPage(searchPage);
-    assert.equal(meta.total, 989);
-    assert.equal(meta.lastPage, 25);
-    assert.ok(cards.length >= 30);
-    for (const c of cards) {
-      assert.ok(/\/artikal\/\d+$/.test(c.url));
-      assert.ok(Number.isFinite(c.articleId));
-    }
-  },
-);
+test("parseSearchPage: recorded Stanovi-BL page keeps meta + cards", () => {
+  const { cards, meta } = parseSearchPage(searchPage);
+  assert.equal(meta.total, 989);
+  assert.equal(meta.lastPage, 25);
+  assert.ok(cards.length >= 30);
+  for (const c of cards) {
+    assert.ok(/\/artikal\/\d+$/.test(c.url));
+    assert.ok(Number.isFinite(c.articleId));
+  }
+});
 
 // ── synthetic edges (shapes verified against live payloads) ──────────────────
 
@@ -236,21 +224,4 @@ test("detail: empty/garbage payload tolerated", () => {
   assert.equal(d.apiPriceHistory, null);
   assert.equal(d.publishedAt, null);
   assert.equal(d.renewedAt, null);
-});
-
-// ── extractArticleId (unchanged contract) ────────────────────────────────────
-
-test("extractArticleId: standard /artikal/<id>/ URLs", () => {
-  assert.equal(extractArticleId("https://olx.ba/artikal/74558628"), "74558628");
-  assert.equal(
-    extractArticleId("https://www.olx.ba/artikal/123456/"),
-    "123456",
-  );
-  assert.equal(extractArticleId("https://olx.ba/artikal/99?some=qs"), "99");
-});
-
-test("extractArticleId: non-matching URLs → null", () => {
-  assert.equal(extractArticleId("https://olx.ba/pretraga?kat=16"), null);
-  assert.equal(extractArticleId(""), null);
-  assert.equal(extractArticleId(undefined), null);
 });

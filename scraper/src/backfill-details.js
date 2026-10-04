@@ -4,9 +4,9 @@
 // at all (characteristics, publish date, seller type, view counters).
 //
 // Usage:
-//   docker compose run --rm scraper node src/backfill-geo.js              # active ≤14 d
-//   docker compose run --rm scraper node src/backfill-geo.js --all        # every stored row
-//   docker compose run --rm scraper node src/backfill-geo.js --max=100    # cap the calls
+//   docker compose run --rm scraper node src/backfill-details.js              # active listings
+//   docker compose run --rm scraper node src/backfill-details.js --all        # include closed listings
+//   docker compose run --rm scraper node src/backfill-details.js --max=100    # cap the calls
 //
 // Resumable: rows whose missing data has since arrived are skipped, and every
 // fetched listing gets details_fetched_at stamped, so an interrupted run can
@@ -33,11 +33,10 @@ const log = makeLogger("backfill");
   const targets = (
     await db.getListingsNeedingDetails(onlyActive, {
       refreshDays: config.detailRefreshDays,
-      retryAfterMinutes: Math.max(1, config.intervalMinutes),
     })
   ).slice(0, max);
   log(
-    `${targets.length} listing(s) to fetch (${onlyActive ? "active ≤14d" : "all rows"}${max !== Infinity ? `, capped at ${max}` : ""})`,
+    `${targets.length} listing(s) to fetch (${onlyActive ? "active listings" : "all rows"}${max !== Infinity ? `, capped at ${max}` : ""})`,
   );
   if (!targets.length) {
     await db.close();
@@ -55,17 +54,15 @@ const log = makeLogger("backfill");
     targets.map((t) => t.articleId),
     {
       timeoutMs: config.apiTimeoutMs,
-      concurrency: config.geoConcurrency,
-      delayMs: config.geoDelayMs,
-      onError: db.archiveResponseDiagnostic
-        ? (articleId, error) =>
-            db.archiveResponseDiagnostic({
-              articleId,
-              requestKind: "detail",
-              error,
-              buildVersion: PARSER_BUILD_VERSION,
-            })
-        : undefined,
+      concurrency: config.detailConcurrency,
+      delayMs: config.detailDelayMs,
+      onError: (articleId, error) =>
+        db.archiveResponseDiagnostic({
+          articleId,
+          requestKind: "detail",
+          error,
+          buildVersion: PARSER_BUILD_VERSION,
+        }),
       async onBatch(results, doneCount, total) {
         // A fetched listing counts as done even when nothing new was learned —
         // details_fetched_at prevents endlessly re-fetching barren ads.

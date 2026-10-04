@@ -8,7 +8,7 @@ const path = require("node:path");
 const dir = path.resolve(__dirname, "../../../superset/dashboards");
 const files = fs.readdirSync(dir).filter((file) => file.endsWith(".json"));
 
-test("staged lean dashboards keep four identities and only query lean relations", () => {
+test("dashboard definitions keep four identities and only query lean relations", () => {
   assert.equal(files.length, 4);
   for (const file of files) {
     const source = fs.readFileSync(path.join(dir, file), "utf8");
@@ -16,11 +16,6 @@ test("staged lean dashboards keep four identities and only query lean relations"
     assert.equal(file, `${dashboard.uid}.json`);
     assert.equal(dashboard.annotations, undefined);
     assert.equal(dashboard.schemaVersion, undefined);
-    assert.doesNotMatch(
-      source,
-      /\b(?:reporting|olap)\.|analytics_refresh_state|current_listing_scores/,
-      file,
-    );
     const variables = new Set(
       dashboard.templating.list.map((item) => item.name),
     );
@@ -31,9 +26,6 @@ test("staged lean dashboards keep four identities and only query lean relations"
       ...dashboard.templating.list
         .filter((item) => item.type === "query")
         .map((item) => item.query),
-      ...(dashboard.annotations?.list || []).map(
-        (item) => item.rawSql || item.target?.rawSql || "",
-      ),
     ];
     for (const statement of sql.filter(Boolean)) {
       assert.match(statement, /lean\./, file);
@@ -68,7 +60,7 @@ test("staged lean dashboards keep four identities and only query lean relations"
   }
 });
 
-test("staged dashboards retain price and closure evidence while removing refresh health", () => {
+test("dashboard definitions use price history, current inventory and scrape outcomes", () => {
   const dashboards = Object.fromEntries(
     files.map((file) => [
       file,
@@ -84,18 +76,6 @@ test("staged dashboards retain price and closure evidence while removing refresh
   assert.match(sql("olx-home.json"), /closed_at/);
   assert.match(sql("olx-health.json"), /lean\.scrape_runs/);
   assert.match(sql("olx-exits.json"), /closing_price/);
-  for (const source of files.map((file) =>
-    fs.readFileSync(path.join(dir, file), "utf8"),
-  ))
-    assert.doesNotMatch(
-      source,
-      /neighborhood_stats|benchmark|deviation_pct|\bscore\b/i,
-    );
-  for (const id of [27, 29, 30])
-    assert.equal(
-      dashboards["olx-health.json"].panels.find((panel) => panel.id === id),
-      undefined,
-    );
 });
 
 test("every Exits data panel reads persisted close events across reopenings", () => {

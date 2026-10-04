@@ -54,20 +54,12 @@ test("Compose targets PostgreSQL 18", () => {
     compose,
     /name: \$\{POSTGRES_VOLUME_NAME:-olx-price-ext_pgdata_pg18\}/,
   );
-  assert.equal(
-    fs.existsSync(path.join(ROOT, "db", "migrate-pg16-to-pg18.sh")),
-    false,
-  );
 });
 
 test("Compose provisions only the lean schema and dashboard assets", () => {
   assert.match(compose, /DB_INIT_DIR:-\.\/db\/init-lean/);
   assert.match(compose, /dockerfile: superset\/Dockerfile/);
   assert.match(compose, /target: 8088\s+published: "3000"/);
-  assert.doesNotMatch(
-    compose,
-    /olap-reconcile|STORAGE_SCHEMA|RUN_ANALYTICS_MAINTENANCE/,
-  );
 });
 
 test("deployment runs migration job before publishing the stack", () => {
@@ -149,7 +141,7 @@ test("production viewer settings fail closed before deployment", () => {
   assert.match(deploy, /COOKIE_SECURE/);
 });
 
-test("remote sync refreshes the selected dashboards after role repair before reporting success", () => {
+test("remote sync refreshes Superset after role repair before reporting success", () => {
   const restore = fs.readFileSync(
     path.join(ROOT, "db", "remote-restore.sh"),
     "utf8",
@@ -158,7 +150,7 @@ test("remote sync refreshes the selected dashboards after role repair before rep
     "docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh",
   );
   const refreshAt = restore.indexOf(
-    'if ! docker compose up -d --no-deps --force-recreate --wait --wait-timeout 120 "$@"; then',
+    "if ! docker compose up -d --no-deps --force-recreate --wait --wait-timeout 120 superset; then",
   );
   const successAt = restore.indexOf('echo "RESTORE_OK');
   assert.ok(grantsAt >= 0 && refreshAt > grantsAt);

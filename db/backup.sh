@@ -6,9 +6,7 @@ BACKUP_DIR=${BACKUP_DIR:-/backups}
 SUPERSET_HOME=${SUPERSET_HOME:-/superset-home}
 META_DB=${SUPERSET_META_DB:-superset_meta}
 RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-14}
-MODE=${DASHBOARD_MODE:-superset}
 partial=
-case "$MODE" in superset) ;; *) echo "Only Superset is supported; DASHBOARD_MODE must be superset" >&2; exit 1 ;; esac
 case "$RETENTION_DAYS" in ''|*[!0-9]*) echo "Invalid BACKUP_RETENTION_DAYS" >&2; exit 1 ;; esac
 cleanup() { [ -z "$partial" ] || rm -f "$partial"; }
 trap cleanup EXIT
@@ -89,7 +87,7 @@ case "${1:-}" in
   '') ;;
   *) echo "Usage: backup.sh [--once|--check]" >&2; exit 2 ;;
 esac
-echo "$(date -u '+%F %T') backup loop started ($MODE, retention $RETENTION_DAYS days)"
+echo "$(date -u '+%F %T') backup loop started (retention $RETENTION_DAYS days)"
 while true; do
   # Release the lock even when an archive fails.
   (backup_cycle daily) || echo "Backup failed; retrying in one hour" >&2

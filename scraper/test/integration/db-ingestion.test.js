@@ -58,10 +58,6 @@ async function commit(search, cards) {
     runId,
     search,
     cards,
-    membership: {
-      searchKey: search.searchKey,
-      articleIds: cards.map((row) => row.articleId),
-    },
     run: { status: "ok", isComplete: true, pages: 1, cards: cards.length },
   });
   return runId;
@@ -298,7 +294,6 @@ needsDb(
           runId,
           search: SEARCH_A,
           cards: [card(9104)],
-          membership: { searchKey: SEARCH_A.searchKey, articleIds: [9104] },
           run: { status: "ok", isComplete: true, pages: 1, cards: 1 },
         }),
         /forced test failure/,

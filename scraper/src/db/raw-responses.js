@@ -73,31 +73,6 @@ module.exports = function installRawResponseMethods(Db) {
       );
     },
 
-    async archiveDetailResponse({
-      articleId,
-      payload,
-      sourcePayload = payload,
-      fetchedAt = new Date(),
-      requestMetadata,
-      responseMetadata,
-      buildVersion,
-      diagnostic = null,
-    }) {
-      return this.archiveSearchResponse({
-        articleId,
-        requestKind: "detail",
-        requestUrl: `https://olx.ba/api/listings/${articleId}`,
-        fetchedAt,
-        parserVersion: "detail-v1",
-        payload,
-        sourcePayload,
-        requestMetadata,
-        responseMetadata,
-        buildVersion,
-        diagnostic,
-      });
-    },
-
     async archiveDetailResponses(responses) {
       const rows = (responses || []).filter(
         (row) => row && row.articleId != null,
@@ -178,58 +153,6 @@ module.exports = function installRawResponseMethods(Db) {
         buildVersion,
         diagnostic,
       });
-    },
-
-    async recordScrapePageManifest({
-      runId,
-      pageNumber,
-      attempt = 1,
-      fetchedAt = new Date(),
-      requestUrl,
-      responseState,
-      expectedTotal = null,
-      expectedLastPage = null,
-      responsePage = null,
-      responsePerPage = null,
-      rawItemCount = 0,
-      parsedItemCount = 0,
-      duplicateItemCount = 0,
-      parseRejections = [],
-      error = null,
-      isAuthoritative = false,
-    }) {
-      const rejectionList = Array.isArray(parseRejections)
-        ? parseRejections.slice(0, 100)
-        : [];
-      await this.pool.query(
-        `INSERT INTO scrape_run_pages
-           (run_id, page_number, attempt, fetched_at, request_url,
-            response_state, expected_total, expected_last_page, response_page,
-            response_per_page, raw_item_count, parsed_item_count,
-            duplicate_item_count, parse_rejection_count, parse_rejections,
-            error, is_authoritative)
-         VALUES ($1,$2,$3,$4::timestamptz,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
-                 $15::jsonb,$16,$17)`,
-        [
-          runId,
-          pageNumber,
-          attempt,
-          fetchedAt,
-          requestUrl,
-          responseState,
-          expectedTotal,
-          expectedLastPage,
-          responsePage,
-          responsePerPage,
-          Math.max(0, Number(rawItemCount) || 0),
-          Math.max(0, Number(parsedItemCount) || 0),
-          Math.max(0, Number(duplicateItemCount) || 0),
-          rejectionList.length,
-          JSON.stringify(rejectionList),
-          error == null ? null : String(error).slice(0, 1000),
-          Boolean(isAuthoritative),
-        ],
-      );
     },
   });
 };

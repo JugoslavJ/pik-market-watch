@@ -3,7 +3,7 @@
 // mapper → /api/listings/<id> → detail mapper. Useful right after deploying
 // or whenever olx.ba's payload shape is suspected to have drifted:
 //   docker run --rm -v "/abs/path/to/scraper:/app" -w /app \
-//     node:24-bookworm-slim node scripts/check-api.js
+//     node:26-bookworm-slim node scripts/check-api.js
 // Exit 0 = everything mapped sensibly; non-zero = investigate.
 
 const { fetchSearchPage, fetchListing, toApiSearchUrl } = require("../src/api");

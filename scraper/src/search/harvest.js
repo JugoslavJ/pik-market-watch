@@ -10,7 +10,6 @@ const { pagesInWave, pageFailureState } = require("./outcomes");
  */
 async function harvestSearchPages({
   db,
-  search,
   cfg,
   base,
   runId,
@@ -29,14 +28,12 @@ async function harvestSearchPages({
   const pageAttempts = new Map();
 
   const recordPage = async (manifest) => {
-    if (db.recordScrapePageManifest)
-      await db.recordScrapePageManifest(manifest);
+    await db.recordScrapePageManifest(manifest);
   };
 
   const archivePage = async (url, response) => {
     await db.archiveSearchResponse({
       runId,
-      searchKey: search.searchKey,
       requestKind: "search",
       requestUrl: url.href,
       fetchedAt: new Date(),
@@ -135,21 +132,19 @@ async function harvestSearchPages({
       });
       return { cards: parsed.cards, fresh, status: responseState };
     } catch (error) {
-      if (typeof db.archiveResponseDiagnostic === "function") {
-        await db
-          .archiveResponseDiagnostic({
-            runId,
-            requestKind: "search",
-            requestUrl: url.href,
-            error,
-            buildVersion: PARSER_BUILD_VERSION,
-          })
-          .catch((archiveError) =>
-            log(
-              `⚠ search diagnostic archive failed: ${archiveError.message || archiveError}`,
-            ),
-          );
-      }
+      await db
+        .archiveResponseDiagnostic({
+          runId,
+          requestKind: "search",
+          requestUrl: url.href,
+          error,
+          buildVersion: PARSER_BUILD_VERSION,
+        })
+        .catch((archiveError) =>
+          log(
+            `⚠ search diagnostic archive failed: ${archiveError.message || archiveError}`,
+          ),
+        );
       const responseState = pageFailureState(error);
       if (responseState === "malformed") malformedPages.add(pageNo);
       await recordPage({
