@@ -18,6 +18,7 @@ test("lean baseline contains the complete installed schema", () => {
     "02-lean-neighborhoods.sql",
     "03-raw-archive.sql",
     "04-date-based-price-history.sql",
+    "05-dashboard-query-indexes.sql",
   ]);
   const neighborhoods = fs.readFileSync(
     path.join(leanInit, "02-lean-neighborhoods.sql"),
@@ -40,4 +41,11 @@ test("lean baseline contains the complete installed schema", () => {
   assert.match(daily, /PARTITION BY article_id, price_date, source/);
   assert.match(daily, /observed_at DESC, id DESC/);
   assert.match(daily, /DROP COLUMN observed_at/);
+  const dashboardIndexes = fs.readFileSync(
+    path.join(leanInit, "05-dashboard-query-indexes.sql"),
+    "utf8",
+  );
+  assert.match(dashboardIndexes, /lean_scrape_runs_started_at_idx/);
+  assert.match(dashboardIndexes, /lean_scrape_runs_search_latest_idx/);
+  assert.match(dashboardIndexes, /lean_price_history_api_article_date_idx/);
 });

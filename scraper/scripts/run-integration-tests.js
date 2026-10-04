@@ -72,6 +72,8 @@ const up = docker([
   "POSTGRES_REPORTING_PASSWORD=integration-reporting",
   "-e",
   "POSTGRES_BACKUP_PASSWORD=integration-backup",
+  "-e",
+  "SUPERSET_META_PASSWORD=integration-superset",
   "-p",
   `${PORT}:5432`,
   "-v",
