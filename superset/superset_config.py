@@ -1,7 +1,13 @@
 """Production Superset configuration for the private dashboard service."""
 
 import os
+import sys
 from copy import deepcopy
+
+# Superset loads this file by path with importlib, which does not guarantee
+# that the config directory is on sys.path. Add /app so local modules copied
+# into the image (including template_cache.py) are importable in every CLI job.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from sqlalchemy.engine import URL
 from superset.config import TALISMAN_CONFIG as DEFAULT_TALISMAN_CONFIG
