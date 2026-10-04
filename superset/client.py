@@ -19,12 +19,20 @@ class InternalServiceCookiePolicy(DefaultCookiePolicy):
         return super().return_ok_secure(cookie, request)
 
 
+class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, request, response, code, message, headers, new_url):
+        # A successful browser login redirects to `/`, which the viewer sends
+        # to a dashboard that may not exist yet during the initial seed.
+        return None
+
+
 class SupersetAPI:
     def __init__(self, username="admin", password=None):
         self.username = username
         self.password = password
+        self.cookies = CookieJar(policy=InternalServiceCookiePolicy())
         self.opener = urllib.request.build_opener(
-            urllib.request.HTTPCookieProcessor(CookieJar(policy=InternalServiceCookiePolicy()))
+            urllib.request.HTTPCookieProcessor(self.cookies)
         )
         self.token = None
         self.csrf = None
@@ -84,9 +92,24 @@ class SupersetAPI:
             }).encode("utf-8"),
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
-        with self.opener.open(request, timeout=30) as response:
-            if "/login" in response.url:
-                raise RuntimeError("Superset browser session login failed")
+        browser_opener = urllib.request.build_opener(
+            urllib.request.HTTPCookieProcessor(self.cookies), NoRedirectHandler()
+        )
+        try:
+            with browser_opener.open(request, timeout=30) as response:
+                status = response.status
+                location = response.headers.get("Location", "")
+        except urllib.error.HTTPError as error:
+            if not 300 <= error.code < 400:
+                raise
+            status = error.code
+            location = error.headers.get("Location", "")
+
+        destination = urllib.parse.urlsplit(
+            urllib.parse.urljoin(BASE + "/login/", location)
+        )
+        if not 300 <= status < 400 or destination.path.rstrip("/") == "/login":
+            raise RuntimeError("Superset browser session login failed")
         self.browser_authenticated = True
 
     def find(self, resource, name_field, name):
