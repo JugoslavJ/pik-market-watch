@@ -9,9 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 class ProjectionContracts(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        from superset import create_app
-        cls.app = create_app()
-        from dashboard_data import simple_projection
+        from dashboard_projection import simple_projection
         cls.projection = staticmethod(simple_projection)
         cls.source = SimpleNamespace(columns=[SimpleNamespace(column_name='active')])
 

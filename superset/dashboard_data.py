@@ -7,7 +7,6 @@ checks as the standard chart endpoint. It never caches operational datasets.
 
 import hashlib
 import logging
-import re
 from time import perf_counter
 
 from cachelib import SimpleCache
@@ -28,48 +27,10 @@ from superset.daos.exceptions import DatasourceNotFound
 from superset.exceptions import QueryObjectValidationError, SupersetSecurityException
 from superset.utils import json
 from superset.extensions import event_logger
+from dashboard_projection import simple_projection
 
 logger = logging.getLogger(__name__)
 response_cache = SimpleCache(threshold=500, default_timeout=600)
-
-
-def simple_projection(body, datasource):
-    """Only allow cached projections that cannot embed another SQL query.
-
-    An identical previously validated request can skip rebuilding its date and
-    post-processing objects. Datasource/dashboard access is checked again.
-    Ad-hoc SQL expressions and guest requests keep the full validation path.
-    """
-    if body.get("result_format") != "json" or body.get("result_type") != "full":
-        return False
-    names = {column.column_name for column in datasource.columns}
-
-    def column_valid(column):
-        if isinstance(column, str):
-            return column in names
-        return isinstance(column, dict) and column.get("sqlExpression") in names
-
-    def metric_valid(metric):
-        if not isinstance(metric, dict):
-            return False
-        if metric.get("expressionType") == "SIMPLE":
-            return (metric.get("column") or {}).get("column_name") in names
-        expression = metric.get("sqlExpression") or ""
-        if not isinstance(expression, str):
-            return False
-        if expression in ("COUNT(*)", "1"):
-            return True
-        match = re.fullmatch(r'(?:MAX|MIN|SUM|AVG|COUNT)\("((?:[^"]|"")+)"\)', expression)
-        return bool(match and match[1].replace('""', '"') in names)
-
-    queries = body.get("queries")
-    return isinstance(queries, list) and bool(queries) and all(
-        isinstance(query, dict)
-        and not any((query.get("extras") or {}).get(key) for key in ("where", "having"))
-        and all(column_valid(column) for column in query.get("columns") or [])
-        and all(metric_valid(metric) for metric in query.get("metrics") or [])
-        for query in queries
-    )
 
 
 class BatchQueryContextFactory(QueryContextFactory):
