@@ -1,47 +1,5 @@
 {
-  "annotations": {
-    "list": [
-      {
-        "builtIn": 1,
-        "datasource": {
-          "type": "grafana",
-          "uid": "-- Grafana --"
-        },
-        "enable": true,
-        "hide": true,
-        "iconColor": "red",
-        "name": "Annotations & Alerts",
-        "type": "dashboard"
-      }
-    ]
-  },
   "description": "Direct views of current listings, recorded price changes, scrape runs, and observed closures in the lean schema. Historical charts use retained event timestamps rather than reconstructed daily inventory.",
-  "editable": true,
-  "fiscalYearStartMonth": 0,
-  "graphTooltip": 0,
-  "id": null,
-  "links": [
-    {
-      "targetBlank": false,
-      "title": "Home",
-      "url": "/d/olx-home"
-    },
-    {
-      "targetBlank": false,
-      "title": "Market overview",
-      "url": "/d/olx-overview"
-    },
-    {
-      "targetBlank": false,
-      "title": "Observed exits",
-      "url": "/d/olx-exits"
-    },
-    {
-      "targetBlank": false,
-      "title": "Data health",
-      "url": "/d/olx-health"
-    }
-  ],
   "panels": [
     {
       "type": "row",
@@ -56,10 +14,6 @@
       "id": 1
     },
     {
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -95,7 +49,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "active",
           "values": false
         },
@@ -104,23 +60,12 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "WITH a AS (\n  SELECT count(*) FILTER (WHERE closed_at IS NULL) AS active,\n    percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE closed_at IS NULL AND deal='sale' AND ppm2>0) AS sale_ppm2,\n    percentile_cont(0.5) WITHIN GROUP (ORDER BY price) FILTER (WHERE closed_at IS NULL AND deal='rent' AND price>0) AS rent_price,\n    percentile_cont(0.5) WITHIN GROUP (ORDER BY price) FILTER (WHERE closed_at IS NULL AND deal='sale' AND price>0) AS sale_price,\n    count(*) FILTER (WHERE closed_at > (now() AT TIME ZONE 'Europe/Sarajevo')::date - 30) AS recent_exits,\n    count(*) FILTER (WHERE closed_at IS NULL OR closed_at > (now() AT TIME ZONE 'Europe/Sarajevo')::date - 30) AS recent_population,\n    percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE deal='sale' AND ppm2>0 AND first_seen >= date_trunc('week', now())) AS current_week,\n    percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE deal='sale' AND ppm2>0 AND first_seen >= date_trunc('week', now()) - INTERVAL '7 days' AND first_seen < date_trunc('week', now())) AS prior_week\n  FROM lean.listings\n)\nSELECT active,\n  round(sale_ppm2::numeric,0) AS median_sale_ppm2,\n  round(rent_price::numeric,0) AS median_rent,\n  round((1200 * rent_price / NULLIF(sale_price,0))::numeric,1) AS gross_yield_pct,\n  round(100.0 * recent_exits / NULLIF(recent_population,0),1) AS exit_ratio,\n  round((100 * (current_week / NULLIF(prior_week,0) - 1))::numeric,1) AS change_pct\nFROM a",
-          "refId": "A"
+          "rawSql": "WITH a AS (\n  SELECT count(*) FILTER (WHERE closed_at IS NULL) AS active,\n    percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE closed_at IS NULL AND deal='sale' AND ppm2>0) AS sale_ppm2,\n    percentile_cont(0.5) WITHIN GROUP (ORDER BY price) FILTER (WHERE closed_at IS NULL AND deal='rent' AND price>0) AS rent_price,\n    percentile_cont(0.5) WITHIN GROUP (ORDER BY price) FILTER (WHERE closed_at IS NULL AND deal='sale' AND price>0) AS sale_price,\n    count(*) FILTER (WHERE closed_at > (now() AT TIME ZONE 'Europe/Sarajevo')::date - 30) AS recent_exits,\n    count(*) FILTER (WHERE closed_at IS NULL OR closed_at > (now() AT TIME ZONE 'Europe/Sarajevo')::date - 30) AS recent_population,\n    percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE deal='sale' AND ppm2>0 AND first_seen >= date_trunc('week', now())) AS current_week,\n    percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE deal='sale' AND ppm2>0 AND first_seen >= date_trunc('week', now()) - INTERVAL '7 days' AND first_seen < date_trunc('week', now())) AS prior_week\n  FROM lean.listings\n)\nSELECT active,\n  round(sale_ppm2::numeric,0) AS median_sale_ppm2,\n  round(rent_price::numeric,0) AS median_rent,\n  round((1200 * rent_price / NULLIF(sale_price,0))::numeric,1) AS gross_yield_pct,\n  round(100.0 * recent_exits / NULLIF(recent_population,0),1) AS exit_ratio,\n  round((100 * (current_week / NULLIF(prior_week,0) - 1))::numeric,1) AS change_pct\nFROM a"
         }
       ],
       "id": 2
     },
     {
-      "datasource": {
-        "type": "datasource",
-        "uid": "-- Dashboard --"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -156,7 +101,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "median_sale_ppm2",
           "values": false
         },
@@ -165,21 +112,12 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "datasource",
-            "uid": "-- Dashboard --"
-          },
-          "panelId": 2,
-          "refId": "A"
+          "panelId": 2
         }
       ],
       "id": 3
     },
     {
-      "datasource": {
-        "type": "datasource",
-        "uid": "-- Dashboard --"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -215,7 +153,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "median_rent",
           "values": false
         },
@@ -224,21 +164,12 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "datasource",
-            "uid": "-- Dashboard --"
-          },
-          "panelId": 2,
-          "refId": "A"
+          "panelId": 2
         }
       ],
       "id": 4
     },
     {
-      "datasource": {
-        "type": "datasource",
-        "uid": "-- Dashboard --"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -275,7 +206,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "gross_yield_pct",
           "values": false
         },
@@ -284,21 +217,12 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "datasource",
-            "uid": "-- Dashboard --"
-          },
-          "panelId": 2,
-          "refId": "A"
+          "panelId": 2
         }
       ],
       "id": 5
     },
     {
-      "datasource": {
-        "type": "datasource",
-        "uid": "-- Dashboard --"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -335,7 +259,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "exit_ratio",
           "values": false
         },
@@ -344,21 +270,12 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "datasource",
-            "uid": "-- Dashboard --"
-          },
-          "panelId": 2,
-          "refId": "A"
+          "panelId": 2
         }
       ],
       "id": 6
     },
     {
-      "datasource": {
-        "type": "datasource",
-        "uid": "-- Dashboard --"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -399,7 +316,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "change_pct",
           "values": false
         },
@@ -408,12 +327,7 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "datasource",
-            "uid": "-- Dashboard --"
-          },
-          "panelId": 2,
-          "refId": "A"
+          "panelId": 2
         }
       ],
       "id": 7
@@ -431,10 +345,6 @@
       "id": 8
     },
     {
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -478,7 +388,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "minutes_since_success",
           "values": false
         },
@@ -487,23 +399,12 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT round(EXTRACT(EPOCH FROM (now() - max(finished_at) FILTER (WHERE status='ok' AND is_complete AND finished_at IS NOT NULL))) / 60)::int AS minutes_since_success,\n  count(*) FILTER (WHERE status='error' AND started_at>now()-INTERVAL '24 hours') AS failed_24h,\n  coalesce(sum(cards) FILTER (WHERE status='ok' AND started_at>now()-INTERVAL '24 hours'),0) AS cards_24h\nFROM lean.scrape_runs",
-          "refId": "A"
+          "rawSql": "SELECT round(EXTRACT(EPOCH FROM (now() - max(finished_at) FILTER (WHERE status='ok' AND is_complete AND finished_at IS NOT NULL))) / 60)::int AS minutes_since_success,\n  count(*) FILTER (WHERE status='error' AND started_at>now()-INTERVAL '24 hours') AS failed_24h,\n  coalesce(sum(cards) FILTER (WHERE status='ok' AND started_at>now()-INTERVAL '24 hours'),0) AS cards_24h\nFROM lean.scrape_runs"
         }
       ],
       "id": 9
     },
     {
-      "datasource": {
-        "type": "datasource",
-        "uid": "-- Dashboard --"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -547,7 +448,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "failed_24h",
           "values": false
         },
@@ -556,21 +459,12 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "datasource",
-            "uid": "-- Dashboard --"
-          },
-          "panelId": 9,
-          "refId": "A"
+          "panelId": 9
         }
       ],
       "id": 10
     },
     {
-      "datasource": {
-        "type": "datasource",
-        "uid": "-- Dashboard --"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -606,7 +500,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "cards_24h",
           "values": false
         },
@@ -615,12 +511,7 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "datasource",
-            "uid": "-- Dashboard --"
-          },
-          "panelId": 9,
-          "refId": "A"
+          "panelId": 9
         }
       ],
       "id": 11
@@ -638,10 +529,6 @@
       "id": 12
     },
     {
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -677,23 +564,12 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawSql": "WITH days AS (SELECT generate_series(date($__timeFrom() AT TIME ZONE 'Europe/Sarajevo'), date($__timeTo() AT TIME ZONE 'Europe/Sarajevo'), INTERVAL '1 day')::date AS day), movements AS (SELECT first_seen AS day, 1 AS new_n, 0 AS closed_n FROM lean.listings UNION ALL SELECT closed_at, 0, 1 FROM lean.listings WHERE closed_at IS NOT NULL) SELECT d.day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time, COALESCE(sum(m.new_n),0)::int AS new_n, COALESCE(sum(m.closed_n),0)::int AS closed_n FROM days d LEFT JOIN movements m USING(day) GROUP BY d.day ORDER BY d.day",
-          "refId": "A"
+          "rawSql": "WITH days AS (SELECT generate_series(date($__timeFrom() AT TIME ZONE 'Europe/Sarajevo'), date($__timeTo() AT TIME ZONE 'Europe/Sarajevo'), INTERVAL '1 day')::date AS day), movements AS (SELECT first_seen AS day, 1 AS new_n, 0 AS closed_n FROM lean.listings UNION ALL SELECT closed_at, 0, 1 FROM lean.listings WHERE closed_at IS NOT NULL) SELECT d.day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time, COALESCE(sum(m.new_n),0)::int AS new_n, COALESCE(sum(m.closed_n),0)::int AS closed_n FROM days d LEFT JOIN movements m USING(day) GROUP BY d.day ORDER BY d.day"
         }
       ],
       "id": 13
     },
     {
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -729,22 +605,17 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawSql": "WITH flow AS (WITH days AS (SELECT generate_series(date($__timeFrom() AT TIME ZONE 'Europe/Sarajevo'), date($__timeTo() AT TIME ZONE 'Europe/Sarajevo'), INTERVAL '1 day')::date AS day), movements AS (SELECT first_seen AS day, 1 AS new_n, 0 AS closed_n FROM lean.listings UNION ALL SELECT closed_at, 0, 1 FROM lean.listings WHERE closed_at IS NOT NULL) SELECT d.day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time, COALESCE(sum(m.new_n),0)::int AS new_n, COALESCE(sum(m.closed_n),0)::int AS closed_n FROM days d LEFT JOIN movements m USING(day) GROUP BY d.day ORDER BY d.day),\nbounds AS (SELECT min(time) AS start_time, min((time AT TIME ZONE 'Europe/Sarajevo')::date) AS start_day FROM flow),\nseed AS (\n  SELECT count(*) AS active FROM lean.listings l CROSS JOIN bounds b\n  WHERE l.first_seen <= b.start_time AND (l.closed_at IS NULL OR l.closed_at >= b.start_day)\n), changes AS (\n  SELECT day, sum(delta) AS delta FROM (\n    SELECT (first_seen AT TIME ZONE 'Europe/Sarajevo')::date +\n      CASE WHEN first_seen AT TIME ZONE 'Europe/Sarajevo' = date_trunc('day', first_seen AT TIME ZONE 'Europe/Sarajevo') THEN 0 ELSE 1 END AS day,\n      count(*)::bigint AS delta\n    FROM lean.listings GROUP BY 1\n    UNION ALL\n    SELECT closed_at + 1 AS day, -count(*)::bigint AS delta\n    FROM lean.listings WHERE closed_at IS NOT NULL GROUP BY 1\n  ) events GROUP BY day\n), active AS (\n  SELECT f.time, f.closed_n,\n    seed.active + sum(CASE WHEN f.time > bounds.start_time THEN coalesce(changes.delta,0) ELSE 0 END)\n      OVER (ORDER BY f.time) AS active_n\n  FROM flow f CROSS JOIN bounds CROSS JOIN seed\n  LEFT JOIN changes ON changes.day = (f.time AT TIME ZONE 'Europe/Sarajevo')::date\n)\nSELECT time, round(100.0*closed_n/NULLIF(active_n,0),2) AS \"closed / observed active %\"\nFROM active ORDER BY time",
-          "refId": "A"
+          "rawSql": "WITH flow AS (WITH days AS (SELECT generate_series(date($__timeFrom() AT TIME ZONE 'Europe/Sarajevo'), date($__timeTo() AT TIME ZONE 'Europe/Sarajevo'), INTERVAL '1 day')::date AS day), movements AS (SELECT first_seen AS day, 1 AS new_n, 0 AS closed_n FROM lean.listings UNION ALL SELECT closed_at, 0, 1 FROM lean.listings WHERE closed_at IS NOT NULL) SELECT d.day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time, COALESCE(sum(m.new_n),0)::int AS new_n, COALESCE(sum(m.closed_n),0)::int AS closed_n FROM days d LEFT JOIN movements m USING(day) GROUP BY d.day ORDER BY d.day),\nbounds AS (SELECT min(time) AS start_time, min((time AT TIME ZONE 'Europe/Sarajevo')::date) AS start_day FROM flow),\nseed AS (\n  SELECT count(*) AS active FROM lean.listings l CROSS JOIN bounds b\n  WHERE l.first_seen <= b.start_time AND (l.closed_at IS NULL OR l.closed_at >= b.start_day)\n), changes AS (\n  SELECT day, sum(delta) AS delta FROM (\n    SELECT (first_seen AT TIME ZONE 'Europe/Sarajevo')::date +\n      CASE WHEN first_seen AT TIME ZONE 'Europe/Sarajevo' = date_trunc('day', first_seen AT TIME ZONE 'Europe/Sarajevo') THEN 0 ELSE 1 END AS day,\n      count(*)::bigint AS delta\n    FROM lean.listings GROUP BY 1\n    UNION ALL\n    SELECT closed_at + 1 AS day, -count(*)::bigint AS delta\n    FROM lean.listings WHERE closed_at IS NOT NULL GROUP BY 1\n  ) events GROUP BY day\n), active AS (\n  SELECT f.time, f.closed_n,\n    seed.active + sum(CASE WHEN f.time > bounds.start_time THEN coalesce(changes.delta,0) ELSE 0 END)\n      OVER (ORDER BY f.time) AS active_n\n  FROM flow f CROSS JOIN bounds CROSS JOIN seed\n  LEFT JOIN changes ON changes.day = (f.time AT TIME ZONE 'Europe/Sarajevo')::date\n)\nSELECT time, round(100.0*closed_n/NULLIF(active_n,0),2) AS \"closed / observed active %\"\nFROM active ORDER BY time"
         }
       ],
       "id": 14
     }
   ],
-  "refresh": "2h",
-  "schemaVersion": 39,
-  "tags": ["olx", "home", "responsive"],
+  "tags": [
+    "olx",
+    "home",
+    "responsive"
+  ],
   "templating": {
     "list": []
   },
@@ -754,7 +625,5 @@
   },
   "timezone": "Europe/Sarajevo",
   "title": "OLX.ba Home",
-  "uid": "olx-home",
-  "version": 1,
-  "weekStart": ""
+  "uid": "olx-home"
 }

@@ -299,7 +299,7 @@ def add_property_filters(api, database_id, filters, chart_sql):
         return filters
     # Reuse a shared listing option dataset across all managed dashboards.
     options = ensure_dataset(api, database_id, "property_filter_options", options_sql())
-    represented = {target.get("column", {}).get("name", "").removeprefix("__gf_")
+    represented = {target.get("column", {}).get("name", "").removeprefix("__source_")
                    for config in filters for target in config.get("targets", [])}
     result = list(filters)
     for name, label, kind, _ in FILTERS:

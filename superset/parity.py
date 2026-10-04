@@ -1,6 +1,6 @@
-"""Compile the provisioned Grafana panels into native Superset charts.
+"""Compile the repository dashboard panels into native Superset charts.
 
-The source SQL remains the semantic contract. Grafana values use Superset's
+The source SQL remains the semantic contract. Source filter values use Superset's
 SQL-quoting filter, and time macros use its time-range processor. Optional
 chart selections filter source rows before aggregation. Aggregated source
 results are displayed with MAX, never summed or averaged a second time.
@@ -16,10 +16,10 @@ from provisioning import (cross_filter_metadata, ensure_dataset, save_chart,
                           save_dashboard, stable_uuid, verify_chart)
 
 
-SOURCE_DIR = Path(__file__).resolve().parents[1] / "grafana" / "dashboards-lean"
-FILTER_PREFIX = "__gf_"
+SOURCE_DIR = Path(__file__).resolve().parent / "dashboards"
+FILTER_PREFIX = "__source_"
 
-# Selection columns are deliberately separate from native __gf_* controls.
+# Selection columns are deliberately separate from native __source_* controls.
 # Both sets of predicates apply, so a chart click intersects sidebar filters.
 LISTING_DIMENSIONS = {
     "rooms": "coalesce(cf.rooms::text, 'unknown')",
@@ -128,7 +128,7 @@ def dataset_name(dashboard, panel):
     source_id = panel["targets"][0].get("panelId", panel["id"])
     if dashboard["uid"] == "olx-exits" and panel["id"] in (1, 2, 3, 4):
         source_id = 1
-    return f"grafana_{dashboard['uid'].replace('-', '_')}_{source_id}"
+    return f"source_{dashboard['uid'].replace('-', '_')}_{source_id}"
 
 
 def shared_source_sql(dashboard, panel):
@@ -211,7 +211,7 @@ def time_range(dashboard, panel):
     value = panel.get("timeFrom", dashboard.get("time", {}).get("from", "now-90d"))
     match = re.fullmatch(r"(?:now-)?(\d+)([dhm])", value)
     if not match or dashboard.get("time", {}).get("to", "now") != "now":
-        raise ValueError(f"Unsupported Grafana time window: {value}")
+        raise ValueError(f"Unsupported source dashboard time window: {value}")
     amount, unit = match.groups()
     unit_name = dict(d="day", h="hour", m="minute")[unit]
     # "Last 90 days" ends at midnight in Superset, and "Last 48 hours" is
@@ -226,43 +226,43 @@ def compile_sql(dashboard, panel, add_links=False):
     header = []
     for name in sorted(variables - {"min_sqm", "max_sqm"}):
         if name not in definitions:
-            raise ValueError(f"Undefined Grafana variable: {name}")
-        header.append("{% set gf_" + name + " = filter_values('" + FILTER_PREFIX
+            raise ValueError(f"Undefined source dashboard variable: {name}")
+        header.append("{% set source_" + name + " = filter_values('" + FILTER_PREFIX
                       + name + "', remove_filter=True) %}")
         if name == "neighborhood":
-            replacement = "{{ (gf_neighborhood or ['All']) | where_in | trim('()') }}"
+            replacement = "{{ (source_neighborhood or ['All']) | where_in | trim('()') }}"
         else:
-            # Scalar Grafana variables stay single-select. SQL tuples with a
+            # Scalar source variables stay single-select. SQL tuples with a
             # single element are parenthesized scalar expressions in Postgres.
-            replacement = "{{ (gf_" + name + " or ['All'])[:1] | where_in }}"
+            replacement = "{{ (source_" + name + " or ['All'])[:1] | where_in }}"
         sql = sql.replace("${" + name + ":sqlstring}", replacement)
     if variables & {"min_sqm", "max_sqm"}:
         header.extend([
-            "{% set gf_area = namespace(min='0', max='99999') %}",
-            "{% for f in get_filters('__gf_sqm', remove_filter=True) %}",
-            "{% if f.op in ['>=', '>'] %}{% set gf_area.min = f.val | string %}{% endif %}",
-            "{% if f.op in ['<=', '<'] %}{% set gf_area.max = f.val | string %}{% endif %}",
+            "{% set source_area = namespace(min='0', max='99999') %}",
+            "{% for f in get_filters('__source_sqm', remove_filter=True) %}",
+            "{% if f.op in ['>=', '>'] %}{% set source_area.min = f.val | string %}{% endif %}",
+            "{% if f.op in ['<=', '<'] %}{% set source_area.max = f.val | string %}{% endif %}",
             "{% endfor %}",
         ])
         for name, bound in [("min_sqm", "min"), ("max_sqm", "max")]:
             sql = sql.replace("${" + name + ":sqlstring}",
-                              "{{ [gf_area." + bound + "] | where_in }}")
+                              "{{ [source_area." + bound + "] | where_in }}")
     if "$__time" in sql:
         window = time_range(dashboard, panel)
         amount, unit = re.search(r"-(\d+), (day|hour|minute)", window).groups()
         interval = f"{amount} {unit}s"
         # Metadata discovery explicitly requests No filter; it still needs
         # finite bounds for generate_series and the source time predicates.
-        from_expr = '{{ gf_time.from_expr or "(now() - interval \'' + interval + '\')" }}'
-        to_expr = '{{ gf_time.to_expr or "now()" }}'
-        header.append("{% set gf_time = get_time_filter(default='"
+        from_expr = '{{ source_time.from_expr or "(now() - interval \'' + interval + '\')" }}'
+        to_expr = '{{ source_time.to_expr or "now()" }}'
+        header.append("{% set source_time = get_time_filter(default='"
                       + window + "', remove_filter=True) %}")
         sql = re.sub(r"\$__timeFilter\(([^)]+)\)",
                      lambda m: f"({m[1]} >= {from_expr} AND {m[1]} <= {to_expr})", sql)
         sql = sql.replace("$__timeFrom()", from_expr)
         sql = sql.replace("$__timeTo()", to_expr)
     if re.search(r"\$\{|\$__", sql):
-        raise ValueError(f"Untranslated Grafana macro in {chart_name(dashboard, panel)}")
+        raise ValueError(f"Untranslated source dashboard macro in {chart_name(dashboard, panel)}")
     sql = push_cross_filters(sql)
     if panel["type"] == "bargauge" and bar_dimension(panel) in cross_filter_columns(source_sql(dashboard, panel)):
         dimension = bar_dimension(panel)
@@ -307,7 +307,7 @@ def unit_settings(panel):
         "percent": "%", "s": "seconds", "m": "minutes",
     }.get(unit, "")
     decimals = defaults.get("decimals", 1 if unit == "percent" else 0)
-    # Grafana percent values already use the 0..100 scale. d3 '%' would
+    # Source percent values already use the 0..100 scale. d3 '%' would
     # multiply them by 100 again.
     return {"y_axis_format": f",.{decimals}f", "y_axis_title": suffix}
 
@@ -447,7 +447,7 @@ def filter_options(variable):
 
 def install(api, database_id, source_dir=SOURCE_DIR):
     if not source_dir.is_dir():
-        raise RuntimeError(f"Grafana source dashboards are missing: {source_dir}")
+        raise RuntimeError(f"Dashboard definitions are missing: {source_dir}")
     api.authenticate_browser()
     for path in sorted(source_dir.glob("*.json")):
         dashboard = json.loads(path.read_text(encoding="utf-8-sig"))
@@ -481,7 +481,7 @@ def install(api, database_id, source_dir=SOURCE_DIR):
             if variable["type"] == "textbox":
                 continue
             column = FILTER_PREFIX + variable["name"]
-            option_name = f"grafana_{dashboard['uid'].replace('-', '_')}_options_{variable['name']}"
+            option_name = f"source_{dashboard['uid'].replace('-', '_')}_options_{variable['name']}"
             options = ensure_dataset(api, database_id, option_name, filter_options(variable))
             excluded = [chart_ids[p["id"]] for p in panels(dashboard)
                         if variable["name"] not in variable_names(source_sql(dashboard, p))]
@@ -496,12 +496,12 @@ def install(api, database_id, source_dir=SOURCE_DIR):
                 "cascadeParentIds": [], "scope": {"rootPath": ["ROOT_ID"], "excluded": excluded},
             })
         if any(v["name"] == "min_sqm" for v in dashboard.get("templating", {}).get("list", [])):
-            name = f"grafana_{dashboard['uid'].replace('-', '_')}_options_sqm"
+            name = f"source_{dashboard['uid'].replace('-', '_')}_options_sqm"
             options = ensure_dataset(api, database_id, name,
-                                     "SELECT sqm AS __gf_sqm FROM lean.listings WHERE sqm >= 0")
+                                     "SELECT sqm AS __source_sqm FROM lean.listings WHERE sqm >= 0")
             filters.append({"id": f"NATIVE_FILTER-{stable_uuid('filter', name)}",
                             "name": "Area (m²)", "filterType": "filter_range", "type": "NATIVE_FILTER",
-                            "targets": [{"datasetId": options["id"], "column": {"name": "__gf_sqm"}}],
+                            "targets": [{"datasetId": options["id"], "column": {"name": "__source_sqm"}}],
                             "defaultDataMask": {"extraFormData": {}, "filterState": {}, "ownState": {}},
                             "controlValues": {}, "cascadeParentIds": [],
                             "scope": {"rootPath": ["ROOT_ID"], "excluded": [chart_ids[p["id"]]
@@ -531,5 +531,5 @@ def install(api, database_id, source_dir=SOURCE_DIR):
         for panel in panels(dashboard):
             chart_id, form = chart_ids[panel["id"]], forms[panel["id"]]
             verify_chart(api, {"id": chart_id, "slice_name": chart_name(dashboard, panel)}, form)
-            print(f"Checked Grafana counterpart: {chart_name(dashboard, panel)} ({form['viz_type']})")
-        print(f"Provisioned {len(chart_ids)} Grafana counterparts: {dashboard['title']}")
+            print(f"Checked native chart: {chart_name(dashboard, panel)} ({form['viz_type']})")
+        print(f"Provisioned {len(chart_ids)} native charts: {dashboard['title']}")

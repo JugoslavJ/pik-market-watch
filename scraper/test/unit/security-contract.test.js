@@ -51,7 +51,6 @@ test("viewer reuses port 3000 behind Cloudflare Tunnel", () => {
   assert.match(config, /SESSION_COOKIE_HTTPONLY = True/);
   assert.match(config, /SESSION_COOKIE_SAMESITE = "Lax"/);
   assert.match(config, /AUTH_USER_REGISTRATION = False/);
-  assert.doesNotMatch(compose, /GF_SERVER_|image: grafana\//);
   for (const name of [
     "SUPERSET_DOMAIN",
     "SUPERSET_ROOT_URL",
@@ -79,7 +78,7 @@ test("database roles separate reporting and backup access", () => {
   assert.doesNotMatch(roles, /GRANT pg_read_all_data TO %I.*reporting_user/);
 });
 
-test("lean database role repair limits Grafana to direct lean reads", () => {
+test("lean database role repair limits Superset to direct lean reads", () => {
   const roles = read("db/init-lean/zz-database-roles.sh");
   assert.match(roles, /n\.nspname IN \('public', 'lean'\)/);
   assert.match(roles, /GRANT SELECT ON %I\.%I TO %I/);

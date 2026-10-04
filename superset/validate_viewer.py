@@ -1,4 +1,4 @@
-"""Compare every lightweight chart with its original Grafana SQL."""
+"""Compare every lightweight chart with its original source dashboard SQL."""
 import json
 import math
 import os

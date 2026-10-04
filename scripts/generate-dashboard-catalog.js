@@ -2,16 +2,17 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
-const dir = path.join(root, "grafana", "dashboards-lean");
-const output = path.join(root, "superset", "MIGRATION_MATRIX.md");
+const dir = path.join(root, "superset", "dashboards");
+const output = path.join(root, "superset", "DASHBOARD_CATALOG.md");
 const flatten = (panels = []) => panels.flatMap((panel) =>
   panel.type === "row" ? flatten(panel.panels) : [panel],
 );
 const inline = (value) => String(value || "").replaceAll("|", "\\|").replaceAll("\n", "<br>");
 const queryCell = (value) => String(value).replaceAll("|", "&#124;").replaceAll("\n", "<br>");
 function targetDataset(dashboard, panel) {
-  const sourceId = panel.targets[0].panelId || panel.id;
-  return 'grafana_' + dashboard.uid.replaceAll('-', '_') + '_' + sourceId;
+  const sourceId = dashboard.uid === 'olx-exits' && [1, 2, 3, 4].includes(panel.id)
+    ? 1 : (panel.targets[0].panelId || panel.id);
+  return 'source_' + dashboard.uid.replaceAll('-', '_') + '_' + sourceId;
 }
 function nativeViz(panel) {
   const types = {
@@ -24,10 +25,10 @@ function nativeViz(panel) {
   return types[panel.type];
 }
 const lines = [
-  "# Superset migration matrix", "",
-  "Generated from `grafana/dashboards-lean/*.json` and the provisioned alert file by `scripts/generate-superset-migration-matrix.js`.", "",
-  "Every row identifies its source owner and exact Grafana query for same-snapshot comparison. Each native chart is named Owner / source panel on a Superset dashboard with the same title. superset/parity.py translates the original variables and time macros and preserves the source grouping and widths, with chart heights adjusted for readable labels. Maps use dark CARTO vector basemaps. Production comparison and cutover acceptance remain separate gates.", "",
-  "| Owner / source panel | Grafana time and filters | Unit / links | Superset target | Expected result / comparison query | Status |",
+  "# Superset dashboard catalog", "",
+  "Generated from `superset/dashboards/*.json` and the Superset alert checker by `scripts/generate-dashboard-catalog.js`.", "",
+  "Every row identifies its source owner and exact query for same-snapshot comparison. Each native chart is named Owner / source panel on a Superset dashboard with the same title. superset/parity.py translates source variables and time macros and preserves the grouping and widths, with chart heights adjusted for readable labels. Maps use dark CARTO vector basemaps. Production comparison and acceptance remain separate gates.", "",
+  "| Owner / source panel | Source time and filters | Unit / links | Superset target | Expected result / comparison query | Status |",
   "|---|---|---|---|---|---|",
 ];
 let count = 0;
@@ -76,9 +77,9 @@ lines.push("", `**Inventory:** ${count} non-row panels and ${alerts.length} aler
 const rendered = lines.join("\n");
 if (process.argv.includes("--check")) {
   if (!fs.existsSync(output) || fs.readFileSync(output, "utf8") !== rendered) {
-    console.error("Superset migration matrix is stale; run the generator and commit the result.");
+    console.error("Superset dashboard catalog is stale; run the generator and commit the result.");
     process.exitCode = 1;
-  } else console.log("Superset migration matrix is current.");
+  } else console.log("Superset dashboard catalog is current.");
 } else {
   fs.writeFileSync(output, rendered);
   console.log(`Wrote ${path.relative(root, output)} with ${count} panels and ${alerts.length} alerts`);

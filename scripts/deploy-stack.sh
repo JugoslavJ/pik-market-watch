@@ -107,27 +107,8 @@ if [ "$HAS_SUPERSET" = true ]; then
   docker compose run --build --rm superset-init
 fi
 
-# Finish building before releasing port 3000. Select the retired container by
-# project and service labels; container removal does not delete its data volume.
+# Build the dashboard service and its scheduled alert checker.
 docker compose build superset superset-alert-check
-database_id=$(docker compose ps -q db)
-project=$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "$database_id")
-if [ -z "$project" ] || [ "$project" = '<no value>' ]; then
-  echo "✗ Cannot determine this stack's Compose project; port cutover stopped." >&2
-  exit 1
-fi
-legacy_output=$(docker ps --all --quiet \
-  --filter "label=com.docker.compose.project=$project" \
-  --filter "label=com.docker.compose.service=grafana")
-legacy_grafana=()
-if [ -n "$legacy_output" ]; then
-  mapfile -t legacy_grafana <<< "$legacy_output"
-fi
-if [ "${#legacy_grafana[@]}" -gt 0 ]; then
-  echo "▶ Retiring this stack's Grafana container and releasing port 3000"
-  docker stop "${legacy_grafana[@]}"
-  docker rm "${legacy_grafana[@]}"
-fi
 
 # These names come only from the validated mode helper.
 read -r -a services <<< "$(stack_services)"

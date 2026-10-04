@@ -91,7 +91,6 @@ read-only repeatable-read snapshot.
 Superset uses one gthread worker, a one-CPU/two-GB limit, and a bounded metadata
 pool. PostgreSQL has a 0.75-CPU/two-GB limit. The viewer run uses the same
 reporting database and previously added indexes as the native measurements.
-This does not establish a comparison with historical Grafana without indexes.
 Production HTTPS/network latency and concurrent-user behavior remain unmeasured.
 
 Raw local results are in the ignored `data/superset-validation/` directory:
@@ -125,7 +124,7 @@ These are API timings, with browser rendering excluded. The gate retains the
 2-second fresh / 1-second cached API budgets and does not establish the
 100–200 ms browser target. The updated 55 Python tests, 21 deployment/security
 contracts, and browser checks passed with the viewer as the root landing page,
-only four dashboard navigation links, and no Grafana container in this stack.
+only four dashboard navigation links, and Superset as the only dashboard provider.
 
 ### Browser opening
 
@@ -145,7 +144,7 @@ not support promising 100–200 ms for fresh direct opens and every new filter.
 
 - 55 Python regression tests passed, including four viewer compiler tests.
 - Seven native request-sharing tests passed.
-- 266 comparisons covering all 71 panels passed against original Grafana SQL,
+- 266 comparisons covering all 71 panels passed against the source SQL,
   including sale/rent, area ranges, room selections and combined selections.
 - Temporary viewer-account checks passed for all four viewer dashboards,
   including role revocation after cache population. Original publication was
@@ -164,7 +163,7 @@ so deployment fixtures can supply their own production URLs:
 ```sh
 docker compose --profile superset --profile superset-ops run --rm --no-deps \
   --entrypoint env -v ./:/repo:ro -v ./superset:/workspace/superset:ro \
-  -v ./grafana/dashboards-lean:/workspace/grafana/dashboards-lean:ro \
+  -v ./superset/dashboards:/workspace/superset/dashboards:ro \
   superset-seed -u SUPERSET_ROOT_URL -u SUPERSET_DOMAIN -u SUPERSET_COOKIE_SECURE \
   python -m unittest discover -s /workspace/superset/tests
 node --test superset/tests/test_dashboard_requests.cjs

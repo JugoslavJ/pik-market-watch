@@ -38,7 +38,7 @@ Open the dashboards at `http://127.0.0.1:3000/`; sign in with the Superset accou
 
 The [React viewer](dashboard-viewer/README.md) renders all 71 source panels and keeps existing charts visible during updates. Superset supplies authentication, permissions and the read-only reporting API. Metadata lives in `superset_meta`; analytical queries use `olx_reporting`.
 
-Grafana is retired from deployment and restore. The only dashboard mode is `superset`; source JSON in `grafana/dashboards-lean/` remains the SQL/panel contract. The [instance deployment runbook](docs/SUPERSET_CUTOVER.md) covers transferring port 3000, viewer access, backups and HTTPS verification.
+Superset is the only dashboard provider and `superset` is the only dashboard mode. Definitions in `superset/dashboards/` supply the SQL/panel contract. The [instance deployment runbook](docs/SUPERSET_CUTOVER.md) covers port 3000, viewer access, backups and HTTPS verification.
 
 ## Configure searches
 

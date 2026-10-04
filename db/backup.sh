@@ -8,7 +8,7 @@ META_DB=${SUPERSET_META_DB:-superset_meta}
 RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-14}
 MODE=${DASHBOARD_MODE:-superset}
 partial=
-case "$MODE" in superset) ;; *) echo "Grafana is retired; DASHBOARD_MODE must be superset" >&2; exit 1 ;; esac
+case "$MODE" in superset) ;; *) echo "Only Superset is supported; DASHBOARD_MODE must be superset" >&2; exit 1 ;; esac
 case "$RETENTION_DAYS" in ''|*[!0-9]*) echo "Invalid BACKUP_RETENTION_DAYS" >&2; exit 1 ;; esac
 cleanup() { [ -z "$partial" ] || rm -f "$partial"; }
 trap cleanup EXIT

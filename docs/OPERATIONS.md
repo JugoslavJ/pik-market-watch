@@ -70,7 +70,7 @@ SUPERSET_ROOT_URL=https://dashboards.example.com/
 SUPERSET_COOKIE_SECURE=true
 ```
 
-Keep the existing `SUPERSET_SECRET_KEY` and reporting/metadata credentials. Grafana credentials are unused. Modes `parallel` and `grafana` are retired. Before manual Compose commands, source `scripts/lib/dashboard-stack.sh` and call `configure_dashboard_stack`.
+Keep the existing `SUPERSET_SECRET_KEY` and reporting/metadata credentials. `superset` is the only supported dashboard mode. Before manual Compose commands, source `scripts/lib/dashboard-stack.sh` and call `configure_dashboard_stack`.
 
 ## Cloudflare Tunnel
 
@@ -233,7 +233,7 @@ local configuration: `.env` and `config/searches.json`. The workflow ships
 tracked files, maintains a remote tracked-file manifest, and removes only
 files that were previously tracked but are absent from the new revision. It
 never cleans ignored configuration, backups, logs, or Docker volumes.
-`scripts/deploy-stack.sh` validates production settings, repairs roles, applies migrations, initializes and builds Superset, and identifies any old Grafana containers by this stack's project/service labels. It stops and removes those containers before publishing Superset on port 3000. It starts the viewer backend, seeds datasets/access, verifies backups, runs the viewer parity/API-performance/access gates and publishes authenticated dashboard access. A failed gate reports deployment failure. Container/volume pruning is never performed.
+`scripts/deploy-stack.sh` validates production settings, repairs roles, applies migrations, initializes and builds Superset, and starts the viewer backend on port 3000. It seeds datasets/access, verifies backups, runs the viewer parity/API-performance/access gates and publishes authenticated dashboard access. A failed gate reports deployment failure. Container/volume pruning is never performed.
 
 The repository does not install or configure `cloudflared`, OCI networking, or
 Cloudflare. The tunnel hostname, connector, token, and optional Access policy
@@ -250,4 +250,4 @@ tunnel path.
 - **Dashboard unavailable:** check `docker compose logs --tail=100 superset`, `curl -f http://127.0.0.1:3000/health`, `systemctl status cloudflared`, and the reporting credentials/grants. Recreate Superset when environment settings change; a restart does not update them.
 - **Viewer login fails:** verify the public `SUPERSET_ROOT_URL`, forwarded HTTPS headers, Secure cookies and the stable `SUPERSET_SECRET_KEY`.
 - **Viewer says the definition changed:** reseed the canonical datasets and rebuild the image, then retry. The viewer deliberately denies execution of older source SQL after a dataset definition changes.
-- **Port 3000 is occupied:** identify the listener and its Compose project before stopping it. The deployment retires only Grafana containers belonging to this stack.
+- **Port 3000 is occupied:** identify the listener and its Compose project before stopping it, then retry the deployment.

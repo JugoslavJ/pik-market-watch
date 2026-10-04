@@ -299,7 +299,7 @@ services:
       - ./superset/listing_filters.py:/app/listing_filters.py:ro
       - ./superset/parity.py:/app/parity.py:ro
       - ./superset/validate_parity.py:/app/validate_parity.py:ro
-      - ./grafana/dashboards-lean:/grafana/dashboards-lean:ro
+      - ./superset/dashboards:/app/dashboards:ro
       - ./superset/benchmark.py:/app/benchmark.py:ro
       - ./superset/datasets:/app/datasets:ro
       - ./superset/active-listings.sql:/app/active-listings.sql:ro

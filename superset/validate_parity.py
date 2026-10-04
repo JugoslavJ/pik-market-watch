@@ -1,4 +1,4 @@
-"""Compare seeded source counterparts with Grafana SQL on the reporting DB.
+"""Compare seeded source counterparts with source dashboard SQL on the reporting DB.
 
 Run after seeding: docker compose --profile superset run --rm --entrypoint
 python superset-seed /app/validate_parity.py
@@ -52,10 +52,10 @@ def context_for(saved, selection, since, until, cross_selection=None):
     filters = []
     for name, values in selection.items():
         if name in ("min_sqm", "max_sqm"):
-            filters.append({"col": "__gf_sqm", "op": ">=" if name == "min_sqm" else "<=",
+            filters.append({"col": "__source_sqm", "op": ">=" if name == "min_sqm" else "<=",
                             "val": float(values[0])})
         else:
-            filters.append({"col": "__gf_" + name, "op": "IN", "val": values})
+            filters.append({"col": "__source_" + name, "op": "IN", "val": values})
     filters += [{"col": name, "op": "IN", "val": values}
                 for name, values in (cross_selection or {}).items()]
     query["filters"] = filters
@@ -184,7 +184,7 @@ def main():
                             columns = list(expected[0]) if expected else []
                     compare(expected, actual, columns, title, time.monotonic() - started)
                     checked += 1
-                print(f"Compared Grafana source: {title} ({len(scenarios)} filter states)")
+                print(f"Compared source dashboard source: {title} ({len(scenarios)} filter states)")
     connection.close()
     print(f"Passed {checked} source comparisons across all 71 panel counterparts.")
 

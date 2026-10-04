@@ -2,7 +2,7 @@
 
 React, selectively imported Apache ECharts, TanStack Query and MapLibre GL render
 the four source dashboards (71 panels). Superset supplies login, permissions and the reporting API. Viewer navigation
-contains only the four new dashboards. Source definitions are the existing Grafana JSON.
+contains only the four dashboards. Source definitions live in `superset/dashboards/`.
 
 Build and run with the existing service:
 

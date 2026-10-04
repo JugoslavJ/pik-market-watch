@@ -18,7 +18,7 @@ class ComparisonContracts(unittest.TestCase):
         context = context_for(saved, {"deal": ["sell"]}, now, now,
                               {"rooms": ["2"]})
         self.assertEqual(context["queries"][0]["filters"], [
-            {"col": "__gf_deal", "op": "IN", "val": ["sell"]},
+            {"col": "__source_deal", "op": "IN", "val": ["sell"]},
             {"col": "rooms", "op": "IN", "val": ["2"]},
         ])
         self.assertEqual(context["form_data"]["adhoc_filters"][1]["subject"], "rooms")

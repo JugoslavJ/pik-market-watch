@@ -18,7 +18,7 @@ COPY --chown=superset:superset superset/dashboard_projection.py /app/dashboard_p
 COPY --chown=superset:superset superset/template_cache.py /app/template_cache.py
 COPY --chown=superset:superset superset/viewer.py superset/viewer_queries.py superset/parity.py superset/provisioning.py superset/maps.py superset/listing_filters.py /app/
 COPY --chown=superset:superset superset/validate_viewer.py superset/benchmark_viewer.py /app/
-COPY --chown=superset:superset grafana/dashboards-lean /app/viewer_sources
+COPY --chown=superset:superset superset/dashboards /app/dashboards
 COPY --from=viewer-build --chown=superset:superset /viewer/dist /app/viewer_dist
 COPY --chown=superset:superset superset/superset_config.py /app/superset_config.py
 USER superset

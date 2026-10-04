@@ -46,9 +46,9 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "0"
-      - name: Validate the versioned Superset migration assets
+      - name: Validate the versioned Superset dashboard catalog
         working-directory: .
-        run: node scripts/generate-superset-migration-matrix.js --check
+        run: node scripts/generate-dashboard-catalog.js --check
       - name: Build the production Superset image
         working-directory: .
         run: docker build --tag pik-market-watch-superset:ci --file superset/Dockerfile .
@@ -62,7 +62,6 @@ jobs:
         working-directory: .
         run: >-
           docker run --rm -v "$PWD/superset:/assets:ro"
-          -v "$PWD/grafana/dashboards-lean:/grafana/dashboards-lean:ro"
           -v "$PWD/scripts:/repo/scripts:ro" -v "$PWD/db:/repo/db:ro"
           --entrypoint python pik-market-watch-superset:ci
           -m unittest discover -v -s /assets/tests

@@ -5,7 +5,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const dir = path.resolve(__dirname, "../../../grafana/dashboards-lean");
+const dir = path.resolve(__dirname, "../../../superset/dashboards");
 const files = fs.readdirSync(dir).filter((file) => file.endsWith(".json"));
 
 test("staged lean dashboards keep four identities and only query lean relations", () => {
@@ -14,6 +14,8 @@ test("staged lean dashboards keep four identities and only query lean relations"
     const source = fs.readFileSync(path.join(dir, file), "utf8");
     const dashboard = JSON.parse(source);
     assert.equal(file, `${dashboard.uid}.json`);
+    assert.equal(dashboard.annotations, undefined);
+    assert.equal(dashboard.schemaVersion, undefined);
     assert.doesNotMatch(
       source,
       /\b(?:reporting|olap)\.|analytics_refresh_state|current_listing_scores/,
@@ -44,32 +46,20 @@ test("staged lean dashboards keep four identities and only query lean relations"
     )) {
       assert.equal(panel.targets.length, 1, `${file}:${panel.id}`);
       const target = panel.targets[0];
-      if (panel.datasource.uid === "-- Dashboard --") {
-        assert.equal(
-          panel.datasource.type,
-          "datasource",
-          `${file}:${panel.id}`,
-        );
-        assert.equal(target.datasource.uid, "-- Dashboard --");
-        assert.equal(target.refId, "A");
+      assert.equal(panel.datasource, undefined);
+      assert.equal(target.datasource, undefined);
+      if (target.panelId !== undefined) {
         assert.equal(target.rawSql, undefined);
         const sourcePanel = dashboard.panels.find(
           (candidate) => candidate.id === target.panelId,
         );
         assert.ok(sourcePanel, `${file}:${panel.id}: missing source panel`);
-        assert.equal(sourcePanel.datasource.uid, "olx-postgres");
         assert.match(
           sourcePanel.targets[0].rawSql,
           new RegExp(`\\bAS\\s+${panel.options.reduceOptions.fields}\\b`, "i"),
           `${file}:${panel.id}: source is missing selected field`,
         );
       } else {
-        assert.equal(
-          panel.datasource.uid,
-          "olx-postgres",
-          `${file}:${panel.id}`,
-        );
-        assert.equal(target.datasource.uid, "olx-postgres");
         assert.ok(target.rawSql, `${file}:${panel.id}: missing SQL`);
       }
       if (panel.type === "stat")

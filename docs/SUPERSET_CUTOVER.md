@@ -1,19 +1,18 @@
 # Deploy the React dashboards on OCI
 
-The React viewer is the only dashboard entry point. Grafana is retired from
-Compose, deployment, restore and backup requirements. Superset supplies login,
+The React viewer is the only dashboard entry point. Superset supplies login,
 permissions, canonical datasets and the read-only reporting API.
 
 ## Port and public URL
 
-- Host listener: `127.0.0.1:3000` (the former Grafana port).
+- Host listener: `127.0.0.1:3000`.
 - Superset container/network listener: `8088`.
 - `/` opens Market Overview; navigation contains Home, Overview, Exits and Health.
 - The existing public hostname and Cloudflare origin `http://127.0.0.1:3000`
   can stay unchanged. If the tunnel was moved to 8088, change it back to 3000.
 
-Source JSON in `grafana/dashboards-lean/` remains the SQL/panel contract for the
-71 panels. These files do not run Grafana or require Grafana credentials.
+Source JSON in `superset/dashboards/` supplies the SQL/panel contract for all
+71 panels and their native Superset charts.
 
 ## Prepare the instance
 
@@ -32,8 +31,8 @@ Source JSON in `grafana/dashboards-lean/` remains the SQL/panel contract for the
    ```
 
    Configure the required metadata, reporting, backup and administrator
-   credentials from `.env.example`. Grafana credentials are unused. Remove
-   `parallel`/`grafana` mode settings; preflight rejects retired modes.
+   credentials from `.env.example`. Preflight requires `superset` as the
+   dashboard mode.
 3. Commit the complete implementation, including `dashboard-viewer/`,
    `superset/`, deployment helpers and the additive query-index migration.
    GitHub Actions ships tracked files only. Preserve the instance's ignored
@@ -42,7 +41,7 @@ Source JSON in `grafana/dashboards-lean/` remains the SQL/panel contract for the
    secrets and pinned host key as described in [OPERATIONS.md](OPERATIONS.md).
    The workflow builds on the instance's architecture.
 
-## Deploy and retire Grafana
+## Deploy Superset
 
 From the instance checkout, production preflight changes no services:
 
@@ -58,16 +57,12 @@ The deployment:
 
 1. Repairs database ownership/grants and applies ordered migrations.
 2. Initializes Superset metadata/security and finishes the image build.
-3. Finds old Grafana containers using this stack's database container's Compose
-   project label plus the `grafana` service label, then stops and removes those
-   containers. Other projects are excluded; volumes are not deleted.
-4. Starts Superset on host port 3000, its alert checker and backups, then seeds
+3. Starts Superset on host port 3000, its alert checker and backups, then seeds
    canonical datasets and viewer permissions.
-5. Takes verified database/home-state backups and runs viewer acceptance gates.
-6. Publishes the managed dashboards to authenticated viewers after gates pass.
+4. Takes verified database/home-state backups and runs viewer acceptance gates.
+5. Publishes the managed dashboards to authenticated viewers after gates pass.
 
-Expect a dashboard interruption between releasing port 3000 and the new service
-becoming ready. Grafana is not restarted by future deployments or database syncs.
+Expect a dashboard interruption while the new service becomes ready.
 The deployment fails if its migration, startup or acceptance gates fail.
 
 ## Verify the actual viewer
@@ -112,9 +107,7 @@ in [the viewer README](../dashboard-viewer/README.md).
 
 Keep both database archives and Superset home backups, with the same encryption
 key. Rehearse recovery in a disposable stack. To roll back a faulty viewer
-release, redeploy a previous accepted viewer revision using port 3000; do not
-switch to retired Grafana modes. Existing historical Grafana volumes/archives
-are not automatically deleted by this deployment.
+release, redeploy a previous accepted viewer revision using port 3000.
 
 Local results and the remaining browser latency gap are recorded in
 [PERFORMANCE.md](../superset/PERFORMANCE.md). Instance HTTPS and concurrent-user

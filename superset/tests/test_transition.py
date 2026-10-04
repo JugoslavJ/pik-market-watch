@@ -37,7 +37,6 @@ class TransitionContracts(unittest.TestCase):
 printf '%s\\n' "$*" >> "$COMMAND_LOG"
 case "$*" in
   *validate_viewer.py*) [ "${MOCK_FAIL_PARITY:-0}" = 0 ] || exit 44 ;;
-  *'ps --all --quiet'*) echo legacy-grafana ;;
   *'ps -q '*) echo container ;;
   'inspect '*) echo healthy ;;
 esac
@@ -66,13 +65,13 @@ esac
         return subprocess.run(["bash", str(self.root / "scripts/deploy-stack.sh"), *args],
                               env=self.env, capture_output=True, text=True)
 
-    def test_superset_preflight_needs_no_grafana_credentials(self):
+    def test_superset_preflight_checks_configuration(self):
         self.configure("superset")
         result = self.run_deploy("--check")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.root / "commands").read_text().strip(), "compose config --quiet")
 
-    def test_existing_host_defaults_to_new_dashboards_without_grafana_credentials(self):
+    def test_existing_host_defaults_to_superset(self):
         self.configure(None)
         result = self.run_deploy("--check")
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -94,18 +93,14 @@ esac
         self.assertIn("validate_viewer.py", commands)
         self.assertNotIn("superset-access --publish", commands)
 
-    def test_deploy_retires_only_its_grafana_container_before_reusing_port(self):
+    def test_deploy_builds_before_starting_and_checks_before_publication(self):
         self.configure("superset")
         result = self.run_deploy()
         self.assertEqual(result.returncode, 0, result.stderr)
         commands = (self.root / "commands").read_text()
         self.assertIn("up -d --build db db-backup superset superset-alert-check", commands)
-        self.assertIn("label=com.docker.compose.project=healthy", commands)
-        self.assertIn("label=com.docker.compose.service=grafana", commands)
-        self.assertLess(commands.index("compose build superset"), commands.index("stop legacy-grafana"))
-        self.assertLess(commands.index("rm legacy-grafana"), commands.index("up -d --build db db-backup superset"))
+        self.assertLess(commands.index("compose build superset"), commands.index("up -d --build db db-backup superset"))
         self.assertLess(commands.index("benchmark_viewer.py"), commands.index("superset-access --publish"))
-        self.assertNotIn("restart grafana", commands)
 
     def test_only_the_new_dashboard_profile_is_selected(self):
         self.configure("superset")
@@ -115,12 +110,12 @@ esac
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip(), "docker-compose.yml|superset|superset")
 
-    def test_retired_modes_are_rejected_before_docker_operations(self):
-        for mode in ("grafana", "parallel"):
+    def test_unsupported_modes_are_rejected_before_docker_operations(self):
+        for mode in ("other", "parallel"):
             self.configure(mode)
             result = self.run_deploy("--check")
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn("Grafana is retired", result.stderr)
+            self.assertIn("Only Superset is supported", result.stderr)
             self.assertFalse((self.root / "commands").exists())
 
 
@@ -140,7 +135,7 @@ class BackupContracts(unittest.TestCase):
             file.chmod(0o755)
         self.env = {**os.environ, "PATH": str(self.root / "bin") + ":" + os.environ["PATH"],
                     "BACKUP_DIR": str(self.root / "backups"), "SUPERSET_HOME": str(self.root / "home"),
-                    "GRAFANA_DIR": str(self.root / "missing-grafana"), "DASHBOARD_MODE": "superset",
+                    "DASHBOARD_MODE": "superset",
                     "BACKUP_RETENTION_DAYS": "0", "SUPERSET_META_DB": "superset_meta"}
 
     def tearDown(self):
@@ -150,7 +145,7 @@ class BackupContracts(unittest.TestCase):
         return subprocess.run(["sh", str(ROOT / "db/backup.sh"), flag], env=self.env,
                               capture_output=True, text=True)
 
-    def test_superset_backups_succeed_without_grafana_volume(self):
+    def test_superset_backups_include_databases_and_home(self):
         result = self.backup("--once")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.backup("--check").returncode, 0)

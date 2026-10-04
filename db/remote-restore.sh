@@ -176,7 +176,7 @@ fi
 # build_toc <container-archive-path> <output-list>: filter the TOC to entries
 # this restore may execute. ACL entries are omitted because extension ACLs can
 # reference extension-owned functions absent after reset; the canonical role
-# repair reapplies the lean writer and shared Grafana/Superset reporting grants.
+# repair reapplies the lean writer and Superset reporting grants.
 build_toc() {
   docker compose exec -T db sh -c "
      pg_restore -l '$1' > /tmp/toc.all || exit 1

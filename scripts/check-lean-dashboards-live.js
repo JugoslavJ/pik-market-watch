@@ -1,11 +1,11 @@
 "use strict";
 
-// Emit a read-only SQL smoke script for every staged Grafana query. Pipe into
+// Emit a read-only SQL smoke script for every staged source dashboard query. Pipe into
 // psql with ON_ERROR_STOP=1 against a populated database after the backfill.
 const fs = require("node:fs");
 const path = require("node:path");
 
-const dir = path.resolve(__dirname, "../grafana/dashboards-lean");
+const dir = path.resolve(__dirname, "../superset/dashboards");
 const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
 
 function valuesOf(dashboard) {
@@ -70,4 +70,4 @@ for (const file of fs
     count++;
   }
 }
-process.stderr.write(`Emitted ${count} staged Grafana queries.\n`);
+process.stderr.write(`Emitted ${count} staged source dashboard queries.\n`);

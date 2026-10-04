@@ -1,6 +1,6 @@
 """One dashboard statement, with shared facts and summary sources.
 
-The checked-in Grafana SQL remains the value contract. Sidebar predicates keep
+The checked-in source dashboard SQL remains the value contract. Sidebar predicates keep
 their original scopes. Cross-filter predicates are applied before aggregation.
 No client value is interpolated into SQL; all values use engine parameters.
 """
@@ -9,16 +9,12 @@ import json
 import math
 import re
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 from jinja2 import DictLoader, Environment, pass_context
 from listing_filters import options_sql, viewer_variables
 from parity import (TABLE_DIMENSIONS, TABLE_SCAN, compile_sql, cross_filter_columns, dataset_name,
-                    panels, push_cross_filters, shared_source_sql, source_sql)
+                    panels, push_cross_filters, shared_source_sql, source_sql, SOURCE_DIR)
 
-SOURCE_DIR = Path(__file__).parent / "viewer_sources"
-if not SOURCE_DIR.is_dir():
-    SOURCE_DIR = Path(__file__).resolve().parents[1] / "grafana" / "dashboards-lean"
 BOARDS = {board["uid"]: board for path in sorted(SOURCE_DIR.glob("*.json"))
           if (board := json.loads(path.read_text(encoding="utf-8-sig")))}
 CANONICAL = {board["uid"]: {dataset_name(board, panel): {
@@ -138,7 +134,7 @@ def compile_dashboard(board, supplied=None, cross=None, days=None, until=None):
             table = match[2].lower()
             # Limited detail tables retain their indexed physical scans. This
             # also preserves the source plan's choice at tied LIMIT boundaries
-            # where the Grafana SQL doesn't specify a unique ordering key.
+            # where the source dashboard SQL doesn't specify a unique ordering key.
             if panel["type"] == "table":
                 return match[0]
             # Materialize repeatedly scanned listing/event facts once. Keep

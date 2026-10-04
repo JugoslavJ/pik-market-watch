@@ -5,7 +5,7 @@
 #   olx_migrator LOGIN  owns the database/schema/objects and is used only by
 #                       migrations and restores.
 #   olx_app LOGIN       runtime writer used by the scraper and maintenance.
-#   olx_reporting LOGIN SELECT-only access to lean data used by Grafana.
+#   olx_reporting LOGIN SELECT-only access to lean data used by Superset.
 #   olx_backup LOGIN    pg_dump-only broad read role; never used by dashboards.
 #   superset_meta LOGIN owns only the separate Superset metadata database.
 #
@@ -111,7 +111,7 @@ SELECT format('GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA %s TO %I',
               string_agg(format('%I', nspname), ', '), :'app_user')
 FROM pg_namespace WHERE nspname IN ('public','lean') \gexec
 
--- Grafana: explicit lean reads only. Never inherit pg_read_all_data. ---------
+-- Superset: explicit lean reads only. Never inherit pg_read_all_data. ---------
 SELECT format('REVOKE pg_read_all_data FROM %I', :'reporting_user') \gexec
 SELECT format('REVOKE ALL ON SCHEMA %s FROM %I',
               string_agg(format('%I', nspname), ', '), :'reporting_user')
@@ -174,7 +174,7 @@ WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'meta_db') \gexec
 SELECT format('ALTER DATABASE %I OWNER TO %I', :'meta_db', :'meta_user') \gexec
 SELECT format('REVOKE CONNECT ON DATABASE %I FROM PUBLIC', :'meta_db') \gexec
 
--- Grafana guard-rails: dashboards/alerts use this role, so a -----------------
+-- Superset guard-rails: dashboards/alerts use this role, so a -----------------
 -- runaway query or wedged session must not eat the shared work_mem /
 -- connection budget. LIMIT 30 sits under max_connections=40 (app pool max 5
 -- + admin headroom); 60 s comfortably covers the heaviest analytics views.

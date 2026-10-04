@@ -7,11 +7,11 @@ import time
 from client import SupersetAPI
 
 CHARTS = [
-    ("OLX.ba Market Overview / Active listings", True, "__gf_deal"),
+    ("OLX.ba Market Overview / Active listings", True, "__source_deal"),
     ("OLX.ba Market Overview / Median reported sale price KM/m² by day", True, None),
-    ("OLX.ba Market Overview / Listing map — click a pin to open the ad", True, "__gf_deal"),
+    ("OLX.ba Market Overview / Listing map — click a pin to open the ad", True, "__source_deal"),
     ("OLX.ba Home / Inventory flow — new vs closed per day · all categories", True, None),
-    ("OLX.ba Exits & Price Endings / Closed listings · 30 d", True, "__gf_deal"),
+    ("OLX.ba Exits & Price Endings / Closed listings · 30 d", True, "__source_deal"),
     ("Current alert status", False, None),
     ("Home inventory flow — last 90 days", True, None),
     ("Sale market trend (BAM per m², 90 days)", True, None),

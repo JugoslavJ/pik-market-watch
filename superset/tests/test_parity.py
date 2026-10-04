@@ -33,7 +33,7 @@ class ParityContracts(unittest.TestCase):
         cls.boards = [json.loads(p.read_text(encoding="utf-8-sig"))
                       for p in sorted(parity.SOURCE_DIR.glob("*.json"))]
         if not cls.boards:
-            raise RuntimeError("Grafana source dashboards must be mounted for parity tests")
+            raise RuntimeError("Dashboard definitions must be mounted for parity tests")
 
     def test_every_source_panel_has_a_visual_counterpart(self):
         expected = {"olx-home": 11, "olx-overview": 25,
@@ -80,10 +80,10 @@ class ParityContracts(unittest.TestCase):
         board = next(b for b in self.boards if b["uid"] == "olx-overview")
         panel = next(p for p in parity.panels(board) if p["id"] == 1)
         sql = render(parity.compile_sql(board, panel), {
-            "__gf_deal": ["sell"], "__gf_rooms": ["3"],
-            "__gf_neighborhood": ["O'Brien", "Centar"],
-            "__gf_category": ["apartment'); SELECT 1; --"],
-            "__gf_sqm": [{"op": ">=", "val": 40}, {"op": "<=", "val": 100}],
+            "__source_deal": ["sell"], "__source_rooms": ["3"],
+            "__source_neighborhood": ["O'Brien", "Centar"],
+            "__source_category": ["apartment'); SELECT 1; --"],
+            "__source_sqm": [{"op": ">=", "val": 40}, {"op": "<=", "val": 100}],
         })
         self.assertIn("ARRAY['O''Brien', 'Centar']", sql)
         self.assertIn("('apartment''); SELECT 1; --')", sql)
@@ -176,7 +176,7 @@ class ParityContracts(unittest.TestCase):
         board = next(b for b in self.boards if b["uid"] == "olx-overview")
         panel = next(p for p in parity.panels(board) if p["id"] == 1)
         sql = render(parity.compile_sql(board, panel), {
-            "__gf_rooms": ["3"], "rooms": [{"op": "IN", "val": [2]}],
+            "__source_rooms": ["3"], "rooms": [{"op": "IN", "val": [2]}],
             "neighborhood": [{"op": "IN", "val": ["O'Brien"]},
                              {"op": "IN", "val": ["Centar"]}],
         })

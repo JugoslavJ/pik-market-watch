@@ -51,7 +51,7 @@ Superset supplies login, permissions, dataset definitions and the viewer API. It
 
 Each fresh viewer request executes one reporting data statement with shared facts and aggregates. Charts keep their previous values during filter updates. Market/exit snapshots expire after ten minutes; operational Home/Health results are uncached. Tables provide links and CSV; MapLibre uses CARTO vector basemaps.
 
-Grafana has no runtime service, profile or required credentials. Its repository JSON remains the trusted SQL/panel contract used by the compiler and parity comparisons. `DASHBOARD_MODE=superset` is the only supported deployment/restore mode. The application migrator, writer, reporting and backup roles retain their separate responsibilities.
+Superset is the only dashboard provider. Definitions in `superset/dashboards/` supply the trusted SQL/panel contract used by the compiler and parity comparisons. `DASHBOARD_MODE=superset` is the only supported deployment/restore mode. The application migrator, writer, reporting and backup roles retain their separate responsibilities.
 
 See [viewer details](../dashboard-viewer/README.md), [performance measurements](../superset/PERFORMANCE.md) and [instance deployment](SUPERSET_CUTOVER.md).
 

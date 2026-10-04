@@ -1,53 +1,7 @@
 {
-  "annotations": {
-    "list": [
-      {
-        "builtIn": 1,
-        "datasource": {
-          "type": "grafana",
-          "uid": "-- Grafana --"
-        },
-        "enable": true,
-        "hide": true,
-        "iconColor": "red",
-        "name": "Annotations & Alerts",
-        "type": "dashboard"
-      }
-    ]
-  },
   "description": "Direct views of current listings, recorded price changes, scrape runs, and observed closures in the lean schema. Historical charts use retained event timestamps rather than reconstructed daily inventory.",
-  "editable": true,
-  "fiscalYearStartMonth": 0,
-  "graphTooltip": 0,
-  "id": null,
-  "links": [
-    {
-      "targetBlank": false,
-      "title": "Home",
-      "url": "/d/olx-home"
-    },
-    {
-      "targetBlank": false,
-      "title": "Market overview",
-      "url": "/d/olx-overview"
-    },
-    {
-      "targetBlank": false,
-      "title": "Observed exits",
-      "url": "/d/olx-exits"
-    },
-    {
-      "targetBlank": false,
-      "title": "Data health",
-      "url": "/d/olx-health"
-    }
-  ],
   "panels": [
     {
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -83,7 +37,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "searches",
           "values": false
         },
@@ -92,23 +48,12 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT count(*) AS searches FROM lean.saved_searches",
-          "refId": "A"
+          "rawSql": "SELECT count(*) AS searches FROM lean.saved_searches"
         }
       ],
       "id": 1
     },
     {
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -152,7 +97,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "failed_24h",
           "values": false
         },
@@ -161,23 +108,12 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "WITH a AS (\n  SELECT count(*) FILTER (WHERE status='error' AND started_at>now()-INTERVAL '24 hours') AS failed_24h,\n    count(*) FILTER (WHERE status='ok' AND started_at>now()-INTERVAL '24 hours') AS ok_24h,\n    count(*) FILTER (WHERE status IN ('ok','error') AND started_at>now()-INTERVAL '24 hours') AS finished_24h,\n    max(finished_at) FILTER (WHERE status='ok' AND is_complete) AS last_success,\n    coalesce(sum(cards) FILTER (WHERE status='ok' AND started_at>now()-INTERVAL '24 hours'),0) AS cards_24h,\n    count(*) FILTER (WHERE NOT is_complete AND status IN ('ok','error') AND finished_at IS NOT NULL AND started_at>now()-INTERVAL '24 hours') AS incomplete\n  FROM lean.scrape_runs\n)\nSELECT failed_24h,\n  round(100.0*ok_24h/NULLIF(finished_24h,0),0) AS success_rate,\n  round(EXTRACT(EPOCH FROM (now()-last_success)))::bigint AS seconds_since_success,\n  cards_24h, incomplete\nFROM a",
-          "refId": "A"
+          "rawSql": "WITH a AS (\n  SELECT count(*) FILTER (WHERE status='error' AND started_at>now()-INTERVAL '24 hours') AS failed_24h,\n    count(*) FILTER (WHERE status='ok' AND started_at>now()-INTERVAL '24 hours') AS ok_24h,\n    count(*) FILTER (WHERE status IN ('ok','error') AND started_at>now()-INTERVAL '24 hours') AS finished_24h,\n    max(finished_at) FILTER (WHERE status='ok' AND is_complete) AS last_success,\n    coalesce(sum(cards) FILTER (WHERE status='ok' AND started_at>now()-INTERVAL '24 hours'),0) AS cards_24h,\n    count(*) FILTER (WHERE NOT is_complete AND status IN ('ok','error') AND finished_at IS NOT NULL AND started_at>now()-INTERVAL '24 hours') AS incomplete\n  FROM lean.scrape_runs\n)\nSELECT failed_24h,\n  round(100.0*ok_24h/NULLIF(finished_24h,0),0) AS success_rate,\n  round(EXTRACT(EPOCH FROM (now()-last_success)))::bigint AS seconds_since_success,\n  cards_24h, incomplete\nFROM a"
         }
       ],
       "id": 2
     },
     {
-      "datasource": {
-        "type": "datasource",
-        "uid": "-- Dashboard --"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -221,7 +157,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "success_rate",
           "values": false
         },
@@ -230,21 +168,12 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "datasource",
-            "uid": "-- Dashboard --"
-          },
-          "panelId": 2,
-          "refId": "A"
+          "panelId": 2
         }
       ],
       "id": 3
     },
     {
-      "datasource": {
-        "type": "datasource",
-        "uid": "-- Dashboard --"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -288,7 +217,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "seconds_since_success",
           "values": false
         },
@@ -297,21 +228,12 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "datasource",
-            "uid": "-- Dashboard --"
-          },
-          "panelId": 2,
-          "refId": "A"
+          "panelId": 2
         }
       ],
       "id": 4
     },
     {
-      "datasource": {
-        "type": "datasource",
-        "uid": "-- Dashboard --"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -347,7 +269,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "cards_24h",
           "values": false
         },
@@ -356,12 +280,7 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "datasource",
-            "uid": "-- Dashboard --"
-          },
-          "panelId": 2,
-          "refId": "A"
+          "panelId": 2
         }
       ],
       "id": 5
@@ -379,10 +298,6 @@
       "id": 6
     },
     {
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -418,23 +333,12 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawSql": "SELECT date_trunc('hour',started_at) AS time,count(*) FILTER (WHERE status='ok') AS ok,count(*) FILTER (WHERE status='error') AS error,count(*) FILTER (WHERE status='running') AS running FROM lean.scrape_runs WHERE $__timeFilter(started_at) GROUP BY 1 ORDER BY 1",
-          "refId": "A"
+          "rawSql": "SELECT date_trunc('hour',started_at) AS time,count(*) FILTER (WHERE status='ok') AS ok,count(*) FILTER (WHERE status='error') AS error,count(*) FILTER (WHERE status='running') AS running FROM lean.scrape_runs WHERE $__timeFilter(started_at) GROUP BY 1 ORDER BY 1"
         }
       ],
       "id": 7
     },
     {
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -470,14 +374,7 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawSql": "SELECT date_trunc('hour',started_at) AS time,round(avg(cards))::int AS \"avg cards\",round(avg(pages))::int AS \"avg pages\" FROM lean.scrape_runs WHERE $__timeFilter(started_at) GROUP BY 1 ORDER BY 1",
-          "refId": "A"
+          "rawSql": "SELECT date_trunc('hour',started_at) AS time,round(avg(cards))::int AS \"avg cards\",round(avg(pages))::int AS \"avg pages\" FROM lean.scrape_runs WHERE $__timeFilter(started_at) GROUP BY 1 ORDER BY 1"
         }
       ],
       "id": 8
@@ -495,10 +392,6 @@
       "id": 9
     },
     {
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -526,21 +419,16 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": ["sum"],
+          "reducer": [
+            "sum"
+          ],
           "show": false
         },
         "showHeader": true
       },
       "targets": [
         {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT name,coalesce(category,'(none)') AS category,listing_count AS listings,median_ppm2 AS \"median KM/m2\",new_count AS new,drop_count AS drops,round(EXTRACT(EPOCH FROM (now()-last_scraped_at))/60)::int AS age_min,url FROM lean.saved_searches WHERE ${category:sqlstring}='All' OR category=${category:sqlstring} ORDER BY last_scraped_at NULLS FIRST",
-          "refId": "A"
+          "rawSql": "SELECT name,coalesce(category,'(none)') AS category,listing_count AS listings,median_ppm2 AS \"median KM/m2\",new_count AS new,drop_count AS drops,round(EXTRACT(EPOCH FROM (now()-last_scraped_at))/60)::int AS age_min,url FROM lean.saved_searches WHERE ${category:sqlstring}='All' OR category=${category:sqlstring} ORDER BY last_scraped_at NULLS FIRST"
         }
       ],
       "id": 10
@@ -558,10 +446,6 @@
       "id": 11
     },
     {
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -589,21 +473,16 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": ["sum"],
+          "reducer": [
+            "sum"
+          ],
           "show": false
         },
         "showHeader": true
       },
       "targets": [
         {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT r.id,coalesce(s.category,'(none)') AS category,r.search_key,r.status,r.pages,r.cards,r.started_at AS started,r.finished_at AS finished,r.error FROM lean.scrape_runs r LEFT JOIN lean.saved_searches s USING(search_key) ORDER BY r.id DESC LIMIT 50",
-          "refId": "A"
+          "rawSql": "SELECT r.id,coalesce(s.category,'(none)') AS category,r.search_key,r.status,r.pages,r.cards,r.started_at AS started,r.finished_at AS finished,r.error FROM lean.scrape_runs r LEFT JOIN lean.saved_searches s USING(search_key) ORDER BY r.id DESC LIMIT 50"
         }
       ],
       "id": 12
@@ -621,10 +500,6 @@
       "id": 13
     },
     {
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -668,7 +543,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "pinned_pct",
           "values": false
         },
@@ -677,23 +554,12 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT round(100.0*count(*) FILTER (WHERE latitude IS NOT NULL AND longitude IS NOT NULL)/NULLIF(count(*),0)) AS pinned_pct,\n  round(100.0*count(details_fetched_at)/NULLIF(count(*),0)) AS details_pct,\n  round(100.0*count(*) FILTER (WHERE ppm2>0)/NULLIF(count(*),0)) AS priced_pct,\n  round(100.0*count(api_status)/NULLIF(count(*),0)) AS api_status_pct\nFROM lean.listings WHERE closed_at IS NULL",
-          "refId": "A"
+          "rawSql": "SELECT round(100.0*count(*) FILTER (WHERE latitude IS NOT NULL AND longitude IS NOT NULL)/NULLIF(count(*),0)) AS pinned_pct,\n  round(100.0*count(details_fetched_at)/NULLIF(count(*),0)) AS details_pct,\n  round(100.0*count(*) FILTER (WHERE ppm2>0)/NULLIF(count(*),0)) AS priced_pct,\n  round(100.0*count(api_status)/NULLIF(count(*),0)) AS api_status_pct\nFROM lean.listings WHERE closed_at IS NULL"
         }
       ],
       "id": 14
     },
     {
-      "datasource": {
-        "type": "datasource",
-        "uid": "-- Dashboard --"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -737,7 +603,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "details_pct",
           "values": false
         },
@@ -746,21 +614,12 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "datasource",
-            "uid": "-- Dashboard --"
-          },
-          "panelId": 14,
-          "refId": "A"
+          "panelId": 14
         }
       ],
       "id": 15
     },
     {
-      "datasource": {
-        "type": "datasource",
-        "uid": "-- Dashboard --"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -804,7 +663,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "priced_pct",
           "values": false
         },
@@ -813,21 +674,12 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "datasource",
-            "uid": "-- Dashboard --"
-          },
-          "panelId": 14,
-          "refId": "A"
+          "panelId": 14
         }
       ],
       "id": 16
     },
     {
-      "datasource": {
-        "type": "datasource",
-        "uid": "-- Dashboard --"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -867,7 +719,9 @@
         "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "api_status_pct",
           "values": false
         },
@@ -876,21 +730,12 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "datasource",
-            "uid": "-- Dashboard --"
-          },
-          "panelId": 14,
-          "refId": "A"
+          "panelId": 14
         }
       ],
       "id": 17
     },
     {
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -918,30 +763,21 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": ["sum"],
+          "reducer": [
+            "sum"
+          ],
           "show": false
         },
         "showHeader": true
       },
       "targets": [
         {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT coalesce(api_status,'(not exposed)') AS olx_says,CASE WHEN closed_at IS NOT NULL THEN 'closed' ELSE 'open' END AS we_say,count(*) AS listings FROM lean.listings WHERE last_seen>now()-INTERVAL '14 days' GROUP BY 1,2 ORDER BY 3 DESC",
-          "refId": "A"
+          "rawSql": "SELECT coalesce(api_status,'(not exposed)') AS olx_says,CASE WHEN closed_at IS NOT NULL THEN 'closed' ELSE 'open' END AS we_say,count(*) AS listings FROM lean.listings WHERE last_seen>now()-INTERVAL '14 days' GROUP BY 1,2 ORDER BY 3 DESC"
         }
       ],
       "id": 18
     },
     {
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -969,21 +805,16 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": ["sum"],
+          "reducer": [
+            "sum"
+          ],
           "show": false
         },
         "showHeader": true
       },
       "targets": [
         {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT s.name,coalesce(s.category,'(none)') AS category,count(r.id) AS runs,round(avg(EXTRACT(EPOCH FROM (r.finished_at-r.started_at))))::int AS avg_s,max(EXTRACT(EPOCH FROM (r.finished_at-r.started_at)))::int AS max_s FROM lean.scrape_runs r JOIN lean.saved_searches s USING(search_key) WHERE r.finished_at IS NOT NULL AND $__timeFilter(r.started_at) GROUP BY 1,2 ORDER BY 4 DESC",
-          "refId": "A"
+          "rawSql": "SELECT s.name,coalesce(s.category,'(none)') AS category,count(r.id) AS runs,round(avg(EXTRACT(EPOCH FROM (r.finished_at-r.started_at))))::int AS avg_s,max(EXTRACT(EPOCH FROM (r.finished_at-r.started_at)))::int AS max_s FROM lean.scrape_runs r JOIN lean.saved_searches s USING(search_key) WHERE r.finished_at IS NOT NULL AND $__timeFilter(r.started_at) GROUP BY 1,2 ORDER BY 4 DESC"
         }
       ],
       "id": 19
@@ -1011,10 +842,6 @@
         "w": 12,
         "h": 4
       },
-      "datasource": {
-        "type": "datasource",
-        "uid": "-- Dashboard --"
-      },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
@@ -1026,7 +853,9 @@
         "colorMode": "value",
         "graphMode": "none",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "incomplete",
           "values": false
         },
@@ -1034,12 +863,7 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "datasource",
-            "uid": "-- Dashboard --"
-          },
-          "panelId": 2,
-          "refId": "A"
+          "panelId": 2
         }
       ]
     },
@@ -1054,10 +878,6 @@
         "w": 12,
         "h": 4
       },
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
@@ -1069,7 +889,9 @@
         "colorMode": "value",
         "graphMode": "none",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "backlog",
           "values": false
         },
@@ -1077,14 +899,7 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT count(*) AS backlog FROM lean.listings WHERE closed_at IS NULL AND (details_fetched_at IS NULL OR details_fetched_at<now()-INTERVAL '7 days') AND (last_enrichment_attempted_at IS NULL OR last_enrichment_attempted_at<now()-INTERVAL '12 hours')",
-          "refId": "A"
+          "rawSql": "SELECT count(*) AS backlog FROM lean.listings WHERE closed_at IS NULL AND (details_fetched_at IS NULL OR details_fetched_at<now()-INTERVAL '7 days') AND (last_enrichment_attempted_at IS NULL OR last_enrichment_attempted_at<now()-INTERVAL '12 hours')"
         }
       ]
     },
@@ -1099,10 +914,6 @@
         "w": 12,
         "h": 4
       },
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
@@ -1114,7 +925,9 @@
         "colorMode": "value",
         "graphMode": "none",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "invalid_latest",
           "values": false
         },
@@ -1122,14 +935,7 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT count(*) AS invalid_latest FROM lean.listings WHERE extra->>'latest_price_state' IN ('invalid','conflict') AND last_seen>now()-INTERVAL '30 days'",
-          "refId": "A"
+          "rawSql": "SELECT count(*) AS invalid_latest FROM lean.listings WHERE extra->>'latest_price_state' IN ('invalid','conflict') AND last_seen>now()-INTERVAL '30 days'"
         }
       ]
     },
@@ -1146,10 +952,6 @@
       "id": 20
     },
     {
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -1177,30 +979,21 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": ["sum"],
+          "reducer": [
+            "sum"
+          ],
           "show": false
         },
         "showHeader": true
       },
       "targets": [
         {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT count(*)::int AS runs,left(regexp_replace(coalesce(error,'(no message)'), '[0-9]+','#','g'),120) AS failure_pattern,max(started_at) AS last_seen FROM lean.scrape_runs WHERE status='error' AND started_at>now()-INTERVAL '7 days' GROUP BY 2 ORDER BY 1 DESC",
-          "refId": "A"
+          "rawSql": "SELECT count(*)::int AS runs,left(regexp_replace(coalesce(error,'(no message)'), '[0-9]+','#','g'),120) AS failure_pattern,max(started_at) AS last_seen FROM lean.scrape_runs WHERE status='error' AND started_at>now()-INTERVAL '7 days' GROUP BY 2 ORDER BY 1 DESC"
         }
       ],
       "id": 21
     },
     {
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
-      },
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -1236,14 +1029,7 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawSql": "SELECT date_trunc('hour',started_at) AS time,round(avg(EXTRACT(EPOCH FROM (finished_at-started_at)))/60.0,1) AS \"avg min\",round(max(EXTRACT(EPOCH FROM (finished_at-started_at)))/60.0,1) AS \"max min\" FROM lean.scrape_runs WHERE finished_at IS NOT NULL AND $__timeFilter(started_at) GROUP BY 1 ORDER BY 1",
-          "refId": "A"
+          "rawSql": "SELECT date_trunc('hour',started_at) AS time,round(avg(EXTRACT(EPOCH FROM (finished_at-started_at)))/60.0,1) AS \"avg min\",round(max(EXTRACT(EPOCH FROM (finished_at-started_at)))/60.0,1) AS \"max min\" FROM lean.scrape_runs WHERE finished_at IS NOT NULL AND $__timeFilter(started_at) GROUP BY 1 ORDER BY 1"
         }
       ],
       "id": 22
@@ -1258,10 +1044,6 @@
         "y": 104,
         "w": 24,
         "h": 12
-      },
-      "datasource": {
-        "type": "postgres",
-        "uid": "olx-postgres"
       },
       "fieldConfig": {
         "defaults": {
@@ -1281,28 +1063,26 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": ["sum"],
+          "reducer": [
+            "sum"
+          ],
           "show": false
         },
         "showHeader": true
       },
       "targets": [
         {
-          "datasource": {
-            "type": "postgres",
-            "uid": "olx-postgres"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT s.name,s.category,s.search_key,CASE WHEN r.status='error' THEN 'failed' WHEN r.status='running' THEN 'running' WHEN r.finished_at<now()-INTERVAL '26 hours' THEN 'stale' ELSE coalesce(r.status,'never') END AS phase,round(EXTRACT(EPOCH FROM (now()-r.finished_at))/60)::int AS age_min,r.started_at,r.finished_at,r.error,s.url FROM lean.saved_searches s LEFT JOIN LATERAL (SELECT * FROM lean.scrape_runs WHERE search_key=s.search_key ORDER BY id DESC LIMIT 1) r ON TRUE WHERE ${category:sqlstring}='All' OR s.category=${category:sqlstring} ORDER BY r.finished_at NULLS FIRST",
-          "refId": "A"
+          "rawSql": "SELECT s.name,s.category,s.search_key,CASE WHEN r.status='error' THEN 'failed' WHEN r.status='running' THEN 'running' WHEN r.finished_at<now()-INTERVAL '26 hours' THEN 'stale' ELSE coalesce(r.status,'never') END AS phase,round(EXTRACT(EPOCH FROM (now()-r.finished_at))/60)::int AS age_min,r.started_at,r.finished_at,r.error,s.url FROM lean.saved_searches s LEFT JOIN LATERAL (SELECT * FROM lean.scrape_runs WHERE search_key=s.search_key ORDER BY id DESC LIMIT 1) r ON TRUE WHERE ${category:sqlstring}='All' OR s.category=${category:sqlstring} ORDER BY r.finished_at NULLS FIRST"
         }
       ]
     }
   ],
-  "refresh": "2h",
-  "schemaVersion": 39,
-  "tags": ["olx", "scraper", "ops", "responsive"],
+  "tags": [
+    "olx",
+    "scraper",
+    "ops",
+    "responsive"
+  ],
   "templating": {
     "list": [
       {
@@ -1310,10 +1090,6 @@
           "selected": true,
           "text": "All",
           "value": "$__all"
-        },
-        "datasource": {
-          "type": "postgres",
-          "uid": "olx-postgres"
         },
         "definition": "SELECT DISTINCT category AS __value,category AS __text FROM lean.saved_searches WHERE category IS NOT NULL ORDER BY 1",
         "includeAll": true,
@@ -1338,7 +1114,5 @@
   },
   "timezone": "Europe/Sarajevo",
   "title": "OLX Scraper Health",
-  "uid": "olx-health",
-  "version": 1,
-  "weekStart": ""
+  "uid": "olx-health"
 }

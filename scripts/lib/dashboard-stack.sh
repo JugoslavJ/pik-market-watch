@@ -18,11 +18,10 @@ configure_dashboard_stack() {
   DASHBOARD_MODE=$(read_env_value DASHBOARD_MODE)
   DASHBOARD_MODE=${DASHBOARD_MODE:-superset}
   HAS_SUPERSET=true
-  HAS_GRAFANA=false
   COMPOSE_FILE=docker-compose.yml
   COMPOSE_PATH_SEPARATOR=:
   if [ "$DASHBOARD_MODE" != superset ]; then
-    echo "Grafana is retired. Set DASHBOARD_MODE=superset in the instance .env." >&2
+    echo "Only Superset is supported. Set DASHBOARD_MODE=superset in the instance .env." >&2
     return 1
   fi
   COMPOSE_PROFILES=superset

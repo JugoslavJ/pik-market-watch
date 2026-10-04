@@ -9,7 +9,7 @@ import urllib.parse
 from pathlib import Path
 
 from client import SupersetAPI
-from parity import install as install_grafana_parity, push_cross_filters
+from parity import install as install_dashboard_sources, push_cross_filters
 from provisioning import (
     ensure_dataset, install_dashboard, metric_count, raw_table, summary_chart,
     map_chart, query_context, select_filter, select_filter_targets,
@@ -100,7 +100,7 @@ def main():
     db = api.ensure("database", "database_name", DATABASE_NAME, database_payload)
     database_id = db["id"]
 
-    install_grafana_parity(api, database_id)
+    install_dashboard_sources(api, database_id)
     if "--parity-only" in sys.argv:
         return
 

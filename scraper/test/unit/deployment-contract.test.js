@@ -62,7 +62,6 @@ test("Compose targets PostgreSQL 18", () => {
 
 test("Compose provisions only the lean schema and dashboard assets", () => {
   assert.match(compose, /DB_INIT_DIR:-\.\/db\/init-lean/);
-  assert.doesNotMatch(compose, /image: grafana\/grafana/);
   assert.match(compose, /dockerfile: superset\/Dockerfile/);
   assert.match(compose, /target: 8088\s+published: "3000"/);
   assert.doesNotMatch(
@@ -185,10 +184,6 @@ test("Cloudflare Tunnel is the documented public entry point", () => {
   assert.match(operations, /no public OCI 80\/443\s+ingress/i);
   assert.equal(
     fs.existsSync(path.join(ROOT, "deploy", "caddy", "Caddyfile.example")),
-    false,
-  );
-  assert.equal(
-    fs.existsSync(path.join(ROOT, "scripts", "generate-grafana-cert.sh")),
     false,
   );
 });
