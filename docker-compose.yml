@@ -372,6 +372,9 @@ services:
     # Keep pg_dump major-version matched with the database. The PostGIS image
     # is used here only for its PostgreSQL 18 client tools.
     image: ghcr.io/baosystems/postgis:18-3.6@sha256:4117c8beae9081e76a23a1577c64d05260a61fb0a3c212f37596054ef4c190d8
+    # The bind-mounted backup directory is owned by the instance checkout user.
+    # Override these IDs on hosts with different backups/ ownership.
+    user: "${BACKUP_UID:-1000}:${BACKUP_GID:-989}"
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true

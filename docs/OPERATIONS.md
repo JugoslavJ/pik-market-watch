@@ -23,6 +23,7 @@ docker compose run --rm superset-access
 | `POSTGRES_APP_USER`, `POSTGRES_APP_PASSWORD`             |                        `olx_app`, required | Scraper and maintenance runtime writer; owns no database objects.                                                                                     |
 | `POSTGRES_REPORTING_USER`, `POSTGRES_REPORTING_PASSWORD` |                  `olx_reporting`, required | Read-only role for the viewer and Superset analytical queries over lean data.                                                                                                   |
 | `POSTGRES_BACKUP_USER`, `POSTGRES_BACKUP_PASSWORD`       |                     `olx_backup`, required | Dedicated broad-read role used only by `pg_dump`; it is not a dashboard credential.                                                                     |
+| `BACKUP_UID`, `BACKUP_GID`                               |                          `1000`, `989` | Linux UID/GID used by `db-backup`; set these to the owner IDs of the host `backups/` directory.                                                         |
 | `SUPERSET_META_USER`, `SUPERSET_META_PASSWORD`, `SUPERSET_META_DB` | `superset_meta`, required, `superset_meta` | Owner login and isolated metadata database in the existing PostgreSQL cluster; the login has no access to `olx`.                                       |
 | `SUPERSET_ADMIN_PASSWORD`, `SUPERSET_SECRET_KEY`         |                                  required | Superset administrator and stable encryption key for saved database credentials.                                                                       |
 | `SUPERSET_BIND`                                           |                            `127.0.0.1` | Host interface for dashboard port 3000; production must keep it on loopback.                                                                            |
@@ -192,7 +193,8 @@ docker compose start scraper
 
 Use a disposable database to rehearse both database dumps before production recovery. Restore Superset home only with Superset stopped and a preserved copy of the current volume. Keep `SUPERSET_SECRET_KEY` stable to recover encrypted connection credentials.
 
-The backup container has only `DAC_READ_SEARCH` added after dropping all other
+The backup container runs as the configured owner of the host `backups/`
+directory and has only `DAC_READ_SEARCH` added after dropping all other
 capabilities, so it can read private application-owned state files. Application
 volume mounts and the container filesystem are read-only; only the backup
 destination and temporary workspace are writable. State-file permissions remain
