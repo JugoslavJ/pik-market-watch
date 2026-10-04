@@ -11,6 +11,7 @@ import re
 from pathlib import Path
 
 from maps import MAP_STYLE, map_controls
+from listing_filters import EXPRESSIONS, EVENT_EXPRESSIONS
 from provisioning import (cross_filter_metadata, ensure_dataset, save_chart,
                           save_dashboard, stable_uuid, verify_chart)
 
@@ -32,8 +33,8 @@ TABLE_DIMENSIONS = {
     "listings": {**LISTING_DIMENSIONS,
                  "seller_type": "coalesce(cf.seller_type::text, 'unknown')",
                  "floor": "coalesce(cf.floor_num::text, 'unknown')",
-                 "floor_num": "cf.floor_num"},
-    "listing_lifecycle_events": LISTING_DIMENSIONS,
+                 "floor_num": "cf.floor_num", **EXPRESSIONS},
+    "listing_lifecycle_events": {**LISTING_DIMENSIONS, **EVENT_EXPRESSIONS},
     "scrape_runs": {"status": "cf.status::text", "search_key": "cf.search_key::text"},
     "saved_searches": {"category": "coalesce(cf.category::text, '(none)')",
                        "search_key": "cf.search_key::text"},
@@ -54,13 +55,15 @@ def cross_filter_columns(sql):
     return set().union(*(set(TABLE_DIMENSIONS[t]) for t in tables))
 
 
-def push_cross_filters(sql, unknown_label="unknown"):
+def push_cross_filters(sql, unknown_label="unknown", columns=None):
     allowed = cross_filter_columns(sql)
 
     def replace_scan(match):
         table = match[2].lower()
         clauses = []
         for column, expression in TABLE_DIMENSIONS[table].items():
+            if columns is not None and column not in columns:
+                continue
             if table in {"listings", "listing_lifecycle_events"} and column not in allowed:
                 continue
             expression = expression.replace("'unknown'", "'" + unknown_label + "'")
@@ -82,7 +85,7 @@ def push_cross_filters(sql, unknown_label="unknown"):
                            "{% elif f.op == 'IS NULL' %} AND " + expression + " IS NULL"
                            "{% elif f.op == 'IS NOT NULL' %} AND " + expression + " IS NOT NULL"
                            "{% endif %}{% endfor %}")
-        if table in {"listings", "listing_lifecycle_events", "scrape_runs"}:
+        if table in {"listings", "listing_lifecycle_events", "scrape_runs"} and (columns is None or "category" in columns):
             membership = ("cf_search.search_key = cf.search_key" if table == "scrape_runs" else
                           "cf_search.search_key = ANY(cf.search_keys)" if table == "listings" else
                           "EXISTS (SELECT 1 FROM lean.listings cf_listing WHERE "
@@ -513,6 +516,10 @@ def install(api, database_id, source_dir=SOURCE_DIR):
                                                 "filterState": {"value": window}},
                             "scope": {"rootPath": ["ROOT_ID"], "excluded": [c for c in chart_ids.values() if c not in timed]}})
         source_panels = list(panels(dashboard))
+        from provisioning import add_property_filters
+        filters = add_property_filters(api, database_id, filters, [
+            (chart_ids[p["id"]], shared_source_sql(dashboard, p)) for p in source_panels
+        ])
         metadata = {
             **cross_filter_metadata(
                 [{"id": chart_ids[p["id"]], "slice_name": chart_name(dashboard, p)} for p in source_panels],

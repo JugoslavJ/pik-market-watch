@@ -50,6 +50,7 @@ async function main() {
     await page.waitForFunction(visibleReady);
     const card = page.locator('[data-panel="1"] .value');
     const initial = await card.innerText();
+    await page.getByRole('button', { name: /^Filters/ }).click();
     for (let cycle = 0; cycle < 4; cycle++) {
       for (const rooms of ['2', 'All']) {
         let requests = 0;

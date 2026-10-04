@@ -5,7 +5,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from viewer_queries import BOARDS, compile_dashboard, selections
+from viewer_queries import BOARDS, compile_dashboard, presentation, selections
+from listing_filters import PREFIX
 
 
 class ViewerQueryTests(unittest.TestCase):
@@ -47,6 +48,43 @@ class ViewerQueryTests(unittest.TestCase):
             compile_dashboard(board, cross={'sql': ['anything']})
         with self.assertRaises(ValueError):
             compile_dashboard(board, days=0)
+
+    def test_property_filters_are_bound_and_applied_before_market_aggregation(self):
+        hostile = "x'); DROP TABLE lean.listings; --"
+        sql, params, _ = compile_dashboard(BOARDS['olx-overview'], {
+            PREFIX + 'heating': [hostile], PREFIX + 'elevator': ['Yes'],
+            PREFIX + 'price_bam_min': ['100000'], PREFIX + 'price_bam_max': ['300000'],
+        }, {'rooms': ['3']})
+        self.assertNotIn(hostile, sql)
+        self.assertIn(hostile, params.values())
+        self.assertIn('100000.0', params.values())
+        self.assertIn('300000.0', params.values())
+        self.assertIn("vrsta-grijanja", sql)
+        self.assertIn("cf.elevator::text", sql)
+        self.assertIn("cf.currency = 'BAM' THEN cf.price END >=", sql)
+        self.assertIn("coalesce(cf.rooms::text, 'unknown') IN", sql)
+
+    def test_amenities_reach_events_and_listing_denominators_together(self):
+        sql, params, _ = compile_dashboard(BOARDS['olx-exits'], {PREFIX + 'elevator': ['No']})
+        self.assertIn('property_listing.article_id = cf.article_id', sql)
+        self.assertIn('cf.elevator::text', sql)
+        self.assertIn('No', params.values())
+
+    def test_every_page_has_property_controls_and_unknown_options(self):
+        for board in BOARDS.values():
+            names = {v['name'] for v in presentation(board)['variables']}
+            for name in ('elevator', 'heating', 'condition', 'pets', 'balcony', 'bills_included', 'price_bam_min', 'price_bam_max'):
+                self.assertIn(PREFIX + name, names)
+            sql, _, _ = compile_dashboard(board)
+            self.assertIn('SELECT DISTINCT "__property_heating"', sql)
+            self.assertIn("'Unknown'", sql)
+
+    def test_invalid_property_ranges_cannot_reach_the_database(self):
+        for value in ('nan', 'inf', '-1', 'not a number'):
+            with self.assertRaises(ValueError):
+                selections(BOARDS['olx-overview'], {PREFIX + 'price_bam_min': [value]})
+        with self.assertRaises(ValueError):
+            selections(BOARDS['olx-overview'], {PREFIX + 'price_bam_min': ['200'], PREFIX + 'price_bam_max': ['100']})
 
 
 if __name__ == '__main__':

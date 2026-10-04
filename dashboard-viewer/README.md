@@ -35,6 +35,15 @@ Filters are reflected in the URL. Area edits apply on blur or Enter. Tables have
 search, sorting, pagination, CSV export and OLX links. Maps load when visible,
 use CARTO vector tiles, and update pins without recreating the map.
 
+Every page opens with its Filters side panel collapsed. The Filters button
+shows the active count; the panel supports search, Reset filters and Escape to
+close, and becomes a drawer on phones. Property controls include BAM price and
+price per m² bounds, lift, heating, condition, furnishing, parking, building
+details and all currently collected OLX amenities. Missing details are shown as
+Unknown. Property filters affect listing charts on Home and Health while run
+statistics retain their operational scope. Exit prices use the event snapshot;
+amenities use the latest listing details, which are not snapshotted on exits.
+
 Authorization is rechecked before every data or cached page response. Dataset
 definitions must match the provisioned source SQL. If an author changes those
 definitions, reseed/rebuild or use Superset. Guest tokens and impersonated

@@ -18,6 +18,7 @@ from parity import panels, push_cross_filters, dataset_name
 from validate_parity import reference_sql, quote
 from viewer_queries import BOARDS
 from viewer_queries import compile_dashboard
+from listing_filters import PREFIX, viewer_variables
 from sqlalchemy import text
 from sqlalchemy.dialects import postgresql
 
@@ -73,6 +74,9 @@ def main():
         as_of = cursor.fetchone()['as_of']
         for uid, board in BOARDS.items():
             states = [({}, {})]
+            states += [({PREFIX + 'elevator': ['Yes']}, {}),
+                       ({PREFIX + 'heating': ['Unknown'], PREFIX + 'condition': ['Unknown']}, {}),
+                       ({PREFIX + 'price_bam_min': ['100000'], PREFIX + 'price_bam_max': ['300000']}, {'rooms': ['2']})]
             if uid in ('olx-overview', 'olx-exits'):
                 states += [({'deal':['sell']}, {}), ({'deal':['rent']}, {}),
                            ({'deal':['sell'], 'min_sqm':['40'], 'max_sqm':['100']}, {}),
@@ -93,9 +97,15 @@ def main():
                 since = until - timedelta(days=packet['days'])
                 for panel in panels(board):
                     sql = reference_sql(board, panel, selected, since, until)
-                    if cross:
-                        sql = env.from_string(push_cross_filters(sql)).render(
-                            get_filters=lambda name, **_: [{'op':'IN', 'val':cross[name]}] if name in cross else [])
+                    predicates = {name: [{'op': 'IN', 'val': values}] for name, values in cross.items()}
+                    for variable in viewer_variables(board):
+                        if variable['name'] in selected:
+                            value = selected[variable['name']]
+                            predicates.setdefault(variable['column'], []).append({
+                                'op': variable['op'], 'val': value if variable['op'] == 'IN' else float(value[0])})
+                    if predicates:
+                        sql = env.from_string(push_cross_filters(sql, columns=set(predicates))).render(
+                            get_filters=lambda name, **_: predicates.get(name, []))
                     cursor.execute(sql)
                     expected = cursor.fetchall()
                     compare(expected, packet['rows'][dataset_name(board, panel)],

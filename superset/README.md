@@ -47,6 +47,15 @@ Active and observed-exit Deck.gl maps use the CARTO Dark Matter vector style, in
 
 During a filter refresh, charts keep showing their last successful result until the new query completes. First loads still show Superset's loading indicator.
 
+Both the viewer and all ten managed native dashboards use vertical filter side
+panels collapsed by default. `listing_filters.py` defines shared property
+controls, including price bounds, lift, heating, condition and the collected OLX
+amenities, with raw attribute aliases and explicit Unknown values. Filters apply
+to supported listing facts before aggregation; operational charts are excluded.
+Exit price filters use the event price snapshot, while amenity filters use the
+latest listing details. Rebuild Superset, rerun the seed and prepare access to
+grant viewers the shared property-option dataset after changing these controls.
+
 Dashboard query notes: the Home inventory-flow dataset shares one grouped listing-date scan between daily movements and estimated active counts. The live scraper summary is bounded to the last 24 hours and uses indexed lookup for the latest complete run. Price-history windows use the unique per-listing/per-day API price invariant, with an index that matches their article/date ordering. These query/index changes apply through the normal database migration and Superset seed; compare fresh and cached latency with the benchmark below after deployment.
 
 The migration seed verifies dashboard filters, cross-filter settings, representative chart queries, a fresh filtered count, and a repeated cached query. The CI deploy then requires the Superset health check and a verified backup of both `olx` and `superset_meta`. CI checks that the generated migration matrix matches the Grafana source dashboards.

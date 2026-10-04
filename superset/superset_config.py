@@ -44,6 +44,7 @@ FEATURE_FLAGS = {
     "DASHBOARD_RBAC": True,
     "ENABLE_TEMPLATE_PROCESSING": True,
     "ENABLE_JAVASCRIPT_CONTROLS": True,
+    "FILTERBAR_CLOSED_BY_DEFAULT": True,
 }
 
 # Vector style, glyph, sprite, and tile requests stay restricted to CARTO.

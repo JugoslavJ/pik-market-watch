@@ -6,11 +6,13 @@ No client value is interpolated into SQL; all values use engine parameters.
 """
 import hashlib
 import json
+import math
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from jinja2 import DictLoader, Environment, pass_context
+from listing_filters import options_sql, viewer_variables
 from parity import (TABLE_DIMENSIONS, TABLE_SCAN, compile_sql, cross_filter_columns, dataset_name,
                     panels, push_cross_filters, shared_source_sql, source_sql)
 
@@ -36,23 +38,29 @@ environment.filters["where_in"] = bound_where_in
 def selections(board, supplied):
     if not isinstance(supplied, dict):
         raise ValueError("Expected filter selections")
-    defined = {v["name"]: v for v in board.get("templating", {}).get("list", [])}
+    defined = {v["name"]: v for v in [*board.get("templating", {}).get("list", []), *viewer_variables(board)]}
     if set(supplied) - set(defined):
         raise ValueError("Unknown dashboard filter")
     values = {}
     for name, variable in defined.items():
-        value = supplied.get(name, variable.get("current", {}).get("value", "All"))
+        value = supplied.get(name, variable.get("current", {}).get("value", variable.get("default", "All")))
         value = "All" if value == "$__all" else value
         value = value if isinstance(value, list) else [value]
         if not 1 <= len(value) <= 100 or any(not isinstance(v, (str, int, float)) for v in value):
             raise ValueError("Invalid filter values")
         if any(len(str(v)) > 500 for v in value):
             raise ValueError("Filter value is too long")
-        if name in ("min_sqm", "max_sqm") and value[0] != "":
-            if not 0 <= float(value[0]) <= 1000000:
-                raise ValueError("Invalid area range")
+        if (name in ("min_sqm", "max_sqm") or variable.get("op") in (">=", "<=")) and value[0] != "":
+            number = float(value[0])
+            if not math.isfinite(number) or not variable.get("min", 0) <= number <= 1000000000:
+                raise ValueError("Invalid numeric range")
         value = [str(v) for v in value]
         values[name] = value if variable.get("multi") else value[:1]
+    for name in list(values):
+        upper = name[:-4] + "_max" if name.endswith("_min") else "max_sqm" if name == "min_sqm" else None
+        if upper in values and values[name][0] != "" and values[upper][0] != "":
+            if float(values[name][0]) > float(values[upper][0]):
+                raise ValueError("Minimum exceeds maximum")
     return values
 
 
@@ -73,6 +81,13 @@ def validate_cross(cross):
 def compile_dashboard(board, supplied=None, cross=None, days=None, until=None):
     selected = selections(board, supplied or {})
     cross = validate_cross(cross or {})
+    property_filters = {}
+    for variable in viewer_variables(board):
+        value = selected[variable["name"]]
+        if value[0] in ("All", ""):
+            continue
+        property_filters.setdefault(variable["column"], []).append({
+            "op": variable["op"], "val": value if variable["op"] == "IN" else float(value[0])})
     until = until or datetime.now(timezone.utc)
     days = float(days if days is not None else (2 if board["uid"] == "olx-health" else 90))
     if not 0 < days <= 365:
@@ -89,12 +104,12 @@ def compile_dashboard(board, supplied=None, cross=None, days=None, until=None):
     def filtered(sql, filters):
         if not filters or not TABLE_SCAN.search(sql):
             return sql
-        template = push_cross_filters(sql)
+        template = push_cross_filters(sql, columns=set(filters))
         name = hashlib.sha256(template.encode()).hexdigest()
         if name not in environment.loader.mapping:
             environment.loader.mapping[name] = template
         return environment.get_template(name).render(bind=bind,
-            get_filters=lambda column, **_: [{"op": "IN", "val": filters[column]}] if column in filters else [],
+            get_filters=lambda column, **_: filters.get(column, []),
         )
 
     for panel in panels(board):
@@ -114,7 +129,10 @@ def compile_dashboard(board, supplied=None, cross=None, days=None, until=None):
         sql = re.sub(r"\$__timeFilter\(([^)]+)\)", lambda m: f"({m[1]} BETWEEN {start} AND {end})", sql)
         sql = sql.replace("$__timeFrom()", start).replace("$__timeTo()", end)
         permitted = cross_filter_columns(sql)
-        applicable = {name: values for name, values in cross.items() if name in permitted or name == "category"}
+        applicable = {name: [{"op": "IN", "val": values}] for name, values in cross.items() if name in permitted or name == "category"}
+        for name, predicates in property_filters.items():
+            if name in permitted:
+                applicable.setdefault(name, []).extend(predicates)
 
         def scan(match):
             table = match[2].lower()
@@ -150,12 +168,18 @@ def compile_dashboard(board, supplied=None, cross=None, days=None, until=None):
     # Lifecycle trend queries use indexed lateral lookup for the next exit.
     # Inlining that fact preserves its index; copying it would force one scan
     # of all events per listing cycle.
-    prefix = "WITH " + ",\n".join(f"{name} AS {'MATERIALIZED' if materialized else 'NOT MATERIALIZED'} ({sql})"
-                                  for name, (sql, materialized) in ctes.items()) if ctes else ""
     entries = [f"'{key}', (SELECT coalesce(jsonb_agg(to_jsonb(r)), '[]'::jsonb) FROM ({sql}) r)"
                for key, sql in groups.items()]
     option_entries = [f"'{key}', (SELECT coalesce(jsonb_agg(r.__value), '[]'::jsonb) FROM ({sql}) r)"
                       for key, sql in options.items() if sql]
+    ctes["property_options"] = (options_sql(), True)
+    for variable in viewer_variables(board):
+        if variable["op"] == "IN":
+            column = variable["column"]
+            option_entries.append(f"'{variable['name']}', (SELECT coalesce(jsonb_agg(v ORDER BY v), '[]'::jsonb) "
+                                  f'FROM (SELECT DISTINCT "{column}" AS v FROM property_options) o)')
+    prefix = "WITH " + ",\n".join(f"{name} AS {'MATERIALIZED' if materialized else 'NOT MATERIALIZED'} ({sql})"
+                                  for name, (sql, materialized) in ctes.items())
     option_sql = "jsonb_build_object(" + ",".join(option_entries) + ")"
     statement = prefix + " SELECT jsonb_build_object('rows', jsonb_build_object(" + ",".join(entries) + "), 'options', " + option_sql + ")"
     used = set(re.findall(r":(v\d+)\b", statement))
@@ -178,4 +202,4 @@ def presentation(board):
                            "type": v["type"], "multi": v.get("multi", False),
                            "default": "All" if v.get("current", {}).get("value") == "$__all" else v.get("current", {}).get("value", "All"),
                            "choices": v.get("query", "").split(",") if v["type"] == "custom" else []}
-                          for v in board.get("templating", {}).get("list", [])]}
+                          for v in board.get("templating", {}).get("list", [])] + viewer_variables(board)}

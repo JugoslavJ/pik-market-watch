@@ -16,7 +16,7 @@ RUN /app/.venv/bin/python /tmp/patch_frontend.py
 COPY --chown=superset:superset superset/dashboard_data.py /app/dashboard_data.py
 COPY --chown=superset:superset superset/dashboard_projection.py /app/dashboard_projection.py
 COPY --chown=superset:superset superset/template_cache.py /app/template_cache.py
-COPY --chown=superset:superset superset/viewer.py superset/viewer_queries.py superset/parity.py superset/provisioning.py superset/maps.py /app/
+COPY --chown=superset:superset superset/viewer.py superset/viewer_queries.py superset/parity.py superset/provisioning.py superset/maps.py superset/listing_filters.py /app/
 COPY --chown=superset:superset superset/validate_viewer.py superset/benchmark_viewer.py /app/
 COPY --chown=superset:superset grafana/dashboards-lean /app/viewer_sources
 COPY --from=viewer-build --chown=superset:superset /viewer/dist /app/viewer_dist

@@ -31,7 +31,8 @@ async function main() {
       assert.equal(api.status(), 401); assert.equal(api.headers()['cache-control'], 'no-store');
       assert.ok((await api.json()).loginUrl); assert.equal((await api.json()).rows, undefined);
     }
-    await page.goto(origin + '/', { waitUntil: 'domcontentloaded' });
+    await context.clearCookies();
+    await page.goto(origin + '/', { waitUntil: 'load' });
     assert.equal(new URL(page.url()).pathname, '/login/');
     assert.equal(new URL(page.url()).searchParams.get('next'), '/olx/dashboard/olx-overview/');
     await page.locator('#username').fill('admin'); await page.locator('#password').fill(password);
@@ -39,6 +40,8 @@ async function main() {
       page.locator('button[type="submit"], input[type="submit"]').click()]);
     await page.goto(origin + '/olx/dashboard/olx-overview/', { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => !!window.__olxViewer);
+    assert.equal(await page.getByRole('button', { name: /^Filters/ }).getAttribute('aria-expanded'), 'false');
+    assert.equal(await page.locator('#dashboard-filters').isVisible(), false);
     assert.equal(await page.getByRole('link', { name: /Explore in Superset/ }).count(), 0);
     const initial = await page.locator('[data-panel="1"] .value').innerText();
     assert.equal(await page.locator('[data-panel]').count(), 25);
@@ -64,6 +67,7 @@ async function main() {
     });
     const delayed = async route => { await new Promise(resolve => setTimeout(resolve, 700)); await route.continue(); };
     await page.route('**/olx/api/dashboard/**', delayed);
+    await page.getByRole('button', { name: /^Filters/ }).click();
     await page.getByLabel('Rooms', { exact: true }).selectOption('3');
     await page.waitForTimeout(150);
     assert.ok(await page.evaluate(() => window.__retainedCard.isConnected && window.__retainedCard.textContent === window.__retainedValue), 'Old KPI must stay visible during refresh');
@@ -93,10 +97,12 @@ async function main() {
     assert.deepEqual(errors, []); assert.deepEqual(await page.evaluate(() => window.__csp), []);
     await page.screenshot({ path: path.join(root, 'data/superset-validation/viewer-map.png') });
     await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole('button', { name: 'Collapse filters', exact: true }).click();
     await page.locator('[data-panel="1"]').scrollIntoViewIfNeeded();
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Phone layout must not overflow');
     await context.clearCookies();
     const retained = await page.locator('[data-panel="1"] .value').innerText();
+    await page.getByRole('button', { name: /^Filters/ }).click();
     await page.getByLabel('Rooms', { exact: true }).selectOption('4');
     await page.getByRole('alert').waitFor();
     assert.ok((await page.getByRole('alert').innerText()).includes('Please sign in again'));

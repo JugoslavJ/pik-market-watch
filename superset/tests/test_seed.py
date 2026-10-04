@@ -5,7 +5,7 @@ from unittest.mock import Mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from client import InternalServiceCookiePolicy, SupersetAPI
-from provisioning import query_context, raw_table, save_dashboard, verify_chart
+from provisioning import add_property_filters, query_context, raw_table, save_dashboard, verify_chart
 
 
 class SeedContracts(unittest.TestCase):
@@ -52,6 +52,21 @@ class SeedContracts(unittest.TestCase):
         query = json.loads(query_context(1, 2, spec[2]))["queries"][0]
         self.assertIsNone(query["metrics"])
         self.assertEqual(query["columns"], ["article_id", "exit_date"])
+
+    def test_property_filters_include_all_controls_and_exclude_operational_charts(self):
+        api = Mock()
+        api.ensure.return_value = {'id': 9}
+        api.call.return_value = {'result': {'id': 9}}
+        filters = add_property_filters(api, 1, [], [
+            (1, 'SELECT count(*) FROM lean.listings'),
+            (2, 'SELECT count(*) FROM lean.scrape_runs'),
+            (3, 'SELECT count(*) FROM lean.listing_lifecycle_events'),
+        ])
+        by_column = {f['targets'][0]['column']['name']: f for f in filters}
+        for column in ('__property_elevator', '__property_heating', '__property_condition', '__property_price_bam'):
+            self.assertEqual(by_column[column]['scope']['excluded'], [2])
+            self.assertEqual(by_column[column]['defaultDataMask']['extraFormData'], {})
+        self.assertEqual(by_column['__property_price_bam']['filterType'], 'filter_range')
 
 
 if __name__ == "__main__":

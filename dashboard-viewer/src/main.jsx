@@ -9,10 +9,10 @@ const client = new QueryClient({ defaultOptions: { queries: { retry: false, refe
   refetchOnMount: false, gcTime: 600000 } } });
 const EMPTY = [];
 
-function AreaInput({ value, label, onCommit }) {
+function AreaInput({ value, label, min = 0, onCommit }) {
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
-  return <input aria-label={label} type="number" min="0" value={draft}
+  return <input aria-label={label} type="number" min={min} step="any" value={draft}
     onChange={e => setDraft(e.target.value)} onBlur={() => { if (draft !== value) onCommit(draft); }}
     onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }} />;
 }
@@ -136,6 +136,15 @@ const Panel = memo(function Panel({ panel, rows, onSelect }) {
 function App() {
   const [selection, setSelection] = useState(boot.data.selection), [cross, setCross] = useState(boot.data.cross), [days, setDays] = useState(boot.data.days);
   const [force, setForce] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false), [filterSearch, setFilterSearch] = useState('');
+  const filtersButton = useRef(null);
+  const closeFilters = useCallback(() => { setFiltersOpen(false); filtersButton.current?.focus(); }, []);
+  useEffect(() => {
+    if (!filtersOpen) return;
+    const escape = event => { if (event.key === 'Escape') closeFilters(); };
+    window.addEventListener('keydown', escape);
+    return () => window.removeEventListener('keydown', escape);
+  }, [filtersOpen, closeFilters]);
   const initial = JSON.stringify([selection, cross, days]) === JSON.stringify([boot.data.selection, boot.data.cross, boot.data.days]);
   const query = useQuery({ queryKey: ['dashboard', boot.data.uid, selection, cross, days],
     initialData: initial ? boot.data : undefined, staleTime: boot.data.ttl * 1000,
@@ -153,8 +162,13 @@ function App() {
       return response.json();
     } });
   const data = query.data || boot.data;
+  useEffect(() => { if (query.error?.loginUrl) closeFilters(); }, [query.error, closeFilters]);
   // Preserve panel objects as filters change so chart instances stay mounted.
   const panels = boot.data.panels;
+  const activeFilters = data.variables.filter(variable => {
+    const value = selection[variable.name] || [variable.default];
+    return JSON.stringify(value) !== JSON.stringify(Array.isArray(variable.default) ? variable.default : [variable.default]);
+  }).length + Object.keys(cross).length + (days !== (data.uid === 'olx-health' ? 2 : 90) ? 1 : 0);
   const onSelect = useCallback((dimension, value) => setCross(previous => {
     const next = { ...previous };
     if (JSON.stringify(next[dimension]) === JSON.stringify([value])) delete next[dimension];
@@ -185,22 +199,32 @@ function App() {
       </header>
     <main><div className="heading"><div><p className="eyebrow">MARKET INTELLIGENCE</p><h1>{data.title}</h1></div>
       <div className="freshness"><span role="status">{query.isFetching ? 'Updating…' : 'As of ' + new Date(data.asOf).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+        <button ref={filtersButton} aria-expanded={filtersOpen} aria-controls="dashboard-filters"
+          onClick={() => setFiltersOpen(open => !open)}>Filters{activeFilters ? ` (${activeFilters})` : ''}</button>
         <button onClick={refresh} disabled={query.isFetching}>Refresh</button></div></div>
-      <div className="filters">{data.variables.map(variable => <label key={variable.name}>{variable.label}
-        {variable.type === 'textbox' ? <AreaInput label={variable.label} value={selection[variable.name]?.[0] ?? variable.default}
+      <div className={'dashboard-layout' + (filtersOpen ? ' filters-open' : '')}>
+      {filtersOpen && <button className="filter-backdrop" aria-label="Close filter panel" onClick={closeFilters} />}
+      <aside id="dashboard-filters" className="filter-panel" aria-label="Dashboard filters" hidden={!filtersOpen}>
+      <div className="filter-panel-heading"><h2>Filters</h2><button aria-label="Collapse filters" onClick={closeFilters}>×</button></div>
+      <input className="filter-search" aria-label="Find a filter" placeholder="Find a filter…" value={filterSearch} onChange={e => setFilterSearch(e.target.value)} />
+      <div className="filters">{data.variables.filter(variable => variable.label.toLowerCase().includes(filterSearch.toLowerCase())).map(variable => <label key={variable.name}>{variable.label}
+        {variable.type === 'textbox' ? <AreaInput label={variable.label} min={variable.min ?? 0} value={selection[variable.name]?.[0] ?? variable.default}
           onCommit={value => setSelection(s => ({ ...s, [variable.name]: [value] }))} /> :
           <select aria-label={variable.label} multiple={variable.multi} value={variable.multi ? selection[variable.name] : selection[variable.name]?.[0]}
-            onChange={e => setSelection(s => ({ ...s, [variable.name]: [...e.target.selectedOptions].map(option => option.value) }))}>
+            onChange={e => { const values = [...e.target.selectedOptions].map(option => option.value);
+              setSelection(s => ({ ...s, [variable.name]: values.length > 1 ? values.filter(value => value !== 'All') : values.length ? values : ['All'] })); }}>
             <option value="All">All</option>{(data.options[variable.name] || variable.choices).filter(v => v !== 'All').map(value => <option key={String(value)} value={String(value)}>{String(value)}</option>)}</select>}
       </label>)}<label>Time window<select aria-label="Time window" value={days} onChange={e => setDays(Number(e.target.value))}>
         {[2, 7, 30, 90, 180, 365].map(value => <option key={value} value={value}>Last {value} days</option>)}</select></label>
         <button onClick={() => { setCross({}); setDays(boot.data.uid === 'olx-health' ? 2 : 90);
           setSelection(Object.fromEntries(data.variables.map(v => [v.name, Array.isArray(v.default) ? v.default : [v.default]]))); }}>Reset filters</button></div>
+      </aside><div className="dashboard-content">
       {!!Object.keys(cross).length && <div className="selections">{Object.entries(cross).map(([dimension, values]) => <button key={dimension}
         onClick={() => setCross(previous => { const next = { ...previous }; delete next[dimension]; return next; })}>{dimension}: {values.join(', ')} ×</button>)}</div>}
       {query.error && <p role="alert" className="error">{query.error.message}
         {query.error.loginUrl && <> <a href={query.error.loginUrl}>Sign in</a></>}</p>}
       <div className="grid">{panels.map(panel => <Panel key={panel.id} panel={panel} rows={data.rows[panel.key] || EMPTY} onSelect={onSelect} />)}</div>
+      </div></div>
     </main><footer>Observed asking prices and listing exits. Exits are not confirmed sales.</footer>
   </>;
 }

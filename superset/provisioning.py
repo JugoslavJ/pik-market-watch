@@ -5,6 +5,7 @@ import urllib.parse
 import uuid
 
 from maps import map_controls
+from listing_filters import FILTERS, PREFIX, options_sql
 
 NAMESPACE = uuid.UUID("6903df34-c531-4f29-acd0-afd1e438ee65")
 
@@ -151,6 +152,13 @@ def install_dashboard(api, title, slug, specs, filters, verify=True):
     for name, viz_type, form_data, dataset_id in specs:
         saved_charts.append(save_chart(api, name, dataset_id, dashboard_id, form_data))
 
+    datasets = {dataset_id: api.call("GET", f"/api/v1/dataset/{dataset_id}")["result"]
+                for dataset_id in {spec[3] for spec in specs}}
+    database_id = next(iter(datasets.values()))["database"]["id"]
+    filters = add_property_filters(api, database_id, filters, [
+        (chart["id"], datasets[spec[3]].get("sql") or "")
+        for chart, spec in zip(saved_charts, specs)
+    ])
     scoped_filters = []
     for filter_config in filters:
         filter_config = dict(filter_config)
@@ -281,3 +289,24 @@ def range_filter_targets(name, targets):
         "controlValues": {}, "cascadeParentIds": [],
         "scope": {"rootPath": ["ROOT_ID"], "excluded": []},
     }
+
+
+def add_property_filters(api, database_id, filters, chart_sql):
+    """Expose property controls only to charts whose input facts support them."""
+    from parity import cross_filter_columns
+    scopes = {chart_id: cross_filter_columns(sql) for chart_id, sql in chart_sql}
+    if not any(PREFIX + "deal" in columns for columns in scopes.values()):
+        return filters
+    # Reuse a shared listing option dataset across all managed dashboards.
+    options = ensure_dataset(api, database_id, "property_filter_options", options_sql())
+    represented = {target.get("column", {}).get("name", "").removeprefix("__gf_")
+                   for config in filters for target in config.get("targets", [])}
+    result = list(filters)
+    for name, label, kind, _ in FILTERS:
+        column = PREFIX + name
+        if name in represented or column in represented:
+            continue
+        config = (range_filter if kind == "range" else select_filter)(options["id"], label, column)
+        config["scope"]["excluded"] = [chart_id for chart_id, columns in scopes.items() if column not in columns]
+        result.append(config)
+    return result

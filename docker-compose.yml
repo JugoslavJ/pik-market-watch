@@ -296,6 +296,7 @@ services:
       - ./superset/provisioning.py:/app/provisioning.py:ro
       - ./superset/maps.py:/app/maps.py:ro
       - ./superset/seed.py:/app/seed.py:ro
+      - ./superset/listing_filters.py:/app/listing_filters.py:ro
       - ./superset/parity.py:/app/parity.py:ro
       - ./superset/validate_parity.py:/app/validate_parity.py:ro
       - ./grafana/dashboards-lean:/grafana/dashboards-lean:ro
