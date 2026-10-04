@@ -1,0 +1,45 @@
+"""Measure authenticated React dashboard APIs; browser readiness is separate."""
+import json
+import sys
+import time
+from urllib.parse import urlencode
+
+from client import SupersetAPI
+from benchmark import benchmark_result
+
+
+def main():
+    api = SupersetAPI()
+    api.authenticate()
+    api.authenticate_browser()
+    results = []
+    for uid in ("olx-home", "olx-overview", "olx-exits", "olx-health"):
+        cache_expected = uid in ("olx-overview", "olx-exits")
+        states = ({}, {"s": json.dumps({"rooms": ["2"]})}) if cache_expected else ({},)
+        for state in states:
+            fresh, cached = [], []
+            endpoint = "/olx/api/dashboard/" + uid
+            for forced, samples in ((True, fresh), (False, cached)):
+                if not forced and not cache_expected:
+                    continue
+                for _ in range(10):
+                    arguments = {**state, **({"force": "true"} if forced else {})}
+                    started = time.perf_counter()
+                    packet = api.call("GET", endpoint + ("?" + urlencode(arguments) if arguments else ""))
+                    samples.append(time.perf_counter() - started)
+                    if not packet.get("rows") or not packet.get("panels"):
+                        raise RuntimeError("Viewer returned no dashboard data: " + uid)
+                    if packet.get("queries") != (1 if forced else 0):
+                        raise RuntimeError("Unexpected dashboard data query count: " + uid)
+                    if not forced and not packet.get("cached"):
+                        raise RuntimeError("Expected a cached viewer response: " + uid)
+            result = benchmark_result(uid + (" / rooms=2" if state else " / all"), fresh, cached, cache_expected)
+            result["scope"] = "authenticated dashboard API; excludes browser rendering"
+            results.append(result)
+    print(json.dumps({"results": results, "passed": all(row["passed"] for row in results)}, indent=2))
+    if not all(row["passed"] for row in results):
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

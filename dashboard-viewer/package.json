@@ -1,0 +1,21 @@
+{
+  "name": "olx-dashboard-viewer",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "test": "node ../superset/tests/check-viewer.cjs"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "5.104.1",
+    "echarts": "6.1.0",
+    "maplibre-gl": "6.12.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "vite": "7.3.6"
+  }
+}

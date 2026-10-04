@@ -1,6 +1,6 @@
 # pik-market-watch
 
-Docker Compose stack for observing configured OLX real-estate searches in PostgreSQL and Grafana. It uses OLX JSON endpoints with ordinary HTTP requests; upstream availability and response shape are external dependencies.
+Docker Compose stack for observing configured OLX real-estate searches in PostgreSQL and a React dashboard viewer backed by Apache Superset. It uses OLX JSON endpoints with ordinary HTTP requests; upstream availability and response shape are external dependencies.
 
 The `scrape` profile is optional. It can run on the same machine as the dashboards or on a separate machine, with database state synchronized through the supported sync workflow.
 
@@ -10,9 +10,11 @@ The `scrape` profile is optional. It can run on the same machine as the dashboar
 cp .env.example .env
 cp config/searches.example.json config/searches.json
 docker compose up -d --build
+docker compose run --rm superset-seed
+docker compose run --rm superset-access
 ```
 
-Set strong values for every required secret in `.env` before starting. This starts PostgreSQL, Grafana, and the backup sidecar. To also schedule scraping on this machine, add `COMPOSE_PROFILES=scrape` to `.env` before `docker compose up`, or run a one-off scrape:
+Set strong values for the PostgreSQL and Superset secrets in `.env` before starting. The example selects `DASHBOARD_MODE=superset` and `COMPOSE_PROFILES=superset`, starting PostgreSQL, Superset, the alert checker, and the backup sidecar. To also schedule scraping, use `COMPOSE_PROFILES=superset,scrape`, or run a one-off scrape:
 
 ```bash
 docker compose --profile scrape run --rm scraper node src/index.js --once
@@ -32,14 +34,11 @@ and adopts an already initialized lean schema without replaying the DDL. See
 [`db/README.md`](db/README.md) for the active database layout and
 [`docs/OPERATIONS.md`](docs/OPERATIONS.md) for restore and maintenance steps.
 
-Grafana is at `http://localhost:3000` for local development. In production the
-topology is `Cloudflare → Cloudflare Tunnel → cloudflared → Grafana
-127.0.0.1:3000`; Cloudflare terminates public TLS and the tunnel forwards HTTP
-over the host loopback. Grafana itself does not need a certificate. When the
-scrape profile runs, `http://localhost:9100` provides health/status JSON.
-Both published ports bind to `127.0.0.1` by default. Do not expose port 3000
-to the Internet; `HEALTH_BIND` is loopback by default for bare-metal runs and
-is set to `0.0.0.0` only inside Compose so Docker can reach it.
+Open the dashboards at `http://127.0.0.1:3000/`; sign in with the Superset account. The root URL opens Market Overview, with Home, Exits, and Health in the viewer navigation. Production uses `Cloudflare → Cloudflare Tunnel → cloudflared → 127.0.0.1:3000 → Superset`. The container continues listening internally on 8088. Scraper status is at `http://127.0.0.1:9100` when scraping runs.
+
+The [React viewer](dashboard-viewer/README.md) renders all 71 source panels and keeps existing charts visible during updates. Superset supplies authentication, permissions and the read-only reporting API. Metadata lives in `superset_meta`; analytical queries use `olx_reporting`.
+
+Grafana is retired from deployment and restore. The only dashboard mode is `superset`; source JSON in `grafana/dashboards-lean/` remains the SQL/panel contract. The [instance deployment runbook](docs/SUPERSET_CUTOVER.md) covers transferring port 3000, viewer access, backups and HTTPS verification.
 
 ## Configure searches
 

@@ -46,6 +46,26 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "0"
+      - name: Validate the versioned Superset migration assets
+        working-directory: .
+        run: node scripts/generate-superset-migration-matrix.js --check
+      - name: Build the production Superset image
+        working-directory: .
+        run: docker build --tag pik-market-watch-superset:ci --file superset/Dockerfile .
+      - name: Check Superset Python assets compile
+        working-directory: .
+        run: >-
+          docker run --rm -v "$PWD/superset:/assets:ro"
+          --entrypoint python pik-market-watch-superset:ci -c
+          "import ast,pathlib; [ast.parse(p.read_text(encoding='utf-8-sig'), filename=str(p)) for p in pathlib.Path('/assets').glob('*.py')]"
+      - name: Check dashboard parity contracts and alert transitions
+        working-directory: .
+        run: >-
+          docker run --rm -v "$PWD/superset:/assets:ro"
+          -v "$PWD/grafana/dashboards-lean:/grafana/dashboards-lean:ro"
+          -v "$PWD/scripts:/repo/scripts:ro" -v "$PWD/db:/repo/db:ro"
+          --entrypoint python pik-market-watch-superset:ci
+          -m unittest discover -v -s /assets/tests
 
   # ── CD: deploy to the Oracle Compute instance ──────────────────────────────
   # Only runs after the suite passed for THIS exact commit, and only for pushes
@@ -61,7 +81,7 @@ jobs:
       (github.event_name == 'workflow_dispatch' || github.event_name == 'push')
     environment: production
     runs-on: ubuntu-latest
-    timeout-minutes: 15   # instance stack is just db + grafana + backup
+    timeout-minutes: 25   # database migration, viewer build, acceptance gates, and backup check
     concurrency:
       group: deploy-production
       cancel-in-progress: false

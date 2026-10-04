@@ -1,0 +1,8 @@
+# Merge this ingress rule into the existing tunnel configuration.
+# Keep the tunnel ID, credentials file, and unrelated ingress rules unchanged.
+tunnel: YOUR_EXISTING_TUNNEL_ID
+credentials-file: /etc/cloudflared/YOUR_EXISTING_TUNNEL_ID.json
+ingress:
+  - hostname: dashboards.example.com
+    service: http://127.0.0.1:3000
+  - service: http_status:404

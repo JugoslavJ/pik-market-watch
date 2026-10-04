@@ -1,0 +1,123 @@
+"""Authenticated Superset API client shared by provisioning and validation."""
+
+import json
+import os
+import urllib.error
+import urllib.parse
+import urllib.request
+from http.cookiejar import CookieJar, DefaultCookiePolicy
+
+BASE = "http://superset:8088"
+
+
+class InternalServiceCookiePolicy(DefaultCookiePolicy):
+    def return_ok_secure(self, cookie, request):
+        # The browser still receives Secure cookies on the public HTTPS origin.
+        # Seed/validation jobs talk directly to this fixed private HTTP service.
+        if request.type == "http" and request.host == "superset:8088":
+            return True
+        return super().return_ok_secure(cookie, request)
+
+
+class SupersetAPI:
+    def __init__(self, username="admin", password=None):
+        self.username = username
+        self.password = password
+        self.opener = urllib.request.build_opener(
+            urllib.request.HTTPCookieProcessor(CookieJar(policy=InternalServiceCookiePolicy()))
+        )
+        self.token = None
+        self.csrf = None
+        self.resource_rows = {}
+        self.browser_authenticated = False
+
+    def call(self, method, path, payload=None):
+        body = json.dumps(payload).encode("utf-8") if payload is not None else None
+        headers = {"Accept": "application/json"}
+        if body is not None:
+            headers["Content-Type"] = "application/json"
+        if self.token:
+            headers["Authorization"] = f"Bearer {self.token}"
+        if self.csrf and method in ("POST", "PUT", "DELETE"):
+            headers["X-CSRFToken"] = self.csrf
+        request = urllib.request.Request(
+            BASE + path, data=body, headers=headers, method=method
+        )
+        try:
+            with self.opener.open(request, timeout=30) as response:
+                data = response.read()
+                return json.loads(data) if data else {}
+        except urllib.error.HTTPError as error:
+            message = error.read(1200).decode("utf-8", errors="replace")
+            # API validation can echo the SQLAlchemy URI; never print its secret.
+            for secret in (os.environ.get("POSTGRES_REPORTING_PASSWORD"),
+                           self.password, os.environ.get("SUPERSET_ADMIN_PASSWORD")):
+                if secret:
+                    message = message.replace(secret, "[redacted]")
+                    message = message.replace(urllib.parse.quote(secret, safe=""), "[redacted]")
+            raise RuntimeError(f"Superset {method} {path}: HTTP {error.code}: {message}") from None
+
+    def authenticate(self):
+        login = self.call(
+            "POST",
+            "/api/v1/security/login",
+            {
+                "username": self.username,
+                "password": self.password if self.password is not None else os.environ["SUPERSET_ADMIN_PASSWORD"],
+                "provider": "db",
+                "refresh": False,
+            },
+        )
+        self.token = login["access_token"]
+        self.csrf = self.call("GET", "/api/v1/security/csrf_token/")["result"]
+
+    def authenticate_browser(self):
+        """Deck.gl's legacy endpoint requires a Flask login session."""
+        if self.browser_authenticated:
+            return
+        request = urllib.request.Request(
+            BASE + "/login/",
+            data=urllib.parse.urlencode({
+                "username": self.username,
+                "password": self.password if self.password is not None else os.environ["SUPERSET_ADMIN_PASSWORD"],
+                "csrf_token": self.csrf,
+            }).encode("utf-8"),
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        with self.opener.open(request, timeout=30) as response:
+            if "/login" in response.url:
+                raise RuntimeError("Superset browser session login failed")
+        self.browser_authenticated = True
+
+    def find(self, resource, name_field, name):
+        if resource not in self.resource_rows:
+            page, all_rows = 0, []
+            while True:
+                query = urllib.parse.quote(f"(page:{page},page_size:100)")
+                response = self.call("GET", f"/api/v1/{resource}/?q={query}")
+                rows = response.get("result", [])
+                all_rows.extend(rows)
+                if len(rows) < 100:
+                    break
+                page += 1
+            self.resource_rows[resource] = all_rows
+        return next((row for row in self.resource_rows[resource]
+                     if row.get(name_field) == name), None)
+
+    def ensure(self, resource, name_field, name, payload):
+        existing = self.find(resource, name_field, name)
+        if existing:
+            if resource not in ("database", "dataset"):
+                return existing
+            update_payload = payload
+            if resource == "dataset" and "database" in payload:
+                update_payload = {**payload, "database_id": payload["database"]}
+                update_payload.pop("database")
+            updated = self.call("PUT", f"/api/v1/{resource}/{existing['id']}", update_payload)
+            return {**existing, **updated.get("result", {}), "id": existing["id"]}
+        result = self.call("POST", f"/api/v1/{resource}/", payload)
+        # Superset's create responses keep the numeric id beside `result`;
+        # list responses put it inside each result row.
+        created = {**result.get("result", {}), "id": result["id"], name_field: name}
+        self.resource_rows[resource].append(created)
+        return created

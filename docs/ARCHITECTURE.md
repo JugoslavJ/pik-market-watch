@@ -1,7 +1,9 @@
 # Architecture and data model
 
 The scraper stores OLX listing state and evidence in PostgreSQL's `lean`
-schema. Grafana reads the same lean tables through a read-only role. The
+schema. The React viewer and Superset read lean data through
+the same read-only role. Superset metadata is isolated in its own database and
+owner role in the same PostgreSQL cluster. The
 database keeps current listing state, observed price history, closure/reopen
 events, scrape runs, retained API responses, and page manifests.
 
@@ -38,18 +40,20 @@ sale; its price is the last observed asking price.
 
 ## Dashboards
 
-Grafana provisions four dashboards from `grafana/dashboards-lean/`:
+The React viewer serves four dashboards at host port 3000:
 
 - **Home** summarizes current market and scraper health.
-- **Overview** reports active inventory, asking prices, trends, maps, and
-  listing attributes.
+- **Overview** reports active inventory, asking prices, trends, maps and listing attributes.
 - **Exits** analyzes observed listing closures using lifecycle events.
-- **Health** reports scrape outcomes, freshness, and data quality.
+- **Health** reports scrape outcomes, freshness and data quality.
 
-Dashboard SQL queries the lean tables directly. Grafana connects with the
-read-only `olx_reporting` role. The `olx_app` role writes scraper data;
-`olx_migrator` owns schema changes; and `olx_backup` is used by database
-backups.
+Superset supplies login, permissions, dataset definitions and the viewer API. It listens on container port 8088, published only at `127.0.0.1:3000`. The root URL and Superset welcome page redirect to Market Overview. Viewer navigation exposes only these four dashboards.
+
+Each fresh viewer request executes one reporting data statement with shared facts and aggregates. Charts keep their previous values during filter updates. Market/exit snapshots expire after ten minutes; operational Home/Health results are uncached. Tables provide links and CSV; MapLibre uses CARTO vector basemaps.
+
+Grafana has no runtime service, profile or required credentials. Its repository JSON remains the trusted SQL/panel contract used by the compiler and parity comparisons. `DASHBOARD_MODE=superset` is the only supported deployment/restore mode. The application migrator, writer, reporting and backup roles retain their separate responsibilities.
+
+See [viewer details](../dashboard-viewer/README.md), [performance measurements](../superset/PERFORMANCE.md) and [instance deployment](SUPERSET_CUTOVER.md).
 
 ## Geography
 

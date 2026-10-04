@@ -35,6 +35,14 @@ test("database has enough transactional locks for schema replacement restores", 
   assert.match(compose, /max_locks_per_transaction=512/);
 });
 
+test("backup reads private application state from read-only volume mounts", () => {
+  const backup = compose.slice(compose.indexOf("  db-backup:"));
+  assert.match(backup, /cap_drop: \[ALL\]/);
+  assert.match(backup, /cap_add: \[DAC_READ_SEARCH\]/);
+  assert.match(backup, /superset_home:\/superset-home:ro/);
+  assert.match(backup, /read_only: true/);
+});
+
 test("database checkpoint settings avoid long scrape stalls", () => {
   assert.match(compose, /max_wal_size=4GB/);
   assert.match(compose, /checkpoint_timeout=15min/);
@@ -54,8 +62,9 @@ test("Compose targets PostgreSQL 18", () => {
 
 test("Compose provisions only the lean schema and dashboard assets", () => {
   assert.match(compose, /DB_INIT_DIR:-\.\/db\/init-lean/);
-  assert.match(compose, /grafana\/provisioning-lean/);
-  assert.match(compose, /grafana\/dashboards-lean/);
+  assert.doesNotMatch(compose, /image: grafana\/grafana/);
+  assert.match(compose, /dockerfile: superset\/Dockerfile/);
+  assert.match(compose, /target: 8088\s+published: "3000"/);
   assert.doesNotMatch(
     compose,
     /olap-reconcile|STORAGE_SCHEMA|RUN_ANALYTICS_MAINTENANCE/,
@@ -134,17 +143,14 @@ test("one-shot scraper closes healthcheck sockets before waiting for server clos
   );
 });
 
-test("production Grafana settings fail closed before deployment", () => {
-  assert.match(deploy, /GRAFANA_BIND/);
+test("production viewer settings fail closed before deployment", () => {
+  assert.match(deploy, /validate_origin SUPERSET/);
   assert.match(deploy, /127\.0\.0\.1/);
-  assert.match(deploy, /GRAFANA_DOMAIN/);
-  assert.match(deploy, /GRAFANA_ROOT_URL/);
   assert.match(deploy, /https:\/\/\*\//);
-  assert.match(deploy, /GRAFANA_ENFORCE_DOMAIN/);
-  assert.match(deploy, /GRAFANA_COOKIE_SECURE/);
+  assert.match(deploy, /COOKIE_SECURE/);
 });
 
-test("remote sync refreshes Grafana after role repair before reporting success", () => {
+test("remote sync refreshes the selected dashboards after role repair before reporting success", () => {
   const restore = fs.readFileSync(
     path.join(ROOT, "db", "remote-restore.sh"),
     "utf8",
@@ -153,14 +159,14 @@ test("remote sync refreshes Grafana after role repair before reporting success",
     "docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh",
   );
   const refreshAt = restore.indexOf(
-    "if ! docker compose up -d --no-deps --force-recreate --wait --wait-timeout 120 grafana; then",
+    'if ! docker compose up -d --no-deps --force-recreate --wait --wait-timeout 120 "$@"; then',
   );
   const successAt = restore.indexOf('echo "RESTORE_OK');
   assert.ok(grantsAt >= 0 && refreshAt > grantsAt);
   assert.ok(successAt > refreshAt);
   assert.match(
     restore.slice(refreshAt, successAt),
-    /RESTORE_ERROR: database restored, but Grafana refresh failed[\s\S]*exit 1/,
+    /RESTORE_ERROR: database restored, but dashboard refresh failed[\s\S]*exit 1/,
   );
   assert.ok(
     restore.indexOf("restore_ok=1") > grantsAt,

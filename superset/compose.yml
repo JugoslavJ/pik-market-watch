@@ -1,0 +1,5 @@
+# Superset now lives in the root Compose file so the production deploy can
+# activate the `superset` profile. Keep this compatibility
+# overlay empty for existing local `-f superset/compose.yml` invocations; all
+# metadata uses the isolated database in the existing PostgreSQL cluster.
+services: {}

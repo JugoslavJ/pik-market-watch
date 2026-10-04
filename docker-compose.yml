@@ -32,6 +32,19 @@ x-scraper-runtime: &scraper-runtime
   networks:
     - backend
 
+x-superset-environment: &superset-environment
+  SUPERSET_CONFIG_PATH: /app/superset_config.py
+  SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY:?set SUPERSET_SECRET_KEY in .env}
+  SUPERSET_META_USER: ${SUPERSET_META_USER:-superset_meta}
+  SUPERSET_META_PASSWORD: ${SUPERSET_META_PASSWORD:?set SUPERSET_META_PASSWORD in .env}
+  SUPERSET_META_DB: ${SUPERSET_META_DB:-superset_meta}
+  POSTGRES_HOST: db
+  POSTGRES_PORT: 5432
+  SUPERSET_COOKIE_SECURE: ${SUPERSET_COOKIE_SECURE:-false}
+  SUPERSET_WEBSERVER_WORKERS: 1
+  SUPERSET_ROOT_URL: ${SUPERSET_ROOT_URL:-http://localhost:3000/}
+  MAPBOX_API_KEY: ${MAPBOX_API_KEY:-}
+
 services:
   db:
     # PostGIS-enabled PostgreSQL 18 image. Digest pin = exactly this build
@@ -42,8 +55,8 @@ services:
       - no-new-privileges:true
     pids_limit: 100 # max_connections forks (40) + background workers
     # Cap PostgreSQL at 0.75 OCPU and 2 GiB RAM on the 2 OCPU / 12 GiB VM,
-    # leaving headroom for Grafana, jobs, and the host OS.
-    # The 40-connection cap covers the scraper pool, Grafana pool, and tools.
+    # leaving headroom for the viewer backend, jobs, and the host OS.
+    # The 40-connection cap covers scraper, Superset, backup, and tools.
     command:
       - postgres
       - -c
@@ -83,7 +96,7 @@ services:
       # Runtime least-privilege roles (db/init-lean/zz-database-roles.sh):
       #   *MIGRATOR* owns schema/objects — migrations and restores only
       #   *APP*      runtime writer — scraper and maintenance
-      #   *REPORTING* read-only lean-table access — Grafana
+      #   *REPORTING* read-only lean-table access — React viewer and Superset
       #   *BACKUP*   broad read-only — pg_dump only
       POSTGRES_MIGRATOR_USER: ${POSTGRES_MIGRATOR_USER:-olx_migrator}
       POSTGRES_MIGRATOR_PASSWORD: ${POSTGRES_MIGRATOR_PASSWORD:?set POSTGRES_MIGRATOR_PASSWORD in .env}
@@ -93,6 +106,9 @@ services:
       POSTGRES_REPORTING_PASSWORD: ${POSTGRES_REPORTING_PASSWORD:?set POSTGRES_REPORTING_PASSWORD in .env}
       POSTGRES_BACKUP_USER: ${POSTGRES_BACKUP_USER:-olx_backup}
       POSTGRES_BACKUP_PASSWORD: ${POSTGRES_BACKUP_PASSWORD:?set POSTGRES_BACKUP_PASSWORD in .env}
+      SUPERSET_META_USER: ${SUPERSET_META_USER:-superset_meta}
+      SUPERSET_META_PASSWORD: ${SUPERSET_META_PASSWORD:?set SUPERSET_META_PASSWORD in .env}
+      SUPERSET_META_DB: ${SUPERSET_META_DB:-superset_meta}
     volumes:
       # PostgreSQL 18 images require the parent mount so PGDATA can include
       # the major-version directory used by the new image layout.
@@ -192,90 +208,165 @@ services:
       - default # egress to olx.ba
       - backend # reach db
 
-  grafana:
-    # Digest pin alongside the version tag (Dependabot keeps both current).
-    image: grafana/grafana-oss:13.0.2@sha256:5dad0df181cb644a14e13617b913b261a54f7d4fd4510721dba420929f35bea2
-    restart: unless-stopped
+  # The React dashboard viewer runs inside Superset. Its metadata
+  # database is isolated by database and role inside this existing cluster.
+  superset-init:
+    profiles: ["superset"]
+    image: pik-market-watch-superset:production
+    build:
+      context: .
+      dockerfile: superset/Dockerfile
+    restart: "no"
     security_opt:
       - no-new-privileges:true
-    cap_drop: [ALL] # uid 472 on an unprivileged port needs none
-    pids_limit: 128 # server + plugins (goroutines aren't PIDs)
     depends_on:
       db:
         condition: service_healthy
     environment:
-      GOMEMLIMIT: 1536MiB # leave room within the 2 GiB limit for non-heap memory
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
-      GF_ANALYTICS_REPORTUSAGE_ENABLED: "false" # no usage telemetry
-      GF_ANALYTICS_CHECK_FOR_UPDATES: "false" # no outbound version-check pings either
-      GF_SERVER_ENABLE_GZIP: "true" # compress dashboard JSON over WAN links
-      GF_LOG_LEVEL: "warn" # trim log IO; flip back to info when debugging
-      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/olx-overview.json
-      # Cloudflare Tunnel publishes public HTTPS; Grafana stays HTTP-only on
-      # the host-loopback published port.
-      GF_SERVER_PROTOCOL: http
-      GF_SERVER_DOMAIN: ${GRAFANA_DOMAIN:-localhost}
-      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3000/}
-      GF_SERVER_ENFORCE_DOMAIN: ${GRAFANA_ENFORCE_DOMAIN:-false}
-      GF_SECURITY_COOKIE_SECURE: ${GRAFANA_COOKIE_SECURE:-false}
-      GF_SECURITY_COOKIE_SAMESITE: lax
-      # Public sharing is explicit per dashboard; organization-wide anonymous
-      # Viewer access stays disabled because it permits arbitrary queries.
-      GF_AUTH_ANONYMOUS_ENABLED: "false"
-      GF_USERS_ALLOW_SIGN_UP: "false"
-      # Encrypts datasource secrets at rest inside grafana.db (.env: GRAFANA_SECRET_KEY)
-      GF_SECURITY_SECRET_KEY: ${GRAFANA_SECRET_KEY:?set GRAFANA_SECRET_KEY in .env}
-      # Grafana's default geomap basemap uses an authenticated CARTO MapLibre
-      # vector style. The key and style are injected at runtime instead of
-      # being stored in dashboard JSON.
-      GF_GEOMAP_DEFAULT_BASELAYER_CONFIG: >-
-        {"type":"maplibre","config":{"url":"https://basemaps.cartocdn.com/gl/${GRAFANA_CARTO_VECTOR_STYLE:-dark-matter}-gl-style/style.json?key=${GRAFANA_CARTO_API_KEY:-}"}}
-      # Consumed by datasource interpolation in provisioning-lean.
-      # (read-only role — Grafana never needs write access)
-      POSTGRES_REPORTING_USER: ${POSTGRES_REPORTING_USER:-olx_reporting}
-      POSTGRES_REPORTING_PASSWORD: ${POSTGRES_REPORTING_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB:-olx}
-      SCRAPE_STALE_AFTER_HOURS: ${SCRAPE_STALE_AFTER_HOURS:-26}
-      # Consumed by provisioning-lean/alerting/olx-alerts.yml (alert mail recipient).
-      # Grafana 13 fatal-VALIDATES email receivers during provisioning: an empty
-      # address makes the container exit (deploys stuck unhealthy). The
-      # placeholder keeps boot safe; set a real ALERT_EMAIL_TO in .env to arm
-      # delivery (plus GF_SMTP_* below).
-      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-alert-not-configured@localhost}
-      # Alert MAIL delivery is optional — without SMTP the rules still evaluate
-      # and show firing/resolving history in the UI. Uncomment + set .env:
-      # GF_SMTP_ENABLED: "true"
-      # GF_SMTP_HOST: ${GRAFANA_SMTP_HOST}          # host:port, e.g. smtp.gmail.com:587
-      # GF_SMTP_USER: ${GRAFANA_SMTP_USER}
-      # GF_SMTP_PASSWORD: ${GRAFANA_SMTP_PASSWORD}
-      # GF_SMTP_FROM_ADDRESS: ${GRAFANA_SMTP_FROM}
+      <<: *superset-environment
+      SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD:?set SUPERSET_ADMIN_PASSWORD in .env}
     volumes:
-      - grafana:/var/lib/grafana
-      - ./grafana/provisioning-lean:/etc/grafana/provisioning:ro
-      - ./grafana/dashboards-lean:/var/lib/grafana/dashboards:ro
+      - superset_home:/app/superset_home
+      - ./superset/init.sh:/app/init.sh:ro
+    entrypoint: ["bash", "/app/init.sh"]
+    mem_limit: 1g
+    memswap_limit: 1g
+    cpus: 0.5
+    networks: [backend]
+
+  superset:
+    profiles: ["superset"]
+    image: pik-market-watch-superset:production
+    build:
+      context: .
+      dockerfile: superset/Dockerfile
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      db:
+        condition: service_healthy
+      superset-init:
+        condition: service_completed_successfully
+    environment: *superset-environment
+    volumes:
+      - superset_home:/app/superset_home
+      - ./superset/superset_config.py:/app/superset_config.py:ro
     ports:
-      # Keep the host-side listener loopback-only. Production deployment
-      # rejects any GRAFANA_BIND override; cloudflared is the public entry point.
-      - target: 3000
+      - target: 8088
         published: "3000"
-        host_ip: ${GRAFANA_BIND:-127.0.0.1}
+        host_ip: ${SUPERSET_BIND:-127.0.0.1}
         protocol: tcp
         mode: host
     mem_limit: 2g
-    memswap_limit: 2g # hit OOM decisively instead of swapping into latency spikes
+    memswap_limit: 2g
     cpus: 1.0
     logging: *logging
-    networks:
-      - default # SMTP egress (optional alert mail delivery)
-      - backend # reach db
+    # Keep the database path on the isolated backend while attaching the
+    # web container to the host-reachable Compose network for its loopback port.
+    networks: [default, backend]
     healthcheck:
-      # Grafana is HTTP-only; Cloudflare handles public TLS outside the host.
-      test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/health || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8088/health >/dev/null"]
       interval: 15s
       timeout: 5s
-      retries: 6
-      start_period: 30s
+      retries: 8
+      start_period: 90s
+
+  superset-seed:
+    # Explicit jobs must not race each other during a normal profile startup.
+    profiles: ["superset-ops"]
+    image: pik-market-watch-superset:production
+    build:
+      context: .
+      dockerfile: superset/Dockerfile
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      superset:
+        condition: service_healthy
+    environment:
+      <<: *superset-environment
+      SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD:?set SUPERSET_ADMIN_PASSWORD in .env}
+      POSTGRES_REPORTING_USER: ${POSTGRES_REPORTING_USER:-olx_reporting}
+      POSTGRES_REPORTING_PASSWORD: ${POSTGRES_REPORTING_PASSWORD:?set POSTGRES_REPORTING_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-olx}
+    volumes:
+      - ./superset/client.py:/app/client.py:ro
+      - ./superset/provisioning.py:/app/provisioning.py:ro
+      - ./superset/maps.py:/app/maps.py:ro
+      - ./superset/seed.py:/app/seed.py:ro
+      - ./superset/parity.py:/app/parity.py:ro
+      - ./superset/validate_parity.py:/app/validate_parity.py:ro
+      - ./grafana/dashboards-lean:/grafana/dashboards-lean:ro
+      - ./superset/benchmark.py:/app/benchmark.py:ro
+      - ./superset/datasets:/app/datasets:ro
+      - ./superset/active-listings.sql:/app/active-listings.sql:ro
+    entrypoint: ["python", "/app/seed.py"]
+    mem_limit: 1g
+    cpus: 0.5
+    networks: [backend]
+
+  superset-access:
+    profiles: ["superset-ops"]
+    image: pik-market-watch-superset:production
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      superset:
+        condition: service_healthy
+    environment: *superset-environment
+    volumes:
+      - ./superset/access.py:/app/access.py:ro
+      - ./superset/validate_access.py:/app/validate_access.py:ro
+      - ./superset/client.py:/app/client.py:ro
+      - ./superset/provisioning.py:/app/provisioning.py:ro
+      - ./superset/maps.py:/app/maps.py:ro
+      - ./superset/superset_config.py:/app/superset_config.py:ro
+    entrypoint: ["python", "/app/access.py"]
+    mem_limit: 1g
+    cpus: 0.5
+    networks: [backend]
+
+  # Invoke every 15 minutes from the host scheduler. The checker stores its
+  # hold/firing state in superset_home and posts transitions only when a
+  # webhook is configured.
+  superset-alert-check:
+    profiles: ["superset"]
+    image: pik-market-watch-superset:production
+    build:
+      context: .
+      dockerfile: superset/Dockerfile
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      <<: *superset-environment
+      POSTGRES_REPORTING_USER: ${POSTGRES_REPORTING_USER:-olx_reporting}
+      POSTGRES_REPORTING_PASSWORD: ${POSTGRES_REPORTING_PASSWORD:?set POSTGRES_REPORTING_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-olx}
+      SCRAPE_STALE_AFTER_HOURS: ${SCRAPE_STALE_AFTER_HOURS:-26}
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+    volumes:
+      - superset_home:/app/superset_home
+      - ./superset/check_alerts.py:/app/check_alerts.py:ro
+      - ./superset/run-alert-checker.sh:/app/run-alert-checker.sh:ro
+    entrypoint: ["bash", "/app/run-alert-checker.sh"]
+    mem_limit: 512m
+    cpus: 0.25
+    networks:
+      - default # optional alert webhook delivery
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "find /app/superset_home/pipeline-alert-state.json -mmin -30 -print -quit | grep -q ."]
+      interval: 5m
+      timeout: 5s
+      retries: 3
+      start_period: 45s
 
   db-backup:
     # Keep pg_dump major-version matched with the database. The PostGIS image
@@ -284,7 +375,10 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
-    cap_drop: [ALL] # sh / pg_dump / tar need no capabilities
+    cap_drop: [ALL]
+    # Read private files owned by Superset without changing their
+    # permissions. Application volumes and the container filesystem stay read-only.
+    cap_add: [DAC_READ_SEARCH]
     read_only: true # dumps land on the /backups mount only
     tmpfs:
       - /tmp
@@ -297,11 +391,13 @@ services:
       PGUSER: ${POSTGRES_BACKUP_USER:-olx_backup} # dedicated broad-read backup role
       PGPASSWORD: ${POSTGRES_BACKUP_PASSWORD}
       PGDATABASE: ${POSTGRES_DB:-olx}
+      SUPERSET_META_DB: ${SUPERSET_META_DB:-superset_meta}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      DASHBOARD_MODE: ${DASHBOARD_MODE:-superset}
     volumes:
       - ./backups:/backups
       - ./db/backup.sh:/usr/local/bin/backup.sh:ro
-      - grafana:/grafana-data:ro # nightly tar of Grafana state (users/prefs/UI edits)
+      - superset_home:/superset-home:ro
     entrypoint: ["sh", "/usr/local/bin/backup.sh"]
     mem_limit: 256m
     memswap_limit: 256m # hit OOM decisively instead of swapping into latency spikes
@@ -317,30 +413,29 @@ services:
       test:
         [
           "CMD-SHELL",
-          "find /backups -name 'olx-*.dump' -mmin -1560 -print -quit | grep -q .",
+          "sh /usr/local/bin/backup.sh --check",
         ]
       interval: 10m
-      timeout: 10s
+      timeout: 30s
       retries: 3
       start_period: 5m
 
 volumes:
   # Explicit names: Compose derives them from the repo FOLDER name when left
   # implicit, so renaming olx-price-ext → pik-market-watch would otherwise
-  # abandon the existing pgdata/grafana volumes on the next `up`.
+  # abandon the existing database volumes on the next `up`.
   pgdata:
     # PostgreSQL 18 uses a new volume after the 16 -> 18 logical migration.
     # The old olx-price-ext_pgdata volume is intentionally retained for rollback.
     name: ${POSTGRES_VOLUME_NAME:-olx-price-ext_pgdata_pg18}
     external: true
-  grafana:
-    name: olx-price-ext_grafana
-    external: true
+  superset_home:
+    name: olx-price-ext_superset_home
 
 networks:
   # Segmentation: db joins ONLY `backend`, so anything on the default network
   # (today's and future containers alike) cannot resolve or reach Postgres.
-  # Scraper and Grafana are dual-homed onto `default` for egress; the database
+  # Scraper and Superset are dual-homed onto `default` for egress; the database
   # and backend-only jobs use this isolated network for PostgreSQL access.
   backend:
     internal: true

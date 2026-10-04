@@ -14,7 +14,8 @@ The numbered SQL files run in lexical order:
 | `02-lean-neighborhoods.sql` | Generated neighborhood boundaries |
 | `03-raw-archive.sql` | Retained raw API responses and page manifests |
 | `04-date-based-price-history.sql` | Canonical local-date representation |
-| `zz-database-roles.sh` | Runtime, migration, Grafana, and backup roles |
+| `05-dashboard-query-indexes.sql` | Dashboard range, latest-run, and API price-history indexes |
+| `zz-database-roles.sh` | Runtime, migration, reporting, Superset metadata and backup roles |
 
 The migrator records each SQL file and checksum in `public.schema_migrations`,
 adopts an already initialized lean schema, and rejects changes to applied

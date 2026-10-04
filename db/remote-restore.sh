@@ -74,6 +74,8 @@ was_running=0   # EXIT trap restarts the scraper if we stop it and then fail
 restore_ok=0
 
 cd "$REPO_DIR"
+. scripts/lib/dashboard-stack.sh
+configure_dashboard_stack
 
 LOCK=/tmp/olx-restore.lock
 if ! mkdir "$LOCK" 2>/dev/null; then
@@ -174,7 +176,7 @@ fi
 # build_toc <container-archive-path> <output-list>: filter the TOC to entries
 # this restore may execute. ACL entries are omitted because extension ACLs can
 # reference extension-owned functions absent after reset; the canonical role
-# repair reapplies the lean writer and Grafana reader grants.
+# repair reapplies the lean writer and shared Grafana/Superset reporting grants.
 build_toc() {
   docker compose exec -T db sh -c "
      pg_restore -l '$1' > /tmp/toc.all || exit 1
@@ -263,7 +265,7 @@ docker compose exec -T db psql -U "$migrator_user" -d "$db_name" -q \
   || echo "RESTORE_WARN: could not re-assert writer default privileges (non-fatal)" >&2
 
 # Schema replacement removes object grants. Re-run the canonical role repair so
-# lean writer and Grafana reader grants are restored before clients restart.
+# lean writer and reporting grants are restored before clients restart.
 docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
 
 if [ "$was_running" = "1" ]; then
@@ -271,9 +273,19 @@ if [ "$was_running" = "1" ]; then
 fi
 restore_ok=1
 
-# Recreate Grafana to reconnect to the restored lean database.
-if ! docker compose up -d --no-deps --force-recreate --wait --wait-timeout 120 grafana; then
-  echo "RESTORE_ERROR: database restored, but Grafana refresh failed; check docker compose logs grafana and recreate Grafana (no need to repeat the scrape/restore)" >&2
+# Reconnect only the active dashboards to the restored OLX database. The metadata
+# database is outside the restore TOC and must remain untouched.
+set -- $(dashboard_services)
+if ! docker compose up -d --no-deps --force-recreate --wait --wait-timeout 120 "$@"; then
+  echo "RESTORE_ERROR: database restored, but dashboard refresh failed; check active dashboard logs and recreate them (no need to repeat the scrape/restore)" >&2
+  exit 1
+fi
+if [ "$HAS_SUPERSET" = true ] && ! docker compose run --rm superset-seed; then
+  echo "RESTORE_ERROR: Superset is healthy but a representative chart query failed; rerun docker compose run --rm superset-seed (no need to repeat the scrape/restore)" >&2
+  exit 1
+fi
+if [ "$HAS_SUPERSET" = true ] && ! docker compose run --rm superset-access; then
+  echo "RESTORE_ERROR: data and charts restored, but viewer permissions could not be refreshed; rerun superset-access" >&2
   exit 1
 fi
 

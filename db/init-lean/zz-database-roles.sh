@@ -6,11 +6,12 @@
 #                       migrations and restores.
 #   olx_app LOGIN       runtime writer used by the scraper and maintenance.
 #   olx_reporting LOGIN SELECT-only access to lean data used by Grafana.
-#   olx_backup LOGIN    pg_dump-only broad read role; never used by Grafana.
+#   olx_backup LOGIN    pg_dump-only broad read role; never used by dashboards.
+#   superset_meta LOGIN owns only the separate Superset metadata database.
 #
 # Passwords come from the environment (never hardcode them here):
 #   POSTGRES_MIGRATOR_PASSWORD / POSTGRES_APP_PASSWORD /
-#   POSTGRES_REPORTING_PASSWORD / POSTGRES_BACKUP_PASSWORD (required)
+#   POSTGRES_REPORTING_PASSWORD / POSTGRES_BACKUP_PASSWORD / SUPERSET_META_PASSWORD (required)
 #   POSTGRES_*_USER (optional overrides)
 #   POSTGRES_USER / POSTGRES_DB                         (bootstrap admin / db)
 #
@@ -27,6 +28,15 @@
   : "${POSTGRES_APP_PASSWORD:?POSTGRES_APP_PASSWORD missing — set it in .env}"
   : "${POSTGRES_REPORTING_PASSWORD:?POSTGRES_REPORTING_PASSWORD missing — set it in .env}"
   : "${POSTGRES_BACKUP_PASSWORD:?POSTGRES_BACKUP_PASSWORD missing — set it in .env}"
+  : "${SUPERSET_META_PASSWORD:?SUPERSET_META_PASSWORD missing — set it in .env}"
+  if [ "${SUPERSET_META_DB:-superset_meta}" = "${POSTGRES_DB:-${POSTGRES_USER:-postgres}}" ]; then
+    echo "zz-database-roles: SUPERSET_META_DB must be separate from POSTGRES_DB" >&2
+    exit 1
+  fi
+  if [ "${SUPERSET_META_USER:-superset_meta}" = "${POSTGRES_REPORTING_USER:-olx_reporting}" ]; then
+    echo "zz-database-roles: SUPERSET_META_USER must be separate from POSTGRES_REPORTING_USER" >&2
+    exit 1
+  fi
 
   psql -v ON_ERROR_STOP=1 \
        -U "${POSTGRES_USER:-postgres}" \
@@ -40,6 +50,9 @@
       -v app_pw="$POSTGRES_APP_PASSWORD" \
       -v reporting_pw="$POSTGRES_REPORTING_PASSWORD" \
       -v backup_pw="$POSTGRES_BACKUP_PASSWORD" \
+      -v meta_user="${SUPERSET_META_USER:-superset_meta}" \
+      -v meta_pw="$SUPERSET_META_PASSWORD" \
+      -v meta_db="${SUPERSET_META_DB:-superset_meta}" \
        -v db_name="${POSTGRES_DB:-${POSTGRES_USER:-postgres}}" \
   <<'SQL'
 -- Create roles when absent, then always refresh credentials -----------------
@@ -56,6 +69,9 @@ SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'reporting_user', :'repor
 SELECT format('CREATE ROLE %I LOGIN', :'backup_user')
 WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'backup_user') \gexec
 SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'backup_user', :'backup_pw') \gexec
+SELECT format('CREATE ROLE %I LOGIN', :'meta_user')
+WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'meta_user') \gexec
+SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L CONNECTION LIMIT 8', :'meta_user', :'meta_pw') \gexec
 
 -- Hand ownership to the migration role (migrations, restores) -----------------
 -- NOTE: a blanket REASSIGN OWNED BY <admin> aborts on pinned catalog objects
@@ -151,6 +167,12 @@ SELECT format('GRANT CONNECT ON DATABASE %I TO %I', :'db_name', :'migrator_user'
 SELECT format('GRANT CONNECT ON DATABASE %I TO %I', :'db_name', :'reporting_user') \gexec
 SELECT format('GRANT CONNECT ON DATABASE %I TO %I', :'db_name', :'backup_user') \gexec
 SELECT format('GRANT pg_read_all_data TO %I', :'backup_user') \gexec
+-- Superset's app login is isolated from olx; chart queries use the reporting
+-- login. A separate database keeps the metadata ACL boundary explicit.
+SELECT format('CREATE DATABASE %I OWNER %I', :'meta_db', :'meta_user')
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'meta_db') \gexec
+SELECT format('ALTER DATABASE %I OWNER TO %I', :'meta_db', :'meta_user') \gexec
+SELECT format('REVOKE CONNECT ON DATABASE %I FROM PUBLIC', :'meta_db') \gexec
 
 -- Grafana guard-rails: dashboards/alerts use this role, so a -----------------
 -- runaway query or wedged session must not eat the shared work_mem /
@@ -161,5 +183,17 @@ SELECT format('ALTER ROLE %I SET idle_in_transaction_session_timeout = %L', :'re
 SELECT format('ALTER ROLE %I WITH CONNECTION LIMIT %s', :'reporting_user', 30) \gexec
 SQL
 
-  echo "zz-database-roles: ensured migrator/writer/Grafana/backup roles."
+  psql -v ON_ERROR_STOP=1 \
+       -U "${POSTGRES_USER:-postgres}" \
+       -d "${SUPERSET_META_DB:-superset_meta}" \
+       -v meta_user="${SUPERSET_META_USER:-superset_meta}" \
+       -v backup_user="${POSTGRES_BACKUP_USER:-olx_backup}" \
+       -v meta_db="${SUPERSET_META_DB:-superset_meta}" <<'META_SQL'
+SELECT format('GRANT CONNECT, TEMPORARY ON DATABASE %I TO %I', :'meta_db', :'meta_user') \gexec
+GRANT USAGE, CREATE ON SCHEMA public TO :"meta_user";
+SELECT format('GRANT CONNECT ON DATABASE %I TO %I', :'meta_db', :'backup_user') \gexec
+GRANT pg_read_all_data TO :"backup_user";
+META_SQL
+
+  echo "zz-database-roles: ensured migrator/writer/reporting/backup/Superset metadata roles."
 )

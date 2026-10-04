@@ -10,27 +10,25 @@ Create local configuration and searches before starting the stack:
 cp .env.example .env
 cp config/searches.example.json config/searches.json
 docker compose up -d --build
+docker compose run --rm superset-seed
+docker compose run --rm superset-access
 ```
 
-`.env.example` intentionally leaves `POSTGRES_PASSWORD`, `POSTGRES_MIGRATOR_PASSWORD`, `POSTGRES_APP_PASSWORD`, `POSTGRES_REPORTING_PASSWORD`, `POSTGRES_BACKUP_PASSWORD`, `GRAFANA_ADMIN_PASSWORD`, and `GRAFANA_SECRET_KEY` blank. Set all seven before starting or deploying; the deployment preflight rejects blank and placeholder `change-me*` values. Database passwords are embedded in connection settings, so use URL-safe values such as `openssl rand -hex 24`.
+`.env.example` intentionally leaves passwords and secret keys blank. Set `POSTGRES_PASSWORD`, the four `POSTGRES_*_PASSWORD` role credentials, `SUPERSET_META_PASSWORD`, `SUPERSET_ADMIN_PASSWORD`, and `SUPERSET_SECRET_KEY` before starting or deploying. The deployment preflight rejects blank and placeholder `change-me*` values. Use distinct credentials and URL-safe database passwords such as `openssl rand -hex 24`.
 
 | Setting                                                  |                                    Default | Consumer                                                                                                                                              |
 | -------------------------------------------------------- | -----------------------------------------: | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`      |                     `olx`, required, `olx` | PostgreSQL bootstrap database.                                                                                                                        |
 | `POSTGRES_MIGRATOR_USER`, `POSTGRES_MIGRATOR_PASSWORD`   |                   `olx_migrator`, required | Migration and restore owner role; not used by normal runtime services.                                                                                |
 | `POSTGRES_APP_USER`, `POSTGRES_APP_PASSWORD`             |                        `olx_app`, required | Scraper and maintenance runtime writer; owns no database objects.                                                                                     |
-| `POSTGRES_REPORTING_USER`, `POSTGRES_REPORTING_PASSWORD` |                  `olx_reporting`, required | Grafana's read-only role for lean dashboard queries.                                                                                                   |
-| `POSTGRES_BACKUP_USER`, `POSTGRES_BACKUP_PASSWORD`       |                     `olx_backup`, required | Dedicated broad-read role used only by `pg_dump`; it is not a Grafana credential.                                                                     |
+| `POSTGRES_REPORTING_USER`, `POSTGRES_REPORTING_PASSWORD` |                  `olx_reporting`, required | Read-only role for the viewer and Superset analytical queries over lean data.                                                                                                   |
+| `POSTGRES_BACKUP_USER`, `POSTGRES_BACKUP_PASSWORD`       |                     `olx_backup`, required | Dedicated broad-read role used only by `pg_dump`; it is not a dashboard credential.                                                                     |
+| `SUPERSET_META_USER`, `SUPERSET_META_PASSWORD`, `SUPERSET_META_DB` | `superset_meta`, required, `superset_meta` | Owner login and isolated metadata database in the existing PostgreSQL cluster; the login has no access to `olx`.                                       |
+| `SUPERSET_ADMIN_PASSWORD`, `SUPERSET_SECRET_KEY`         |                                  required | Superset administrator and stable encryption key for saved database credentials.                                                                       |
+| `SUPERSET_BIND`                                           |                            `127.0.0.1` | Host interface for dashboard port 3000; production must keep it on loopback.                                                                            |
+| `SUPERSET_DOMAIN`, `SUPERSET_ROOT_URL`                    | `localhost`, `http://localhost:3000/` | Dashboard hostname and public URL; production preflight requires matching HTTPS hostname values.                                    |
+| `SUPERSET_COOKIE_SECURE`                                 |                                  `false` | Local HTTP default; production requires `true` for the Cloudflare HTTPS origin.                                                                         |
 | `DB_INIT_DIR`                                            |                           `./db/init-lean` | First-boot lean database SQL and role bootstrap.                                                                                                      |
-| `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD`           |                          `admin`, required | Grafana login.                                                                                                                                        |
-| `GRAFANA_SECRET_KEY`                                     |                                   required | Grafana encryption for stored datasource secrets.                                                                                                     |
-| `GRAFANA_DOMAIN`                                         |                                `localhost` | Grafana's externally visible hostname; production must use the Cloudflare hostname.                                                                   |
-| `GRAFANA_ROOT_URL`                                       |                   `http://localhost:3000/` | Grafana's externally visible URL; production must be HTTPS and end in `/`.                                                                            |
-| `GRAFANA_ENFORCE_DOMAIN`                                 |                                    `false` | Reject unexpected Host headers; set `true` in production.                                                                                             |
-| `GRAFANA_COOKIE_SECURE`                                  |                                    `false` | Secure Grafana auth cookies; set `true` in production HTTPS.                                                                                          |
-| `GRAFANA_CARTO_API_KEY`                                  |                                      unset | CARTO basemap key for Grafana geomaps; create one at [carto.com/basemaps/apikey](https://carto.com/basemaps/apikey).                                  |
-| `GRAFANA_CARTO_VECTOR_STYLE`                             |                              `dark-matter` | Authenticated CARTO MapLibre vector style: `dark-matter`, `positron`, or `voyager`; recreate Grafana after changing it.                               |
-| `GRAFANA_BIND`                                           |                                `127.0.0.1` | Host interface for Grafana port 3000. Keep this at `127.0.0.1`; cloudflared is the public entry point.                                                |
 | `HEALTH_BIND`                                            | `127.0.0.1` bare-metal / `0.0.0.0` Compose | Health listener bind address. Compose needs all-interface binding inside the container; the published host port remains loopback-only.                |
 | `SCRAPE_INTERVAL_MINUTES`                                |                                      `720` | Scheduled scraper cadence when the `scrape` profile is enabled.                                                                                       |
 | `DETAIL_REFRESH_DAYS`                                    |                                        `7` | Age at which successful detail evidence becomes eligible for refresh.                                                                                 |
@@ -38,93 +36,68 @@ docker compose up -d --build
 | `RAW_RESPONSE_RETENTION_COUNT`                           |                                        `3` | Newest raw search/detail responses retained per request kind and URL. Maintenance removes older rows.                                                 |
 | `ABANDONED_RUN_AFTER_MINUTES`                            |                                      `180` | Age after which startup marks an unfinished `running` scrape as abandoned.                                                                            |
 | `RATE_LIMIT_COOLDOWN_MS`                                 |                                    `65000` | Fallback pause when the upstream rate-limit window is low and no reset is advertised.                                                                 |
-| `BACKUP_RETENTION_DAYS`                                  |                                       `14` | Days of database and Grafana archives retained by `db-backup`; `0` disables pruning.                                                                  |
-| `ALERT_EMAIL_TO`                                         |                                      unset | Recipient for provisioned alerting. Mail also requires enabling and configuring the `GF_SMTP_*` entries in `docker-compose.yml`.                      |
+| `BACKUP_RETENTION_DAYS`                                  |                                       `14` | Days of `olx`, `superset_meta`, and Superset home archives retained by `db-backup`; `0` disables pruning.                                                                  |
+| `ALERT_WEBHOOK_URL`                                      |                                      unset | Optional destination for Superset checker alert and recovery transitions; keep the URL secret in the instance `.env`.                                   |
 | `SCRAPE_STALE_AFTER_HOURS`                               |                                       `26` | Per-search freshness alert and public freshness label; choose a value that covers the actual scrape cadence.                                          |
 
-For an existing volume, add the four role credentials to `.env`, recreate the
-database service, and run the role bootstrap script once:
+For an existing volume, set the role and Superset metadata credentials in
+`.env`, recreate the database service, and run the idempotent role bootstrap:
 
 ```bash
 docker compose up -d db
 docker compose exec db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
 ```
 
-This transfers object ownership to `olx_migrator` and refreshes the
-writer/reporting grants. Do this before
-starting Grafana or the scraper with the new credentials.
+This transfers object ownership to `olx_migrator`, refreshes the
+writer/reporting grants, and creates or repairs the separately owned
+`superset_meta` database. Do this before starting dashboard services or the
+scraper with the new credentials.
 
 Search configuration is read from `config/searches.json`; `SEARCH_URLS` is an environment override for a bare scraper process or an explicit `docker compose run -e SEARCH_URLS=...` invocation. The scraper also accepts `SCRAPE_USER_AGENT`, `HEALTH_PORT`, and pacing/health variables (`MAX_PAGES`, `CONCURRENCY`, `PAGE_DELAY_MS`, `API_PER_PAGE`, `API_TIMEOUT_MS`, `MAX_GEO_FETCHES`, `GEO_CONCURRENCY`, `GEO_DELAY_MS`, `SCRAPE_MIN_GAP_MINUTES`, `ABANDONED_RUN_AFTER_MINUTES`, `DETAIL_JOB_LEASE_MINUTES`, and `HEALTH_FAILURE_THRESHOLD`). Compose injects `ABANDONED_RUN_AFTER_MINUTES` and `DETAIL_JOB_LEASE_MINUTES`; pass the other tuning variables explicitly with `docker compose run -e NAME=value` or set them in a supported deployment change.
 
-Grafana is HTTP-only inside the stack. Local development uses
-`http://localhost:3000`; production uses `Cloudflare → Cloudflare Tunnel →
-cloudflared → Grafana 127.0.0.1:3000`. Cloudflare terminates public TLS and
-cloudflared forwards HTTP over host loopback. There is no public OCI 80/443
-ingress requirement, and port 3000 must not be opened in OCI ingress or
-published on a public interface. Grafana signup remains disabled by default.
+The React dashboards use `http://127.0.0.1:3000/` locally. Production uses Cloudflare HTTPS → Cloudflare Tunnel → cloudflared → `http://127.0.0.1:3000` → Superset. There is no public OCI 80/443
+ingress requirement; port 3000 stays on loopback. Superset uses port 8088 only inside the container/network.
 
-For production, add these values to the instance's ignored `.env`:
+Set these values in the instance's ignored `.env`, using the existing public dashboard hostname:
 
 ```dotenv
-GRAFANA_BIND=127.0.0.1
-GRAFANA_DOMAIN=grafana.example.com
-GRAFANA_ROOT_URL=https://grafana.example.com/
-GRAFANA_ENFORCE_DOMAIN=true
-GRAFANA_COOKIE_SECURE=true
+DASHBOARD_MODE=superset
+COMPOSE_PROFILES=superset
+SUPERSET_BIND=127.0.0.1
+SUPERSET_DOMAIN=dashboards.example.com
+SUPERSET_ROOT_URL=https://dashboards.example.com/
+SUPERSET_COOKIE_SECURE=true
 ```
 
-The deployment preflight rejects a public bind, local domain, non-HTTPS root
-URL, or insecure/unrestricted production cookie/domain settings. The tunnel
-configuration is created in Cloudflare and on the OCI host; no tunnel token,
-credentials JSON, or production hostname is stored in this repository.
+Keep the existing `SUPERSET_SECRET_KEY` and reporting/metadata credentials. Grafana credentials are unused. Modes `parallel` and `grafana` are retired. Before manual Compose commands, source `scripts/lib/dashboard-stack.sh` and call `configure_dashboard_stack`.
 
-## Cloudflare Tunnel production setup
+## Cloudflare Tunnel
 
-The repository supplies the application and its loopback-only listener. Create
-and operate the tunnel manually; do not add its token or credentials to Git.
-
-The intended path is:
-
-```text
-Cloudflare HTTPS → Cloudflare Tunnel → cloudflared on OCI
-                → http://127.0.0.1:3000 → Grafana → PostgreSQL
-```
-
-Use the Cloudflare dashboard to create a tunnel and publish the production
-hostname to the origin service `http://127.0.0.1:3000`. Install `cloudflared`
-on OCI using the dashboard-generated connector instructions and run it as a
-systemd service. Keep the tunnel token or credentials file only in the local
-`/etc/cloudflared` service configuration with owner-only permissions. Never
-place it in `.env`, a tracked Compose file, CI secrets sent to the repository,
-logs, or shell scripts.
-
-Validate the private origin and tunnel:
+An existing tunnel origin of `http://127.0.0.1:3000` stays unchanged. A tunnel currently using 8088 must be changed to 3000 when this deployment lands. The hostname opens the viewer at `/`; login returns to Market Overview. The repository does not install or configure the tunnel; keep its token/credentials only in the host's protected cloudflared configuration.
 
 ```bash
-curl -f http://127.0.0.1:3000/api/health
+curl -f http://127.0.0.1:3000/health
 systemctl status cloudflared
 journalctl -u cloudflared -n 100 --no-pager
-curl -I https://grafana.example.com
+curl -I https://dashboards.example.com/
 ```
 
-Replace `grafana.example.com` with the real Cloudflare hostname. Confirm the
-hostname loads Grafana over HTTPS, the Cloudflare dashboard reports the tunnel
-as healthy, login cookies are marked Secure, and the Grafana URL is the public
-HTTPS URL. Optional Cloudflare Access can be placed in front of the hostname;
-it does not change Grafana's `GRAFANA_ROOT_URL`.
-
-After the tunnel is verified, remove OCI inbound TCP 80 and 443 rules according
-to the host access policy and confirm listeners with
-`sudo ss -lntp | grep -E ':80|:443|:3000'`. The expected application listener
-is `127.0.0.1:3000`; Grafana must not listen on a public interface.
+Verify HTTPS sign-in, Secure cookies and the four viewer dashboards. Optional Cloudflare Access can protect the hostname. See [the deployment runbook](SUPERSET_CUTOVER.md).
 
 ## Dashboard access
 
-All Grafana dashboards require authentication. Anonymous organization access is
-disabled with `GF_AUTH_ANONYMOUS_ENABLED=false`, and no externally shared
-dashboards are provisioned.
+The viewer requires the Superset login. Anonymous pages redirect to login and anonymous data requests return 401 JSON. Assign `OLX Viewer` to approved users; keep author/admin access restricted. Publication grants authenticated dashboard access, never anonymous access. An expired session keeps the current charts visible and offers a sign-in link.
 
 ## Normal operation
+
+The React viewer presents all 71 source panels across Home, Overview, Exits and Health. Source datasets and permissions are maintained by the Superset seed. Maps use CARTO vector tiles without a Mapbox key. Production deploy compares viewer values against the source SQL and benchmarks the authenticated dashboard API. Browser opening/filter timings are measured separately.
+Production deploy runs a lightweight
+SQL alert-checker service every 15 minutes; it keeps hold/firing state in the
+Superset home volume. It uses `olx_reporting`, preserves the source alert thresholds
+and hold times, and posts only firing/recovery transitions when
+`ALERT_WEBHOOK_URL` is configured. Inspect `docker compose logs -f
+superset-alert-check` for results. The Health dashboard exposes the same live
+predicates and their supporting counts without chart cache delay.
 
 ```bash
 docker compose ps
@@ -179,7 +152,7 @@ and `public` (PostGIS and `schema_migrations`).
 
 ## Backup and restore
 
-The `db-backup` service makes a custom-format PostgreSQL dump and a compressed Grafana-volume archive in `./backups/`, verifies each archive, and checks hourly whether a fresh database dump exists. Each archive is written with owner-only permissions to a `.partial` name, verified, and atomically renamed to its final name. Interrupted or failed writes are removed; a previously verified same-day archive remains usable. Keep an encrypted copy of this directory outside the host and in a separate failure domain.
+The `db-backup` service makes separate custom-format dumps for `olx` and `superset_meta`, plus compressed Superset home archives in `./backups/`. It verifies each archive and checks hourly that required database and volume archives are fresh. `docker compose run --rm --no-deps db-backup --once` forces a verified snapshot; `docker compose exec -T db-backup sh /usr/local/bin/backup.sh --check` checks freshness and integrity. Shared locks prevent concurrent writes, and backups need only the Superset home volume. Each archive is written with owner-only permissions to a `.partial` name, verified, and atomically renamed to its final name. Interrupted or failed writes are removed; a previously verified same-day archive remains usable. Keep an encrypted copy of this directory outside the host and in a separate failure domain.
 
 To make an additional database dump:
 
@@ -187,11 +160,13 @@ To make an additional database dump:
 docker compose exec -T db pg_dump -U olx_backup -Fc -f /backups/manual.dump olx
 ```
 
-Use the configured `POSTGRES_BACKUP_USER` and `POSTGRES_DB` if they differ from
-the defaults. Verify any dump before depending on it:
+Use the configured `POSTGRES_BACKUP_USER`, `POSTGRES_DB`, and
+`SUPERSET_META_DB` if they differ from the defaults. Verify both archives
+before depending on them:
 
 ```bash
 docker compose exec -T db pg_restore -l /backups/manual.dump
+docker compose exec -T db pg_restore -l /backups/superset_meta-YYYYMMDD.dump
 ```
 
 A restore overwrites database objects and should be performed during a
@@ -211,11 +186,17 @@ restored.
 ```bash
 docker compose stop scraper
 docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
-docker compose up -d --force-recreate grafana db-backup
+docker compose --profile superset up -d --force-recreate superset db-backup
 docker compose start scraper
 ```
 
-Use a disposable database to rehearse a dump before production recovery. The Grafana archive is a separate volume backup; restore it only with Grafana stopped and with a preserved copy of the current Grafana volume. `GRAFANA_SECRET_KEY` must match the one used when the archive was created to recover encrypted datasource secrets.
+Use a disposable database to rehearse both database dumps before production recovery. Restore Superset home only with Superset stopped and a preserved copy of the current volume. Keep `SUPERSET_SECRET_KEY` stable to recover encrypted connection credentials.
+
+The backup container has only `DAC_READ_SEARCH` added after dropping all other
+capabilities, so it can read private application-owned state files. Application
+volume mounts and the container filesystem are read-only; only the backup
+destination and temporary workspace are writable. State-file permissions remain
+unchanged.
 
 For post-deploy checks, run the deployment contract and integration tests in
 `scraper/test/` against a disposable instance before changing production data.
@@ -229,7 +210,7 @@ pwsh -File scripts\sync-to-instance.ps1
 pwsh -File scripts\register-sync-task.ps1
 ```
 
-The restore endpoint receives and validates the archive, audits ownership, saves a rollback snapshot, pauses a running scraper, restores in a transaction, restores the prior snapshot on failure when available, reasserts role grants, and resumes the writer. It then recreates Grafana to reload datasource provisioning and credentials, briefly interrupting dashboard access, and waits for health before reporting success. If that refresh fails, the restored data remains in place; repair Grafana without repeating the scrape/restore. Input is capped at `OLX_SYNC_MAX_BYTES` (default 512 MiB) and the temporary incoming file is removed on every exit path. Its `RESTORE_OK` or `RESTORE_ERROR` output is the protocol consumed by the PowerShell script. A holder of the restore SSH key has database-administrator-equivalent capability over application data, even though the key is restricted to a forced command and has no interactive shell; protect and rotate it accordingly.
+The restore endpoint receives and validates the archive, audits ownership, saves a rollback snapshot, pauses a running scraper, restores only the `olx` application schemas in a transaction, restores the prior snapshot on failure when available, reasserts role grants, and resumes the writer. It leaves `superset_meta` untouched, then refreshes only the selected dashboards and runs the Superset seed's chart checks when Superset is active before reporting success. If a dashboard refresh fails, the restored `olx` data remains in place; repair the dashboard service without repeating the scrape/restore. Input is capped at `OLX_SYNC_MAX_BYTES` (default 512 MiB) and the temporary incoming file is removed on every exit path. Its `RESTORE_OK` or `RESTORE_ERROR` output is the protocol consumed by the PowerShell script. A holder of the restore SSH key has database-administrator-equivalent capability over application data, even though the key is restricted to a forced command and has no interactive shell; protect and rotate it accordingly.
 
 Recovery should be rehearsed periodically against a disposable PostgreSQL
 instance: verify representative data, expected tables, ownership, reader
@@ -239,8 +220,9 @@ access, malformed/oversized input rejection, rollback, and writer restart.
 
 The GitHub Actions workflow tests pushes to `main` (except documentation/geography-only changes) and deploys successful main or manually dispatched runs. Deployment is restricted to the `main` ref and the protected GitHub `production` environment. Configure environment secrets `OCI_HOST`, `OCI_USER`, `OCI_SSH_PRIVATE_KEY`, and mandatory pinned `OCI_KNOWN_HOSTS`. `OCI_SSH_PRIVATE_KEY` must be a separate deployment key whose `authorized_keys` entry permits the workflow’s remote shell commands; never use the forced-command restore key from the home-machine sync. Set the production environment’s deployment branch rule to `main` and consider a required reviewer.
 
-CI builds the scraper image and runs Trivy v0.74.0 via the pinned Trivy action
-against its OS and application layers. Fixable HIGH/CRITICAL findings are
+CI builds the scraper and Superset images, verifies the migration matrix and
+Superset Python assets, and runs Trivy v0.74.0 via the pinned Trivy action
+against the scraper OS and application layers. Fixable HIGH/CRITICAL findings are
 currently reported without failing the workflow while the image baseline is
 tuned; revisit the policy after reviewing real findings.
 
@@ -249,11 +231,7 @@ local configuration: `.env` and `config/searches.json`. The workflow ships
 tracked files, maintains a remote tracked-file manifest, and removes only
 files that were previously tracked but are absent from the new revision. It
 never cleans ignored configuration, backups, logs, or Docker volumes.
-`scripts/deploy-stack.sh` checks required secrets and production Grafana URL
-settings, runs the profile-only `migrator` job, starts the
-database/Grafana/backup services, restarts Grafana to reload provisioning, and
-waits for database and Grafana health. A failed migration exits before the
-dashboard is restarted.
+`scripts/deploy-stack.sh` validates production settings, repairs roles, applies migrations, initializes and builds Superset, and identifies any old Grafana containers by this stack's project/service labels. It stops and removes those containers before publishing Superset on port 3000. It starts the viewer backend, seeds datasets/access, verifies backups, runs the viewer parity/API-performance/access gates and publishes authenticated dashboard access. A failed gate reports deployment failure. Container/volume pruning is never performed.
 
 The repository does not install or configure `cloudflared`, OCI networking, or
 Cloudflare. The tunnel hostname, connector, token, and optional Access policy
@@ -267,49 +245,7 @@ tunnel path.
 - **Listings were not closed:** closures require a non-empty cycle and complete search results. Failed searches retain membership and a zero-card cycle skips the closing pass by design.
 - **Stale detail fields or sparse dashboard segments:** detail fetches are capped and source attributes are optional. Check `details_fetched_at`, `last_enrichment_attempted_at`, and the health dashboard’s coverage panels; use a bounded backfill where appropriate.
 - **Migration or ownership error:** run the role bootstrap script as shown above, then restart affected clients. Inspect `schema_migrations` and rerun the Compose `migrator` job with the configured migration role.
-- **Grafana is unavailable:** verify `GRAFANA_SECRET_KEY`, the configured
-  `GRAFANA_ROOT_URL`/domain settings, `systemctl status cloudflared`, and
-  `docker compose logs grafana`. From the OCI host, check
-  `curl -f http://127.0.0.1:3000/api/health`; then inspect
-  `journalctl -u cloudflared -n 100 --no-pager`. Datasource failures usually
-  indicate missing reporting credentials or grants. Check that Grafana uses
-  the configured reporting role, `olx_reporting` by default.
-  With the current Compose and provisioning files deployed, run these commands
-  in the instance's repository directory to align both containers with `.env`
-  and reload the datasource (a plain `restart` does not refresh environment):
-
-  ```bash
-  docker compose up -d --wait db
-  docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
-  docker compose up -d --no-deps --force-recreate --wait --wait-timeout 120 grafana
-  docker compose logs --tail=100 grafana
-  ```
-
-  The datasource `olx-postgres` should use `POSTGRES_REPORTING_USER` (default
-  `olx_reporting`) and `POSTGRES_REPORTING_PASSWORD`. Set the reporting password
-  in the instance's `.env` if missing.
-  Use a URL-safe password such as `openssl rand -hex 24`; never print it in
-  logs or commit it.
-
-  - **Dashboard filters fail and panels report `cannot determine type of empty array`:**
-  check that category and room variables can query lean tables.
-  Deploy the current schema and dashboards together; dashboard arrays require
-  explicit `text[]` casts even when no filter options are available.
-  From the instance checkout containing these changes, run:
-
-  ```bash
-  docker compose up -d --wait db
-  docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
-  docker compose --profile migrate run --build --rm migrator
-  docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
-  docker compose up -d --no-deps --force-recreate --wait --wait-timeout 120 grafana
-  ```
-
-  Reload the dashboard so its variable queries run again. A database sync alone
-  does not ship dashboard files. The usual `scripts/deploy-stack.sh` deployment
-  performs the migration, grant repair, and Grafana reload in this order.
-
-- **Backup is unhealthy:** inspect `docker compose logs db-backup`, confirm a recent `backups/olx-*.dump`, and run `pg_restore -l` on it. The included Grafana alert tracks scrape freshness, not backup freshness.
-- **Sync fails:** retain the local dump and read the remote `RESTORE_ERROR` lines in `logs/sync.log`. Ownership failures must be corrected on the source database before retrying; a restore failure after the schema swap triggers the remote rollback procedure.
-
-For personal analysis, keep request intervals conservative and treat upstream blocking, throttling, and payload changes as normal operational conditions.
+- **Dashboard unavailable:** check `docker compose logs --tail=100 superset`, `curl -f http://127.0.0.1:3000/health`, `systemctl status cloudflared`, and the reporting credentials/grants. Recreate Superset when environment settings change; a restart does not update them.
+- **Viewer login fails:** verify the public `SUPERSET_ROOT_URL`, forwarded HTTPS headers, Secure cookies and the stable `SUPERSET_SECRET_KEY`.
+- **Viewer says the definition changed:** reseed the canonical datasets and rebuild the image, then retry. The viewer deliberately denies execution of older source SQL after a dataset definition changes.
+- **Port 3000 is occupied:** identify the listener and its Compose project before stopping it. The deployment retires only Grafana containers belonging to this stack.

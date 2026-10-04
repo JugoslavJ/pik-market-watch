@@ -23,76 +23,59 @@ for f in .env config/searches.json; do
   fi
 done
 
-# Least-privilege DB roles live only on the machines (git-ignored): fail fast
-# with fix instructions.
+. scripts/lib/dashboard-stack.sh
+configure_dashboard_stack
+case "${1:-}" in ''|--check) ;; *) echo "Usage: deploy-stack.sh [--check]" >&2; exit 2 ;; esac
+
+require_secret() {
+  local value
+  value=$(read_env_value "$1")
+  case "$value" in ''|change-me*) echo "✗ $1 must be configured (see docs/OPERATIONS.md)." >&2; exit 1 ;; esac
+}
 for v in POSTGRES_PASSWORD POSTGRES_MIGRATOR_PASSWORD POSTGRES_APP_PASSWORD \
          POSTGRES_REPORTING_PASSWORD POSTGRES_BACKUP_PASSWORD \
-         GRAFANA_ADMIN_PASSWORD GRAFANA_SECRET_KEY; do
-  line=$(grep -E "^${v}=" .env | tail -n 1 || true)
-  value=${line#*=}
-  value=$(printf '%s' "$value" | tr -d '\r')
-  case "$value" in
-    ""|change-me*)
-      echo "✗ $v must be set to a non-example value in $DEPLOY_DIR/.env (see docs/OPERATIONS.md)."
-      exit 1
-      ;;
-  esac
+         SUPERSET_META_PASSWORD SUPERSET_ADMIN_PASSWORD SUPERSET_SECRET_KEY; do
+  require_secret "$v"
 done
 
-# Production Grafana is reachable through Cloudflare Tunnel, which publishes
-# HTTPS while forwarding to the private HTTP listener. Keep the container's
-# published port private and fail closed if production settings are unsafe.
-read_env_value() {
-  local name=$1 line
-  line=$(grep -E "^${name}=" .env | tail -n 1 || true)
-  printf '%s' "${line#*=}" | tr -d '\r'
+validate_origin() {
+  local prefix=$1 bind domain url root_host
+  bind=$(read_env_value "${prefix}_BIND")
+  domain=$(read_env_value "${prefix}_DOMAIN")
+  url=$(read_env_value "${prefix}_ROOT_URL")
+  if [ "$bind" != 127.0.0.1 ]; then
+    echo "✗ ${prefix}_BIND must be 127.0.0.1 in production." >&2; exit 1
+  fi
+  if ! printf '%s' "$domain" | grep -Eq '^([A-Za-z0-9]([-A-Za-z0-9]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$'; then
+    echo "✗ ${prefix}_DOMAIN must be a public DNS hostname." >&2; exit 1
+  fi
+  case "$url" in
+    https://*/)
+      root_host=${url#https://}; root_host=${root_host%%/*}
+      [ "$url" = "https://$domain/" ] && [ "$root_host" = "$domain" ] || {
+        echo "✗ ${prefix}_ROOT_URL must match https://${prefix}_DOMAIN/." >&2; exit 1;
+      } ;;
+    *) echo "✗ ${prefix}_ROOT_URL must use HTTPS and end in /." >&2; exit 1 ;;
+  esac
+  if [ "$(read_env_value "${prefix}_COOKIE_SECURE")" != true ]; then
+    echo "✗ ${prefix}_COOKIE_SECURE must be true in production." >&2; exit 1
+  fi
 }
-
-grafana_bind=$(read_env_value GRAFANA_BIND)
-grafana_domain=$(read_env_value GRAFANA_DOMAIN)
-grafana_root_url=$(read_env_value GRAFANA_ROOT_URL)
-grafana_enforce_domain=$(read_env_value GRAFANA_ENFORCE_DOMAIN)
-grafana_cookie_secure=$(read_env_value GRAFANA_COOKIE_SECURE)
-
-if [ "$grafana_bind" != "127.0.0.1" ]; then
-  echo "✗ GRAFANA_BIND must be 127.0.0.1 in production; port 3000 must stay private."
-  exit 1
+if [ "$HAS_SUPERSET" = true ]; then
+  validate_origin SUPERSET
 fi
-if ! printf '%s' "$grafana_domain" | grep -Eq '^([A-Za-z0-9]([-A-Za-z0-9]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$'; then
-  echo "✗ GRAFANA_DOMAIN must be a public DNS hostname in production (for example grafana.example.com)."
-  exit 1
-fi
-case "$grafana_root_url" in
-  https://*/)
-    root_host=${grafana_root_url#https://}
-    root_host=${root_host%%/*}
-    if [ "$root_host" != "$grafana_domain" ]; then
-      echo "✗ GRAFANA_ROOT_URL host must match GRAFANA_DOMAIN in production."
-      exit 1
-    fi
-    ;;
-  *)
-    echo "✗ GRAFANA_ROOT_URL must be an HTTPS URL ending in / in production."
-    exit 1
-    ;;
-esac
-if [ "$grafana_enforce_domain" != "true" ] || [ "$grafana_cookie_secure" != "true" ]; then
-  echo "✗ GRAFANA_ENFORCE_DOMAIN and GRAFANA_COOKIE_SECURE must both be true in production."
-  exit 1
+docker compose config --quiet
+if [ "${1:-}" = --check ]; then
+  echo "✓ Production preflight passed ($DASHBOARD_MODE); no services changed."
+  exit 0
 fi
 
-# Non-fatal: without it the alert rule still evaluates & shows UI state, but
-# mail delivery stays inert on the placeholder recipient.
-grep -q '^ALERT_EMAIL_TO=.' .env || \
-  echo "⚠ ALERT_EMAIL_TO not set in .env — scrape-silence alert mail is INERT (placeholder recipient)."
-
-# Refresh the prebuilt images (postgres/grafana pins) if the registry
-# is reachable; `up` below still works from the local cache otherwise.
-docker compose pull db grafana db-backup || echo "⚠ pull failed, using local images"
+pull_services=(db db-backup)
+docker compose pull "${pull_services[@]}" || echo "⚠ pull failed, using local images"
 
 # Apply schema changes before publishing dashboards. The migrator is a
 # profile-only one-shot service, so a failed migration stops this deployment
-# before Grafana can observe a partially upgraded contract.
+# before the viewer can observe a partially upgraded contract.
 echo "▶ Starting database for ownership checks"
 docker compose up -d db
 db_deadline=$((SECONDS + 120))
@@ -115,54 +98,68 @@ echo "▶ Applying database migrations"
 docker compose --profile migrate run --build --rm migrator
 
 # Re-run the idempotent role helper so both fresh and existing volumes have
-# the current lean writer and Grafana reader grants.
+# the current lean writer and reporting grants.
 echo "▶ Applying database role grants"
 docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
 
-echo "▶ docker compose up -d --build (build output below, if any)"
-docker compose up -d --build --remove-orphans
+if [ "$HAS_SUPERSET" = true ]; then
+  echo "▶ Upgrading Superset metadata and syncing security permissions"
+  docker compose run --build --rm superset-init
+fi
 
-# Provisioning files (datasources etc.) are read ONLY at Grafana
-# startup, and bind-mount content changes don't trigger container
-# recreation when the image tag is unchanged. Restart it so shipped
-# provisioning edits always take effect. (Dashboard JSON files also
-# hot-reload every 30 s via updateIntervalSeconds.)
-echo "▶ Restarting grafana to re-read provisioning files…"
-docker compose restart grafana
+# Finish building before releasing port 3000. Select the retired container by
+# project and service labels; container removal does not delete its data volume.
+docker compose build superset superset-alert-check
+database_id=$(docker compose ps -q db)
+project=$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "$database_id")
+if [ -z "$project" ] || [ "$project" = '<no value>' ]; then
+  echo "✗ Cannot determine this stack's Compose project; port cutover stopped." >&2
+  exit 1
+fi
+legacy_output=$(docker ps --all --quiet \
+  --filter "label=com.docker.compose.project=$project" \
+  --filter "label=com.docker.compose.service=grafana")
+legacy_grafana=()
+if [ -n "$legacy_output" ]; then
+  mapfile -t legacy_grafana <<< "$legacy_output"
+fi
+if [ "${#legacy_grafana[@]}" -gt 0 ]; then
+  echo "▶ Retiring this stack's Grafana container and releasing port 3000"
+  docker stop "${legacy_grafana[@]}"
+  docker rm "${legacy_grafana[@]}"
+fi
 
-echo "▶ Waiting for containers to become healthy…"
+# These names come only from the validated mode helper.
+read -r -a services <<< "$(stack_services)"
+echo "▶ Starting $DASHBOARD_MODE dashboard stack"
+docker compose up -d --build "${services[@]}"
+if [ "$HAS_SUPERSET" = true ]; then
+  docker compose run --build --rm superset-seed
+  docker compose run --rm superset-access
+fi
+
+echo "▶ Taking and verifying a fresh database and application-state backup"
+docker compose run --rm --no-deps db-backup --once
+
 deadline=$((SECONDS + 360))
-health_status() {
-  local service=$1
-  local id
-  id=$(docker compose ps -q "$service" 2>/dev/null || true)
-  if [ -z "$id" ]; then
-    echo missing
-  else
-    docker inspect -f '{{.State.Health.Status}}' "$id" 2>/dev/null || echo missing
-  fi
-}
 while :; do
-  db=$(health_status db)
-  gr=$(health_status grafana)
-  bk=$(health_status db-backup)
-  echo "   db=$db  grafana=$gr  db-backup=$bk  (t=${SECONDS}s)"
-  if [ "$db" = healthy ] && [ "$gr" = healthy ]; then
-    echo "✓ Stack healthy — deployed ${GIT_SHA:-unknown} to the instance"
-    echo "  Grafana: ${grafana_root_url} (public HTTPS is terminated by Cloudflare)"
-    # The scraper moved to the home machine (compose profile "scrape").
-    # --remove-orphans already deleted its container; drop its image too.
-    docker images --format '{{.Repository}}:{{.Tag}}' \
-      | grep -E '(pik-market-watch|olx-price-ext)-scraper' \
-      | xargs -r docker rmi -f || true
-    docker image prune -f >/dev/null
-    exit 0
-  fi
+  healthy=true
+  for service in "${services[@]}"; do
+    status=$(health_status "$service")
+    echo "   $service=$status"
+    [ "$status" = healthy ] || healthy=false
+  done
+  [ "$healthy" != true ] || break
   if [ "$SECONDS" -ge "$deadline" ]; then
-    echo "✗ Health check timed out after 6 min — recent state:"
     docker compose ps -a
-    docker compose logs --tail 80 db grafana
+    docker compose logs --tail 80 "${services[@]}"
+    echo "✗ Stack did not become healthy within six minutes" >&2
     exit 1
   fi
   sleep 10
 done
+
+bash scripts/superset-readiness.sh
+docker compose run --rm superset-access --publish
+echo "✓ Stack healthy — deployed ${GIT_SHA:-unknown} ($DASHBOARD_MODE)."
+echo "  React dashboards use 127.0.0.1:3000; the existing port-3000 tunnel origin can stay."

@@ -30,50 +30,32 @@ test("example secrets and Compose listeners fail closed", () => {
     "POSTGRES_APP_PASSWORD",
     "POSTGRES_REPORTING_PASSWORD",
     "POSTGRES_BACKUP_PASSWORD",
-    "GRAFANA_ADMIN_PASSWORD",
-    "GRAFANA_SECRET_KEY",
+    "SUPERSET_META_PASSWORD",
+    "SUPERSET_ADMIN_PASSWORD",
+    "SUPERSET_SECRET_KEY",
   ])
     assert.match(example, new RegExp(`^${name}=$`, "m"));
   assert.doesNotMatch(example, /change-me/i);
-  assert.match(compose, /host_ip: \$\{GRAFANA_BIND:-127\.0\.0\.1\}/);
+  assert.match(compose, /host_ip: \$\{SUPERSET_BIND:-127\.0\.0\.1\}/);
   assert.match(compose, /HEALTH_BIND: \$\{HEALTH_BIND:-0\.0\.0\.0\}/);
   assert.match(compose, /backend:\s*\n\s*internal: true/);
 });
 
-test("Grafana is HTTP-only behind Cloudflare Tunnel", () => {
+test("viewer reuses port 3000 behind Cloudflare Tunnel", () => {
   const compose = read("docker-compose.yml");
   const example = read(".env.example");
-
-  assert.match(compose, /GF_SERVER_PROTOCOL: http/);
-  assert.match(compose, /GF_SERVER_DOMAIN: \$\{GRAFANA_DOMAIN:-localhost\}/);
-  assert.match(
-    compose,
-    /GF_SERVER_ROOT_URL: \$\{GRAFANA_ROOT_URL:-http:\/\/localhost:3000\/\}/,
-  );
-  assert.match(
-    compose,
-    /GF_SERVER_ENFORCE_DOMAIN: \$\{GRAFANA_ENFORCE_DOMAIN:-false\}/,
-  );
-  assert.match(
-    compose,
-    /GF_SECURITY_COOKIE_SECURE: \$\{GRAFANA_COOKIE_SECURE:-false\}/,
-  );
-  assert.match(compose, /GF_SECURITY_COOKIE_SAMESITE: lax/);
-  assert.match(compose, /GF_USERS_ALLOW_SIGN_UP: "false"/);
-  assert.match(
-    compose,
-    /curl -sf http:\/\/localhost:3000\/api\/health \|\| exit 1/,
-  );
-  assert.doesNotMatch(
-    compose,
-    /GF_SERVER_CERT_FILE|GF_SERVER_CERT_KEY|\.\/tls:\/certs/,
-  );
-  assert.doesNotMatch(compose, /GF_SERVER_PROTOCOL: https/);
+  const config = read("superset/superset_config.py");
+  assert.match(compose, /target: 8088\s+published: "3000"/);
+  assert.match(compose, /SUPERSET_ROOT_URL:-http:\/\/localhost:3000\//);
+  assert.match(compose, /http:\/\/127\.0\.0\.1:8088\/health/);
+  assert.match(config, /SESSION_COOKIE_HTTPONLY = True/);
+  assert.match(config, /SESSION_COOKIE_SAMESITE = "Lax"/);
+  assert.match(config, /AUTH_USER_REGISTRATION = False/);
+  assert.doesNotMatch(compose, /GF_SERVER_|image: grafana\//);
   for (const name of [
-    "GRAFANA_DOMAIN",
-    "GRAFANA_ROOT_URL",
-    "GRAFANA_ENFORCE_DOMAIN",
-    "GRAFANA_COOKIE_SECURE",
+    "SUPERSET_DOMAIN",
+    "SUPERSET_ROOT_URL",
+    "SUPERSET_COOKIE_SECURE",
   ])
     assert.match(example, new RegExp(`^${name}=`, "m"));
 });
@@ -81,11 +63,11 @@ test("Grafana is HTTP-only behind Cloudflare Tunnel", () => {
 test("backup publication is verified before atomic rename", () => {
   const backup = read("db/backup.sh");
   assert.match(backup, /umask 077/);
-  assert.match(backup, /partial="\$out\.partial"/);
+  assert.match(backup, /partial=\$\(mktemp "\$out\.partial\.XXXXXX"\)/);
   assert.match(backup, /pg_restore -l "\$partial"/);
   assert.match(backup, /mv -f "\$partial" "\$out"/);
-  assert.match(backup, /tar -tzf "\$gpartial"/);
-  assert.match(backup, /mv -f "\$gpartial" "\$gtar"/);
+  assert.match(backup, /tar -tzf "\$partial"/);
+  assert.match(backup, /archive_volume superset-home "\$SUPERSET_HOME"/);
 });
 
 test("database roles separate reporting and backup access", () => {
