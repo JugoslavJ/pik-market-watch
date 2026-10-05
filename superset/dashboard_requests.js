@@ -133,24 +133,6 @@
           "X-Dashboard-Stream": "1",
         },
       });
-      // Allow the normal API to keep working with a server that has not yet
-      // installed the extension (rolling deployment or a reverted image).
-      if (result.status === 404) {
-        await Promise.all(
-          wave.map(async (item) => {
-            const original = await fetchOriginal(item.url, {
-              ...item.options,
-              signal: undefined,
-              body: JSON.stringify(item.context),
-            });
-            item.resolve({
-              status: original.status,
-              body: await original.text(),
-            });
-          }),
-        );
-        return;
-      }
       if (!result.ok)
         throw new Error("Dashboard data request failed: " + result.status);
       if (

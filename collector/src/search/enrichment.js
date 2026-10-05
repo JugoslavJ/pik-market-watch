@@ -6,19 +6,18 @@ async function enrichSearchResults({
   db,
   cfg,
   allCards,
-  ids,
   runId,
   rateBudget,
   fetchDetailsInBatches,
   pace,
   log,
 }) {
-  if (!(cfg.maxDetailFetches > 0) || !ids.length) return 0;
+  if (cfg.maxDetailFetches === 0 || !allCards.length) return 0;
   // Retry oldest attempts first so unanswerable listings cannot starve the queue.
   let enrichedCount = 0;
   try {
     const { pending, total } = await db.enrichmentQueue(
-      ids,
+      allCards.map((card) => card.articleId),
       cfg.maxDetailFetches,
       {
         refreshDays: cfg.detailRefreshDays ?? 7,
@@ -28,6 +27,7 @@ async function enrichSearchResults({
     const cardsById = new Map(allCards.map((card) => [card.articleId, card]));
 
     const rows = new Map();
+    const detailIds = [];
     const counts = {
       unpinned: 0,
       missingSqm: 0,
@@ -38,7 +38,7 @@ async function enrichSearchResults({
     for (const listing of pending) {
       const card = cardsById.get(listing.id);
       if (!card) continue;
-      for (const reason of Object.keys(counts)) {
+      for (const reason in counts) {
         if (listing[reason]) counts[reason]++;
       }
       rows.set(listing.id, {
@@ -50,21 +50,15 @@ async function enrichSearchResults({
         sellerType: card.sellerType,
         apiStatus: card.apiStatus,
       });
+      if (
+        listing.neverDetailed ||
+        listing.stale ||
+        listing.priceChanged ||
+        (listing.missingSqm && card.sqm == null) ||
+        (listing.unpinned && card.latitude == null)
+      )
+        detailIds.push(listing.id);
     }
-
-    const detailIds = pending
-      .filter((listing) => {
-        const row = rows.get(listing.id);
-        if (!row) return false;
-        return (
-          listing.neverDetailed ||
-          listing.stale ||
-          listing.priceChanged ||
-          (listing.missingSqm && row.sqm == null) ||
-          (listing.unpinned && row.latitude == null)
-        );
-      })
-      .map((listing) => listing.id);
 
     await db.markDetailAttempts(detailIds);
 
@@ -95,7 +89,7 @@ async function enrichSearchResults({
       },
       log,
     );
-    const successfulRows = new Map();
+    const successfulRows = [];
     for (const detail of details) {
       if (!detail) continue;
       const row = rows.get(detail.articleId);
@@ -107,12 +101,11 @@ async function enrichSearchResults({
         if (name === "characteristics" && !Object.keys(value).length) continue;
         row[name] = value;
       }
-      successfulRows.set(detail.articleId, row);
+      successfulRows.push(row);
     }
 
-    if (successfulRows.size)
-      await db.enrichListings([...successfulRows.values()]);
-    enrichedCount = successfulRows.size;
+    if (successfulRows.length) await db.enrichListings(successfulRows);
+    enrichedCount = successfulRows.length;
     log(`⌖ enriched ${enrichedCount}/${pending.length} listing(s)`);
   } catch (error) {
     // Ingestion is committed; enrichment failures are retried next cycle.

@@ -8,8 +8,6 @@ function leanPool(calls, queryResult = { rowCount: 1 }) {
   return {
     query: async (...args) => {
       calls.push(args);
-      if (String(args[0]).includes("to_regclass"))
-        return { rows: [{ ready: true }] };
       return queryResult;
     },
   };
@@ -32,17 +30,18 @@ test("raw archive writes canonical search payloads and bodyless diagnostics to l
     error: new Error("blocked"),
   });
 
-  assert.match(calls[1][0], /INSERT INTO lean\.raw_api_responses/);
-  assert.deepEqual(calls[1][1].slice(0, 2), [81, 82]);
-  assert.equal(calls[1][1][6], null);
-  assert.deepEqual(JSON.parse(calls[1][1][7]), {
+  assert.equal(calls.length, 2);
+  assert.match(calls[0][0], /INSERT INTO lean\.raw_api_responses/);
+  assert.deepEqual(calls[0][1].slice(0, 2), [81, 82]);
+  assert.equal(calls[0][1][6], null);
+  assert.deepEqual(JSON.parse(calls[0][1][7]), {
     data: [{ id: 1 }],
     meta: { total: 1 },
   });
-  assert.equal(calls[1][1][12], "canonical-v2");
-  assert.match(calls[2][0], /INSERT INTO lean\.raw_api_responses/);
-  assert.equal(calls[2][1][6], null);
-  assert.equal(calls[2][1][12], "diagnostic-v2");
+  assert.equal(calls[0][1][12], "canonical-v2");
+  assert.match(calls[1][0], /INSERT INTO lean\.raw_api_responses/);
+  assert.equal(calls[1][1][6], null);
+  assert.equal(calls[1][1][12], "diagnostic-v2");
 });
 
 test("raw response retention purges the lean archive by request stream", async () => {
@@ -52,9 +51,9 @@ test("raw response retention purges the lean archive by request stream", async (
   db.pool = leanPool(calls, { rowCount: 0, rows: [{ deleted: 0 }] });
 
   assert.equal(await db.purgeRawResponses(), 0);
-  assert.match(calls[1][0], /FROM lean\.raw_api_responses/);
-  assert.match(calls[1][0], /PARTITION BY request_kind,request_url/);
-  assert.deepEqual(calls[1][1], [3, 1000]);
+  assert.match(calls[0][0], /FROM lean\.raw_api_responses/);
+  assert.match(calls[0][0], /PARTITION BY request_kind,request_url/);
+  assert.deepEqual(calls[0][1], [3, 1000]);
 });
 
 test("batched detail archives keep source bodies and bodyless diagnostics", async () => {
@@ -70,19 +69,24 @@ test("batched detail archives keep source bodies and bodyless diagnostics", asyn
       diagnostic: { kind: "http", status: 403 },
     },
   ]);
-  const rows = JSON.parse(calls[1][1][0]);
+  const rows = JSON.parse(calls[0][1][0]);
   assert.equal(count, 2);
-  assert.match(calls[1][0], /INSERT INTO lean\.raw_api_responses/);
+  assert.match(calls[0][0], /INSERT INTO lean\.raw_api_responses/);
   assert.deepEqual(rows[0].payload, { id: 1 });
   assert.equal(rows[1].payload, null);
   assert.deepEqual(rows[1].diagnostic, { kind: "http", status: 403 });
 });
 
-test("lean archive absence fails explicitly without falling back to public", async () => {
+test("archive writes propagate database errors without falling back to public", async () => {
   const db = new Db("postgres://unused");
-  db.pool = { query: async () => ({ rows: [{ ready: false }] }) };
+  const error = new Error('relation "lean.raw_api_responses" does not exist');
+  db.pool = {
+    query: async () => {
+      throw error;
+    },
+  };
   await assert.rejects(
-    db.rawArchiveTarget(),
-    /lean\.raw_api_responses is not installed/,
+    db.archiveSearchResponse({ requestUrl: "https://olx.ba/api/search" }),
+    error,
   );
 });

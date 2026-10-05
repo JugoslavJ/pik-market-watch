@@ -161,16 +161,14 @@ async function harvestSearchPages({
       "API page 1 was not an authoritative result after retry — blocked, malformed or payload shape changed?",
     );
   }
-  let cards = firstPage.cards;
   let pagesDone = 1;
 
   for (
     let waveStart = 2;
-    waveStart <= cfg.maxPages && waveStart <= lastPage && cards.length > 0;
+    waveStart <= cfg.maxPages && waveStart <= lastPage;
     waveStart += cfg.concurrency
   ) {
     const pageNos = pagesInWave(waveStart, lastPage, cfg);
-    if (!pageNos.length) break;
     const results = await Promise.all(
       pageNos.map((page) =>
         fetchPage(page).catch((error) => {
@@ -195,7 +193,6 @@ async function harvestSearchPages({
       truncatedPagination = true;
       break;
     }
-    cards = results.find((result) => result.cards.length)?.cards || [];
     await pace(cfg.pageDelayMs);
   }
 
@@ -222,7 +219,6 @@ async function harvestSearchPages({
       error: incompleteReason,
     };
     const error = new Error(incompleteReason);
-    error.incomplete = true;
     error.runOutcome = outcome;
     throw error;
   }

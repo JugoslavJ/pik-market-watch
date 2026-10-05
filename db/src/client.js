@@ -11,10 +11,7 @@ const LEAN_MAINTENANCE_LOCK = "pik-market-watch lean maintenance";
 class Db {
   constructor(connectionString, { rawResponseRetentionCount = 3 } = {}) {
     this.pool = new Pool({ connectionString, max: 5 });
-    this.rawResponseRetentionCount = Math.max(
-      1,
-      Number(rawResponseRetentionCount) || 3,
-    );
+    this.rawResponseRetentionCount = rawResponseRetentionCount;
   }
 
   async waitUntilReady({ retries = 30, delayMs = 2000 } = {}) {

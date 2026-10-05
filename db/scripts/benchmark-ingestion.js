@@ -31,6 +31,14 @@ function cardsFor(size, offset) {
 
 async function main() {
   const db = new Db(process.env.DATABASE_URL);
+  let queryCount = 0;
+  db.pool.on("connect", (client) => {
+    const query = client.query;
+    client.query = function (...args) {
+      queryCount++;
+      return query.apply(this, args);
+    };
+  });
   try {
     await db.waitUntilReady({ retries: 3, delayMs: 250 });
     for (const size of sizes) {
@@ -44,7 +52,7 @@ async function main() {
         category: "benchmark",
       });
       const runId = await db.startRun(searchKey);
-      const queryCounter = { count: 0 };
+      queryCount = 0;
       const started = process.hrtime.bigint();
       const result = await db.commitSearchIngestion({
         runId,
@@ -62,14 +70,13 @@ async function main() {
           cards: size,
           listingCount: size,
         },
-        queryCounter,
       });
       const elapsedMs = Number(process.hrtime.bigint() - started) / 1e6;
       const { newIds = [], ...summary } = result;
       console.log(
         JSON.stringify({
           size,
-          queryCount: queryCounter.count,
+          queryCount,
           elapsedMs: Math.round(elapsedMs),
           ...summary,
           newIdCount: newIds.length,

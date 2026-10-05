@@ -82,7 +82,12 @@ function fakeDb(queueImpl) {
         pages: payload.run.pages,
         cards: payload.run.cards,
       });
-      return { newCount: payload.cards.length, dropCount: 0 };
+      return {
+        newCount: payload.cards.length,
+        dropCount: 0,
+        closedCount: 0,
+        median: null,
+      };
     },
     async enrichmentQueue(ids, cap) {
       return queueImpl
@@ -97,9 +102,6 @@ function fakeDb(queueImpl) {
     },
     async finishRun(_id, info) {
       rec.finishedRuns.push(info);
-    },
-    async hasRecentFinishedRun() {
-      return false;
     },
   };
 }

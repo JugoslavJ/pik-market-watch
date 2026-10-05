@@ -78,8 +78,9 @@ def validate_cross(cross):
 def compile_dashboard(board, supplied=None, cross=None, days=None, until=None):
     selected = selections(board, supplied or {})
     cross = validate_cross(cross or {})
+    variables = viewer_variables(board)
     property_filters = {}
-    for variable in viewer_variables(board):
+    for variable in variables:
         value = selected[variable["name"]]
         if value[0] in ("All", ""):
             continue
@@ -152,15 +153,13 @@ def compile_dashboard(board, supplied=None, cross=None, days=None, until=None):
     for variable in board.get("templating", {}).get("list", []):
         if variable["type"] == "query":
             options[variable["name"]] = variable["query"]
-        elif variable["type"] == "custom":
-            options[variable["name"]] = None
     # Inline lifecycle facts to preserve indexed lateral lookups for the next exit.
     entries = [f"'{key}', (SELECT coalesce(jsonb_agg(to_jsonb(r)), '[]'::jsonb) FROM ({sql}) r)"
                for key, sql in groups.items()]
     option_entries = [f"'{key}', (SELECT coalesce(jsonb_agg(r.__value), '[]'::jsonb) FROM ({sql}) r)"
                       for key, sql in options.items() if sql]
     ctes["property_options"] = (options_sql(), True)
-    for variable in viewer_variables(board):
+    for variable in variables:
         if variable["op"] == "IN":
             column = variable["column"]
             option_entries.append(f"'{variable['name']}', (SELECT coalesce(jsonb_agg(v ORDER BY v), '[]'::jsonb) "

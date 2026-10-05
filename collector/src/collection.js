@@ -86,17 +86,12 @@ async function collectSearch(
     });
     ingestionCommitted = true;
 
-    const newCount = Number(stats?.newCount || 0);
-    const dropCount = Number(stats?.dropCount || 0);
-    const closedCount = Number(stats?.closedCount || 0);
-    const median = stats?.median ?? null;
-    const ids = allCards.map((c) => c.articleId).filter(Boolean);
+    const { newCount, dropCount, closedCount, median } = stats;
 
     const enrichedCount = await enrichSearchResults({
       db,
       cfg,
       allCards,
-      ids,
       runId,
       rateBudget,
       fetchDetailsInBatches,

@@ -121,7 +121,7 @@ def viewer_variables(board):
         if kind == "range":
             result.extend({"name": column + suffix, "column": column, "op": op,
                            "label": label + " " + bound, "type": "textbox", "default": "",
-                           "multi": False, "min": -5 if name == "floor_num" else 0,
+                           "multi": False, "min": 0,
                            "choices": [], "property": True}
                           for suffix, op, bound in [("_min", ">=", "minimum"), ("_max", "<=", "maximum")])
         else:

@@ -126,12 +126,12 @@ async function finishRun(runId, outcome) {
   );
 }
 
-async function hasRecentFinishedRun(minutes, searchKey = null) {
+async function hasRecentFinishedRun(minutes, searchKey) {
   const result = await this.pool.query(
     `SELECT 1 FROM lean.scrape_runs WHERE status='ok' AND is_complete
        AND finished_at > now()-make_interval(mins => $1::int)
-       AND ($2::text IS NULL OR search_key=$2) LIMIT 1`,
-    [Math.max(0, Math.round(minutes || 0)), searchKey],
+       AND search_key=$2 LIMIT 1`,
+    [minutes, searchKey],
   );
   return result.rowCount > 0;
 }
@@ -141,12 +141,6 @@ async function commitSearchIngestion(payload) {
   const ids = cards.map((card) => Number(card.articleId));
   const searchKey = payload.search.searchKey;
   const client = await this.pool.connect();
-  const originalQuery = client.query.bind(client);
-  if (payload.queryCounter)
-    client.query = (...args) => {
-      payload.queryCounter.count = (payload.queryCounter.count || 0) + 1;
-      return originalQuery(...args);
-    };
   try {
     await client.query("BEGIN");
     await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [
@@ -195,7 +189,7 @@ async function commitSearchIngestion(payload) {
         price,
         price_text: card.priceText ?? null,
         currency: card.priceCurrency || "BAM",
-        ppm2: rate(price, sqm ?? null, deal),
+        ppm2: rate(price, sqm, deal),
         latitude: card.latitude ?? null,
         longitude: card.longitude ?? null,
         seller_type: card.sellerType ?? null,
@@ -505,7 +499,6 @@ async function enrichListings(rows) {
           JSON.stringify(extra),
         ],
       );
-      await classify(client, [Number(row.articleId)]);
       const apiHistory = (row.apiPriceHistory || []).map((event, ordinal) => ({
         article_id: Number(row.articleId),
         reported_at: event.date,
@@ -538,12 +531,13 @@ async function enrichListings(rows) {
           [JSON.stringify(apiHistory)],
         );
       }
-      await client.query(
-        `DELETE FROM lean.price_history
-          WHERE article_id=$1 AND source='search'`,
-        [row.articleId],
-      );
     }
+    const ids = rows.map((row) => Number(row.articleId));
+    await classify(client, ids);
+    await client.query(
+      "DELETE FROM lean.price_history WHERE article_id=ANY($1::bigint[]) AND source='search'",
+      [ids],
+    );
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK").catch(() => {});

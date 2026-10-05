@@ -319,3 +319,71 @@ needsDb(
     }
   },
 );
+
+needsDb(
+  "batch enrichment keeps listing facts and price histories isolated",
+  async () => {
+    await commit(SEARCH_A, [card(9201), card(9202), card(9203)]);
+    await db.enrichListings([
+      {
+        articleId: 9201,
+        dealType: "sale",
+        price: 120000,
+        sqm: 60,
+        latitude: 44.7839172,
+        longitude: 17.1629606,
+        apiPriceHistory: [{ date: 1743523200, price: 120000 }],
+      },
+      {
+        articleId: 9202,
+        dealType: "rent",
+        priceState: "unpriced",
+        price: null,
+      },
+      { articleId: 9299, price: 99999 },
+    ]);
+    const { rows } = await db.pool.query(
+      `SELECT article_id::int AS id, price, deal, sqm, ppm2, property_type,
+            details_fetched_at IS NOT NULL AS detailed
+       FROM lean.listings ORDER BY article_id`,
+    );
+    assert.deepEqual(rows, [
+      {
+        id: 9201,
+        price: "120000.00",
+        deal: "sale",
+        sqm: "50.00",
+        ppm2: 2400,
+        property_type: "apartments",
+        detailed: true,
+      },
+      {
+        id: 9202,
+        price: null,
+        deal: "rent",
+        sqm: "50.00",
+        ppm2: null,
+        property_type: "apartments",
+        detailed: true,
+      },
+      {
+        id: 9203,
+        price: "100000.00",
+        deal: "sale",
+        sqm: "50.00",
+        ppm2: 2000,
+        property_type: "apartments",
+        detailed: false,
+      },
+    ]);
+    const history = await db.pool.query(
+      "SELECT article_id::int AS id, price, source FROM lean.price_history ORDER BY article_id",
+    );
+    assert.deepEqual(history.rows, [
+      { id: 9201, price: "120000.00", source: "api_price_history" },
+      { id: 9203, price: "100000.00", source: "search" },
+    ]);
+    assert.equal(await db.hasRecentFinishedRun(45, SEARCH_A.searchKey), true);
+    assert.equal(await db.hasRecentFinishedRun(45, SEARCH_B.searchKey), false);
+  },
+);

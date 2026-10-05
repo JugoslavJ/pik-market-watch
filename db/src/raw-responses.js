@@ -70,18 +70,17 @@ async function recordScrapePageManifest(page) {
 async function purgeRawResponses(limit = 1000) {
   const cap = Math.max(1, Math.floor(Number(limit) || 1));
   let deleted = 0;
-  const { table } = await this.rawArchiveTarget();
-  for (;;) {
-    const sql = `WITH ranked AS (
+  const sql = `WITH ranked AS (
        SELECT id,expires_at,row_number() OVER (
          PARTITION BY request_kind,request_url ORDER BY fetched_at DESC,id DESC) AS rank
-       FROM ${table}
+       FROM lean.raw_api_responses
      ), doomed AS (
        SELECT id FROM ranked WHERE rank>$1 OR expires_at<=now() LIMIT $2
      ), deleted AS (
-       DELETE FROM ${table} r USING doomed d
+       DELETE FROM lean.raw_api_responses r USING doomed d
        WHERE r.id=d.id RETURNING r.id
      ) SELECT count(*)::int AS deleted FROM deleted`;
+  for (;;) {
     const result = await this.pool.query(sql, [
       this.rawResponseRetentionCount,
       cap,
@@ -106,16 +105,6 @@ async function runMaintenanceCycle({ log = () => {} } = {}) {
 }
 
 module.exports = {
-  async rawArchiveTarget() {
-    this._leanRawArchiveReady ??= this.pool
-      .query(
-        "SELECT to_regclass('lean.raw_api_responses') IS NOT NULL AS ready",
-      )
-      .then((result) => Boolean(result.rows[0]?.ready));
-    if (!(await this._leanRawArchiveReady))
-      throw new Error("lean.raw_api_responses is not installed");
-    return { table: "lean.raw_api_responses" };
-  },
   async archiveSearchResponse({
     runId,
     articleId = null,
@@ -140,9 +129,8 @@ module.exports = {
       !isDiagnostic && requestKind === "search"
         ? (sourcePayload ?? payload ?? null)
         : null;
-    const { table } = await this.rawArchiveTarget();
     await this.pool.query(
-      `INSERT INTO ${table}
+      `INSERT INTO lean.raw_api_responses
          (run_id, article_id, request_kind, request_url, fetched_at, expires_at,
           parser_version, payload, source_payload, request_metadata,
           response_metadata, build_version, diagnostic, archive_format)
@@ -175,9 +163,8 @@ module.exports = {
       (row) => row && row.articleId != null,
     );
     if (!rows.length) return 0;
-    const { table } = await this.rawArchiveTarget();
     const result = await this.pool.query(
-      `INSERT INTO ${table}
+      `INSERT INTO lean.raw_api_responses
          (run_id, article_id, request_kind, request_url, fetched_at, expires_at,
           parser_version, payload, source_payload, request_metadata,
           response_metadata, build_version, diagnostic, archive_format)
