@@ -62,6 +62,34 @@ test("Compose provisions only the lean schema and dashboard assets", () => {
   assert.match(compose, /target: 8088\s+published: "3000"/);
 });
 
+test("access jobs mount their local Python import dependencies", () => {
+  // These jobs bind current helpers over the image's copies. Follow their
+  // imports so a previously built image cannot hide a missing helper mount.
+  const accessService = compose
+    .split("  superset-access:")[1]
+    .split("\n  #")[0];
+  const pending = ["access", "validate_access"];
+  const visited = new Set();
+  while (pending.length) {
+    const name = pending.pop();
+    if (visited.has(name)) continue;
+    visited.add(name);
+    assert.ok(
+      accessService.includes(`./superset/${name}.py:/app/${name}.py:ro`),
+      `superset-access must mount ${name}.py from the current checkout`,
+    );
+    const source = fs.readFileSync(
+      path.join(ROOT, "superset", `${name}.py`),
+      "utf8",
+    );
+    for (const [, dependency] of source.matchAll(/^from (\w+) import /gm)) {
+      if (fs.existsSync(path.join(ROOT, "superset", `${dependency}.py`))) {
+        pending.push(dependency);
+      }
+    }
+  }
+});
+
 test("deployment runs migration job before publishing the stack", () => {
   const ownershipAt = deploy.indexOf("zz-database-roles.sh");
   const migrateAt = deploy.indexOf("docker compose --profile migrate run");

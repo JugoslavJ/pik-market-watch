@@ -217,6 +217,22 @@ pwsh -File scripts\register-sync-task.ps1
 
 The restore endpoint receives and validates the archive, audits ownership, saves a rollback snapshot, pauses a running scraper, restores only the `olx` application schemas in a transaction, restores the prior snapshot on failure when available, reasserts role grants, and resumes the writer. It leaves `superset_meta` untouched, then refreshes Superset, reseeds datasets and charts, and reapplies viewer permissions before reporting success. If a dashboard refresh fails, the restored `olx` data remains in place; repair the dashboard service without repeating the scrape/restore. Input is capped at `OLX_SYNC_MAX_BYTES` (default 512 MiB) and the temporary incoming file is removed on every exit path. Its `RESTORE_OK` or `RESTORE_ERROR` output is the protocol consumed by the PowerShell script. A holder of the restore SSH key has database-administrator-equivalent capability over application data, even though the key is restricted to a forced command and has no interactive shell; protect and rotate it accordingly.
 
+If sync reports `data and charts restored, but viewer permissions could not be
+refreshed`, update the instance checkout with the fix, then retry only the
+permissions job from that checkout using an administrative shell:
+
+```bash
+. scripts/lib/superset-stack.sh
+configure_superset_stack
+docker compose run --rm --no-deps superset-access
+```
+
+For `ModuleNotFoundError: No module named 'listing_filters'`, the
+`superset-access` service must mount `superset/listing_filters.py` alongside
+`provisioning.py`. The permissions retry uses these current checkout files
+without rebuilding the image. It preserves dashboard publication settings.
+The restore-only SSH key cannot run this repair command.
+
 Recovery should be rehearsed periodically against a disposable PostgreSQL
 instance: verify representative data, expected tables, ownership, reader
 access, malformed/oversized input rejection, rollback, and writer restart.

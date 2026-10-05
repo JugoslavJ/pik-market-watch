@@ -330,6 +330,7 @@ services:
       - ./superset/client.py:/app/client.py:ro
       - ./superset/provisioning.py:/app/provisioning.py:ro
       - ./superset/maps.py:/app/maps.py:ro
+      - ./superset/listing_filters.py:/app/listing_filters.py:ro
       - ./superset/superset_config.py:/app/superset_config.py:ro
     entrypoint: ["python", "/app/access.py"]
     mem_limit: 1g
