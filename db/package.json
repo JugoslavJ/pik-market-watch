@@ -1,0 +1,21 @@
+{
+  "name": "@pik-market-watch/db",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PostgreSQL persistence, migrations, and archive maintenance",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "node --test \"test/unit/*.test.js\"",
+    "test:integration": "node scripts/run-integration-tests.js",
+    "migrate": "node src/migrate-only.js",
+    "maintenance": "node src/maintenance-only.js",
+    "benchmark:ingestion": "node scripts/benchmark-ingestion.js"
+  },
+  "engines": {
+    "node": ">=26"
+  },
+  "dependencies": {
+    "pg": "^8.23.0",
+    "@pik-market-watch/config": "1.0.0"
+  }
+}

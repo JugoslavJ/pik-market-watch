@@ -22,7 +22,7 @@ docker compose --profile scrape run --rm scraper node src/index.js --once
 ```
 
 When the `scrape` profile is enabled, Compose first completes the `migrator`
-job (`src/migrate-only.js`) and only then starts the scraper. To apply schema
+job (`db/src/migrate-only.js`) and only then starts the scraper. To apply schema
 changes on a dashboard-only host, run `docker compose --profile migrate run
 --build --rm migrator` before restarting clients.
 
@@ -58,7 +58,6 @@ Restart a running scraper after changing the file: `docker compose restart scrap
 ## Development
 
 ```bash
-cd scraper
 npm ci
 npm test
 npm run test:integration
@@ -67,7 +66,36 @@ npm run lint
 npm run format:check
 ```
 
-`npm run fixtures` refreshes recorded API fixtures and `node scripts/check-api.js` is a live API probe. The integration suite uses a disposable PostgreSQL container.
+Run these commands from the repository root. npm workspaces link the collector,
+database, and shared configuration packages using one lockfile. The React viewer
+keeps its own package and build dependencies in `dashboard-viewer/`.
+
+`npm run fixtures` refreshes recorded API fixtures and
+`node collector/scripts/check-api.js` is a live API probe. The integration suite
+uses a disposable PostgreSQL container.
+
+With PowerShell 7 available, `npm test` also exercises the home sync workflow
+with Docker and SSH mocked, including build, scrape, dump and restore failures.
+CI requires PowerShell 7 so these checks cannot silently skip; local runs without
+PowerShell skip them.
+
+## Repository ownership
+
+| Directory | Responsibility |
+| --- | --- |
+| `collector/` | OLX API requests, payload mapping, normalization, pagination, enrichment and scheduling |
+| `db/` | PostgreSQL client, persistence, migrations, archive maintenance, schema, backups and database tests |
+| `config/` | Shared environment validation and saved-search configuration |
+| `superset/` | Dashboard backend, SQL definitions, provisioning and dashboard tests |
+| `dashboard-viewer/` | React UI, charts, maps and viewer browser checks |
+| `scripts/` | Deployment, synchronization, documentation checks and repository tooling |
+| `tests/contracts/` | Deployment, backup and security checks spanning components |
+
+The Compose service and profile remain `scraper` and `scrape`; its source code
+lives in `collector/`. The collector imports `@pik-market-watch/db` for storage.
+Database jobs use their own configuration and can run independently of OLX
+search settings. See [collector details](collector/README.md) and
+[database details](db/README.md).
 
 ## Documentation
 

@@ -17,9 +17,6 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 20   # a hung throwaway-Postgres boot must not burn the 6 h default
-    defaults:
-      run:
-        working-directory: scraper
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -28,14 +25,16 @@ jobs:
         with:
           node-version: 26
           cache: npm
-          cache-dependency-path: scraper/package-lock.json
+          cache-dependency-path: package-lock.json
       - run: npm ci
       - run: npm run format:check
       - run: npm run lint
+      - name: Require PowerShell for executable sync tests
+        run: pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
       - run: npm test
       - run: npm run test:integration
       - name: Build scraper image for vulnerability scanning
-        run: docker build --tag pik-market-watch-scraper:ci .
+        run: docker build --tag pik-market-watch-scraper:ci --file collector/Dockerfile .
       - name: Scan scraper image with Trivy
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -47,10 +46,10 @@ jobs:
           exit-code: "0"
       - name: Validate the versioned Superset dashboard catalog
         working-directory: .
-        run: node scripts/generate-dashboard-catalog.js --check
-      - name: Check native dashboard request handling
+        run: node superset/scripts/generate-dashboard-catalog.js --check
+      - name: Check deployment and backup contracts
         working-directory: .
-        run: node --test superset/tests/test_dashboard_requests.cjs
+        run: python3 -m unittest discover -v -s tests/contracts -p '*.py'
       - name: Build the production Superset image
         working-directory: .
         run: docker build --tag pik-market-watch-superset:ci --file superset/Dockerfile .

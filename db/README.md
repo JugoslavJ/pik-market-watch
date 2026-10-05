@@ -1,5 +1,21 @@
 # Lean database
 
+This directory owns the PostgreSQL schema and Node persistence package,
+`@pik-market-watch/db`. `src/client.js` supplies the connection pool and leases;
+`src/ingestion.js` owns listing/search writes, and `src/raw-responses.js` owns
+transport archives, page manifests and retention. `src/migrate.js` manages the
+schema baseline. Database code depends on `pg` and shared environment validators,
+and has no dependency on the collector or dashboard packages.
+
+Install workspace dependencies with `npm ci` from the repository root. Run
+database unit tests with `npm test --workspace @pik-market-watch/db`, database
+integration tests with `npm run test:integration`, and the optional disposable
+database benchmark with `npm run benchmark:ingestion`. Bare Node jobs use
+`npm run migrate --workspace @pik-market-watch/db` and
+`npm run maintenance --workspace @pik-market-watch/db`; provide `DATABASE_URL`
+and the appropriate database role. Database settings are in `src/config.js`
+and do not load saved searches or API pacing settings.
+
 `init-lean/` is the sole first-boot schema baseline. Compose mounts it for both
 PostgreSQL initialization and the checksum-managed migrator. The scraper writes
 to the `lean` schema; `public` contains PostgreSQL extension objects and the

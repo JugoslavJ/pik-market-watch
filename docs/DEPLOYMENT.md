@@ -90,9 +90,9 @@ Browser checks can run from the Windows workstation against the HTTPS origin:
 
 ```powershell
 $env:SUPERSET_TEST_URL='https://dashboards.example.com'
-node superset/tests/check-viewer.cjs
+node dashboard-viewer/tests/check-viewer.cjs
 $env:SUPERSET_BENCH_ROUNDS='10'
-node superset/tests/benchmark-viewer.cjs
+node dashboard-viewer/tests/benchmark-viewer.cjs
 ```
 
 Use an existing administrative credential through the environment or ignored

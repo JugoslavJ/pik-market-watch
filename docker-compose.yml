@@ -13,7 +13,9 @@ x-logging: &logging
 # reuse one built image and its BuildKit cache across all four services.
 x-scraper-runtime: &scraper-runtime
   image: pik-market-watch-scraper:local
-  build: ./scraper
+  build:
+    context: .
+    dockerfile: collector/Dockerfile
   init: true
   security_opt:
     - no-new-privileges:true
@@ -146,7 +148,8 @@ services:
     environment:
       DATABASE_URL: postgres://${POSTGRES_MIGRATOR_USER:-olx_migrator}:${POSTGRES_MIGRATOR_PASSWORD}@db:5432/${POSTGRES_DB:-olx}
       MIGRATION_ADMIN_DATABASE_URL: postgres://${POSTGRES_USER:-olx}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-olx}
-    entrypoint: ["node", "src/migrate-only.js"]
+    working_dir: /app
+    entrypoint: ["node", "db/src/migrate-only.js"]
 
   # Run lean raw-archive retention independently from upstream scraping.
   # Invoke on a host scheduler with --profile maintenance.
@@ -163,7 +166,8 @@ services:
       DATABASE_URL: postgres://${POSTGRES_APP_USER:-olx_app}:${POSTGRES_APP_PASSWORD}@db:5432/${POSTGRES_DB:-olx}
       MIGRATIONS_ON_STARTUP: "0"
       RAW_RESPONSE_RETENTION_COUNT: ${RAW_RESPONSE_RETENTION_COUNT:-3}
-    entrypoint: ["node", "src/maintenance-only.js"]
+    working_dir: /app
+    entrypoint: ["node", "db/src/maintenance-only.js"]
 
   scraper:
     <<: *scraper-runtime

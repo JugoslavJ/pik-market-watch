@@ -7,7 +7,7 @@ on:
       - "README.md"
       - "**/*.md"
       - ".github/workflows/docs.yml"
-      - "scraper/scripts/check-markdown-links.js"
+      - "scripts/check-markdown-links.js"
   pull_request:
     paths: *doc_paths
   workflow_dispatch:
@@ -29,4 +29,4 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 26
-      - run: node scraper/scripts/check-markdown-links.js
+      - run: node scripts/check-markdown-links.js

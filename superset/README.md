@@ -52,7 +52,7 @@ including price bounds, amenities and explicit Unknown values. Listing filters
 apply before aggregation; operational run statistics keep their own scope.
 Exit prices use event snapshots, while amenities use the latest listing details.
 
-After changing definitions, run `node scripts/generate-dashboard-catalog.js`
+After changing definitions, run `node superset/scripts/generate-dashboard-catalog.js`
 from the repository root, rebuild the Superset image, and rerun the seed and
 access jobs. The generated [catalog](DASHBOARD_CATALOG.md) records the panel SQL,
 filters and semantic datasets. CI verifies it matches the definitions.
@@ -118,10 +118,10 @@ Browser validation uses Playwright installed in ignored `data/superset-validatio
 
 ```bash
 npm install --prefix data/superset-validation --no-save playwright
-node superset/tests/check-viewer.cjs
+node dashboard-viewer/tests/check-viewer.cjs
 node superset/tests/check-ui.cjs
 node superset/tests/check-cross-filters.cjs
-node superset/tests/check-property-filters.cjs
+node dashboard-viewer/tests/check-property-filters.cjs
 ```
 
 The viewer scripts use installed Edge on Windows. They read credentials from the

@@ -57,7 +57,7 @@ available. Browser data is never stored in persistent local storage.
 npm ci
 npm run build
 npm run test:browser
-node ../superset/tests/benchmark-viewer.cjs
+node tests/benchmark-viewer.cjs
 docker compose --profile superset --profile superset-ops run --rm --no-deps \
   --entrypoint python -v ./superset/validate_viewer.py:/app/validate_viewer.py:ro \
   superset-seed /app/validate_viewer.py

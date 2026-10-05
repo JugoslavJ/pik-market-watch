@@ -201,8 +201,10 @@ volume mounts and the container filesystem are read-only; only the backup
 destination and temporary workspace are writable. State-file permissions remain
 unchanged.
 
-For post-deploy checks, run the deployment contract and integration tests in
-`scraper/test/` against a disposable instance before changing production data.
+For post-deploy checks, run `npm run test:contracts` from the repository root
+for `tests/contracts/`, and `npm run test:integration` for the database tests
+in `db/test/integration/` against a disposable instance before changing
+production data.
 
 ## Home-machine scrape and sync
 

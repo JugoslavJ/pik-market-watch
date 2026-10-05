@@ -1,0 +1,12 @@
+.git
+.codex
+.env
+.env.*
+**/node_modules
+**/coverage
+**/__pycache__
+**/dist
+data
+logs
+backups
+config/searches.json

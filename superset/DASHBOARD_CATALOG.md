@@ -1,6 +1,6 @@
 # Superset dashboard catalog
 
-Generated from `superset/dashboards/*.json` and the Superset alert checker by `scripts/generate-dashboard-catalog.js`.
+Generated from `superset/dashboards/*.json` and the Superset alert checker by `superset/scripts/generate-dashboard-catalog.js`.
 
 Every row identifies its source owner and exact query for same-snapshot comparison. Each native chart is named Owner / source panel on a Superset dashboard with the same title. superset/parity.py translates source variables and time macros and preserves the grouping and widths, with chart heights adjusted for readable labels. Maps use dark CARTO vector basemaps. Deployment readiness validates the viewer against these queries.
 

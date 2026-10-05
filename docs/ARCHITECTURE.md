@@ -21,6 +21,24 @@ source-reported price changes. Lean archive maintenance applies the configured
 raw-response retention policy. `replay-response.js` reads retained responses
 without writing listing or price data.
 
+The `collector/` package owns API requests, mapping, normalization and collection
+orchestration. `collector/src/api.js` fetches and decodes responses;
+`payload-mapper.js` maps API fields to listing records, while `normalization.js`
+applies price, currency, date and measurement policy.
+
+The database package exposes `Db` and `applyMigrations` to the collector.
+`db/src/client.js` manages connections and advisory leases. `db/src/ingestion.js`
+owns listing writes, search runs and lifecycle transitions;
+`db/src/raw-responses.js` owns API archives, page manifests and retention.
+Migration and maintenance entry points load only `db/src/config.js`; collector
+settings and saved searches are independent. Both packages use the environment
+validators in `config/env.js`.
+
+Unit and database integration tests live with their owning packages. Dashboard
+contracts live in `superset/tests/`, viewer browser checks in
+`dashboard-viewer/tests/`, and stack deployment/security contracts in
+`tests/contracts/`. Repository tooling runs from the root npm workspace.
+
 ## Storage
 
 | Table | Contents |

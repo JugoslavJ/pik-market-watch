@@ -16,7 +16,7 @@ updates:
           - patch
 
   - package-ecosystem: npm
-    directory: /scraper
+    directory: /
     schedule:
       interval: weekly
       day: monday
@@ -27,7 +27,7 @@ updates:
           - patch
 
   - package-ecosystem: docker
-    directory: /scraper   # Dockerfile
+    directory: /collector   # Dockerfile
     schedule:
       interval: weekly
       day: monday
