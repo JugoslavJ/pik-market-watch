@@ -79,7 +79,7 @@ function Invoke-SshRestore([string]$dumpPath) {
   $global:SyncVerificationCommands.Add('ssh-restore')
   if ((Get-Item -LiteralPath $dumpPath).Length -ne 30000) { throw 'Unexpected dump upload' }
   if ($global:SyncVerificationScenario -eq 'restore-failure') { throw 'mock restore failed' }
-  return 'RESTORE_OK'
+  return 'RESTORE_STAGE dashboard-query-check 2s', 'Checked sync chart: fixture', 'RESTORE_OK'
 }
 '@
   $source = [IO.File]::ReadAllText($sourceFile)
@@ -114,6 +114,11 @@ function Invoke-SshRestore([string]$dumpPath) {
     if ($Scenario -eq 'success') {
       Assert-Condition ($null -eq $failure) "Successful sync failed: $failure"
       Assert-Condition ($scrapeAt -lt $restoreAt -and $restoreAt -lt $resumeAt) 'Restore ran outside the paused snapshot window'
+      $log = Get-Content -LiteralPath (Join-Path $fixtureRoot 'logs/sync.log')
+      Assert-Condition (($log | Where-Object { $_ -match 'remote: RESTORE_STAGE dashboard-query-check 2s' }).Count -eq 1) 'Remote timings were not logged exactly once'
+      Assert-Condition (($log | Where-Object { $_ -match 'remote: Checked sync chart: fixture' }).Count -eq 1) 'Remote chart output was lost'
+      Assert-Condition (($log | Where-Object { $_ -match 'remote: RESTORE_OK' }).Count -eq 1) 'Restore protocol was not saved'
+      Assert-Condition (($log | Where-Object { $_ -match 'remote output saved in' }).Count -eq 1) 'Output-saving duration was not logged'
     } else {
       Assert-Condition ($null -ne $failure) 'Failure did not abort sync'
       if ($Scenario -in @('scrape-failure', 'dump-failure')) {

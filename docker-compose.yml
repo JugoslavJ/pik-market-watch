@@ -307,6 +307,7 @@ services:
       - ./superset/validate_parity.py:/app/validate_parity.py:ro
       - ./superset/dashboards:/app/dashboards:ro
       - ./superset/benchmark.py:/app/benchmark.py:ro
+      - ./superset/check_sync.py:/app/check_sync.py:ro
       - ./superset/datasets:/app/datasets:ro
       - ./superset/active-listings.sql:/app/active-listings.sql:ro
     entrypoint: ["python", "/app/seed.py"]

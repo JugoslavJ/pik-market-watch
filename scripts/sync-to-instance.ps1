@@ -15,14 +15,16 @@
 param()
 $ErrorActionPreference = 'Stop'
 $syncLog = Join-Path (Split-Path -Parent $PSScriptRoot) 'logs\sync.log'
-function Log([string]$m) {
-  $line = "[{0}] {1}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $m
-  Write-Output $line
+function Write-SyncLog([string[]]$messages) {
+  $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+  $lines = @($messages | ForEach-Object { "[$timestamp] $_" })
+  Write-Output $lines
   try {   # scheduled runs have no console - keep an on-disk trail too
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $syncLog) | Out-Null
-    Add-Content -LiteralPath $syncLog -Value $line -ErrorAction Stop
+    Add-Content -LiteralPath $syncLog -Value $lines -ErrorAction Stop
   } catch { }
 }
+function Log([string]$m) { Write-SyncLog @($m) }
 
 foreach ($e in 'OLX_INSTANCE_HOST', 'OLX_SSH_USER', 'OLX_SYNC_KEY') {
   if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($e))) {
@@ -75,7 +77,8 @@ function Invoke-SshRestore([string]$dumpPath) {
     $input = [System.IO.File]::OpenRead($dumpPath)
     $input.CopyTo($ssh.StandardInput.BaseStream, 1MB)
     $ssh.StandardInput.Close()
-    Log 'upload complete; waiting for remote validation and restore...'
+    # Status output must not become part of the captured restore protocol.
+    Log 'upload complete; waiting for remote validation and restore...' | Out-Host
     $ssh.WaitForExit()
     $stdout = $stdoutTask.GetAwaiter().GetResult()
     $stderr = $stderrTask.GetAwaiter().GetResult()
@@ -188,8 +191,14 @@ try {
   if ((Get-Item $dump).Length -lt 20000) { throw "dump suspiciously small - aborting" }
 
   Log ('streaming {0:N0} bytes to {1}@{2} and restoring...' -f (Get-Item $dump).Length, $SshUser, $InstanceHost)
+  $remoteTimer = [Diagnostics.Stopwatch]::StartNew()
   $out = Invoke-SshRestore $dump
-  $out | ForEach-Object { Log "remote: $_" }
+  $remoteTimer.Stop()
+  Log ('remote processing finished in {0:N1}s; saving output...' -f $remoteTimer.Elapsed.TotalSeconds)
+  $logTimer = [Diagnostics.Stopwatch]::StartNew()
+  Write-SyncLog @($out | ForEach-Object { "remote: $_" })
+  $logTimer.Stop()
+  Log ('remote output saved in {0:N1}s' -f $logTimer.Elapsed.TotalSeconds)
 
   if (($out -join "`n") -match 'RESTORE_OK') {
     Log 'sync complete - instance database updated.'

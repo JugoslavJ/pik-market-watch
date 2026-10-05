@@ -77,6 +77,21 @@ cd "$REPO_DIR"
 . scripts/lib/superset-stack.sh
 configure_superset_stack
 
+# This is instance-controlled configuration, never an argument from the sender.
+# Routine data restores do not change Superset metadata or viewer permissions.
+provision_dashboards=$(read_env_value OLX_SYNC_PROVISION_DASHBOARDS)
+provision_dashboards=${provision_dashboards:-0}
+case "$provision_dashboards" in
+  0|1) ;;
+  *) echo "RESTORE_ERROR: OLX_SYNC_PROVISION_DASHBOARDS must be 0 or 1" >&2; exit 1 ;;
+esac
+phase_started=$(date +%s)
+finish_phase() {
+  phase_finished=$(date +%s)
+  echo "RESTORE_STAGE $1 $((phase_finished - phase_started))s"
+  phase_started=$phase_finished
+}
+
 LOCK=/tmp/olx-restore.lock
 if ! mkdir "$LOCK" 2>/dev/null; then
   echo "RESTORE_ERROR: another restore is already in progress" >&2
@@ -108,6 +123,7 @@ if [ "$size" -lt "$MIN_BYTES" ]; then
   exit 1
 fi
 mv -f "$incoming_partial" "$incoming"
+finish_phase receive
 
 if ! docker compose exec -T db pg_restore -l /backups/olx-sync-incoming.dump >/dev/null 2>&1; then
   echo "RESTORE_ERROR: archive failed pg_restore integrity check" >&2
@@ -211,6 +227,7 @@ if ! build_toc /backups/olx-sync-incoming.dump /tmp/toc.use; then
   echo "RESTORE_ERROR: could not build a usable filtered restore list" >&2
   exit 1
 fi
+finish_phase validation-and-preparation
 reset_schemas() {
   docker compose exec -T db psql -v ON_ERROR_STOP=1 -U "$boot_user" -d "$db_name" -q -c "
     DROP SCHEMA IF EXISTS lean CASCADE;
@@ -272,6 +289,7 @@ if [ "$was_running" = "1" ]; then
   docker compose start scraper
 fi
 restore_ok=1
+finish_phase restore-and-grants
 
 # Reconnect Superset to the restored OLX database. The metadata
 # database is outside the restore TOC and must remain untouched.
@@ -279,13 +297,23 @@ if ! docker compose up -d --no-deps --force-recreate --wait --wait-timeout 120 s
   echo "RESTORE_ERROR: database restored, but dashboard refresh failed; check Superset logs and recreate the service (no need to repeat the scrape/restore)" >&2
   exit 1
 fi
-if ! docker compose run --rm superset-seed; then
-  echo "RESTORE_ERROR: Superset is healthy but a representative chart query failed; rerun docker compose run --rm superset-seed (no need to repeat the scrape/restore)" >&2
+finish_phase superset-reconnect
+if [ "$provision_dashboards" = "1" ]; then
+  if ! docker compose run --rm --no-deps superset-seed; then
+    echo "RESTORE_ERROR: database restored, but dashboard provisioning failed; rerun docker compose run --rm --no-deps superset-seed (no need to repeat the scrape/restore)" >&2
+    exit 1
+  fi
+  finish_phase dashboard-provisioning
+  if ! docker compose run --rm --no-deps superset-access; then
+    echo "RESTORE_ERROR: data and charts restored, but viewer permissions could not be refreshed; rerun superset-access" >&2
+    exit 1
+  fi
+  finish_phase viewer-permissions
+fi
+if ! docker compose run --rm --no-deps --entrypoint python superset-seed /app/check_sync.py; then
+  echo "RESTORE_ERROR: database restored, but fresh dashboard queries failed; repair or provision dashboards and rerun /app/check_sync.py (no need to repeat the scrape/restore)" >&2
   exit 1
 fi
-if ! docker compose run --rm superset-access; then
-  echo "RESTORE_ERROR: data and charts restored, but viewer permissions could not be refreshed; rerun superset-access" >&2
-  exit 1
-fi
+finish_phase dashboard-query-check
 
 echo "RESTORE_OK $stamp ($size bytes)"

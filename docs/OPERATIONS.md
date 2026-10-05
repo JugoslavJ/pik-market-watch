@@ -215,7 +215,19 @@ pwsh -File scripts\sync-to-instance.ps1
 pwsh -File scripts\register-sync-task.ps1
 ```
 
-The restore endpoint receives and validates the archive, audits ownership, saves a rollback snapshot, pauses a running scraper, restores only the `olx` application schemas in a transaction, restores the prior snapshot on failure when available, reasserts role grants, and resumes the writer. It leaves `superset_meta` untouched, then refreshes Superset, reseeds datasets and charts, and reapplies viewer permissions before reporting success. If a dashboard refresh fails, the restored `olx` data remains in place; repair the dashboard service without repeating the scrape/restore. Input is capped at `OLX_SYNC_MAX_BYTES` (default 512 MiB) and the temporary incoming file is removed on every exit path. Its `RESTORE_OK` or `RESTORE_ERROR` output is the protocol consumed by the PowerShell script. A holder of the restore SSH key has database-administrator-equivalent capability over application data, even though the key is restricted to a forced command and has no interactive shell; protect and rotate it accordingly.
+The restore endpoint receives and validates the archive, audits ownership, saves a rollback snapshot, pauses a running scraper, restores only the `olx` application schemas in a transaction, restores the prior snapshot on failure when available, reasserts role grants, and resumes the writer. It leaves `superset_meta` untouched, then recreates Superset to clear in-process caches and reconnect database sessions. Routine sync checks three existing charts with forced fresh queries covering listings, inventory history, and scraper activity before reporting success; it skips dashboard provisioning and viewer permission refresh because these live in the unchanged metadata database. If a dashboard refresh or query check fails, the restored `olx` data remains in place; repair the dashboard service without repeating the scrape/restore. Input is capped at `OLX_SYNC_MAX_BYTES` (default 512 MiB) and the temporary incoming file is removed on every exit path. Its `RESTORE_OK` or `RESTORE_ERROR` output is the protocol consumed by the PowerShell script. A holder of the restore SSH key has database-administrator-equivalent capability over application data, even though the key is restricted to a forced command and has no interactive shell; protect and rotate it accordingly.
+
+Dashboard definitions and permissions are provisioned during deployment. To also provision them during every sync, set `OLX_SYNC_PROVISION_DASHBOARDS=1` in the **instance's** `.env` (default `0`). These jobs use `--no-deps` after the Superset health gate so they do not rerun metadata initialization. Remove the setting or set it to `0` to return to routine data sync. Missing charts or changed dashboard definitions can also be repaired without another scrape or restore from an administrative shell on the instance:
+
+```bash
+. scripts/lib/superset-stack.sh
+configure_superset_stack
+docker compose run --rm --no-deps superset-seed
+docker compose run --rm --no-deps superset-access
+docker compose run --rm --no-deps --entrypoint python superset-seed /app/check_sync.py
+```
+
+The remote output includes `RESTORE_STAGE` durations for each completed phase. The local script buffers SSH output, writes the returned lines to the log in one batch, and records remote processing and output-saving durations separately.
 
 If sync reports `data and charts restored, but viewer permissions could not be
 refreshed`, update the instance checkout with the fix, then retry only the
