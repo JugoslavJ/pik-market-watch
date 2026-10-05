@@ -1,8 +1,4 @@
 "use strict";
-
-// Opt-in benchmark for a disposable PostgreSQL database. It reports the
-// metric the bulk-write refactor is intended to improve: statements per
-// ingestion. It deliberately has no wall-clock assertion.
 const Db = require("../src/client");
 
 const sizes = (process.env.BENCHMARK_SIZES || "100,500,1200")

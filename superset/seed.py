@@ -178,8 +178,6 @@ def main():
                                                             (drops_dataset, "neighborhood")])],
     )
 
-    # A focused companion to Market explorer for the inventory breakdowns and
-    # rankings that otherwise make that landing page too dense.
     segments_specs = [
             summary_chart("Active listings by rooms", dataset_id, "rooms"),
             summary_chart("Active listings by floor", dataset_id, "floor_num"),

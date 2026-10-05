@@ -1,34 +1,14 @@
 "use strict";
-// HTTP layer for olx.ba's public JSON API (media type olx.v3).
-//
-// Both endpoints serve anonymous reads — no cookies, no Bearer token, no
-// browser. Cloudflare fronts them, so every response is validated as real
-// JSON before use: a challenge/interstitial page must surface as an ERROR,
-// never as an empty result (an empty-looking success would let the closing
-// pass freeze every listing with bogus exit prices).
-//
-// Endpoints used (verified against live olx.ba, Aug 2026):
-//   GET /api/search?category_id=…&canton=…&cities=…&per_page=&page=
-//     → { data: [listing…], meta: { total, last_page, current_page,
-//         per_page, selected_category }, filters, aggregations }
-//   GET /api/listings/<id>
-//     → full ad incl. attributes[], price_history[], views, location,
-//       created_at/date, user.type, cities[], category
+// Reject non-JSON responses so upstream errors cannot look like an empty market.
 
 const { USER_AGENT, sleep } = require("./util");
 const { mapListingDetail, MAPPER_BUILD_VERSION } = require("./payload-mapper");
 
 const API_ORIGIN = "https://olx.ba";
 
-// olx.ba advertises x-ratelimit-limit: 100 per window across these endpoints.
-// A full cycle stays far below that (a few dozen search pages + capped detail
-// fetches); if the budget ever runs low mid-cycle, back off until it resets
-// instead of burning requests into a 429.
+// Pause before exhausting the rate window shared by search and detail requests.
 const RATE_RESERVE = 10;
 
-// Hard ceiling on upstream response bodies: a broken or hostile endpoint (or
-// an oversized Cloudflare interstitial) can never balloon memory past this —
-// the fetch fails cleanly instead of OOM-killing the container.
 const MAX_BODY_BYTES = 5 * 1024 * 1024;
 const MAX_REQUEST_ATTEMPTS = 3;
 const RETRY_BASE_MS = 250;
@@ -43,8 +23,7 @@ function headerValue(headers, name) {
   return headers?.get?.(name) ?? null;
 }
 
-// Keep archives useful without copying arbitrary upstream headers (which may
-// grow unexpectedly or contain credentials in a future deployment).
+// Archive only these diagnostic headers.
 function responseHeaders(headers) {
   const names = [
     "content-type",
@@ -133,9 +112,7 @@ class RateBudget {
   observeValues(remaining, limit = null) {
     if (remaining != null) this.remaining = remaining;
     if (limit != null) this.limit = limit;
-    // A raised counter indicates that the upstream window has reset. Allow a
-    // later low-water mark to pause again, especially when one budget is shared
-    // across several searches in the same cycle.
+    // A reset window can reach the low-water mark again in the same cycle.
     if (remaining != null && remaining >= this.reserve) this.lowHandled = false;
     if (remaining != null && remaining < this.reserve && !this.lowHandled) {
       this.lowHandled = true;
@@ -187,14 +164,6 @@ function retryDelay(attempt, retryAfterMs, random = Math.random) {
   );
 }
 
-/**
- * Rewrite a human-facing /pretraga URL into the API equivalent.
- * Filter params (category_id, canton, cities, attr, …) pass through 1:1;
- * pagination/scrape bookkeeping params are stripped and per_page added.
- * @param {string} searchUrl — configured search URL (/pretraga form)
- * @param {number} [perPage]
- * @returns {URL}
- */
 function toApiSearchUrl(searchUrl, perPage) {
   const u = new URL(searchUrl);
   u.protocol = "https:";
@@ -207,11 +176,7 @@ function toApiSearchUrl(searchUrl, perPage) {
   return u;
 }
 
-/**
- * Drain a fetch body as text while enforcing a byte ceiling. `res.text()`
- * would happily buffer any size; this cancels the stream once the cap is
- * crossed, so hostile/broken upstreams fail fast instead of eating RAM.
- */
+/** Cancel the body stream once it exceeds the byte limit. */
 async function readBodyCapped(res, maxBytes) {
   if (!res.body) {
     const text = await res.text();
@@ -235,7 +200,6 @@ async function readBodyCapped(res, maxBytes) {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-/** One authenticated-free GET expecting a JSON body. */
 async function fetchJson(url, timeoutMs, policy = {}) {
   const target = url instanceof URL ? url : new URL(String(url));
   const request = requestMetadata(target);
@@ -278,7 +242,6 @@ async function fetchJson(url, timeoutMs, policy = {}) {
       );
     }
     if (rateBudget) rateBudget.observe(res.headers);
-    // Cheap pre-flight: honor a declared Content-Length before reading at all.
     const declared = numericHeader(res.headers, "content-length");
     if (declared != null && declared > MAX_BODY_BYTES)
       throw errorContext(
@@ -344,8 +307,7 @@ async function fetchJson(url, timeoutMs, policy = {}) {
     try {
       body = JSON.parse(text);
     } catch (_) {
-      // Cloudflare challenge / HTML interstitial / truncated gzip — anything
-      // non-JSON is unusable regardless of the 200. Do not blindly retry it.
+      // A 200 response can still be a challenge page; do not retry invalid JSON.
       throw errorContext(
         new ApiError(
           `non-JSON response for ${target.pathname} (${res.headers.get("content-type")}) — blocked or challenged?`,
@@ -383,11 +345,6 @@ function validateListingId(articleId) {
   return Number(articleId);
 }
 
-/**
- * Fetch one search-result page.
- * @returns {Promise<{items:Array, meta:{total:number,last_page:number,current_page:number},
- *                     remaining:?number, limit:?number}>}
- */
 async function fetchSearchPage(apiUrl, timeoutMs, policy) {
   const result = await fetchJson(apiUrl, timeoutMs, policy);
   const { body, remaining, limit } = result;
@@ -418,7 +375,6 @@ async function fetchSearchPage(apiUrl, timeoutMs, policy) {
   };
 }
 
-/** Fetch one ad's full detail object by article id. */
 async function fetchListing(
   articleId,
   timeoutMs,
@@ -444,22 +400,7 @@ async function fetchListing(
   return includeMetadata ? result : body;
 }
 
-/**
- * Fetch full listings for the given article ids in small concurrent waves
- * with a politeness gap between requests (the shared pacing used by both the
- * per-run enrichment pass and the standalone backfill script).
- *
- * Resolves to one entry per id, in input order: the parsed detail object, or
- * null when that fetch failed (already logged — callers treat null as
- * "keep whatever search-level facts exist").
- *
- * @param {number[]} articleIds
- * @param {{timeoutMs:number, concurrency?:number, delayMs?:number,
- *           onBatch?:(results:Array<?object>, done:number, total:number,
- *                     )=>Promise<void>,
- *           onError?:(articleId:number,error:Error)=>Promise<void>}} opts
- * @param {(…args:any[])=>void} [log]
- */
+/** Return mapped details in input order, with null for failed requests. */
 async function fetchDetailsInBatches(articleIds, opts, log = () => {}) {
   const {
     timeoutMs,
@@ -517,10 +458,7 @@ async function fetchDetailsInBatches(articleIds, opts, log = () => {}) {
           parsed.sourceBuildVersion = MAPPER_BUILD_VERSION;
           return parsed;
         } catch (err) {
-          // Keep the historical null result contract for callers while
-          // allowing durable workers to persist a per-request outcome. An
-          // observability callback must never turn a handled fetch failure
-          // into a failed batch, so reporting errors are logged and ignored.
+          // Diagnostic failures must not turn a handled fetch error into a failed batch.
           if (onError) {
             try {
               await onError(id, err);
@@ -546,8 +484,7 @@ async function fetchDetailsInBatches(articleIds, opts, log = () => {}) {
   return all;
 }
 
-// Unknown query parameters are ignored by the API. Require a recognized filter
-// so a configured search cannot fetch the entire site.
+// Unknown parameters are ignored upstream; require a filter to avoid fetching the whole site.
 const FILTER_PARAMS = [
   "category_id",
   "cities",
@@ -561,7 +498,6 @@ function hasApiFilter(apiUrl) {
   return FILTER_PARAMS.some((p) => apiUrl.searchParams.has(p));
 }
 
-// API_ORIGIN stays internal; callers receive structured ApiError diagnostics.
 module.exports = {
   ApiError,
   RateBudget,

@@ -1,24 +1,8 @@
 "use strict";
-// Map OLX JSON API payloads to normalized listing records.
-// Pure functions — no network, no database — so everything here unit-tests
-// against the recorded fixtures in test/fixtures/.
-//
-// Search-item fields consumed (media type olx.v3):
-//   id, title, price, display_price, listing_type ('sell'|'rent', …),
-//   special_labels: [{label:'Kvadrata', value}, {label:'Broj Soba', value}],
-//   location:{lat,lon}, date (unix renewal/bump stamp → renewedAt),
-//   user_type, status
-// Listing-detail adds: attributes[] ({attr_code, value, …}), views, favorites,
-//   created_at (true publish time → publishedAt), price_history[], user.type
-// The coercion helpers and the attr_code→column handlers below map those
-// payloads to typed columns.
 
 const BIH_BBOX = { latMin: 42.4, latMax: 46.4, lonMin: 15.5, lonMax: 19.9 };
 
-// The package version is the fallback build identity; deployments can inject a
-// commit/tag through MAPPER_BUILD_VERSION so archived payloads remain
-// replayable after mapping changes. Keep the old environment name available
-// for existing deployments and bound the value for DB diagnostics.
+// Preserve the legacy version override for archived evidence.
 const MAPPER_BUILD_VERSION = String(
   process.env.MAPPER_BUILD_VERSION ||
     process.env.PARSER_BUILD_VERSION ||
@@ -47,15 +31,12 @@ function inBiH(lat, lon) {
   );
 }
 
-// ── value coercion helpers ───────────────────────────────────────────────────
-
-/** Tolerant float: handles "1.636", "72,5", "1636". Returns null outside [min,max]. */
+// value coercion helpers
 function numOrNull(v, min, max) {
   const n = finiteNumber(v);
   return Number.isFinite(n) && n >= min && n <= max ? n : null;
 }
 
-/** Integer variant of numOrNull (floors may legitimately be negative). */
 function smallInt(v, min, max) {
   const n = numOrNull(v, -Infinity, Infinity);
   if (n === null) return null;
@@ -77,7 +58,6 @@ function boolFromText(v) {
   return null;
 }
 
-/** Opremljenost: fully furnished / unfurnished are clear; partial is not. */
 function furnishedFromText(v) {
   const s = String(v ?? "")
     .trim()
@@ -86,18 +66,13 @@ function furnishedFromText(v) {
   const b = boolFromText(s);
   if (b !== null) return b;
   if (s.includes("namje\u0161ten") || s.includes("namjesten")) {
-    return s.includes("ne") ? false : true;
+    return !s.includes("ne");
   }
   return null;
 }
 
-// ── characteristic codes → typed columns ─────────────────────────────────────
-
-/**
- * attr_code → typed field mapping (codes observed on live olx.ba payloads;
- * raw pairs land in `characteristics` regardless, so an unknown/renamed code
- * stays recoverable from the DB).
- */
+// characteristic codes → typed columns
+// Unknown attribute codes remain available in raw characteristics.
 const CHAR_CODE_HANDLERS = {
   "broj-soba": (v, o) => {
     o.roomsDetail = textOrNull(v, 40);
@@ -146,8 +121,7 @@ const CHAR_CODE_HANDLERS = {
   },
 };
 
-// ── shared bits ──────────────────────────────────────────────────────────────
-
+// shared bits
 const SELLER_TYPES = new Set(["shop", "private"]);
 
 function specialLabelValue(item, label) {
@@ -157,7 +131,6 @@ function specialLabelValue(item, label) {
   return hit ? hit.value : null;
 }
 
-/** Coordinates only when plausible inside BiH. */
 function pinOf(loc) {
   const point =
     loc && loc.location && typeof loc.location === "object"
@@ -171,19 +144,13 @@ function pinOf(loc) {
   return { latitude: lat, longitude: lon };
 }
 
-// ── search results ───────────────────────────────────────────────────────────
-
-/**
- * One /api/search result object → normalized search card plus the
- * enrichment facts the search payload hands us for free.
- * Returns null for non-listing/empty entries.
- */
+// search results
 function mapSearchItem(item) {
   if (!item || typeof item !== "object") return null;
   const id = normalizeId(item.id);
   if (id === null) return null;
   const title = typeof item.title === "string" ? item.title.trim() : "";
-  if (title.length <= 2) return null; // too short to be a real listing title
+  if (title.length <= 2) return null;
 
   const url = `https://olx.ba/artikal/${id}`;
 
@@ -200,7 +167,6 @@ function mapSearchItem(item) {
     (priceQuality.state === "unpriced" ? "Na upit" : String(item.price ?? ""));
   const isStudio = /garsonjera/i.test(title);
 
-  // Sanity bounds for floor area (m²).
   const sqm = normalizeArea(specialLabelValue(item, "Kvadrata"));
 
   let rooms = isStudio ? "0" : null;
@@ -229,21 +195,14 @@ function mapSearchItem(item) {
     priceReason: priceQuality.reason,
     pricePresent: Object.prototype.hasOwnProperty.call(item, "price"),
     ...pinOf(item.location),
-    // Search cards only carry the renewal/bump stamp (`date`), never the true
-    // creation time — that lives solely on the ad's own endpoint. Emitted as
-    // renewedAt so transactional ingestion can refresh it every cycle without ever
-    // polluting published_at (day created).
+    // Search dates are renewal timestamps, not publication dates.
     renewedAt: dateFromUnixSeconds(item.date),
     sellerType: SELLER_TYPES.has(item.user_type) ? item.user_type : null,
     apiStatus: typeof item.status === "string" ? item.status : null,
   };
 }
 
-/**
- * Parse all cards while retaining a small, bounded diagnostic for entries the
- * normalizer rejects.  A null card is useful for the ingestion path, but a
- * page containing rejected entries is not authoritative for closure logic.
- */
+/** Rejected entries make a page non-authoritative for closing listings. */
 function mapSearchItems(items) {
   if (!Array.isArray(items))
     return { cards: [], rejected: [{ reason: "data_not_array" }] };
@@ -273,11 +232,6 @@ function mapSearchItems(items) {
   return { cards, rejected };
 }
 
-/**
- * A validated /api/search payload → { cards, meta }.
- * Cards carry the fields needed by transactional search ingestion and detail
- * enrichment.
- */
 function mapSearchPage(payload) {
   if (
     !payload ||
@@ -299,14 +253,7 @@ function mapSearchPage(payload) {
   };
 }
 
-// ── ad detail (/api/listings/<id>) ───────────────────────────────────────────
-
-/**
- * Full listing payload → one db.enrichListings() row (any field may be null).
- * created_at is the TRUE original publish time (day created → publishedAt);
- * date is the renewal bump (day renewed → renewedAt). First-wins SQL
- * semantics on published_at make repeated passes safe.
- */
+// ad detail (/api/listings/<id>)
 function mapListingDetail(json, fallbackId) {
   if (!json || typeof json !== "object") return null;
   const articleId = normalizeId(json.id) ?? normalizeId(fallbackId);
@@ -385,14 +332,11 @@ function mapListingDetail(json, fallbackId) {
     if (handler) handler(trimmed, detail);
   }
 
-  // A partial/unknown furnishing description cannot become fully furnished
-  // merely because the payload also carries a coarse yes/no flag.
+  // The detailed furnishing description takes precedence over a coarse yes/no flag.
   if (detail.characteristics.opremljenost != null) {
     detail.furnished = furnishedFromText(detail.characteristics.opremljenost);
   }
 
-  // kvadrata is stored raw above AND feeds the typed sqm column (same 5–500
-  // sanity bounds as the search-card path).
   if (detail.characteristics["kvadrata"] != null) {
     const v = normalizeArea(detail.characteristics["kvadrata"]);
     if (v !== null) detail.sqm = v;

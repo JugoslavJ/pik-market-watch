@@ -1,20 +1,8 @@
 "use strict";
-// Dev utility: refresh the live-API fixtures used by the unit tests.
-//
-// Fetches one real search page + one ad detail from olx.ba's public JSON API
-// and writes them (pretty-printed) into test/fixtures/. Machines without a
-// local Node install can run it through Docker (same image as production):
-//   docker run --rm -v "/abs/path/to/pik-market-watch:/app" -w /app \
-//     node:26-bookworm-slim npm run fixtures
-//
-// Re-running this occasionally is a cheap drift alarm: if olx.ba changes the
-// payload shape, the unit tests against these fixtures break immediately.
 
 const fs = require("fs");
 const path = require("path");
 
-// Same HTTP discipline as production: browser-like UA + strict JSON
-// validation with a loud Cloudflare-challenge error.
 const { fetchJson } = require("../src/api");
 
 // Banja Luka apartment search used by the recorded mapping fixture.

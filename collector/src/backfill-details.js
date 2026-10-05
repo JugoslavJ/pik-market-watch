@@ -1,16 +1,5 @@
 "use strict";
-// One-off backfill via olx.ba's JSON API: fetch /api/listings/<id> for rows
-// lacking a map pin, floor area (when no card showed one) or never detailed
-// at all (characteristics, publish date, seller type, view counters).
-//
-// Usage:
-//   docker compose run --rm scraper node src/backfill-details.js              # active listings
-//   docker compose run --rm scraper node src/backfill-details.js --all        # include closed listings
-//   docker compose run --rm scraper node src/backfill-details.js --max=100    # cap the calls
-//
-// Resumable: rows whose missing data has since arrived are skipped, and every
-// fetched listing gets details_fetched_at stamped, so an interrupted run can
-// simply be started again.
+// Usage: node src/backfill-details.js [--all] [--max=100]
 
 const config = require("./config");
 const { Db, config: dbConfig } = require("@pik-market-watch/db");
@@ -64,9 +53,7 @@ const log = makeLogger("backfill");
           buildVersion: MAPPER_BUILD_VERSION,
         }),
       async onBatch(results, doneCount, total) {
-        // A fetched listing counts as done even when nothing new was learned —
-        // details_fetched_at prevents endlessly re-fetching barren ads.
-        // Persistence stays per-batch so an interrupted run keeps its progress.
+        // Persist each batch so interrupted backfills retain progress.
         const good = results.filter(Boolean);
         missed += results.length - good.length;
         if (good.length) {

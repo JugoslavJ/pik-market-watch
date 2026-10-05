@@ -1,7 +1,6 @@
 "use strict";
 
-// Dependency-free checker for repository-local Markdown targets. External
-// URLs and heading anchors are intentionally outside this small CI contract.
+// Check local Markdown targets; skip external URLs and heading anchors.
 const fs = require("fs");
 const path = require("path");
 

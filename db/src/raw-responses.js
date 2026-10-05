@@ -1,9 +1,5 @@
 "use strict";
 
-// Raw transport evidence and scrape-page manifests. Keeping archival writes
-// together makes retention and diagnostic behavior independent of domain state
-// ingestion.
-
 async function recordScrapePageManifest(page) {
   const rejectionList = Array.isArray(page.parseRejections)
     ? page.parseRejections.slice(0, 100)

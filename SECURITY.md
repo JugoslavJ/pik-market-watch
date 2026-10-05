@@ -1,14 +1,7 @@
 # Security policy
 
-The `main` branch is the supported/current branch for this personal,
-self-hosted project.
+The supported branch is `main`.
 
-Please report suspected vulnerabilities privately through GitHub’s private
-vulnerability reporting channel when it is enabled for this repository. If it
-is unavailable, contact the maintainer privately through GitHub before opening
-an issue. Please do not publish exploit details or open a public issue until
-the maintainer has had an opportunity to coordinate a fix.
+Report vulnerabilities through GitHub's private vulnerability reporting, or contact the maintainer privately if it is unavailable. Allow time to coordinate a fix before publishing details or opening a public issue.
 
-Useful reports include the affected commit or version, reproduction steps,
-impact, and any logs or proof of concept needed to confirm the issue. Do not
-include real credentials, private keys, or personal data in a report.
+Include the affected commit, reproduction steps, impact and relevant logs or proof of concept. Omit credentials, private keys and personal data.

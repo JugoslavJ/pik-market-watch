@@ -3,11 +3,7 @@
 const { mapSearchItems, MAPPER_BUILD_VERSION } = require("../payload-mapper");
 const { pagesInWave, pageFailureState } = require("./outcomes");
 
-/**
- * Fetch and validate all pages for one search. This phase deliberately does
- * not mutate current listing state; it returns the deduplicated harvest that
- * the ingestion phase can commit atomically.
- */
+/** Validate and deduplicate pages before atomically committing listing state. */
 async function harvestSearchPages({
   db,
   cfg,
@@ -20,16 +16,11 @@ async function harvestSearchPages({
 }) {
   const seen = new Set();
   const allCards = [];
-  let pagesDone;
   let lastPage = Infinity;
   const failedPages = new Set();
   const malformedPages = new Set();
   let truncatedPagination = false;
   const pageAttempts = new Map();
-
-  const recordPage = async (manifest) => {
-    await db.recordScrapePageManifest(manifest);
-  };
 
   const archivePage = async (url, response) => {
     await db.archiveSearchResponse({
@@ -110,7 +101,7 @@ async function harvestSearchPages({
           fresh++;
         }
       }
-      await recordPage({
+      await db.recordScrapePageManifest({
         runId,
         pageNumber: pageNo,
         attempt,
@@ -147,7 +138,7 @@ async function harvestSearchPages({
         );
       const responseState = pageFailureState(error);
       if (responseState === "malformed") malformedPages.add(pageNo);
-      await recordPage({
+      await db.recordScrapePageManifest({
         runId,
         pageNumber: pageNo,
         attempt,
@@ -171,7 +162,7 @@ async function harvestSearchPages({
     );
   }
   let cards = firstPage.cards;
-  pagesDone = 1;
+  let pagesDone = 1;
 
   for (
     let waveStart = 2;

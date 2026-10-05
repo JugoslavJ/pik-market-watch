@@ -1,15 +1,27 @@
 import sys
 import unittest
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from viewer_queries import BOARDS, compile_dashboard, presentation, selections
+from viewer_queries import BOARDS, compile_dashboard, filter_template, presentation, selections
 from listing_filters import PREFIX
 
 
 class ViewerQueryTests(unittest.TestCase):
+    def test_template_cache_reuses_compilation_and_evicts_old_sources(self):
+        filter_template.cache_clear()
+        self.addCleanup(filter_template.cache_clear)
+        source = "SELECT {{ value }}"
+        template = filter_template(source)
+        self.assertIs(filter_template(source), template)
+        self.assertEqual(template.render(value="first"), "SELECT first")
+        self.assertEqual(template.render(value="second"), "SELECT second")
+        for index in range(256):
+            filter_template(f"SELECT {index}")
+        self.assertEqual(filter_template.cache_info().currsize, 256)
+        self.assertIsNot(filter_template(source), template)
+
     def test_all_71_panels_have_shared_sources_and_no_unexpanded_macros(self):
         count = 0
         for board in BOARDS.values():

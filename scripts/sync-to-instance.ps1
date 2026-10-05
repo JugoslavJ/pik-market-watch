@@ -1,17 +1,6 @@
 #requires -Version 7
-<#
-  OLX market watch - home-machine scrape + sync to the OCI instance.
-
-  Pipeline: full scrape (Docker) -> pg_dump -> stream to instance over SSH ->
-  remote forced-command endpoint verifies and restores (scraper paused during
-  restore). The instance is left untouched unless the whole pipeline succeeds.
-
-  Config (user environment variables, set once — start a fresh terminal
-  afterwards so they are visible to new sessions and scheduled tasks):
-    OLX_INSTANCE_HOST  e.g. 203.0.113.10
-    OLX_SSH_USER       e.g. opc
-    OLX_SYNC_KEY       e.g. C:\Users\you\.ssh\olx_sync_key
-#>
+# Scrape locally, dump the database and stream it to the forced-command restore endpoint.
+# Required user environment: OLX_INSTANCE_HOST, OLX_SSH_USER, OLX_SYNC_KEY.
 param()
 $ErrorActionPreference = 'Stop'
 $syncLog = Join-Path (Split-Path -Parent $PSScriptRoot) 'logs\sync.log'
@@ -36,10 +25,7 @@ $SshUser      = $env:OLX_SSH_USER
 $KeyPath      = $env:OLX_SYNC_KEY
 if (-not (Test-Path -LiteralPath $KeyPath)) { throw "sync key not found: $KeyPath" }
 
-# Host-key pinning: set OLX_KNOWN_HOSTS_FILE (user env, see OPERATIONS.md) to a
-# file produced with `ssh-keyscan -H <instance-ip>` to upgrade from
-# trust-on-first-use to strict checking — a hijacked DNS/route then fails the
-# sync loudly instead of streaming the dump to an impostor host.
+# OLX_KNOWN_HOSTS_FILE enables strict host-key checks; otherwise trust the first connection.
 $knownHostArgs = @('-o', 'StrictHostKeyChecking=accept-new')
 if ($env:OLX_KNOWN_HOSTS_FILE) {
   if (-not (Test-Path -LiteralPath $env:OLX_KNOWN_HOSTS_FILE)) {
@@ -51,9 +37,7 @@ if ($env:OLX_KNOWN_HOSTS_FILE) {
 $sshArgs = @('-i', $KeyPath, '-o', 'BatchMode=yes') + $knownHostArgs +
            @('-o', 'ServerAliveInterval=30')
 
-# Do not pipe Get-Content -AsByteStream into ssh. PowerShell emits each byte as
-# a separate pipeline object, which makes even a small dump take minutes to
-# upload. Connect the file stream directly to ssh's standard input instead.
+# Copy directly to stdin; a PowerShell byte pipeline uploads too slowly.
 function Invoke-SshRestore([string]$dumpPath) {
   $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
   $startInfo.FileName = 'ssh'
@@ -70,8 +54,7 @@ function Invoke-SshRestore([string]$dumpPath) {
   $input = $null
   try {
     if (-not $ssh.Start()) { throw 'could not start ssh' }
-    # Drain both output streams concurrently so neither can fill its OS pipe
-    # and block the restore while the dump is being uploaded.
+    # Drain both output pipes during upload to avoid deadlocking SSH.
     $stdoutTask = $ssh.StandardOutput.ReadToEndAsync()
     $stderrTask = $ssh.StandardError.ReadToEndAsync()
     $input = [System.IO.File]::OpenRead($dumpPath)
@@ -96,8 +79,7 @@ function Invoke-SshRestore([string]$dumpPath) {
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
-# A scheduled run wakes the PC straight into this script; Docker Desktop only
-# autostarts with a user session, so bring the engine up ourselves if needed.
+# Scheduled runs may start before Docker Desktop.
 function Test-DockerEngine { docker info --format ok *> $null; return ($LASTEXITCODE -eq 0) }
 if (-not (Test-DockerEngine)) {
   Log 'docker engine not reachable - starting Docker Desktop...'
@@ -114,12 +96,7 @@ if (-not (Test-DockerEngine)) {
   Log 'docker engine ready.'
 }
 
-# Compose can retain stopped dependency containers after Docker Desktop
-# recreates a project network. Such a container still has the old network mode
-# in its config, but no endpoint in NetworkSettings.Networks; `compose run`
-# then fails while starting the dependency with "not connected to the network".
-# Remove only those broken Compose-managed containers. This never touches a
-# volume, and healthy/running containers are left alone.
+# Remove stopped Compose containers whose stale network configuration prevents startup.
 function Remove-StaleComposeContainer([string]$service) {
   $id = (& docker compose --profile scrape ps -aq $service 2>$null |
     Select-Object -First 1)
@@ -161,10 +138,7 @@ if ($LASTEXITCODE -ne 0) { throw "database failed to become healthy (exit $LASTE
 docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
 if ($LASTEXITCODE -ne 0) { throw "database ownership repair failed (exit $LASTEXITCODE)" }
 
-# A long-running scraper service can already hold the database cycle lease.
-# In that case `compose run --rm scraper ... --once` exits successfully without
-# fetching anything. Pause it for the complete snapshot window, then restore
-# its prior state even when scraping, dumping, or remote restore fails.
+# Pause an existing scraper through the snapshot window; restore its state on failure.
 $scraperWasRunning = $false
 $runningScraper = (& docker compose --profile scrape ps --status running -q scraper 2>$null |
   Select-Object -First 1)
@@ -183,8 +157,6 @@ try {
   Log 'dumping database...'
   $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
   $dumpName = "olx-sync-$stamp.dump"
-  # Read the Compose-configured bootstrap role and database inside the container;
-  # this keeps sync aligned with POSTGRES_USER/POSTGRES_DB overrides in .env.
   docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -Fc -f "$1" "$POSTGRES_DB"' sh "/backups/$dumpName"
   if ($LASTEXITCODE -ne 0) { throw "pg_dump failed (exit $LASTEXITCODE)" }
   $dump = Join-Path $root "backups/$dumpName"
@@ -202,10 +174,7 @@ try {
 
   if (($out -join "`n") -match 'RESTORE_OK') {
     Log 'sync complete - instance database updated.'
-    # Prune local dumps now that the instance confirmed the restore — every
-    # scheduled run otherwise drops another olx-sync-*.dump into ./backups
-    # forever. Keep the newest few (timestamped names sort chronologically).
-    # Dumps from FAILED runs never reach this branch, so they stay for forensics.
+    # Prune successful dumps; failed runs keep their archives for diagnosis.
     Get-ChildItem (Join-Path $root 'backups') -Filter 'olx-sync-*.dump' |
       Sort-Object Name -Descending | Select-Object -Skip 3 | ForEach-Object {
         Log "pruning superseded local dump: $($_.Name)"

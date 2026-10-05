@@ -1,14 +1,10 @@
 "use strict";
-// Connection pool and process-wide leases. Database operations are grouped by
-// responsibility in ingestion.js and raw-responses.js.
 
 const { Pool } = require("pg");
 const ingestionMethods = require("./ingestion");
 const rawResponseMethods = require("./raw-responses");
 
-// Search ingestion and the periodic lifecycle sweep both mutate the current
-// membership and closure state.  Serializing them with one advisory lock
-// keeps a closure from racing a sighting that is being committed.
+// Serialize ingestion and closure sweeps to prevent sighting/closure races.
 const SCRAPE_CYCLE_LOCK = "pik-market-watch scrape cycle";
 const LEAN_MAINTENANCE_LOCK = "pik-market-watch lean maintenance";
 
@@ -21,7 +17,6 @@ class Db {
     );
   }
 
-  /** Retry SELECT 1 until Postgres accepts connections (compose healthcheck covers this too). */
   async waitUntilReady({ retries = 30, delayMs = 2000 } = {}) {
     for (let i = 1; i <= retries; i++) {
       try {
@@ -34,16 +29,11 @@ class Db {
     }
   }
 
-  /**
-   * Acquire a process-wide scrape lease on a dedicated session connection.
-   * A transaction-scoped lock would only serialize writes; this lease also
-   * prevents two scraper processes from fetching the same cycle concurrently.
-   */
+  // Hold a session lock for the whole cycle, including network requests.
   async tryAcquireCycleLease() {
     return this.#tryAcquireLease(SCRAPE_CYCLE_LOCK);
   }
 
-  /** Acquire a process-wide lease so duplicate maintenance jobs skip cleanly. */
   async tryAcquireLeanMaintenanceLease() {
     return this.#tryAcquireLease(LEAN_MAINTENANCE_LOCK);
   }
@@ -70,8 +60,7 @@ class Db {
               [lockName],
             );
           } catch (error) {
-            // A session that might still hold the lock must never reenter the
-            // pool. Destroying it lets PostgreSQL release its session locks.
+            // Destroy the connection to release any remaining session locks.
             client.release(error);
             throw error;
           }

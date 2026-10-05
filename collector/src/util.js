@@ -1,8 +1,6 @@
 "use strict";
 
-// Browser-like UA: Cloudflare scores bare runtime UAs ("node") harshly. The
-// default mimics a real Chrome session; override via SCRAPE_USER_AGENT once it
-// ages into an obviously stale fingerprint.
+// Override the browser user agent with SCRAPE_USER_AGENT.
 const USER_AGENT =
   process.env.SCRAPE_USER_AGENT ||
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) " +
@@ -10,17 +8,12 @@ const USER_AGENT =
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Timestamped console logger shared by the entry points: `<iso> [tag] msg…`.
 const makeLogger =
   (tag) =>
   (...args) =>
     console.log(new Date().toISOString(), `[${tag}]`, ...args);
 
-// HTTP status for the /health endpoint: 503 only once WHOLE scrape cycles keep
-// failing end-to-end (consecutiveFailures >= threshold). Transient single-cycle
-// outages, partial successes and 'skipped' boot ticks never flip the container
-// unhealthy — an always-green endpoint hides a dead scraper from Docker and
-// any uptime probe.
+// Only consecutive fully failed cycles make the scraper unhealthy.
 function healthStatus(state, threshold) {
   return state.consecutiveFailures >= threshold ? 503 : 200;
 }

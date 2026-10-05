@@ -1,18 +1,12 @@
 "use strict";
-// Shared helpers for the DB-backed integration tests.
-// These run against a throwaway PostgreSQL provisioned by
-// scripts/run-integration-tests.js (TEST_DATABASE_URL must be set).
 
 const path = require("node:path");
 const { test } = require("node:test");
 const applyMigrations = require("../../src/migrate");
 const Db = require("../../src/client");
 
-/** Skip decorator for suites that need a database. */
 const needsDb = process.env.TEST_DATABASE_URL ? test : test.skip;
 
-// Repo checkout location of db/init-lean — mounted at /db/init inside containers,
-// but tests may also run from a plain `npm install`ed working copy.
 const MIGRATIONS_DIR = path.resolve(
   __dirname,
   "..",
@@ -22,16 +16,8 @@ const MIGRATIONS_DIR = path.resolve(
   "init-lean",
 );
 
-/**
- * Ensure the schema exists (and is current) by running the project's own
- * migration runner. Idempotent — safe to call from every suite.
- */
 function ensureSchema(pool) {
-  // The integration runner boots the canonical schema through Docker, then
-  // uses one disposable database for sequential child processes. The first
-  // child adopts the bootstrap into the migration ledger; later children can
-  // skip that redundant scan. Direct test runs leave this unset so they retain
-  // the self-bootstrapping behavior.
+  // Sequential integration children share an already bootstrapped database.
   if (process.env.TEST_DATABASE_SCHEMA_READY === "1") return Promise.resolve();
   return applyMigrations(pool, MIGRATIONS_DIR, () => {});
 }
@@ -43,7 +29,6 @@ async function reset(pool) {
     lean.raw_api_responses, lean.scrape_run_pages RESTART IDENTITY CASCADE`);
 }
 
-/** Fresh Db wired to TEST_DATABASE_URL with the schema ensured (suite bootstrap). */
 async function setupDb() {
   const db = new Db(process.env.TEST_DATABASE_URL);
   await db.waitUntilReady();

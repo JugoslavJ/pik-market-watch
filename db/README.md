@@ -1,29 +1,20 @@
 # Lean database
 
-This directory owns the PostgreSQL schema and Node persistence package,
-`@pik-market-watch/db`. `src/client.js` supplies the connection pool and leases;
-`src/ingestion.js` owns listing/search writes, and `src/raw-responses.js` owns
-transport archives, page manifests and retention. `src/migrate.js` manages the
-schema baseline. Database code depends on `pg` and shared environment validators,
-and has no dependency on the collector or dashboard packages.
+`@pik-market-watch/db` owns the PostgreSQL schema and persistence. `src/client.js` provides connections and leases, `src/ingestion.js` writes listing/search state, `src/raw-responses.js` manages archives and retention, and `src/migrate.js` applies schema changes.
 
-Install workspace dependencies with `npm ci` from the repository root. Run
-database unit tests with `npm test --workspace @pik-market-watch/db`, database
-integration tests with `npm run test:integration`, and the optional disposable
-database benchmark with `npm run benchmark:ingestion`. Bare Node jobs use
-`npm run migrate --workspace @pik-market-watch/db` and
-`npm run maintenance --workspace @pik-market-watch/db`; provide `DATABASE_URL`
-and the appropriate database role. Database settings are in `src/config.js`
-and do not load saved searches or API pacing settings.
+Run from the repository root after `npm ci`:
 
-`init-lean/` is the sole first-boot schema baseline. Compose mounts it for both
-PostgreSQL initialization and the checksum-managed migrator. The scraper writes
-to the `lean` schema; `public` contains PostgreSQL extension objects and the
-migration ledger. Compose uses an external PostgreSQL volume selected by
-`POSTGRES_VOLUME_NAME` (default `olx-price-ext_pgdata_pg18`). Create that volume
-with `docker volume create olx-price-ext_pgdata_pg18` before first startup.
-The deployed database and Superset home volume names remain stable across
-checkout renames.
+```sh
+npm test --workspace @pik-market-watch/db
+npm run test:integration
+npm run benchmark:ingestion
+npm run migrate --workspace @pik-market-watch/db
+npm run maintenance --workspace @pik-market-watch/db
+```
+
+Integration tests and benchmarks use disposable databases. Migration and maintenance jobs require `DATABASE_URL` with the appropriate role. Settings live in `src/config.js`.
+
+`init-lean/` supplies both first-boot initialization and later migrations. Listing data lives in `lean`; extensions and the migration ledger live in `public`. Create the external `POSTGRES_VOLUME_NAME` volume before startup (default `olx-price-ext_pgdata_pg18`). Volume names remain stable across checkout renames.
 
 The numbered SQL files run in lexical order:
 
@@ -37,11 +28,7 @@ The numbered SQL files run in lexical order:
 | `05-dashboard-query-indexes.sql` | Dashboard range, latest-run, and API price-history indexes |
 | `zz-database-roles.sh` | Runtime, migration, reporting, Superset metadata and backup roles |
 
-The migrator records each SQL file and checksum in `public.schema_migrations`,
-adopts an already initialized lean schema, and rejects changes to applied
-files. Add future schema changes as new ordered SQL files under `init-lean/`;
-never edit an applied file. The same canonical directory bootstraps fresh
-databases and applies appended changes to existing lean deployments.
+The migrator records checksums in `public.schema_migrations` and adopts already initialized schemas. Never edit applied SQL files; append new ordered migrations under `init-lean/`.
 
 `remote-restore.sh` handles synchronized lean database restores. PostgreSQL
 extension objects in `public` remain installed by the database bootstrap.

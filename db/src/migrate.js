@@ -114,9 +114,7 @@ async function applyMigrations(pool, dir, log = () => {}) {
     const recorded = new Map(
       known.rows.map((row) => [row.filename, row.checksum]),
     );
-    // Docker executes the canonical files before the application migrator. A
-    // complete live schema can therefore adopt the ledger without replaying
-    // non-idempotent CREATE statements.
+    // Adopt Docker-initialized schemas without replaying non-idempotent DDL.
     if (recorded.size === 0 && files.length > 0) {
       if (await schemaIsCurrent(client)) {
         for (const file of files) {

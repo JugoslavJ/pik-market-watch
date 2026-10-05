@@ -4,9 +4,7 @@ import os
 import sys
 from copy import deepcopy
 
-# Superset loads this file by path with importlib, which does not guarantee
-# that the config directory is on sys.path. Add /app so local modules copied
-# into the image (including template_cache.py) are importable in every CLI job.
+# Superset loads config by path; CLI jobs still need /app for local imports.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from sqlalchemy.engine import URL
@@ -61,8 +59,7 @@ DECKGL_BASE_MAP = [
     ["https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json", "CARTO Dark Matter (vector)"],
 ]
 
-# One web worker keeps the in-process data cache coherent without adding a
-# Redis service. A ten-minute TTL keeps repeated market queries quick.
+# One worker shares the in-process cache; market results expire after ten minutes.
 CACHE_DEFAULT_TIMEOUT = 600
 DATA_CACHE_CONFIG = {
     "CACHE_TYPE": "SimpleCache",
@@ -80,8 +77,7 @@ def FLASK_APP_MUTATOR(app):
 from template_cache import CachedPostgresTemplateProcessor
 CUSTOM_TEMPLATE_PROCESSORS = {"postgresql": CachedPostgresTemplateProcessor}
 
-# The OCI cluster is capped at 40 PostgreSQL sessions. Bound both workers and
-# each process's pool so Superset cannot crowd out the scraper or backups.
+# Bound pools to leave room for scraper and backup sessions under the 40-session cap.
 SQLALCHEMY_POOL_SIZE = 3
 SQLALCHEMY_MAX_OVERFLOW = 1
 SQLALCHEMY_POOL_TIMEOUT = 10

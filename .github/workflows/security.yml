@@ -1,9 +1,7 @@
 name: Security audit
 
-# Weekly supply-chain sweep, independent of code pushes: fails on HIGH/CRITICAL
-# advisories in PRODUCTION dependencies. Dependabot proposes version bumps;
-# this job catches anything already sitting in the lockfile between them.
-# Dev-only findings stay quiet here (visible via Dependabot instead).
+# Weekly production-dependency audit; fail on HIGH/CRITICAL advisories.
+
 on:
   schedule:
     - cron: "17 6 * * 1"   # Mondays 06:17 UTC (off the crowded top-of-hour)

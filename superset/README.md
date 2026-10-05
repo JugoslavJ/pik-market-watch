@@ -1,10 +1,6 @@
 # Superset dashboard service
 
-Apache Superset 6.0.0 supplies authentication, permissions, administration and
-reporting for the [React viewer](../dashboard-viewer/README.md). The viewer is
-the dashboard entry point at `http://127.0.0.1:3000/`. Superset listens on port
-8088 inside the container. Production serves the same loopback origin through
-Cloudflare Tunnel; see [deployment](../docs/DEPLOYMENT.md).
+Apache Superset 6.0.0 provides authentication, administration and reporting for the [React viewer](../dashboard-viewer/README.md) at `http://127.0.0.1:3000/` (container port 8088). Production uses [Cloudflare Tunnel](../docs/DEPLOYMENT.md).
 
 ## Start locally
 
@@ -59,11 +55,7 @@ filters and semantic datasets. CI verifies it matches the definitions.
 
 ## Native charts and maps
 
-The seed provisions datasets, charts, dashboard layouts, collapsed vertical
-filter panels and cross-filter scopes. Chart selections intersect sidebar
-filters and reach supported facts before aggregation. Market datasets use a
-ten-minute cache; operational datasets bypass chart caching. Charts retain
-their previous successful values while updates run.
+The seed provisions charts, datasets, layouts and filters. Chart selections intersect sidebar filters before aggregation. Market results cache for ten minutes; operational results are uncached. Charts retain their values during updates.
 
 Native Deck.gl maps and viewer MapLibre maps use CARTO Dark Matter vector tiles.
 Pins show listing details on hover and open OLX ads on click. No Mapbox key is
@@ -90,8 +82,7 @@ The alert-checker service evaluates SQL every 15 minutes and optionally sends
 webhook firing/recovery transitions. Its state lives in Superset home. The
 backup service creates verified `olx` and `superset_meta` dumps and a Superset
 home archive. Keep `SUPERSET_SECRET_KEY` securely with `.env` for recovery.
-Home-to-instance sync replaces only the `olx` database, then refreshes Superset,
-reseeds charts and repairs viewer permissions.
+Home-to-instance sync replaces `olx` and reconnects Superset. Provisioning during sync is optional; see [operations](../docs/OPERATIONS.md#home-machine-scrape-and-sync).
 
 ## Validation
 
@@ -124,6 +115,4 @@ node superset/tests/check-cross-filters.cjs
 node dashboard-viewer/tests/check-property-filters.cjs
 ```
 
-The viewer scripts use installed Edge on Windows. They read credentials from the
-environment or ignored `.env`; `SUPERSET_TEST_URL` selects the origin. Screenshots
-and timing artifacts stay in ignored `data/superset-validation/`.
+Browser scripts share `tests/helpers/browser.cjs`, using installed Edge or Playwright Chromium. `SUPERSET_TEST_BROWSER` overrides the executable; `SUPERSET_TEST_URL` selects the origin. Credentials come from the environment or ignored `.env`. Artifacts stay in ignored `data/superset-validation/`.

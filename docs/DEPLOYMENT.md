@@ -1,7 +1,6 @@
 # Deploy the React dashboards on OCI
 
-The React viewer is the only dashboard entry point. Superset supplies login,
-permissions, canonical datasets and the read-only reporting API.
+Deploy the React viewer and Superset authentication/reporting service.
 
 ## Port and public URL
 
@@ -10,9 +9,6 @@ permissions, canonical datasets and the read-only reporting API.
 - `/` opens Market Overview; navigation contains Home, Overview, Exits and Health.
 - Cloudflare Tunnel forwards the public dashboard hostname to
   `http://127.0.0.1:3000`.
-
-Source JSON in `superset/dashboards/` supplies the SQL/panel contract for all
-71 panels and their native Superset charts.
 
 ## Prepare the instance
 
@@ -71,11 +67,7 @@ curl -f http://127.0.0.1:3000/health
 systemctl status cloudflared
 ```
 
-The gate compares all 71 panels against the source SQL,
-benchmarks all four authenticated dashboard APIs (default and room-filtered
-market/exit states), checks temporary viewer permissions and revoked access,
-and verifies backups. API p95 budgets remain 2 seconds fresh / 1 second cached.
-These API checks do not establish a 100–200 ms browser opening time.
+The gate checks all 71 panels against source SQL, API latency, temporary viewer permissions, revoked access and backups. API p95 budgets are 2 seconds fresh / 1 second cached; browser timings are measured separately.
 
 Through the existing public HTTPS hostname, verify:
 

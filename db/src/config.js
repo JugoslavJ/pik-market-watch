@@ -1,7 +1,4 @@
 "use strict";
-
-// Database jobs load only database settings, independently of saved searches
-// and upstream API configuration.
 const fs = require("node:fs");
 const path = require("node:path");
 const { integer, boolean } = require("@pik-market-watch/config");

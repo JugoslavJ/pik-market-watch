@@ -1,26 +1,23 @@
-"""One dashboard statement, with shared facts and summary sources.
-
-The checked-in source dashboard SQL remains the value contract. Sidebar predicates keep
-their original scopes. Cross-filter predicates are applied before aggregation.
-No client value is interpolated into SQL; all values use engine parameters.
-"""
+"""Batch source SQL with shared facts, scoped filters and bound client values."""
 import hashlib
 import json
 import math
 import re
 from datetime import datetime, timedelta, timezone
+from functools import lru_cache
 
-from jinja2 import DictLoader, Environment, pass_context
+from jinja2 import Environment, pass_context
 from listing_filters import options_sql, viewer_variables
 from parity import (TABLE_DIMENSIONS, TABLE_SCAN, compile_sql, cross_filter_columns, dataset_name,
-                    panels, push_cross_filters, shared_source_sql, source_sql, SOURCE_DIR)
+                    panels, push_cross_filters, shared_source_sql, SOURCE_DIR)
 
 BOARDS = {board["uid"]: board for path in sorted(SOURCE_DIR.glob("*.json"))
           if (board := json.loads(path.read_text(encoding="utf-8-sig")))}
 CANONICAL = {board["uid"]: {dataset_name(board, panel): {
     compile_sql(board, panel), compile_sql(board, panel, add_links=True)}
     for panel in panels(board)} for board in BOARDS.values()}
-environment = Environment(loader=DictLoader({}), autoescape=False, cache_size=256)
+ALLOWED_CROSS_COLUMNS = frozenset(column for columns in TABLE_DIMENSIONS.values() for column in columns)
+environment = Environment(autoescape=False)
 
 
 @pass_context
@@ -29,6 +26,11 @@ def bound_where_in(context, values):
 
 
 environment.filters["where_in"] = bound_where_in
+
+
+@lru_cache(maxsize=256)
+def filter_template(source):
+    return environment.from_string(source)
 
 
 def selections(board, supplied):
@@ -63,8 +65,7 @@ def selections(board, supplied):
 def validate_cross(cross):
     if not isinstance(cross, dict) or len(cross) > 20:
         raise ValueError("Invalid chart selection")
-    allowed = set().union(*(set(columns) for columns in TABLE_DIMENSIONS.values()))
-    if set(cross) - allowed:
+    if set(cross) - ALLOWED_CROSS_COLUMNS:
         raise ValueError("Unknown chart dimension")
     for values in cross.values():
         if not isinstance(values, list) or not 1 <= len(values) <= 100:
@@ -95,16 +96,12 @@ def compile_dashboard(board, supplied=None, cross=None, days=None, until=None):
         params[key] = value
         return ":" + key
 
-    # Templates are trusted repository SQL, cached by content. Filter values
-    # become bind placeholders, including values passing through where_in.
+    # Cache trusted SQL templates; bind values belong to each render.
     def filtered(sql, filters):
         if not filters or not TABLE_SCAN.search(sql):
             return sql
         template = push_cross_filters(sql, columns=set(filters))
-        name = hashlib.sha256(template.encode()).hexdigest()
-        if name not in environment.loader.mapping:
-            environment.loader.mapping[name] = template
-        return environment.get_template(name).render(bind=bind,
+        return filter_template(template).render(bind=bind,
             get_filters=lambda column, **_: filters.get(column, []),
         )
 
@@ -132,14 +129,10 @@ def compile_dashboard(board, supplied=None, cross=None, days=None, until=None):
 
         def scan(match):
             table = match[2].lower()
-            # Limited detail tables retain their indexed physical scans. This
-            # also preserves the source plan's choice at tied LIMIT boundaries
-            # where the source dashboard SQL doesn't specify a unique ordering key.
+            # Keep indexed detail scans and the source plan's behavior at tied LIMIT boundaries.
             if panel["type"] == "table":
                 return match[0]
-            # Materialize repeatedly scanned listing/event facts once. Keep
-            # scrape lookups on their indexed physical table instead of copying
-            # the full run history into a CTE.
+            # Materialize shared listing/event facts; scrape lookups keep their physical indexes.
             if table not in ("listings", "listing_lifecycle_events", "saved_searches"):
                 return match[0]
             signature = json.dumps([table, applicable], sort_keys=True)
@@ -161,9 +154,7 @@ def compile_dashboard(board, supplied=None, cross=None, days=None, until=None):
             options[variable["name"]] = variable["query"]
         elif variable["type"] == "custom":
             options[variable["name"]] = None
-    # Lifecycle trend queries use indexed lateral lookup for the next exit.
-    # Inlining that fact preserves its index; copying it would force one scan
-    # of all events per listing cycle.
+    # Inline lifecycle facts to preserve indexed lateral lookups for the next exit.
     entries = [f"'{key}', (SELECT coalesce(jsonb_agg(to_jsonb(r)), '[]'::jsonb) FROM ({sql}) r)"
                for key, sql in groups.items()]
     option_entries = [f"'{key}', (SELECT coalesce(jsonb_agg(r.__value), '[]'::jsonb) FROM ({sql}) r)"

@@ -1,7 +1,5 @@
 "use strict";
 
-// Shared price and payload policy for search, detail, and historical evidence.
-
 const PRICE_STATES = Object.freeze({
   VALID: "valid",
   UNPRICED: "unpriced",
@@ -22,7 +20,6 @@ const UNIX_SECONDS_MAX = 4102444800; // 2100-01-01; rejects millisecond epochs
 const NO_PRICE_TEXT =
   /^(?:na\s+upit|po\s+dogovoru|dogovor|cijena\s+na\s+upit|call)$/i;
 
-/** Return a positive, safe integer ID or null. */
 function normalizeId(value) {
   if (typeof value === "string" && !/^\s*\d+\s*$/.test(value)) return null;
   const n = typeof value === "number" ? value : Number(value);
@@ -35,11 +32,7 @@ function compactNumberString(value) {
     .trim();
 }
 
-/**
- * Parse a finite number without accepting a numeric prefix (parseFloat's
- * "12abc" behaviour is especially dangerous for prices).  Money is commonly
- * rendered as 26.000 KM, while measurements use 72.5 or 72,5.
- */
+/** Accept complete numeric strings; money uses grouping, measurements use decimals. */
 function finiteNumber(value, { integerLike = false } = {}) {
   if (typeof value === "number") {
     return Number.isFinite(value) ? value : null;
@@ -61,8 +54,7 @@ function finiteNumber(value, { integerLike = false } = {}) {
   const commas = (unsigned.match(/,/g) || []).length;
   const dots = (unsigned.match(/\./g) || []).length;
   if (commas && dots) {
-    // The final separator is the decimal separator; all preceding separators
-    // are grouping marks (1.234,50 and 1,234.50 both work).
+    // The last separator is decimal: 1.234,50 and 1,234.50 both work.
     const decimal =
       unsigned.lastIndexOf(",") > unsigned.lastIndexOf(".") ? "," : ".";
     const grouping = decimal === "," ? /\./g : /,/g;
@@ -125,9 +117,7 @@ function normalizeDealType(value) {
   return null;
 }
 
-// Currency belongs to the individual assertion, never to the listing's latest
-// price or the dataset's rental period. Preserve foreign/conflicting evidence
-// so comparison projections cannot silently label it as BAM.
+// Keep currency per price assertion, including foreign or conflicting evidence.
 function priceCurrencyOf(payload) {
   if (!payload || typeof payload !== "object") return null;
   const currencies = new Set();
@@ -176,10 +166,7 @@ function reasonForMissingPrice(raw, display) {
   return null;
 }
 
-/**
- * Normalize one current or historical price.  `price` is always null unless
- * the state is valid; classification is never inferred from price quality.
- */
+/** Invalid prices become null; price quality does not determine the deal type. */
 function normalizePrice(price, dealType, { displayPrice } = {}) {
   const missingReason = reasonForMissingPrice(price, displayPrice);
   if (missingReason) {
@@ -241,7 +228,6 @@ function historyDate(entry) {
   return normalizeUnixSeconds(entry.created_at ?? entry.date);
 }
 
-// Normalize history with explicit rejection reasons and exact deduplication.
 function normalizeHistoryWithRejections(
   history,
   { dealType, now = Date.now() } = {},

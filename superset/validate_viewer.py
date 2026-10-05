@@ -85,9 +85,7 @@ def main():
                 started = time.monotonic()
                 params = urllib.parse.urlencode({'s':json.dumps(selected), 'c':json.dumps(cross), 'force':'true'})
                 packet = api.call('GET', f'/olx/api/dashboard/{uid}?{params}')
-                # Compare both SQL paths inside one read-only snapshot. Scrape
-                # jobs can otherwise finish between the HTTP and reference
-                # requests, changing status and completion timestamps.
+                # Compare in one read-only snapshot so scraper updates cannot change the reference.
                 until = as_of
                 sql, bindings, _ = compile_dashboard(board, selected, cross, packet['days'], until)
                 query = text(sql)

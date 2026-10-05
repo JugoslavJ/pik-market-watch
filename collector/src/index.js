@@ -1,13 +1,13 @@
 "use strict";
-// Entry point: scheduler + health endpoint.
-//   RUN_ONCE=1 or `node src/index.js --once`  → scrape once and exit
-//   otherwise scrape at startup, then every SCRAPE_INTERVAL_MINUTES
 
 const http = require("http");
 const config = require("./config");
-const { Db, config: dbConfig } = require("@pik-market-watch/db");
+const {
+  Db,
+  config: dbConfig,
+  applyMigrations,
+} = require("@pik-market-watch/db");
 const api = require("./api");
-const { applyMigrations } = require("@pik-market-watch/db");
 const { collectSearch } = require("./collection");
 const { makeLogger, healthStatus, healthPayload, sleep } = require("./util");
 
@@ -19,7 +19,7 @@ const state = {
   lastStatus: "starting",
   totalRuns: 0,
   failedRuns: 0,
-  consecutiveFailures: 0, // fully-failed cycles in a row → drives /health 503
+  consecutiveFailures: 0,
   intervalMinutes: config.intervalMinutes,
   searches: config.searches.map((s) => ({ name: s.name })),
 };
@@ -31,8 +31,7 @@ async function runAllUnlocked(db) {
         "(see config/searches.example.json) or set SEARCH_URLS.",
     );
     state.lastStatus = "idle: no searches configured";
-    // Housekeeping has no upstream dependency. A deployment with no searches
-    // configured must still cap and purge live raw archives.
+    // Archive maintenance also runs when no searches are configured.
     const maintenance = await db.runMaintenanceCycle({
       log: (message) => log(`maintenance: ${message}`),
     });
@@ -49,8 +48,7 @@ async function runAllUnlocked(db) {
   let failedRuns = 0;
   let totalCards = 0;
   let skipped = 0;
-  // OLX rate limits apply across all search and detail endpoints. Share one
-  // budget across the complete cycle instead of resetting it per search.
+  // Search and detail requests share one upstream rate window.
   const cycleRateBudget = new api.RateBudget({
     cooldownMs: config.rateLimitCooldownMs,
     wait: sleep,
@@ -60,11 +58,7 @@ async function runAllUnlocked(db) {
       ),
   });
   for (const search of config.searches) {
-    // Deploy-restart protection, PER SEARCH: every container recreation boots
-    // a full scrape cycle (~dozens of API pages + detail calls), and several
-    // deploys in one evening are enough to trip olx.ba's rate limiter. Keyed
-    // on search_key so a newly added search still scrapes immediately instead
-    // of waiting out the gap. (RUN_ONCE is exempt — explicit intent.)
+    // Skip recent searches after restarts; explicit one-shot runs bypass the gap.
     try {
       if (
         !config.runOnce &&
@@ -94,10 +88,7 @@ async function runAllUnlocked(db) {
     }
   }
 
-  // /health semantics: only a cycle where EVERY non-skipped search failed (or
-  // that threw) counts as a consecutive failure — partial success still serves
-  // fresh data, any success resets the streak, and a pure skip tick (everything
-  // ran recently) is neutral in both directions.
+  // All-skipped cycles leave the failure streak unchanged; any success resets it.
   const allSkipped = skipped > 0 && skipped === config.searches.length;
   if (allSkipped) {
     state.lastStatus = "skipped: recent run";
@@ -107,14 +98,7 @@ async function runAllUnlocked(db) {
     state.consecutiveFailures = 0;
   }
 
-  // End of cycle: close listings that no successful search returned anymore,
-  // freezing their last observed price as the closing price. Failed searches
-  // leave their previous result links in place, so an outage never closes
-  // anything.
-  //
-  // A zero-card cycle is safe to close only when every configured search
-  // completed successfully. This distinguishes an authoritative empty market
-  // from a blocked/failed/ skipped search whose old membership must remain.
+  // Only close after a zero-card cycle if every search returned authoritative results.
   const allSearchesAuthoritative =
     okRuns === config.searches.length && failedRuns === 0 && skipped === 0;
   if (totalCards === 0 && !allSearchesAuthoritative) {
@@ -200,9 +184,6 @@ function startHealthServer() {
       res.end();
       return;
     }
-    // 200 normally; 503 once HEALTH_FAILURE_THRESHOLD consecutive cycles have
-    // failed end-to-end — so `docker compose ps` shows unhealthy and uptime
-    // probes can page. The JSON body is identical either way.
     res.writeHead(healthStatus(state, config.healthFailureThreshold), {
       "Content-Type": "application/json",
       "Cache-Control": "no-store",
@@ -244,9 +225,7 @@ async function main() {
     stopping = true;
     log(`${signal} received — shutting down`);
     if (timer) clearInterval(timer);
-    // Allow an in-flight cycle to finish its current request/transaction before
-    // closing the pool. A deadline prevents a stuck upstream from blocking
-    // container termination forever.
+    // Let active work finish, with a deadline for stalled requests.
     if (activeCycle) {
       await Promise.race([
         activeCycle.catch(() => {}),
@@ -262,8 +241,7 @@ async function main() {
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
 
-  // Serve the health endpoint from t=0 so container healthchecks pass while
-  // the initial scrape is still running.
+  // Serve health probes during the initial scrape.
   healthServer = startHealthServer();
 
   activeCycle = runAll(db).catch(cycleFailureResult);
@@ -272,10 +250,7 @@ async function main() {
 
   if (config.runOnce) {
     await db.close();
-    // Destroy healthcheck keep-alive sockets before waiting for close().
-    // Docker may have an open probe connection; waiting for close() first
-    // would leave RUN_ONCE (and callers such as sync-to-instance.ps1) blocked
-    // forever waiting for that socket to close on its own.
+    // Close probe keep-alive sockets before awaiting server shutdown.
     healthServer.closeAllConnections?.();
     await new Promise((resolve) => healthServer.close(resolve));
     const failed = initialResult.failedRuns > 0;
@@ -283,11 +258,10 @@ async function main() {
     log(
       `RUN_ONCE complete (${failed ? `${initialResult.failedRuns} search(es) failed` : "ok"})`,
     );
-    return; // nothing left keeping the event loop alive
+    return;
   }
 
-  // Reentrancy guard: a slow cycle (many pages × waves + 65 s rate-limit
-  // sleeps) must never overlap the next tick's cycle against the same tables.
+  // A slow cycle must finish before another starts.
   let running = false;
   timer = setInterval(() => {
     if (running) {

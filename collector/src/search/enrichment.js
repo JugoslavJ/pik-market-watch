@@ -13,120 +13,109 @@ async function enrichSearchResults({
   pace,
   log,
 }) {
-  // ── Enrichment ───────────────────────────────────────────────────────────
-  // Search payloads already carry pins, dates, seller type and m² for free;
-  // /api/listings/<id> is consulted only for facts still missing. The queue
-  // below is capped per run and rotated oldest-attempt-first
-  // (listings.last_enrichment_attempted_at): rows olx.ba can never answer
-  // rotate through instead of squatting on the head and starving the rest.
+  if (!(cfg.maxDetailFetches > 0) || !ids.length) return 0;
+  // Retry oldest attempts first so unanswerable listings cannot starve the queue.
   let enrichedCount = 0;
   try {
-    if (cfg.maxDetailFetches > 0 && ids.length) {
-      const { pending, total } = await db.enrichmentQueue(
-        ids,
-        cfg.maxDetailFetches,
-        {
-          refreshDays: cfg.detailRefreshDays ?? 7,
-          retryAfterMinutes: Math.max(1, cfg.intervalMinutes ?? 720),
-        },
-      );
-      const targets = pending.map((p) => p.id);
-      const byCard = new Map(allCards.map((c) => [c.articleId, c]));
+    const { pending, total } = await db.enrichmentQueue(
+      ids,
+      cfg.maxDetailFetches,
+      {
+        refreshDays: cfg.detailRefreshDays ?? 7,
+        retryAfterMinutes: Math.max(1, cfg.intervalMinutes ?? 720),
+      },
+    );
+    const cardsById = new Map(allCards.map((card) => [card.articleId, card]));
 
-      // Free facts straight off the search results…
-      const rows = new Map();
-      let unpinnedN = 0,
-        missingSqmN = 0,
-        neverDetailedN = 0,
-        staleN = 0,
-        priceChangedN = 0;
-      for (const p of pending) {
-        const c = byCard.get(p.id);
-        if (!c) continue;
-        if (p.unpinned) unpinnedN++;
-        if (p.missingSqm) missingSqmN++;
-        if (p.neverDetailed) neverDetailedN++;
-        if (p.stale) staleN++;
-        if (p.priceChanged) priceChangedN++;
-        rows.set(p.id, {
-          articleId: p.id,
-          latitude: c.latitude,
-          longitude: c.longitude,
-          sqm: c.sqm,
-          renewedAt: c.renewedAt,
-          sellerType: c.sellerType,
-          apiStatus: c.apiStatus,
-        });
+    const rows = new Map();
+    const counts = {
+      unpinned: 0,
+      missingSqm: 0,
+      neverDetailed: 0,
+      stale: 0,
+      priceChanged: 0,
+    };
+    for (const listing of pending) {
+      const card = cardsById.get(listing.id);
+      if (!card) continue;
+      for (const reason of Object.keys(counts)) {
+        if (listing[reason]) counts[reason]++;
       }
-
-      // …and detail calls only where search results cannot answer.
-      const needDetail = pending
-        .filter((p) => {
-          const r = rows.get(p.id);
-          if (!r) return false;
-          if (p.neverDetailed) return true; // characteristics/views/history
-          if (p.stale || p.priceChanged) return true;
-          if (p.missingSqm && r.sqm == null) return true;
-          if (p.unpinned && r.latitude == null) return true;
-          return false;
-        })
-        .map((p) => p.id);
-
-      await db.markDetailAttempts(needDetail);
-
-      log(
-        `⌖ enriching ${pending.length}/${total} pending listing(s) ` +
-          `(${unpinnedN} without pin, ${missingSqmN} without m², ` +
-          `${neverDetailedN} never detailed, ${staleN} stale, ` +
-          `${priceChangedN} changed price)` +
-          (needDetail.length ? ` · ${needDetail.length} detail call(s)` : ""),
-      );
-
-      const details = await fetchDetailsInBatches(
-        needDetail,
-        {
-          timeoutMs: cfg.apiTimeoutMs,
-          concurrency: cfg.detailConcurrency,
-          delayMs: cfg.detailDelayMs,
-          rateBudget,
-          wait: pace,
-          onError: (articleId, error) =>
-            db.archiveResponseDiagnostic({
-              runId,
-              articleId,
-              requestKind: "detail",
-              error,
-              buildVersion: MAPPER_BUILD_VERSION,
-            }),
-        },
-        log,
-      );
-      const successfulRows = new Map();
-      for (const d of details) {
-        if (!d) continue; // a failed call leaves search-level facts in place
-        const row = rows.get(d.articleId);
-        if (!row) continue;
-        // Null is meaningful evidence for the deal dimension. Retain it even
-        // though optional display/detail facts below use non-null merging.
-        if (Object.prototype.hasOwnProperty.call(d, "dealType"))
-          row.dealType = d.dealType;
-        for (const [k, v] of Object.entries(d)) {
-          if (k === "articleId" || v == null) continue;
-          if (k === "characteristics" && !Object.keys(v).length) continue;
-          row[k] = v; // non-null detail facts override search-level ones
-        }
-        successfulRows.set(d.articleId, row);
-      }
-
-      if (successfulRows.size)
-        await db.enrichListings([...successfulRows.values()]);
-      enrichedCount = successfulRows.size;
-      log(`⌖ enriched ${enrichedCount}/${targets.length} listing(s)`);
+      rows.set(listing.id, {
+        articleId: listing.id,
+        latitude: card.latitude,
+        longitude: card.longitude,
+        sqm: card.sqm,
+        renewedAt: card.renewedAt,
+        sellerType: card.sellerType,
+        apiStatus: card.apiStatus,
+      });
     }
+
+    const detailIds = pending
+      .filter((listing) => {
+        const row = rows.get(listing.id);
+        if (!row) return false;
+        return (
+          listing.neverDetailed ||
+          listing.stale ||
+          listing.priceChanged ||
+          (listing.missingSqm && row.sqm == null) ||
+          (listing.unpinned && row.latitude == null)
+        );
+      })
+      .map((listing) => listing.id);
+
+    await db.markDetailAttempts(detailIds);
+
+    log(
+      `⌖ enriching ${pending.length}/${total} pending listing(s) ` +
+        `(${counts.unpinned} without pin, ${counts.missingSqm} without m², ` +
+        `${counts.neverDetailed} never detailed, ${counts.stale} stale, ` +
+        `${counts.priceChanged} changed price)` +
+        (detailIds.length ? ` · ${detailIds.length} detail call(s)` : ""),
+    );
+
+    const details = await fetchDetailsInBatches(
+      detailIds,
+      {
+        timeoutMs: cfg.apiTimeoutMs,
+        concurrency: cfg.detailConcurrency,
+        delayMs: cfg.detailDelayMs,
+        rateBudget,
+        wait: pace,
+        onError: (articleId, error) =>
+          db.archiveResponseDiagnostic({
+            runId,
+            articleId,
+            requestKind: "detail",
+            error,
+            buildVersion: MAPPER_BUILD_VERSION,
+          }),
+      },
+      log,
+    );
+    const successfulRows = new Map();
+    for (const detail of details) {
+      if (!detail) continue;
+      const row = rows.get(detail.articleId);
+      if (!row) continue;
+      // Preserve explicit unknown deal types while merging other non-null facts.
+      if (Object.hasOwn(detail, "dealType")) row.dealType = detail.dealType;
+      for (const [name, value] of Object.entries(detail)) {
+        if (name === "articleId" || value == null) continue;
+        if (name === "characteristics" && !Object.keys(value).length) continue;
+        row[name] = value;
+      }
+      successfulRows.set(detail.articleId, row);
+    }
+
+    if (successfulRows.size)
+      await db.enrichListings([...successfulRows.values()]);
+    enrichedCount = successfulRows.size;
+    log(`⌖ enriched ${enrichedCount}/${pending.length} listing(s)`);
   } catch (error) {
-    // Ingestion is already durable and complete. Detail enrichment is
-    // deliberately best-effort; retain the successful run and let the next
-    // fair-share pass retry the failed work.
+    // Ingestion is committed; enrichment failures are retried next cycle.
     log(
       `⚠ enrichment failed after committed ingestion: ${
         error?.message || error

@@ -1,6 +1,6 @@
 # Banja Luka MZ geography
 
-This directory contains the source data and reproducible tooling for the Banja Luka mjesne zajednice (MZ) seed used by PostgreSQL neighborhood assignment.
+Source boundaries and tools for the Banja Luka mjesne zajednice (MZ) neighborhood seed.
 
 | Path | Purpose |
 |---|---|
@@ -13,7 +13,7 @@ This directory contains the source data and reproducible tooling for the Banja L
 | `scripts/gen-lean-sql.js` | Generates `../db/init-lean/02-lean-neighborhoods.sql` from the final GeoJSON. |
 | `osm/` | Overpass queries and responses used while naming/georeferencing the trace. |
 
-Coordinates are WGS84 `[longitude, latitude]`. Polygon rings are closed and counter-clockwise in GeoJSON. The seed converts longitude/latitude pairs into PostGIS polygons. Listing assignment uses polygon containment; its 5 km nearest-polygon fallback is intended to handle pins just outside a traced boundary, not to establish legal boundaries.
+Coordinates are WGS84 `[longitude, latitude]`, with closed counter-clockwise rings. PostGIS assigns listings by containment, then by the nearest boundary within 5 km. These are approximate neighborhood boundaries.
 
 ## Regenerate the seed
 

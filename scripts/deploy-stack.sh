@@ -1,18 +1,12 @@
 #!/usr/bin/env bash
-# Rebuild the instance stack and wait until it is healthy.
-#
-# Runs ON THE INSTANCE, invoked by .github/workflows/ci.yml (deploy job):
-#   ssh … "DEPLOY_DIR=… GIT_SHA=… bash -s" < scripts/deploy-stack.sh
-# Expects DEPLOY_DIR (repo checkout already synced via git archive) and
-# GIT_SHA in the environment.
+# Run on the instance after syncing the checkout; accepts DEPLOY_DIR and GIT_SHA.
 set -euo pipefail
 
 DEPLOY_DIR="${DEPLOY_DIR:-$HOME/pik-market-watch}"
 cd "$DEPLOY_DIR"
 echo "▶ Deploying ${GIT_SHA:-unknown} in $(pwd) on $(hostname)"
 
-# One-time setup guard: these two are git-ignored, so the pipeline
-# never ships them — they must exist on the instance already.
+# Ignored configuration must already exist on the instance.
 for f in .env config/searches.json; do
   if [ ! -f "$f" ]; then
     echo "✗ Missing $DEPLOY_DIR/$f on the instance."
@@ -71,9 +65,6 @@ fi
 pull_services=(db db-backup)
 docker compose pull "${pull_services[@]}" || echo "⚠ pull failed, using local images"
 
-# Apply schema changes before publishing dashboards. The migrator is a
-# profile-only one-shot service, so a failed migration stops this deployment
-# before the viewer can observe a partially upgraded contract.
 echo "▶ Starting database for ownership checks"
 docker compose up -d db
 db_deadline=$((SECONDS + 120))
@@ -86,27 +77,22 @@ until docker compose exec -T db sh -c 'pg_isready -U "$POSTGRES_USER" -d "$POSTG
   sleep 2
 done
 
-# Existing volumes may contain functions created by the bootstrap role before
-# the app-owned migration gate was introduced. Re-assert ownership before the
-# app-role migrator attempts CREATE OR REPLACE FUNCTION.
+# Repair legacy object ownership before running migrations.
 echo "▶ Ensuring database role ownership"
 docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
 
 echo "▶ Applying database migrations"
 docker compose --profile migrate run --build --rm migrator
 
-# Re-run the idempotent role helper so both fresh and existing volumes have
-# the current lean writer and reporting grants.
+# Apply grants for objects added by migrations.
 echo "▶ Applying database role grants"
 docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
 
 echo "▶ Upgrading Superset metadata and syncing security permissions"
 docker compose run --build --rm superset-init
 
-# Build the dashboard service and its scheduled alert checker.
 docker compose build superset superset-alert-check
 
-# These names come only from the shared Superset helper.
 read -r -a services <<< "$(stack_services)"
 echo "▶ Starting Superset dashboard stack"
 docker compose up -d --build "${services[@]}"

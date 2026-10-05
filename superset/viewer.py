@@ -26,11 +26,7 @@ blueprint = Blueprint("olx_viewer", __name__, url_prefix="/olx")
 
 
 def viewer_login_required(view):
-    """Use AppBuilder's configured login route, including non-DB auth modes.
-
-    Superset's Flask-Login default points to the nonexistent endpoint 'login'.
-    API requests must return JSON instead of redirecting a fetch to login HTML.
-    """
+    """Use the configured login route; unauthenticated API requests return JSON."""
     @wraps(view)
     def protected(*args, **kwargs):
         if current_user.is_authenticated:
@@ -77,16 +73,13 @@ def authorized(uid):
     expected = CANONICAL[uid]
     if (set(source.table_name for source in sources) != set(expected)
             or any(source.sql not in expected[source.table_name] for source in sources)):
-        # A narrowed/replaced Superset dataset must never authorize execution
-        # of its older repository query through this separate viewer.
+        # Changed datasets must not authorize older repository SQL.
         abort(409, description="Dashboard definition changed. Open it in Superset.")
     dashboard_role_access = board.published and bool(
         {r.id for r in board.roles} & {r.id for r in security_manager.get_user_roles()})
     if not dashboard_role_access and not all(security_manager.can_access_datasource(source) for source in sources):
         abort(403)
-    # This application currently has no RLS policies. Never bypass a future
-    # Superset policy through the shared-fact compiler: fail closed and retain
-    # the standard Superset route until those policies are compiled here too.
+    # Deny viewer access until any Superset RLS policies are supported by the compiler.
     if db.session.query(RowLevelSecurityFilter.id).first() is not None:
         abort(403, description="This dashboard is unavailable for this account.")
     database_ids = {source.database_id for source in sources}
@@ -97,8 +90,6 @@ def authorized(uid):
 
 
 def reporting_engine(database):
-    # A dedicated bounded pool avoids opening a database connection per chart.
-    # Superset's configured reporting account remains read only.
     if database.impersonate_user:
         abort(409, description="This dashboard connection is unavailable.")
     key = (database.id, database.changed_on)
@@ -141,10 +132,7 @@ def payload(uid, database, revision):
     engine = reporting_engine(database)
     started = perf_counter()
     with engine.connect() as connection, connection.begin():
-        # These small dashboard aggregates cost less than PostgreSQL's LLVM
-        # compilation startup, especially when combined into one statement.
-        # psycopg2 returns the final statement's result, so transaction settings
-        # and the one data statement share one driver round trip.
+        # Disable JIT startup overhead; settings and data share one driver round trip.
         data = connection.execute(text("SET TRANSACTION READ ONLY; "
             "SET LOCAL statement_timeout = '8s'; SET LOCAL jit = off; " + sql), params).scalar_one()
     result = {**presentation(source), **data, "selection": selected, "cross": cross,
@@ -193,8 +181,7 @@ def dashboard_page(uid):
             boards=[{"uid": uid, "title": board["title"]} for uid, board in BOARDS.items()])
         if data["ttl"]:
             page_cache.set(html_key, html, timeout=data["ttl"])
-    # A fresh CSP nonce is attached after cached HTML is retrieved. The data
-    # and HTML cache stay principal scoped; authorization is never cached.
+    # Add a fresh CSP nonce after retrieving principal-scoped, authorized cached HTML.
     response = make_response(html.replace('nonce="__OLX_NONCE__"', f'nonce="{request.csp_nonce}"'))
     response.headers["Cache-Control"] = "no-store"
     response.headers["Server-Timing"] = f"viewer;dur={(perf_counter()-started)*1000:.2f}, auth;dur={g.viewer_auth_ms:.2f}"

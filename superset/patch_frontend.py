@@ -1,12 +1,4 @@
-"""Patch the pinned Superset 6.0.0 vector map and cross-filter handlers.
-
-Upstream DeckGLContainer.tsx mounts StaticMap only for mapbox:// styles.
-Allow the versioned CARTO style endpoint through the same vector renderer.
-Fail the image build if the pinned upstream gate changes. Rehash changed JS
-assets and their references so browsers receive the rebuilt map component.
-The time-series click handler must strip metric labels before constructing
-dimension filters (the context-menu handler already accounts for this offset).
-"""
+"""Patch pinned Superset map/filter handlers and rehash assets; fail on target drift."""
 
 import hashlib
 import json
@@ -66,17 +58,13 @@ def patch_assets(root, request_script=None):
     patched, count = GATE.subn(lambda m: m[1] + VECTOR_CHECK + m[4], text)
     if count != 1:
         raise RuntimeError("Deck.gl vector gate must occur exactly once")
-    # Webpack entry runtimes can reference one another. Find the dependency
-    # closure before assigning cache hashes, instead of iteratively hashing
-    # those cycles until their filenames stop changing.
+    # Resolve runtime dependency cycles before assigning cache hashes.
     changes = {path: patched}
     chart_path = find_chart_loading_asset(assets)
     changes[chart_path] = patch_chart_loading(
         changes.get(chart_path, assets[chart_path])
     )
-    # ChartRenderer refuses updates while loading, preserving its mounted
-    # chart. Its render guard also needs to allow a previously loaded result
-    # when a chart moves back into view during a filter request.
+    # Keep loaded charts visible when they reenter the viewport during a request.
     guard = re.compile(r'if\("loading"===(\w+)\|\|(\w+)\|\|null===\1\)return null;')
     chart_text = changes[chart_path]
     chart_text, count = guard.subn(
@@ -160,9 +148,7 @@ def patch_assets(root, request_script=None):
         for suffix in (".gz", ".br"):
             if current_path.with_name(current_path.name + suffix).exists():
                 raise RuntimeError(f"Unexpected compressed asset: {current_path.name}{suffix}")
-    # Webpack shares a chunk digest between its JS and extracted CSS. Updating
-    # a JS chunk's runtime reference also changes miniCssF; rename its matching
-    # stylesheet so lazy dashboard imports do not fail with a CSS 404.
+    # Webpack shares JS/CSS chunk digests; rename matching stylesheets to avoid lazy-load 404s.
     for stylesheet in root.glob("*.css"):
         updated_name = stylesheet.name
         for before, after in replacements.items():

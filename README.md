@@ -1,8 +1,6 @@
 # pik-market-watch
 
-Docker Compose stack for observing configured OLX real-estate searches in PostgreSQL and a React dashboard viewer backed by Apache Superset. It uses OLX JSON endpoints with ordinary HTTP requests; upstream availability and response shape are external dependencies.
-
-The `scrape` profile is optional. It can run on the same machine as the dashboards or on a separate machine, with database state synchronized through the supported sync workflow.
+Track OLX real-estate searches in PostgreSQL and explore them through a React dashboard backed by Apache Superset. Collection uses OLX's public JSON endpoints.
 
 ## Start locally
 
@@ -15,35 +13,21 @@ docker compose run --rm superset-seed
 docker compose run --rm superset-access
 ```
 
-Set strong values for the PostgreSQL and Superset secrets in `.env` before starting. The volume command uses the default `POSTGRES_VOLUME_NAME`; use your configured name if different. The example selects `COMPOSE_PROFILES=superset`, starting PostgreSQL, Superset, the alert checker, and the backup sidecar. To also schedule scraping, use `COMPOSE_PROFILES=superset,scrape`, or run a one-off scrape:
+Set the required PostgreSQL and Superset secrets in `.env` before starting. Use your `POSTGRES_VOLUME_NAME` if it differs from the default above. The example starts dashboards, alerts and backups. Set `COMPOSE_PROFILES=superset,scrape` to schedule collection, or run it once:
 
 ```bash
 docker compose --profile scrape run --rm scraper node src/index.js --once
 ```
 
-When the `scrape` profile is enabled, Compose first completes the `migrator`
-job (`db/src/migrate-only.js`) and only then starts the scraper. To apply schema
-changes on a dashboard-only host, run `docker compose --profile migrate run
---build --rm migrator` before restarting clients.
+Open `http://127.0.0.1:3000/` and sign in with your Superset account. The [viewer](dashboard-viewer/README.md) has Home, Overview, Exits and Health dashboards. Scraper health is at `http://127.0.0.1:9100` during collection.
 
-Retention maintenance can run independently of scraping with
-`docker compose --profile maintenance run --build --rm maintenance`.
+Compose runs migrations before starting the scraper. Dashboard-only hosts apply schema changes with `docker compose --profile migrate run --build --rm migrator`. Run archive retention with `docker compose --profile maintenance run --build --rm maintenance`.
 
-The database init directory is the lean schema baseline, split into
-dependency-ordered SQL files. The application migrator records their checksums
-and adopts an already initialized lean schema without replaying the DDL. See
-[`db/README.md`](db/README.md) for the active database layout and
-[`docs/OPERATIONS.md`](docs/OPERATIONS.md) for restore and maintenance steps.
-
-Open the dashboards at `http://127.0.0.1:3000/`; sign in with the Superset account. The root URL opens Market Overview, with Home, Exits, and Health in the viewer navigation. Production uses `Cloudflare → Cloudflare Tunnel → cloudflared → 127.0.0.1:3000 → Superset`. The container continues listening internally on 8088. Scraper status is at `http://127.0.0.1:9100` when scraping runs.
-
-The [React viewer](dashboard-viewer/README.md) renders all 71 source panels and keeps existing charts visible during updates. Superset supplies authentication, permissions and the read-only reporting API. Metadata lives in `superset_meta`; analytical queries use `olx_reporting`.
-
-Superset supplies the dashboard service. Definitions in `superset/dashboards/` supply the SQL/panel contract. The [instance deployment runbook](docs/DEPLOYMENT.md) covers port 3000, viewer access, backups and HTTPS verification.
+Collection can run on a separate machine using the [sync workflow](docs/OPERATIONS.md#home-machine-scrape-and-sync). See the [deployment runbook](docs/DEPLOYMENT.md) for production HTTPS and access setup.
 
 ## Configure searches
 
-Add OLX browser URLs to `config/searches.json`. A URL must contain an API-recognized filter; the scraper rejects URLs whose parameters would produce an unfiltered API request. `name` and `category` are optional; category is a free-form dashboard label.
+Add filtered OLX browser URLs to `config/searches.json`. The collector rejects URLs without an API-recognized filter. `name` and `category` are optional; category is a dashboard label.
 
 ```json
 {
@@ -66,18 +50,13 @@ npm run lint
 npm run format:check
 ```
 
-Run these commands from the repository root. npm workspaces link the collector,
-database, and shared configuration packages using one lockfile. The React viewer
-keeps its own package and build dependencies in `dashboard-viewer/`.
+Run from the repository root. The collector, database and configuration packages share an npm lockfile; the viewer has its own dependencies in `dashboard-viewer/`.
 
 `npm run fixtures` refreshes recorded API fixtures and
 `node collector/scripts/check-api.js` is a live API probe. The integration suite
 uses a disposable PostgreSQL container.
 
-With PowerShell 7 available, `npm test` also exercises the home sync workflow
-with Docker and SSH mocked, including build, scrape, dump and restore failures.
-CI requires PowerShell 7 so these checks cannot silently skip; local runs without
-PowerShell skip them.
+Sync tests mock Docker and SSH and require PowerShell 7. CI requires it; local runs skip those tests when it is unavailable.
 
 ## Repository ownership
 
@@ -85,17 +64,13 @@ PowerShell skip them.
 | --- | --- |
 | `collector/` | OLX API requests, payload mapping, normalization, pagination, enrichment and scheduling |
 | `db/` | PostgreSQL client, persistence, migrations, archive maintenance, schema, backups and database tests |
-| `config/` | Shared environment validation and saved-search configuration |
+| `config/` | Shared environment validators and search configuration examples |
 | `superset/` | Dashboard backend, SQL definitions, provisioning and dashboard tests |
 | `dashboard-viewer/` | React UI, charts, maps and viewer browser checks |
 | `scripts/` | Deployment, synchronization, documentation checks and repository tooling |
 | `tests/contracts/` | Deployment, backup and security checks spanning components |
 
-The Compose service and profile remain `scraper` and `scrape`; its source code
-lives in `collector/`. The collector imports `@pik-market-watch/db` for storage.
-Database jobs use their own configuration and can run independently of OLX
-search settings. See [collector details](collector/README.md) and
-[database details](db/README.md).
+See the [collector](collector/README.md), [database](db/README.md) and [Superset](superset/README.md) guides for package commands.
 
 ## Documentation
 

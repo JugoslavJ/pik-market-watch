@@ -1,7 +1,5 @@
 "use strict";
 
-// Read-only replay of one retained raw_api_responses row. This is intentionally
-// an offline diagnostic: it never writes listings or evidence.
 const { Db, config: dbConfig } = require("@pik-market-watch/db");
 const { mapSearchItems, mapListingDetail } = require("./payload-mapper");
 

@@ -4,12 +4,7 @@ import re
 
 
 def simple_projection(body, datasource):
-    """Only allow cached projections that cannot embed another SQL query.
-
-    An identical previously validated request can skip rebuilding its date and
-    post-processing objects. Datasource/dashboard access is checked again.
-    Ad-hoc SQL expressions and guest requests keep the full validation path.
-    """
+    """Allow cached projections without ad-hoc SQL; access is rechecked separately."""
     if body.get("result_format") != "json" or body.get("result_type") != "full":
         return False
     names = {column.column_name for column in datasource.columns}

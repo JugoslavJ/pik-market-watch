@@ -1,6 +1,4 @@
 "use strict";
-// Unit tests for util.healthStatus — the /health endpoint's HTTP-status rule.
-// Pure function: state object + threshold in, status code out.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { healthStatus, healthPayload } = require("../../src/util");

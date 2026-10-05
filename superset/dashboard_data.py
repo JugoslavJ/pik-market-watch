@@ -1,9 +1,4 @@
-"""Batch native chart queries and cache their serialized, authorized responses.
-
-Superset's dataframe cache still renders/parses the virtual SQL on a cache hit.
-This cache sits after the same schema, query, datasource, dashboard and RLS
-checks as the standard chart endpoint. It never caches operational datasets.
-"""
+"""Cache serialized chart responses after authorization; exclude operational data."""
 
 import hashlib
 import logging
@@ -105,9 +100,7 @@ class DashboardDataRestApi(ChartDataRestApi):
             return self.response_400(message="Expected 1..100 chart query contexts")
         schema = ChartDataQueryContextSchema()
         schema.query_context_factory = BatchQueryContextFactory(bodies)
-        # Virtual datasets inherit rules from their underlying physical tables.
-        # Include every rule and its associations so editing/deleting a rule or
-        # changing a role/table assignment invalidates serialized responses too.
+        # Include inherited rules and associations so policy edits invalidate the cache.
         from superset import db
         from superset.connectors.sqla.models import RowLevelSecurityFilter
         rules = db.session.query(RowLevelSecurityFilter).options(
@@ -147,14 +140,12 @@ class DashboardDataRestApi(ChartDataRestApi):
                         raise ValidationError("Only full JSON chart results can be batched")
                     command = ChartDataCommand(context)
                     command.validate()
-                    # Retain ORM references through the batch so repeated sources use
-                    # SQLAlchemy's identity map rather than being loaded again.
+                    # Retain ORM references to reuse the identity map across the batch.
                     contexts.append(context)
                     timeout = context.get_cache_timeout()
                     timeout = 600 if timeout is None else timeout
                     key = None
-                    # Guest row predicates come from the embedding token and
-                    # can differ between otherwise identical guest principals.
+                    # Guest tokens can have different row predicates for the same principal.
                     if timeout > 0 and not security_manager.is_guest_user():
                         key = cache_key(body, context, rls_revision)
                     cached = response_cache.get(key) if key and not context.force else None

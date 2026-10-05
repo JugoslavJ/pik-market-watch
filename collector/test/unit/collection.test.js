@@ -1,18 +1,11 @@
 "use strict";
-// Unit tests for collection.js — pagination termination rules, cross/same-page
-// dedupe, rate-budget latching, error-path bookkeeping and the enrichment
-// need-detail/merge logic. Everything runs OFFLINE through collectSearch()'s
-// dependency seam (fetchSearchPage / fetchDetailsInBatches / pace fakes);
-// the real payload mapper and stats math stay in the loop on purpose.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { collectSearch } = require("../../src/collection");
 const { pagesInWave } = require("../../src/search/outcomes");
 const { RATE_RESERVE, RateBudget } = require("../../src/api");
 
-// ── fixtures ─────────────────────────────────────────────────────────────────
-
-/** Raw search-API card shaped so the REAL mapSearchItem accepts it. */
+// fixtures
 const rawCard = (id) => ({
   id,
   title: `Stan ${id}`,
@@ -51,7 +44,6 @@ const baseCfg = (overrides) => ({
   ...overrides,
 });
 
-/** Recording db double — enough surface for collectSearch, nothing more. */
 function fakeDb(queueImpl) {
   const rec = {
     startRun: 0,
@@ -84,9 +76,7 @@ function fakeDb(queueImpl) {
       rec.savedCards = payload.cards;
       rec.upserts.push({ ...payload.search, ...payload.run });
       rec.refreshed.push(payload.cards.map((card) => card.articleId));
-      // The real commitSearchIngestion finalizes a successful run in the same
-      // transaction as the authoritative ingestion. Mirror that contract so
-      // the double-finalization regression is visible in these unit tests.
+      // Mirror atomic run finalization so the tests detect a second finish.
       rec.finishedRuns.push({
         status: payload.run.status,
         pages: payload.run.pages,
@@ -114,7 +104,6 @@ function fakeDb(queueImpl) {
   };
 }
 
-/** Page-fetch fake: map of pageNo → response; records visit order; can throw. */
 function pageFetcher(pages) {
   const fetched = [];
   const failOn = pages.__failOn || [];
@@ -130,7 +119,6 @@ function pageFetcher(pages) {
   return fn;
 }
 
-/** Pacing fake: records requested delays instead of waiting. */
 function paceRecorder() {
   const delays = [];
   const fn = async (ms) => {
@@ -143,8 +131,7 @@ function paceRecorder() {
 const run = (db, cfg, deps) =>
   collectSearch(db, SEARCH, baseCfg(cfg), () => {}, deps);
 
-// ── pagination ───────────────────────────────────────────────────────────────
-
+// pagination
 test("single-page search: one fetch, ok run, correct stats and refresh", async () => {
   const db = fakeDb();
   const fetchPage = pageFetcher({
@@ -255,8 +242,7 @@ test("a failing page inside a wave marks the run incomplete", async () => {
   assert.equal(db.rec.finishedRuns[0].isComplete, false);
 });
 
-// ── rate budget ──────────────────────────────────────────────────────────────
-
+// rate budget
 test("low rate budget pauses once (65 s), latch prevents repeat backoffs", async () => {
   const low = RATE_RESERVE - 1;
   const db = fakeDb();
@@ -305,8 +291,7 @@ test("a supplied rate budget can be shared across searches", async () => {
   assert.deepEqual(waits, [100]);
 });
 
-// ── guards & error paths ─────────────────────────────────────────────────────
-
+// guards & error paths
 test("filterless URL fails LOUDLY before touching the database", async () => {
   const db = fakeDb();
   await assert.rejects(
@@ -366,8 +351,7 @@ test("malformed empty page 1 retries and never commits closures", async () => {
   );
 });
 
-// ── enrichment ───────────────────────────────────────────────────────────────
-
+// enrichment
 test("enrichment: detail calls only where search cards cannot answer", async () => {
   // pending facts vs what each card carries:
   //   10 neverDetailed            -> needs detail
@@ -586,8 +570,7 @@ test("registration failure finishes the started run once", async () => {
   );
 });
 
-// ── pagesInWave: pure pagination boundary rules ──────────────────────────────
-
+// pagesInWave: pure pagination boundary rules
 test("pagesInWave: full wave strides by concurrency from page 2", () => {
   assert.deepEqual(
     pagesInWave(2, Infinity, baseCfg({ concurrency: 3 })),

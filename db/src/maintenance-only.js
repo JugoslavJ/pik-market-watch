@@ -1,6 +1,4 @@
 "use strict";
-
-// Run lean raw-archive retention without scraping.
 const config = require("./config");
 const Db = require("./client");
 const applyMigrations = require("./migrate");

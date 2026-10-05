@@ -1,8 +1,5 @@
 "use strict";
-// Configuration: environment variables + the searches list.
-// Precedence for searches: SEARCH_URLS env → /config/searches.json.
-// (No in-image fallback on purpose: with neither source present the scraper
-// idles loudly instead of silently scraping whatever the example file holds.)
+// SEARCH_URLS overrides SEARCHES_FILE; missing configuration leaves the scraper idle.
 
 const fs = require("fs");
 
@@ -10,14 +7,12 @@ const SEARCHES_FILE = process.env.SEARCHES_FILE || "/config/searches.json";
 
 const { integer } = require("@pik-market-watch/config");
 
-// Same URL minus page/hash/scrape params → stable primary key per search.
 function normalizeSearchKey(href) {
   const u = new URL(href);
   u.searchParams.delete("page");
   u.searchParams.delete("olx_scrape");
   u.hash = "";
-  // URL query order is not part of the search's meaning. Keep the API's
-  // established filter order for readable keys, then sort all other names.
+  // Canonicalize query order while keeping common API filters first.
   const preferred = new Map([
     ["category_id", 0],
     ["canton", 1],
@@ -38,14 +33,12 @@ function normalizeSearchKey(href) {
 }
 
 function loadSearches() {
-  // 1) SEARCH_URLS="https://...,https://..." env override
   const envUrls = (process.env.SEARCH_URLS || "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
   if (envUrls.length) return envUrls.map((url) => ({ url }));
 
-  // 2) mounted JSON file
   let raw;
   try {
     raw = fs.readFileSync(SEARCHES_FILE, "utf8");
@@ -91,18 +84,18 @@ function loadSearches() {
   }
 }
 
-// Identical URLs normalize onto one search_key; keep the first occurrence so a
-// copy-pasted duplicate doesn't scrape the same search twice per cycle
-// (double rate-limit spend for zero new data, doubled run stats).
+// Keep the first occurrence of each normalized search.
 function dedupeBySearchKey(searches) {
   const seen = new Set();
-  return searches.filter(
-    ({ searchKey }) => !seen.has(searchKey) && seen.add(searchKey),
-  );
+  return searches.filter(({ searchKey }) => {
+    if (seen.has(searchKey)) return false;
+    seen.add(searchKey);
+    return true;
+  });
 }
 
 module.exports = {
-  normalizeSearchKey, // stable per-search primary key
+  normalizeSearchKey,
   intervalMinutes: integer(
     "SCRAPE_INTERVAL_MINUTES",
     process.env.SCRAPE_INTERVAL_MINUTES,
@@ -110,13 +103,13 @@ module.exports = {
     { min: 1 },
   ),
   runOnce: process.env.RUN_ONCE === "1" || process.argv.includes("--once"),
-  maxPages: integer("MAX_PAGES", process.env.MAX_PAGES, 30, { min: 1 }), // pagination cap (pages of `perPage`)
-  concurrency: integer("CONCURRENCY", process.env.CONCURRENCY, 3, { min: 1 }), // search pages fetched in parallel
-  pageDelayMs: integer("PAGE_DELAY_MS", process.env.PAGE_DELAY_MS, 1500), // politeness gap between waves
-  perPage: integer("API_PER_PAGE", process.env.API_PER_PAGE, 40, { min: 1 }), // olx.ba UI default
+  maxPages: integer("MAX_PAGES", process.env.MAX_PAGES, 30, { min: 1 }),
+  concurrency: integer("CONCURRENCY", process.env.CONCURRENCY, 3, { min: 1 }),
+  pageDelayMs: integer("PAGE_DELAY_MS", process.env.PAGE_DELAY_MS, 1500),
+  perPage: integer("API_PER_PAGE", process.env.API_PER_PAGE, 40, { min: 1 }),
   apiTimeoutMs: integer("API_TIMEOUT_MS", process.env.API_TIMEOUT_MS, 20000, {
     min: 1,
-  }), // per-request HTTP timeout
+  }),
   healthPort: integer("HEALTH_PORT", process.env.HEALTH_PORT, 9100, {
     min: 1,
     max: 65535,
@@ -126,7 +119,7 @@ module.exports = {
     "MAX_DETAIL_FETCHES",
     process.env.MAX_DETAIL_FETCHES,
     25,
-  ), // /api/listings detail calls per run
+  ),
   detailRefreshDays: integer(
     "DETAIL_REFRESH_DAYS",
     process.env.DETAIL_REFRESH_DAYS,
@@ -140,8 +133,8 @@ module.exports = {
     {
       min: 1,
     },
-  ), // parallel detail calls
-  detailDelayMs: integer("DETAIL_DELAY_MS", process.env.DETAIL_DELAY_MS, 1200), // politeness gap between batches
+  ),
+  detailDelayMs: integer("DETAIL_DELAY_MS", process.env.DETAIL_DELAY_MS, 1200),
   rateLimitCooldownMs: integer(
     "RATE_LIMIT_COOLDOWN_MS",
     process.env.RATE_LIMIT_COOLDOWN_MS,
@@ -152,19 +145,19 @@ module.exports = {
     "SCRAPE_MIN_GAP_MINUTES",
     process.env.SCRAPE_MIN_GAP_MINUTES,
     45,
-  ), // skip boot cycle if a run finished this recently
+  ),
   abandonedRunAfterMinutes: integer(
     "ABANDONED_RUN_AFTER_MINUTES",
     process.env.ABANDONED_RUN_AFTER_MINUTES,
     180,
     { min: 1 },
-  ), // stale running rows recovered at startup
+  ),
   healthFailureThreshold: integer(
     "HEALTH_FAILURE_THRESHOLD",
     process.env.HEALTH_FAILURE_THRESHOLD,
     3,
     { min: 1 },
-  ), // fully-failed cycles in a row before /health answers 503
+  ),
 
   searches: dedupeBySearchKey(
     loadSearches().map((s) => {
@@ -181,7 +174,7 @@ module.exports = {
       return {
         url: s.url,
         name: name || s.url,
-        category: (s.category || "").trim() || null, // free-form label used by dashboards
+        category: (s.category || "").trim() || null,
         searchKey: normalizeSearchKey(s.url),
       };
     }),

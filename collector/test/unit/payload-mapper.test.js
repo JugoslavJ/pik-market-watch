@@ -1,8 +1,4 @@
 "use strict";
-// Unit tests for payload-mapper.js — pure mapping of olx.ba JSON payloads.
-// Fixture-backed where possible (test/fixtures/, refreshed via `npm run
-// fixtures`) so payload drift breaks CI instead of production; synthetic
-// cases cover the nasty edges seen in the wild.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -20,8 +16,7 @@ const load = (name) =>
 
 const searchPage = load("api-search-page1.json");
 
-// ── recorded payloads ────────────────────────────────────────────────────────
-
+// recorded payloads
 test("mapSearchPage: recorded Stanovi-BL page keeps meta + cards", () => {
   const { cards, meta } = mapSearchPage(searchPage);
   assert.equal(meta.total, 989);
@@ -33,8 +28,7 @@ test("mapSearchPage: recorded Stanovi-BL page keeps meta + cards", () => {
   }
 });
 
-// ── synthetic edges (shapes verified against live payloads) ──────────────────
-
+// synthetic edges (shapes verified against live payloads)
 test("search item: priced sale maps price/m²/rooms/pin/seller", () => {
   const card = mapSearchItem({
     id: 78615352,

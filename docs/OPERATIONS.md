@@ -1,47 +1,36 @@
 # Operations
 
-This runbook covers the Compose stack, an optional separate scraping machine, and the tracked deployment workflow. It does not assume that an upstream OLX endpoint is reachable from every network.
+Run the Compose stack, collect on a separate machine, and recover from failed collection, sync or deployment.
 
 ## Setup and configuration
 
-Create local configuration and searches before starting the stack:
+Follow [local setup](../README.md#start-locally) to create configuration, the PostgreSQL volume and services.
 
-```bash
-cp .env.example .env
-cp config/searches.example.json config/searches.json
-docker volume create olx-price-ext_pgdata_pg18
-docker compose up -d --build
-docker compose run --rm superset-seed
-docker compose run --rm superset-access
-```
+Set `POSTGRES_PASSWORD`, the four role passwords, `SUPERSET_META_PASSWORD`, `SUPERSET_ADMIN_PASSWORD` and `SUPERSET_SECRET_KEY` in `.env`. Preflight rejects blank and `change-me*` values. Use distinct credentials and URL-safe database passwords, for example `openssl rand -hex 24`.
 
-The volume command uses the default `POSTGRES_VOLUME_NAME`; use your configured name if different.
-
-`.env.example` intentionally leaves passwords and secret keys blank. Set `POSTGRES_PASSWORD`, the four `POSTGRES_*_PASSWORD` role credentials, `SUPERSET_META_PASSWORD`, `SUPERSET_ADMIN_PASSWORD`, and `SUPERSET_SECRET_KEY` before starting or deploying. The deployment preflight rejects blank and placeholder `change-me*` values. Use distinct credentials and URL-safe database passwords such as `openssl rand -hex 24`.
-
-| Setting                                                  |                                    Default | Consumer                                                                                                                                              |
-| -------------------------------------------------------- | -----------------------------------------: | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`      |                     `olx`, required, `olx` | PostgreSQL bootstrap database.                                                                                                                        |
-| `POSTGRES_MIGRATOR_USER`, `POSTGRES_MIGRATOR_PASSWORD`   |                   `olx_migrator`, required | Migration and restore owner role; not used by normal runtime services.                                                                                |
-| `POSTGRES_APP_USER`, `POSTGRES_APP_PASSWORD`             |                        `olx_app`, required | Scraper and maintenance runtime writer; owns no database objects.                                                                                     |
-| `POSTGRES_REPORTING_USER`, `POSTGRES_REPORTING_PASSWORD` |                  `olx_reporting`, required | Read-only role for the viewer and Superset analytical queries over lean data.                                                                                                   |
-| `POSTGRES_BACKUP_USER`, `POSTGRES_BACKUP_PASSWORD`       |                     `olx_backup`, required | Dedicated broad-read role used only by `pg_dump`; it is not a dashboard credential.                                                                     |
-| `BACKUP_UID`, `BACKUP_GID`                               |                          `1000`, `989` | Linux UID/GID used by `db-backup`; set these to the owner IDs of the host `backups/` directory.                                                         |
-| `SUPERSET_META_USER`, `SUPERSET_META_PASSWORD`, `SUPERSET_META_DB` | `superset_meta`, required, `superset_meta` | Owner login and isolated metadata database in the existing PostgreSQL cluster; the login has no access to `olx`.                                       |
-| `SUPERSET_ADMIN_PASSWORD`, `SUPERSET_SECRET_KEY`         |                                  required | Superset administrator and stable encryption key for saved database credentials.                                                                       |
-| `SUPERSET_BIND`                                           |                            `127.0.0.1` | Host interface for dashboard port 3000; production must keep it on loopback.                                                                            |
-| `SUPERSET_DOMAIN`, `SUPERSET_ROOT_URL`                    | `localhost`, `http://localhost:3000/` | Dashboard hostname and public URL; production preflight requires matching HTTPS hostname values.                                    |
-| `SUPERSET_COOKIE_SECURE`                                 |                                  `false` | Local HTTP default; production requires `true` for the Cloudflare HTTPS origin.                                                                         |
-| `DB_INIT_DIR`                                            |                           `./db/init-lean` | First-boot lean database SQL and role bootstrap.                                                                                                      |
-| `HEALTH_BIND`                                            | `127.0.0.1` bare-metal / `0.0.0.0` Compose | Health listener bind address. Compose needs all-interface binding inside the container; the published host port remains loopback-only.                |
-| `SCRAPE_INTERVAL_MINUTES`                                |                                      `720` | Scheduled scraper cadence when the `scrape` profile is enabled.                                                                                       |
-| `DETAIL_REFRESH_DAYS`                                    |                                        `7` | Age at which successful detail evidence becomes eligible for refresh.                                                                                 |
-| `RAW_RESPONSE_RETENTION_COUNT`                           |                                        `3` | Newest raw search/detail responses retained per request kind and URL. Maintenance removes older rows.                                                 |
-| `ABANDONED_RUN_AFTER_MINUTES`                            |                                      `180` | Age after which startup marks an unfinished `running` scrape as abandoned.                                                                            |
-| `RATE_LIMIT_COOLDOWN_MS`                                 |                                    `65000` | Fallback pause when the upstream rate-limit window is low and no reset is advertised.                                                                 |
-| `BACKUP_RETENTION_DAYS`                                  |                                       `14` | Days of `olx`, `superset_meta`, and Superset home archives retained by `db-backup`; `0` disables pruning.                                                                  |
-| `ALERT_WEBHOOK_URL`                                      |                                      unset | Optional destination for Superset checker alert and recovery transitions; keep the URL secret in the instance `.env`.                                   |
-| `SCRAPE_STALE_AFTER_HOURS`                               |                                       `26` | Per-search freshness alert and public freshness label; choose a value that covers the actual scrape cadence.                                          |
+| Setting | Default | Consumer |
+| --- | ---: | --- |
+| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | `olx`, required, `olx` | Bootstrap database credentials. |
+| `POSTGRES_MIGRATOR_USER`, `POSTGRES_MIGRATOR_PASSWORD` | `olx_migrator`, required | Owner role for migrations and restores. |
+| `POSTGRES_APP_USER`, `POSTGRES_APP_PASSWORD` | `olx_app`, required | Runtime writer for collection and maintenance; owns no objects. |
+| `POSTGRES_REPORTING_USER`, `POSTGRES_REPORTING_PASSWORD` | `olx_reporting`, required | Read-only lean access for Superset and the viewer. |
+| `POSTGRES_BACKUP_USER`, `POSTGRES_BACKUP_PASSWORD` | `olx_backup`, required | Broad read access for pg_dump only. |
+| `BACKUP_UID`, `BACKUP_GID` | `1000`, `989` | Host backups/ owner IDs used by db-backup. |
+| `SUPERSET_META_USER`, `SUPERSET_META_PASSWORD`, `SUPERSET_META_DB` | `superset_meta`, required, `superset_meta` | Isolated metadata database and owner; no olx access. |
+| `SUPERSET_ADMIN_PASSWORD`, `SUPERSET_SECRET_KEY` | required | Administrator password and stable credential-encryption key. |
+| `SUPERSET_BIND` | `127.0.0.1` | Dashboard interface; keep loopback in production. |
+| `SUPERSET_DOMAIN`, `SUPERSET_ROOT_URL` | `localhost`, `http://localhost:3000/` | Public hostname and URL; production requires matching HTTPS values. |
+| `SUPERSET_COOKIE_SECURE` | `false` | Require true for production HTTPS. |
+| `DB_INIT_DIR` | `./db/init-lean` | First-boot schema and roles. |
+| `HEALTH_BIND` | `127.0.0.1` bare-metal / `0.0.0.0` Compose | Container listener binds all interfaces; host port stays on loopback. |
+| `SCRAPE_INTERVAL_MINUTES` | `720` | Minutes between scheduled collection cycles. |
+| `DETAIL_REFRESH_DAYS` | `7` | Days before successful detail evidence is eligible for refresh. |
+| `RAW_RESPONSE_RETENTION_COUNT` | `3` | Newest responses retained per request kind and URL. |
+| `ABANDONED_RUN_AFTER_MINUTES` | `180` | Minutes before unfinished runs are marked abandoned at startup. |
+| `RATE_LIMIT_COOLDOWN_MS` | `65000` | Fallback rate-limit pause when no reset is advertised. |
+| `BACKUP_RETENTION_DAYS` | `14` | Days to retain database/home backups; 0 disables pruning. |
+| `ALERT_WEBHOOK_URL` | unset | Optional secret webhook for alert/recovery transitions. |
+| `SCRAPE_STALE_AFTER_HOURS` | `26` | Freshness threshold in hours; allow for the scrape cadence. |
 
 For an existing volume, set the role and Superset metadata credentials in
 `.env`, recreate the database service, and run the idempotent role bootstrap:
@@ -51,31 +40,15 @@ docker compose up -d db
 docker compose exec db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
 ```
 
-This transfers object ownership to `olx_migrator`, refreshes the
-writer/reporting grants, and creates or repairs the separately owned
-`superset_meta` database. Do this before starting dashboard services or the
-scraper with the new credentials.
+This repairs ownership, runtime grants and `superset_meta`. Run it before starting clients with new credentials.
 
 Search configuration is read from `config/searches.json`; `SEARCH_URLS` is an environment override for a bare scraper process or an explicit `docker compose run -e SEARCH_URLS=...` invocation. The scraper also accepts `SCRAPE_USER_AGENT`, `HEALTH_PORT`, and pacing/health variables (`MAX_PAGES`, `CONCURRENCY`, `PAGE_DELAY_MS`, `API_PER_PAGE`, `API_TIMEOUT_MS`, `MAX_DETAIL_FETCHES`, `DETAIL_CONCURRENCY`, `DETAIL_DELAY_MS`, `SCRAPE_MIN_GAP_MINUTES`, `ABANDONED_RUN_AFTER_MINUTES`, and `HEALTH_FAILURE_THRESHOLD`). Compose injects `ABANDONED_RUN_AFTER_MINUTES`, `MAX_DETAIL_FETCHES`, `DETAIL_CONCURRENCY`, and `DETAIL_DELAY_MS`; pass the other tuning variables explicitly with `docker compose run -e NAME=value` or set them in a supported deployment change.
 
-The React dashboards use `http://127.0.0.1:3000/` locally. Production uses Cloudflare HTTPS → Cloudflare Tunnel → cloudflared → `http://127.0.0.1:3000` → Superset. There is no public OCI 80/443
-ingress requirement; port 3000 stays on loopback. Superset uses port 8088 only inside the container/network.
-
-Set these values in the instance's ignored `.env`, using the existing public dashboard hostname:
-
-```dotenv
-COMPOSE_PROFILES=superset
-SUPERSET_BIND=127.0.0.1
-SUPERSET_DOMAIN=dashboards.example.com
-SUPERSET_ROOT_URL=https://dashboards.example.com/
-SUPERSET_COOKIE_SECURE=true
-```
-
-Keep the existing `SUPERSET_SECRET_KEY` and reporting/metadata credentials. Before manual Compose commands, source `scripts/lib/superset-stack.sh` and call `configure_superset_stack`.
+Use the [production settings](DEPLOYMENT.md#prepare-the-instance) for the public hostname. Keep `SUPERSET_SECRET_KEY` stable. Before manual instance commands, source `scripts/lib/superset-stack.sh` and call `configure_superset_stack`.
 
 ## Cloudflare Tunnel
 
-An existing tunnel origin of `http://127.0.0.1:3000` stays unchanged. A tunnel currently using 8088 must be changed to 3000 when this deployment lands. The hostname opens the viewer at `/`; login returns to Market Overview. The repository does not install or configure the tunnel; keep its token/credentials only in the host's protected cloudflared configuration.
+Point the host-managed tunnel at `http://127.0.0.1:3000`. Keep tunnel credentials in protected host configuration. No public OCI 80/443 ingress is required; the dashboard listener stays on loopback.
 
 ```bash
 curl -f http://127.0.0.1:3000/health
@@ -88,18 +61,11 @@ Verify HTTPS sign-in, Secure cookies and the four viewer dashboards. Optional Cl
 
 ## Dashboard access
 
-The viewer requires the Superset login. Anonymous pages redirect to login and anonymous data requests return 401 JSON. Assign `OLX Viewer` to approved users; keep author/admin access restricted. Publication grants authenticated dashboard access, never anonymous access. An expired session keeps the current charts visible and offers a sign-in link.
+Assign `OLX Viewer` to approved accounts and restrict author/admin roles. Anonymous pages redirect to login; data requests return 401 JSON. Publication requires authentication. Expired sessions retain charts and offer sign-in.
 
 ## Normal operation
 
-The React viewer presents all 71 source panels across Home, Overview, Exits and Health. Source datasets and permissions are maintained by the Superset seed. Maps use CARTO vector tiles without a Mapbox key. Production deploy compares viewer values against the source SQL and benchmarks the authenticated dashboard API. Browser opening/filter timings are measured separately.
-Production deploy runs a lightweight
-SQL alert-checker service every 15 minutes; it keeps hold/firing state in the
-Superset home volume. It uses `olx_reporting`, preserves the source alert thresholds
-and hold times, and posts only firing/recovery transitions when
-`ALERT_WEBHOOK_URL` is configured. Inspect `docker compose logs -f
-superset-alert-check` for results. The Health dashboard exposes the same live
-predicates and their supporting counts without chart cache delay.
+The alert checker runs every 15 minutes as `olx_reporting`, retaining hold/firing state in Superset home. With `ALERT_WEBHOOK_URL` set, it posts firing and recovery transitions. Inspect `docker compose logs -f superset-alert-check`; Health shows the same live predicates and counts.
 
 ```bash
 docker compose ps
@@ -114,14 +80,9 @@ The maintenance profile waits for the migrator job. For an explicit run after
 you have already run the migrator successfully, use
 `docker compose --profile maintenance run --build --rm --no-deps maintenance`.
 
-The first command shows service health. The `scraper` service exists only when the `scrape` profile is enabled; use `COMPOSE_PROFILES=superset,scrape` to `.env` to schedule it locally. A one-off `compose run` is safe for manual collection because it does not inherit the service restart policy.
+Set `COMPOSE_PROFILES=superset,scrape` in `.env` for scheduled collection. A one-off `compose run` does not inherit the restart policy.
 
-The profile-only `migrator` job verifies the lean baseline by filename and
-SHA-256 checksum. The `scrape` profile waits for that job before starting the
-scraper. An edited applied file fails the migration job. Bare-metal runs keep
-a startup migration fallback; Compose sets `MIGRATIONS_ON_STARTUP=0` because
-the deployment gate already ran. Run the job with the configured migration
-role so application objects keep the intended ownership.
+The migrator verifies filenames and checksums; edited applied files fail. Use the migration role. Compose disables startup migrations (`MIGRATIONS_ON_STARTUP=0`); standalone collection retains that fallback. See [schema rules](../db/README.md).
 
 Detail backfill is separate from normal collection:
 
@@ -138,14 +99,9 @@ URL; run maintenance hourly on the host. To inspect a retained response offline,
 `docker compose --profile scrape run --rm scraper node
 src/replay-response.js --id=<raw-response-id>`.
 
-The maintenance result reports the raw archive purge. Successful raw records
-retain the bounded source payload and request metadata; diagnostic records
-retain bounded failure metadata without a successful body.
+Successful archives retain bounded payloads and request metadata; diagnostic archives retain failure metadata.
 
-The lean database retains current listings, price history, lifecycle events,
-scrape runs, and raw response/page archives. Dashboards derive inventory summaries
-from these facts. Maintenance applies the raw response retention policy;
-listing and price history are not age-pruned. After a large restore, run
+Listing and price history are not age-pruned. After a large restore, run
 `ANALYZE` on `lean.listings` and `lean.price_history`. Normal autovacuum handles
 incremental updates; investigate dead tuples and index growth with
 `pg_stat_user_tables` and `pg_total_relation_size`. Use `VACUUM (ANALYZE)`, never
@@ -154,7 +110,12 @@ and `public` (PostGIS and `schema_migrations`).
 
 ## Backup and restore
 
-The `db-backup` service makes separate custom-format dumps for `olx` and `superset_meta`, plus compressed Superset home archives in `./backups/`. It verifies each archive and checks hourly that required database and volume archives are fresh. `docker compose run --rm --no-deps db-backup --once` forces a verified snapshot; `docker compose exec -T db-backup sh /usr/local/bin/backup.sh --check` checks freshness and integrity. Shared locks prevent concurrent writes, and backups need only the Superset home volume. Each archive is written with owner-only permissions to a `.partial` name, verified, and atomically renamed to its final name. Interrupted or failed writes are removed; a previously verified same-day archive remains usable. Keep an encrypted copy of this directory outside the host and in a separate failure domain.
+`db-backup` creates separate `olx` and `superset_meta` dumps plus a Superset home archive in `./backups/`. Writes are locked, verified and atomically renamed from private `.partial` files; failed writes leave earlier verified backups usable. Freshness is checked hourly. Keep an encrypted copy off-host.
+
+```bash
+docker compose run --rm --no-deps db-backup --once
+docker compose exec -T db-backup sh /usr/local/bin/backup.sh --check
+```
 
 To make an additional database dump:
 
@@ -171,19 +132,9 @@ docker compose exec -T db pg_restore -l /backups/manual.dump
 docker compose exec -T db pg_restore -l /backups/superset_meta-YYYYMMDD.dump
 ```
 
-A restore overwrites database objects and should be performed during a
-maintenance window. Use `db/remote-restore.sh` for synchronized recovery: it
-validates ownership, resets the target schemas, filters schema-level TOC
-entries, restores transactionally, and retries the preserved snapshot after a
-failure. Do not run `pg_restore --clean` directly; extension and application
-objects can have cross-schema dependencies. After a restore, repair role
-privileges and restart clients:
+A restore overwrites database objects; use a maintenance window. `db/remote-restore.sh` validates ownership, resets schemas, restores transactionally and attempts rollback on failure. Avoid direct `pg_restore --clean` because of cross-schema extension dependencies.
 
-The database service sets `max_locks_per_transaction=512` because the
-transactional schema reset traverses the application schema dependency graph.
-Keep that setting when deploying the restore endpoint; reverting to the
-PostgreSQL default can fail with `out of shared memory` before the archive is
-restored.
+Keep `max_locks_per_transaction=512`; schema reset can otherwise exhaust lock memory. After restore, repair grants and restart clients:
 
 ```bash
 docker compose stop scraper
@@ -194,12 +145,7 @@ docker compose start scraper
 
 Use a disposable database to rehearse both database dumps before production recovery. Restore Superset home only with Superset stopped and a preserved copy of the current volume. Keep `SUPERSET_SECRET_KEY` stable to recover encrypted connection credentials.
 
-The backup container runs as the configured owner of the host `backups/`
-directory and has only `DAC_READ_SEARCH` added after dropping all other
-capabilities, so it can read private application-owned state files. Application
-volume mounts and the container filesystem are read-only; only the backup
-destination and temporary workspace are writable. State-file permissions remain
-unchanged.
+The backup container runs as the host backup-directory owner. `DAC_READ_SEARCH` permits reading private Superset state through read-only mounts; only backups and temporary space are writable.
 
 For post-deploy checks, run `npm run test:contracts` from the repository root
 for `tests/contracts/`, and `npm run test:integration` for the database tests
@@ -215,9 +161,11 @@ pwsh -File scripts\sync-to-instance.ps1
 pwsh -File scripts\register-sync-task.ps1
 ```
 
-The restore endpoint receives and validates the archive, audits ownership, saves a rollback snapshot, pauses a running scraper, restores only the `olx` application schemas in a transaction, restores the prior snapshot on failure when available, reasserts role grants, and resumes the writer. It leaves `superset_meta` untouched, then recreates Superset to clear in-process caches and reconnect database sessions. Routine sync checks three existing charts with forced fresh queries covering listings, inventory history, and scraper activity before reporting success; it skips dashboard provisioning and viewer permission refresh because these live in the unchanged metadata database. If a dashboard refresh or query check fails, the restored `olx` data remains in place; repair the dashboard service without repeating the scrape/restore. Input is capped at `OLX_SYNC_MAX_BYTES` (default 512 MiB) and the temporary incoming file is removed on every exit path. Its `RESTORE_OK` or `RESTORE_ERROR` output is the protocol consumed by the PowerShell script. A holder of the restore SSH key has database-administrator-equivalent capability over application data, even though the key is restricted to a forced command and has no interactive shell; protect and rotate it accordingly.
+The endpoint validates the archive, saves a rollback snapshot, pauses the writer, replaces `olx` transactionally, repairs grants and resumes collection. It attempts rollback on restore failure and leaves `superset_meta` untouched. Superset is recreated to clear caches and reconnect, then three fresh chart queries check listings, history and scraper activity.
 
-Dashboard definitions and permissions are provisioned during deployment. To also provision them during every sync, set `OLX_SYNC_PROVISION_DASHBOARDS=1` in the **instance's** `.env` (default `0`). These jobs use `--no-deps` after the Superset health gate so they do not rerun metadata initialization. Remove the setting or set it to `0` to return to routine data sync. Missing charts or changed dashboard definitions can also be repaired without another scrape or restore from an administrative shell on the instance:
+Dashboard refresh failures leave restored data in place; repair Superset without repeating collection or restore. Input is capped at `OLX_SYNC_MAX_BYTES` (default 512 MiB), and incoming temporary files are always removed. `RESTORE_OK`/`RESTORE_ERROR` form the client protocol. Protect the restore key: its holder can replace application data despite lacking an interactive shell.
+
+Deployment provisions charts and permissions. Set `OLX_SYNC_PROVISION_DASHBOARDS=1` in the **instance's** `.env` to repeat provisioning during sync (default `0`). Repair definitions without another restore from an administrative instance shell:
 
 ```bash
 . scripts/lib/superset-stack.sh
@@ -227,7 +175,7 @@ docker compose run --rm --no-deps superset-access
 docker compose run --rm --no-deps --entrypoint python superset-seed /app/check_sync.py
 ```
 
-The remote output includes `RESTORE_STAGE` durations for each completed phase. The local script buffers SSH output, writes the returned lines to the log in one batch, and records remote processing and output-saving durations separately.
+`RESTORE_STAGE` reports phase durations; the local log records remote processing and output-saving time separately.
 
 If sync reports `data and charts restored, but viewer permissions could not be
 refreshed`, update the instance checkout with the fix, then retry only the
@@ -239,11 +187,7 @@ configure_superset_stack
 docker compose run --rm --no-deps superset-access
 ```
 
-For `ModuleNotFoundError: No module named 'listing_filters'`, the
-`superset-access` service must mount `superset/listing_filters.py` alongside
-`provisioning.py`. The permissions retry uses these current checkout files
-without rebuilding the image. It preserves dashboard publication settings.
-The restore-only SSH key cannot run this repair command.
+For a missing `listing_filters` module, ensure `superset-access` mounts `superset/listing_filters.py` alongside `provisioning.py`. The job uses checkout files without rebuilding or changing publication. The restore-only key cannot run this administrative repair.
 
 Recovery should be rehearsed periodically against a disposable PostgreSQL
 instance: verify representative data, expected tables, ownership, reader
@@ -264,7 +208,7 @@ local configuration: `.env` and `config/searches.json`. The workflow ships
 tracked files, maintains a remote tracked-file manifest, and removes only
 files that were previously tracked but are absent from the new revision. It
 never cleans ignored configuration, backups, logs, or Docker volumes.
-`scripts/deploy-stack.sh` validates production settings, repairs roles, applies migrations, initializes and builds Superset, and starts the viewer backend on port 3000. It seeds datasets/access, verifies backups, runs the viewer parity/API-performance/access gates and publishes authenticated dashboard access. A failed gate reports deployment failure. Container/volume pruning is never performed.
+See [the deployment runbook](DEPLOYMENT.md) for preflight, rollout and acceptance gates.
 
 The repository does not install or configure `cloudflared`, OCI networking, or
 Cloudflare. The tunnel hostname, connector, token, and optional Access policy
@@ -275,7 +219,7 @@ tunnel path.
 ## Diagnosis
 
 - **No current data or a failing health endpoint:** inspect `docker compose logs scraper` and `scrape_runs`. A cycle is unhealthy only after `HEALTH_FAILURE_THRESHOLD` fully failed cycles; partial success resets the streak. Check an upstream response with `docker compose --profile scrape run --rm scraper node scripts/check-api.js`. A blank first page, page failure, or incomplete pagination is intentionally not a successful result set.
-- **Listings were not closed:** complete authoritative search results close listings whose membership disappears, including verified empty searches. Failed or incomplete searches retain membership. The separate cycle-wide sweep skips zero-card cycles.
+- **Listings were not closed:** authoritative results close listings whose membership disappears, including verified empty searches. Incomplete searches retain membership. The cycle-wide sweep skips zero-card cycles unless every search succeeded.
 - **Stale detail fields or sparse dashboard segments:** detail fetches are capped and source attributes are optional. Check `details_fetched_at`, `last_enrichment_attempted_at`, and the health dashboard’s coverage panels; use a bounded backfill where appropriate.
 - **Migration or ownership error:** run the role bootstrap script as shown above, then restart affected clients. Inspect `schema_migrations` and rerun the Compose `migrator` job with the configured migration role.
 - **Dashboard unavailable:** check `docker compose logs --tail=100 superset`, `curl -f http://127.0.0.1:3000/health`, `systemctl status cloudflared`, and the reporting credentials/grants. Recreate Superset when environment settings change; a restart does not update them.

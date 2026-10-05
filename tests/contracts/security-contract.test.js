@@ -1,8 +1,4 @@
 "use strict";
-
-// Static boundary contracts for shell, Compose, and workflow controls. These
-// checks keep security-sensitive defaults covered without needing production
-// credentials or a remote deployment target.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -125,13 +121,20 @@ test("restore input and identifiers are bounded and cleaned up", () => {
 
 test("remote restore repairs roles before ownership and schema reset", () => {
   const restore = read("db/remote-restore.sh");
-  const roleRepair = restore.indexOf("zz-database-roles.sh");
-  const ownershipAudit = restore.indexOf("Ownership audit");
-  const schemaReset = restore.indexOf("reset_schemas() {");
+  const roleRepair = restore.indexOf(
+    "if ! docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh; then",
+  );
+  const ownershipAudit = restore.indexOf(
+    'drifted=$(docker compose exec -T db sh -c "',
+  );
+  const ownershipRejection = restore.indexOf('if [ -n "$drifted" ]; then');
+  const schemaReset = restore.indexOf("if ! reset_schemas; then");
 
   assert.ok(roleRepair >= 0, "restore must invoke the canonical role repair");
   assert.ok(ownershipAudit >= 0, "restore must retain the ownership audit");
+  assert.ok(ownershipRejection >= 0, "restore must reject incorrect ownership");
   assert.ok(schemaReset >= 0, "restore must retain the schema reset");
   assert.ok(roleRepair < ownershipAudit);
-  assert.ok(roleRepair < schemaReset);
+  assert.ok(ownershipAudit < ownershipRejection);
+  assert.ok(ownershipRejection < schemaReset);
 });

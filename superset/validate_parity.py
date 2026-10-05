@@ -1,8 +1,4 @@
-"""Compare seeded source counterparts with source dashboard SQL on the reporting DB.
-
-Run after seeding: docker compose --profile superset run --rm --entrypoint
-python superset-seed /app/validate_parity.py
-"""
+"""Compare native chart results with source dashboard SQL on the reporting database."""
 
 import json
 import math
@@ -87,9 +83,7 @@ def equal_value(expected, actual):
 def compare(expected, actual, columns, title, elapsed_seconds=0):
     expected = [{c: comparable(row[c]) for c in columns} for row in expected]
     actual = [{c: row[c] for c in columns} for row in actual]
-    # These two source measures use now(), so sequential DB/API reads have
-    # different clocks. Allow only the measured request duration plus rounding;
-    # counts, prices, dates, and all other values retain their strict tolerance.
+    # For the two now()-based measures, allow request-duration drift plus rounding.
     clock_units = {"seconds_since_success": 1, "age_min": 60}
     key = lambda row: json.dumps({c: v for c, v in row.items() if c not in clock_units},
                                 sort_keys=True, default=str)
@@ -118,9 +112,7 @@ def main():
     )
     connection.set_session(readonly=True, autocommit=True)
     checked = 0
-    # A psycopg2 connection context starts a transaction even in autocommit
-    # mode, freezing now() for the entire comparison. Keep reference reads in
-    # separate read-only transactions so live ages use the current clock.
+    # Separate read-only transactions keep now() current for live-age comparisons.
     with connection.cursor(cursor_factory=RealDictCursor) as cursor:
         cursor.execute("SET statement_timeout = '30s'")
         cursor.execute("SELECT now() AS as_of")

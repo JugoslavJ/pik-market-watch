@@ -1,23 +1,16 @@
 "use strict";
 
-// Listing ingestion, detail enrichment, search runs and lifecycle transitions.
-
 const { computeMedian } = require("./statistics");
 
 const LIFECYCLE_LOCK = "pik-market-watch lean listing lifecycle";
 
-function uniqueIds(cards) {
-  return [
-    ...new Map(
-      (cards || [])
-        .filter(
-          (card) =>
-            Number.isSafeInteger(Number(card.articleId)) &&
-            Number(card.articleId) > 0,
-        )
-        .map((card) => [Number(card.articleId), card]),
-    ).values(),
-  ];
+function uniqueCards(cards) {
+  const byId = new Map();
+  (cards || []).forEach((card) => {
+    const id = Number(card.articleId);
+    if (Number.isSafeInteger(id) && id > 0) byId.set(id, card);
+  });
+  return [...byId.values()];
 }
 
 function rate(price, sqm, deal) {
@@ -144,7 +137,7 @@ async function hasRecentFinishedRun(minutes, searchKey = null) {
 }
 
 async function commitSearchIngestion(payload) {
-  const cards = uniqueIds(payload.cards);
+  const cards = uniqueCards(payload.cards);
   const ids = cards.map((card) => Number(card.articleId));
   const searchKey = payload.search.searchKey;
   const client = await this.pool.connect();

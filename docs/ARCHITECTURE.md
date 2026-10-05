@@ -1,43 +1,16 @@
 # Architecture and data model
 
-The scraper stores OLX listing state and evidence in PostgreSQL's `lean`
-schema. The React viewer and Superset read lean data through
-the same read-only role. Superset metadata is isolated in its own database and
-owner role in the same PostgreSQL cluster. The
-database keeps current listing state, observed price history, closure/reopen
-events, scrape runs, retained API responses, and page manifests.
+The collector writes listing state and API evidence to PostgreSQL's `lean` schema. The viewer and Superset query it as `olx_reporting`. Superset metadata lives in the separately owned `superset_meta` database in the same cluster.
 
 ## Runtime
 
-Compose gates the scraper and maintenance job on the one-shot `migrator`.
-That job applies the ordered `db/init-lean/` baseline and records checksums in
-`public.schema_migrations`. The scraper's startup migration fallback uses the
-same baseline for standalone runs. Search cycles use an advisory lease,
-preserve membership after incomplete searches, and only close listings after
-authoritative results.
+Compose runs the one-shot migrator before collection or maintenance. Standalone collection uses the same migration runner at startup. An advisory lease prevents overlapping cycles. Incomplete searches preserve listing membership; only authoritative results can close listings.
 
-The scraper enriches current listing rows from detail responses and records
-source-reported price changes. Lean archive maintenance applies the configured
-raw-response retention policy. `replay-response.js` reads retained responses
-without writing listing or price data.
+Detail requests enrich listings and record source price changes. Archive maintenance enforces response retention; `replay-response.js` reads retained payloads without changing listing data.
 
-The `collector/` package owns API requests, mapping, normalization and collection
-orchestration. `collector/src/api.js` fetches and decodes responses;
-`payload-mapper.js` maps API fields to listing records, while `normalization.js`
-applies price, currency, date and measurement policy.
+The [collector](../collector/README.md) owns requests, normalization and scheduling; the [database package](../db/README.md) owns storage and schema jobs. Both use `config/env.js` for environment validation. Database jobs load settings independently of searches.
 
-The database package exposes `Db` and `applyMigrations` to the collector.
-`db/src/client.js` manages connections and advisory leases. `db/src/ingestion.js`
-owns listing writes, search runs and lifecycle transitions;
-`db/src/raw-responses.js` owns API archives, page manifests and retention.
-Migration and maintenance entry points load only `db/src/config.js`; collector
-settings and saved searches are independent. Both packages use the environment
-validators in `config/env.js`.
-
-Unit and database integration tests live with their owning packages. Dashboard
-contracts live in `superset/tests/`, viewer browser checks in
-`dashboard-viewer/tests/`, and stack deployment/security contracts in
-`tests/contracts/`. Repository tooling runs from the root npm workspace.
+Tests live with their packages. Cross-component deployment and security checks live in `tests/contracts/`.
 
 ## Storage
 
@@ -65,11 +38,11 @@ The React viewer serves four dashboards at host port 3000:
 - **Exits** analyzes observed listing closures using lifecycle events.
 - **Health** reports scrape outcomes, freshness and data quality.
 
-Superset supplies login, permissions, dataset definitions and the viewer API. It listens on container port 8088, published only at `127.0.0.1:3000`. The root URL and Superset welcome page redirect to Market Overview. Viewer navigation exposes only these four dashboards.
+Superset supplies login, permissions, datasets and the viewer API. Container port 8088 is published at `127.0.0.1:3000`; the root and welcome page open Overview.
 
 Each fresh viewer request executes one reporting data statement with shared facts and aggregates. Charts keep their previous values during filter updates. Market/exit snapshots expire after ten minutes; operational Home/Health results are uncached. Tables provide links and CSV; MapLibre uses CARTO vector basemaps.
 
-Definitions in `superset/dashboards/` supply the trusted SQL/panel contract used by the compiler and parity comparisons. The application migrator, writer, reporting and backup roles retain their separate responsibilities.
+Definitions in `superset/dashboards/` supply panel SQL for both compilers and parity checks. Migration, writer, reporting and backup roles have separate privileges.
 
 See [viewer details](../dashboard-viewer/README.md), [performance measurements](../superset/PERFORMANCE.md) and [instance deployment](DEPLOYMENT.md).
 

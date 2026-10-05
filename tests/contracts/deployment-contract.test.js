@@ -1,8 +1,4 @@
 "use strict";
-
-// Static contract checks for the Compose/deploy migration gate. YAML parsing is
-// intentionally avoided here because the production stack does not ship a
-// YAML runtime dependency; the asserted fragments are the interface we own.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");

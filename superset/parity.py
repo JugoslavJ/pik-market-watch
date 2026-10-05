@@ -1,10 +1,4 @@
-"""Compile the repository dashboard panels into native Superset charts.
-
-The source SQL remains the semantic contract. Source filter values use Superset's
-SQL-quoting filter, and time macros use its time-range processor. Optional
-chart selections filter source rows before aggregation. Aggregated source
-results are displayed with MAX, never summed or averaged a second time.
-"""
+"""Compile source panels into native charts; filter before aggregation and preserve measures."""
 
 import json
 import re
@@ -19,8 +13,7 @@ from provisioning import (cross_filter_metadata, ensure_dataset, save_chart,
 SOURCE_DIR = Path(__file__).resolve().parent / "dashboards"
 FILTER_PREFIX = "__source_"
 
-# Selection columns are deliberately separate from native __source_* controls.
-# Both sets of predicates apply, so a chart click intersects sidebar filters.
+# Chart selections intersect the separate __source_* sidebar filters.
 LISTING_DIMENSIONS = {
     "rooms": "coalesce(cf.rooms::text, 'unknown')",
     "neighborhood": "coalesce(cf.neighborhood::text, 'unknown')",
@@ -47,8 +40,7 @@ TABLE_SCAN = re.compile(
 
 def cross_filter_columns(sql):
     tables = {match[2].lower() for match in TABLE_SCAN.finditer(sql)}
-    # A closed-event query may contain an active-listing denominator. A floor
-    # selection must not filter only that denominator and distort the ratio.
+    # Do not apply a floor filter only to the active denominator of an exit ratio.
     facts = tables & {"listings", "listing_lifecycle_events"}
     if facts:
         return set.intersection(*(set(TABLE_DIMENSIONS[t]) for t in facts))
@@ -266,15 +258,11 @@ def compile_sql(dashboard, panel, add_links=False):
     sql = push_cross_filters(sql)
     if panel["type"] == "bargauge" and bar_dimension(panel) in cross_filter_columns(source_sql(dashboard, panel)):
         dimension = bar_dimension(panel)
-        # The frontend query builder emits the axis and series dimensions
-        # separately and rejects duplicate labels. A distinct display axis
-        # retains real column names in the selection sent to sibling charts.
+        # Separate display-axis labels from selection columns to avoid duplicate labels.
         sql = ('SELECT source.*, source."' + dimension + '" AS "' + bar_axis(dimension)
                + '" FROM (' + sql + ') AS source')
     if panel["type"] == "geomap":
-        # The legacy Deck.gl query groups its selected columns even without a
-        # metric. Keep a row identity so distinct close events at identical
-        # coordinates/prices are not silently merged into one pin.
+        # Deck.gl groups rows; keep event identities so coincident exits remain separate.
         sql = "SELECT source.*, row_number() OVER () AS map_point_id FROM (" + sql + ") AS source"
     if panel["type"] == "xychart":
         sql = "SELECT source.*, row_number() OVER () AS scatter_point_id FROM (" + sql + ") AS source"
@@ -387,9 +375,7 @@ def chart_form(dashboard, panel, dataset_id, columns):
         if "ad_link" in displayed:
             displayed = ["ad_link", *[n for n in displayed if n != "ad_link"]]
         dimensions = [n for n in displayed if n in cross_filter_columns(sql)]
-        # Summary rows have unique source groups. MAX preserves the original
-        # measure while making only dimensions clickable. Detail tables retain
-        # raw mode so repeated lifecycle events and listing links survive.
+        # MAX preserves summary measures; raw detail rows retain repeated events and links.
         summary = dimensions and not set(names) & {"url", "title", "article_id", "id", "search_key", "name"}
         query = {"query_mode": "aggregate", "groupby": dimensions,
                  "metrics": [metric(n) for n in displayed if n not in dimensions]} if summary else {

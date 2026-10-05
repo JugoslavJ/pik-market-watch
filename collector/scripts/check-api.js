@@ -1,10 +1,4 @@
 "use strict";
-// No-database live check of the whole API path: URL rewrite → /api/search →
-// mapper → /api/listings/<id> → detail mapper. Useful right after deploying
-// or whenever olx.ba's payload shape is suspected to have drifted:
-//   docker run --rm -v "/abs/path/to/pik-market-watch:/app" -w /app \
-//     node:26-bookworm-slim node collector/scripts/check-api.js
-// Exit 0 = everything mapped sensibly; non-zero = investigate.
 
 const { fetchSearchPage, fetchListing, toApiSearchUrl } = require("../src/api");
 const { mapSearchPage, mapListingDetail } = require("../src/payload-mapper");

@@ -1,23 +1,6 @@
 #!/bin/sh
-# Remote restore endpoint for the home-machine sync (scripts/sync-to-instance.ps1).
-#
-# Invoked over SSH by a FORCED-COMMAND key (see authorized_keys):
-#   command=".../db/remote-restore.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-ed25519 ...
-# The client's command is ignored; the pg_dump custom-format archive arrives
-# on STDIN:
-#   Get-Content dump -AsByteStream | ssh -i key <host>   (forced command runs)
-#
-# Pipeline: receive -> size check -> integrity check -> ownership audit ->
-# rollback snapshot -> stop scraper (only if running) -> replace application
-# schemas -> restore (atomic) -> on failure roll back to the previous snapshot
-# -> restart scraper.
-#
-# Why schemas are dropped instead of relying on pg_restore --clean: the dump
-# replaces the lean application schema as a single restore unit, while public
-# extension objects are recreated by the bootstrap administrator.
-#
-# No client-controlled input is ever evaluated: the dump path is fixed and
-# the archive must pass pg_restore -l and contain the listings data.
+# Forced-command SSH endpoint: receive a custom-format dump on stdin and restore olx.
+# Validate the archive and ownership before replacing schemas; retain a rollback snapshot.
 set -eu
 umask 077
 
@@ -35,16 +18,14 @@ if [ "$MAX_BYTES" -le 0 ]; then
   echo "RESTORE_ERROR: OLX_SYNC_MAX_BYTES must be greater than zero" >&2
   exit 1
 fi
-# Restore as the least-privileged OWNING role (db/init-lean/zz-database-roles.sh):
-# it must own the restored objects. Names come from .env.
+# The migrator role must own restored objects.
 migrator_user="$(sed -n 's/^POSTGRES_MIGRATOR_USER=//p' "$REPO_DIR/.env" 2>/dev/null | tr -d '\r')"
 migrator_user="${migrator_user:-olx_migrator}"
 app_user="$(sed -n 's/^POSTGRES_APP_USER=//p' "$REPO_DIR/.env" 2>/dev/null | tr -d '\r')"
 app_user="${app_user:-olx_app}"
 reporting_user="$(sed -n 's/^POSTGRES_REPORTING_USER=//p' "$REPO_DIR/.env" 2>/dev/null | tr -d '\r')"
 reporting_user="${reporting_user:-olx_reporting}"
-# Bootstrap superuser (POSTGRES_USER) - owns the public schema itself, which
-# $app_user does not, so the schema reset below runs as this role.
+# Reset public as the bootstrap superuser; runtime roles do not own it.
 boot_user="$(sed -n 's/^POSTGRES_USER=//p' "$REPO_DIR/.env" 2>/dev/null | tr -d '\r')"
 boot_user="${boot_user:-olx}"
 db_name="$(sed -n 's/^POSTGRES_DB=//p' "$REPO_DIR/.env" 2>/dev/null | tr -d '\r')"
@@ -134,31 +115,14 @@ if ! docker compose exec -T db sh -c 'pg_restore -l /backups/olx-sync-incoming.d
   exit 1
 fi
 
-# Existing instance volumes may predate the least-privilege role bootstrap (or
-# may have been upgraded without the deploy script's ownership step).  Repair
-# roles before the ownership audit and schema reset: reset_schemas creates
-# schemas AUTHORIZATION "$migrator_user", which must already exist.  The
-# helper is idempotent and uses the instance's .env credentials; invalid or
-# incomplete archives have already been rejected above, so this is the first
-# database mutation on the accepted restore path.
+# Repair legacy ownership before the audit and schema reset.
 if ! docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh; then
   echo "RESTORE_ERROR: could not ensure database roles and ownership" >&2
   exit 1
 fi
 
-# ─── Ownership audit (before anything destructive) ───────────────────────────
-# pg_restore replays every entry's ALTER ... OWNER TO <source-owner>, and the
-# least-privileged restore role cannot SET ROLE to any other role — so every
-# restorable application object must already be owned by $migrator_user. Schema
-# entries are excluded because reset_schemas and PostGIS recreate them. Drift
-# happens when the SOURCE machine creates objects as its bootstrap superuser
-# (2026-08-24: a migration re-applied by hand as "-U olx" shipped two objects;
-# the failure only surfaced here, after the schema had already been dropped).
-# DEFAULT ACL entries are excluded: build_toc filters those separately and
-# their trailing token is a grantee, not the owner. PostGIS extension entries
-# are also excluded: pg_restore lists `EXTENSION - postgis` without an owner,
-# and the extension must be installed by the bootstrap administrator rather
-# than replayed by the app role.
+# Audit application ownership before dropping schemas.
+# Bootstrap and role repair handle schema, extension and ACL entries separately.
 drifted=$(docker compose exec -T db sh -c "
     pg_restore -l '/backups/olx-sync-incoming.dump' |
     grep -v '^;' | grep -v 'DEFAULT ACL' |
@@ -174,8 +138,7 @@ if [ -n "$drifted" ]; then
   exit 1
 fi
 
-# rollback snapshots; keep the 3 newest. prev = second-newest = the state we
-# roll back to if the restore fails after the schema reset.
+# Keep three snapshots; the second-newest is the rollback state.
 stamp=$(date +%Y%m%d-%H%M%S)
 cp "$incoming" "$BACKUP_DIR/olx-sync-$stamp.dump"
 ls -1t "$BACKUP_DIR"/olx-sync-*.dump 2>/dev/null | tail -n +4 | xargs -r rm -f
@@ -186,13 +149,7 @@ if docker compose ps --status running scraper 2>/dev/null | grep -q scraper; the
   docker compose stop scraper
 fi
 
-# pg_restore runs INSIDE the db container: address the archive by its mount
-# point (/backups), never by the host-side path.
-#
-# build_toc <container-archive-path> <output-list>: filter the TOC to entries
-# this restore may execute. ACL entries are omitted because extension ACLs can
-# reference extension-owned functions absent after reset; the canonical role
-# repair reapplies the lean writer and Superset reporting grants.
+# Archive paths use the container /backups mount. Role repair reapplies omitted ACLs.
 build_toc() {
   docker compose exec -T db sh -c "
      pg_restore -l '$1' > /tmp/toc.all || exit 1
@@ -200,20 +157,15 @@ build_toc() {
      if [ -s /tmp/toc.drop ]; then
        grep -vxFf /tmp/toc.drop /tmp/toc.all > '$2' || :
      else
-       # busybox grep -v -f <empty file> selects NOTHING (GNU selects
-       # everything) - skip the filter when there is nothing to exclude
+       # BusyBox grep rejects all rows with an empty pattern file; skip that filter.
        cp /tmp/toc.all '$2'
      fi
-     # Extension metadata is installed by the bootstrap administrator in
-     # reset_schemas; the app role must not try to CREATE EXTENSION or replay
-     # its extension-owned spatial_ref_sys table/data.
+     # Bootstrap installs extensions; omit their metadata and spatial_ref_sys.
      grep -ve ' ACL ' -e ' EXTENSION - ' -e ' COMMENT - EXTENSION ' \
           -e 'spatial_ref_sys' \
           '$2' > '$2'.extensions || :
      mv '$2'.extensions '$2'
-     # schema-level entries carry the source schema's owner (ALTER ... OWNER
-     # TO <bootstrap admin>) and cannot be replayed by $app_user; the reset
-     # block already created the schema with the right owner and grants
+     # reset_schemas already creates schemas with the correct ownership and grants.
      grep -ve 'SCHEMA - lean' -e 'SCHEMA - public' \
           -e 'SCHEMA - tiger' -e 'SCHEMA - topology' \
           -e 'COMMENT - SCHEMA' -e 'ACL - SCHEMA' \
@@ -248,14 +200,9 @@ if ! reset_schemas; then
   exit 1
 fi
 
-# --single-transaction: the restore is all-or-nothing. If it fails after the
-# schema reset, the database is empty and the auto-rollback below replays the
-# previous snapshot.
+# Restore transactionally; replay the rollback snapshot after failure.
+# Ignore archive ownership/ACLs and reapply canonical grants afterwards.
 restore_failed=0
-# --no-owner: belt-and-braces behind the audit above — a no-op while every
-# entry targets $migrator_user; if anything ever slips through it degrades to
-# "object owned by the restoring role" instead of failing the whole sync.
-# --no-acl: grants and defaults are reapplied by the canonical role repair.
 if ! docker compose exec -T db pg_restore -U "$migrator_user" -d "$db_name" --no-owner --no-acl \
        --single-transaction --use-list=/tmp/toc.use /backups/olx-sync-incoming.dump; then
   restore_failed=1
@@ -275,14 +222,12 @@ if [ "$restore_failed" = "1" ]; then
   fi
   exit 1
 fi
-# Belt & braces: future public tables retain the app-role defaults.
 docker compose exec -T db psql -U "$migrator_user" -d "$db_name" -q \
   -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO \"$app_user\";
       ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO \"$app_user\";" \
   || echo "RESTORE_WARN: could not re-assert writer default privileges (non-fatal)" >&2
 
-# Schema replacement removes object grants. Re-run the canonical role repair so
-# lean writer and reporting grants are restored before clients restart.
+# Restore grants removed by schema replacement before restarting clients.
 docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
 
 if [ "$was_running" = "1" ]; then
@@ -291,8 +236,7 @@ fi
 restore_ok=1
 finish_phase restore-and-grants
 
-# Reconnect Superset to the restored OLX database. The metadata
-# database is outside the restore TOC and must remain untouched.
+# Reconnect Superset to olx; the metadata database is outside this restore.
 if ! docker compose up -d --no-deps --force-recreate --wait --wait-timeout 120 superset; then
   echo "RESTORE_ERROR: database restored, but dashboard refresh failed; check Superset logs and recreate the service (no need to repeat the scrape/restore)" >&2
   exit 1

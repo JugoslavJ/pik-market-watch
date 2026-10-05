@@ -58,8 +58,7 @@ def verify_chart(api, chart, form=None):
 
 
 def save_dashboard(api, dashboard, positions, metadata):
-    # Publishing and role assignment are explicit access-management actions.
-    # A normal reseed must not turn a live dashboard back into a draft.
+    # Reseeding preserves publication and assigned roles.
     api.call("PUT", f"/api/v1/dashboard/{dashboard['id']}", {
         "dashboard_title": dashboard["dashboard_title"],
         "published": bool(dashboard.get("published", False)),
@@ -115,13 +114,7 @@ def map_chart(name, dataset_id, columns):
 
 
 def cross_filter_metadata(charts):
-    """Send every chart selection to every other chart on the dashboard.
-
-    Superset tables emit selections in both raw and aggregate query modes.
-    Scoping by groupby therefore silently disconnects clickable raw cells.
-    Query builders and dataset SQL handle the incoming dimensions; scope must
-    never depend on the emitter's chart type or its selected query columns.
-    """
+    """Route selections to all other charts, including raw-mode tables."""
     ids = [chart["id"] for chart in charts]
     configuration = {}
     for chart in charts:

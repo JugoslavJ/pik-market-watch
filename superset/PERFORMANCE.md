@@ -1,8 +1,6 @@
 # Dashboard performance
 
-The measurements below were collected locally on 2026-10-04 using the React
-viewer and Superset login. They describe this implementation under the stated
-conditions; production HTTPS and concurrent-user latency are not measured here.
+Local measurements from 2026-10-04 using the React viewer and Superset login. Production HTTPS and concurrent-user latency remain unmeasured.
 
 The 100–200 ms target is met for tested repeated filters. Dashboard opening and
 first-time filters exceed that target.
@@ -46,8 +44,7 @@ cached samples where caching is supported:
 | Exits, rooms=2 | 159 ms | 63 ms |
 | Health | 88 ms | Uncached |
 
-These API timings exclude browser rendering. Deployment budgets are two seconds
-fresh and one second cached; passing them does not establish the browser target.
+API timings exclude rendering. Deployment budgets are 2 seconds fresh / 1 second cached, separate from the browser target.
 
 ## Runtime and method
 
@@ -76,11 +73,7 @@ in the [viewer README](../dashboard-viewer/README.md).
 
 ## Validation
 
-Readiness compares all 71 panels against source SQL, benchmarks the four
-authenticated dashboard APIs, validates temporary viewer access and revocation,
-and verifies backups. Browser checks cover chart selection/clearing, retained
-values during delayed responses, vector tiles, listing links, sorting, CSV,
-CSP and mobile layout.
+Readiness checks SQL parity, API latency, access/revocation and backups. Browser checks cover filters, retained values, maps, links, table controls, CSP and mobile layout.
 
 Run the offline Python regression suite and native request tests from the root:
 

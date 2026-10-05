@@ -1,7 +1,4 @@
 "use strict";
-// Unit tests for api.js response-body capping: readBodyCapped concatenates
-// small streams verbatim, throws ApiError past the cap, and tolerates
-// exactly-at-cap bodies.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {

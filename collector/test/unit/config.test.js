@@ -1,6 +1,4 @@
 "use strict";
-// Unit tests for config.js: search-key normalization in-process;
-// searches-file loading via subprocesses (config resolves at require time).
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { execFileSync } = require("node:child_process");
@@ -34,8 +32,7 @@ test("normalizeSearchKey: keeps param order stable (URLSearchParams preserves in
   );
 });
 
-// ── loadSearches precedence + derivation, exercised in subprocesses ──────────
-
+// loadSearches precedence + derivation, exercised in subprocesses
 function runWith(envOverrides, fixture) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "olx-cfg-"));
   const file = path.join(dir, "searches.json");
