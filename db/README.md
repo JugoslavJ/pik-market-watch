@@ -21,14 +21,15 @@ The numbered SQL files run in lexical order:
 | File | Responsibility |
 | --- | --- |
 | `00-extensions.sql` | Required PostGIS and statistics extensions |
-| `01-lean-schema.sql` | Current listings, searches, runs, prices, and lifecycle events |
+| `01-lean-schema.sql` | Complete schema, including daily prices and lifecycle events, raw archives, page manifests, and dashboard indexes |
 | `02-lean-neighborhoods.sql` | Generated neighborhood boundaries |
-| `03-raw-archive.sql` | Retained raw API responses and page manifests |
-| `04-date-based-price-history.sql` | Canonical local-date representation |
-| `05-dashboard-query-indexes.sql` | Dashboard range, latest-run, and API price-history indexes |
 | `zz-database-roles.sh` | Runtime, migration, reporting, Superset metadata and backup roles |
 
-The migrator records checksums in `public.schema_migrations` and adopts already initialized schemas. Never edit applied SQL files; append new ordered migrations under `init-lean/`.
+The migrator records checksums in `public.schema_migrations` and adopts already initialized schemas. Outside deliberate baseline consolidations, keep applied SQL files immutable and append new ordered migrations under `init-lean/`.
+
+The baseline consolidates the former `03`–`05` migrations into the original table definitions. Fresh installs create columns with their final types, defaults, and constraints directly, without conversion or cleanup DDL. Future baseline consolidations should follow the same pattern.
+
+Existing databases with the former files recorded need a deliberate migration-ledger rebaseline after verifying that their installed schema matches the consolidated baseline. The migrator continues to reject changed checksums; this consolidation does not automatically upgrade an older schema or rewrite its ledger.
 
 `remote-restore.sh` handles synchronized lean database restores. PostgreSQL
 extension objects in `public` remain installed by the database bootstrap.

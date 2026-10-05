@@ -16,9 +16,6 @@ test("lean baseline contains the complete installed schema", () => {
     "00-extensions.sql",
     "01-lean-schema.sql",
     "02-lean-neighborhoods.sql",
-    "03-raw-archive.sql",
-    "04-date-based-price-history.sql",
-    "05-dashboard-query-indexes.sql",
   ]);
   const neighborhoods = fs.readFileSync(
     path.join(leanInit, "02-lean-neighborhoods.sql"),
@@ -31,21 +28,36 @@ test("lean baseline contains the complete installed schema", () => {
     "utf8",
   );
   assert.match(schema, /CREATE TABLE lean\.listing_lifecycle_events/);
+  assert.match(schema, /CREATE TABLE lean\.raw_api_responses/);
+  assert.match(schema, /CREATE TABLE lean\.scrape_run_pages/);
   assert.doesNotMatch(schema, /neighborhood_stats|CREATE MATERIALIZED VIEW/);
-  const daily = fs.readFileSync(
-    path.join(leanInit, "04-date-based-price-history.sql"),
-    "utf8",
+  for (const column of [
+    "first_seen",
+    "published_at",
+    "closed_at",
+    "renewed_at",
+    "occurred_at",
+    "opened_at",
+    "price_date",
+  ]) {
+    assert.match(schema, new RegExp(`\\b${column} date\\b`));
+  }
+  assert.match(
+    schema,
+    /CREATE UNIQUE INDEX lean_price_history_article_date_source_uidx/,
   );
-  assert.match(daily, /ALTER COLUMN occurred_at TYPE date/);
-  assert.match(daily, /ALTER COLUMN opened_at TYPE date/);
-  assert.match(daily, /PARTITION BY article_id, price_date, source/);
-  assert.match(daily, /observed_at DESC, id DESC/);
-  assert.match(daily, /DROP COLUMN observed_at/);
-  const dashboardIndexes = fs.readFileSync(
-    path.join(leanInit, "05-dashboard-query-indexes.sql"),
-    "utf8",
+  assert.doesNotMatch(
+    schema,
+    /observed_at|UNIQUE \(article_id, event_type, occurred_at\)/,
   );
-  assert.match(dashboardIndexes, /lean_scrape_runs_started_at_idx/);
-  assert.match(dashboardIndexes, /lean_scrape_runs_search_latest_idx/);
-  assert.match(dashboardIndexes, /lean_price_history_api_article_date_idx/);
+  assert.match(schema, /lean_scrape_runs_started_at_idx/);
+  assert.match(schema, /lean_scrape_runs_search_latest_idx/);
+  assert.match(schema, /lean_price_history_api_article_date_idx/);
+  for (const file of sqlFiles) {
+    const sql = fs.readFileSync(path.join(leanInit, file), "utf8");
+    assert.doesNotMatch(
+      sql,
+      /\b(?:ALTER TABLE|DROP (?:TABLE|COLUMN|CONSTRAINT))\b/i,
+    );
+  }
 });
