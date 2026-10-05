@@ -15,7 +15,7 @@
     "node": ">=26"
   },
   "dependencies": {
-    "pg": "^8.23.0",
+    "pg": "^8.23.1",
     "@pik-market-watch/config": "1.0.0"
   }
 }
