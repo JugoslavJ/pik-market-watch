@@ -22,6 +22,21 @@ For a local authenticated viewer account, publish explicitly with
 `docker compose run --rm superset-access --publish` and assign `OLX Viewer` to
 the account. Publication does not grant anonymous access.
 
+For a restricted account, assign **only `OLX Guest`** through `/users/list/`.
+The access job creates this role with one `can_read on OLXDashboard` permission
+and assigns it only to Home, Market Overview and Exits. It works through the
+custom viewer, without dataset grants, native Superset dashboard/chart/dataset access, Health,
+editing or SQL Lab. Other assigned roles can expand a user's access.
+Rebuild/restart Superset after updating viewer code, then rerun `superset-access`
+to apply the role. Provisioning removes any extra guest permissions and
+dashboard assignments; it does not change existing user roles.
+
+To prepare only the guest role and publish only its three dashboards:
+
+```sh
+docker compose --profile superset --profile superset-ops run --rm --no-deps superset-access --guest-only --publish
+```
+
 ## Definitions and datasets
 
 The four JSON files in `dashboards/` define 71 panels, scoped filter variables,
@@ -74,8 +89,10 @@ capped at eight connections; the single web worker uses a bounded metadata pool.
 
 `superset-access` prepares `OLX Viewer` from Gamma with managed chart and filter
 dataset permissions and assigns it to the ten dashboards. `Public` has no
-dashboard access. The viewer rechecks authorization on cached responses and
-rejects changed dataset definitions, guest access, impersonation and unsupported
+dashboard access. `OLX Guest` has only the custom-viewer permission for the three
+market dashboards. Navigation includes only authorized dashboards. The viewer
+rechecks authorization on cached responses and rejects changed dataset
+definitions, embedded guest tokens, impersonation and unsupported
 RLS policies; see [viewer limitations](../dashboard-viewer/README.md).
 
 The alert-checker service evaluates SQL every 15 minutes and optionally sends
@@ -94,7 +111,7 @@ bash scripts/superset-readiness.sh --snapshot
 ```
 
 Readiness checks viewer/source parity, authenticated API latency, temporary
-viewer permissions, revoked and anonymous access, and verified backups.
+viewer and guest permissions, revoked and anonymous access, and verified backups.
 API budgets are two seconds fresh and one second cached. These checks exclude
 browser rendering; see [measured performance](PERFORMANCE.md).
 

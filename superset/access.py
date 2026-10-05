@@ -7,12 +7,37 @@ import uuid
 from superset import create_app, db, security_manager
 
 from provisioning import stable_uuid
+from guest_access import GUEST_BOARDS, GUEST_PERMISSION, GUEST_ROLE
 
 TITLES = [
     "OLX.ba Home", "OLX.ba Market Overview", "OLX.ba Exits & Price Endings",
     "OLX Scraper Health", "Market explorer", "Home", "Price history",
     "Segments & rankings", "Observed exits", "Scraper health",
 ]
+
+
+def prepare_guest_access(publish=None):
+    """Replace guest grants exactly; never inherit Gamma or grant datasets."""
+    from superset.models.dashboard import Dashboard
+
+    boards = db.session.query(Dashboard).all()
+    allowed = {uuid.UUID(stable_uuid("dashboard", title)) for title in GUEST_BOARDS.values()}
+    if ({board.uuid for board in boards} & allowed) != allowed:
+        raise RuntimeError("Seed Home, Market Overview and Exits before preparing guest access")
+    guest = security_manager.add_role(GUEST_ROLE)
+    permission = security_manager.add_permission_view_menu(*GUEST_PERMISSION)
+    if permission is None:
+        raise RuntimeError("Could not register the custom dashboard permission")
+    guest.permissions = [permission]
+    for board in boards:
+        if board.uuid in allowed:
+            if guest not in board.roles:
+                board.roles.append(guest)
+            if publish is not None:
+                board.published = publish
+        elif guest in board.roles:
+            board.roles.remove(guest)
+    print("Prepared OLX Guest: Home, Market Overview and Exits; one custom-viewer permission")
 
 
 def prepare_access(publish=None):
@@ -52,6 +77,7 @@ def prepare_access(publish=None):
             board.roles.append(viewer)
         if publish is not None:
             board.published = publish
+    prepare_guest_access()
     db.session.commit()
     print(f"Prepared OLX Viewer: {len(boards)} dashboards, {len(datasets)} scoped datasets")
     if publish is not None:
@@ -60,12 +86,18 @@ def prepare_access(publish=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--guest-only", action="store_true", help="Prepare only OLX Guest and its three dashboards")
     publication = parser.add_mutually_exclusive_group()
     publication.add_argument("--publish", action="store_true")
     publication.add_argument("--unpublish", action="store_true")
     args = parser.parse_args()
     with create_app().app_context():
-        prepare_access(True if args.publish else False if args.unpublish else None)
+        publish = True if args.publish else False if args.unpublish else None
+        if args.guest_only:
+            prepare_guest_access(publish)
+            db.session.commit()
+        else:
+            prepare_access(publish)
 
 
 if __name__ == "__main__":

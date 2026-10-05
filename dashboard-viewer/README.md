@@ -13,6 +13,12 @@ Open `http://127.0.0.1:3000/` (Market Overview) and use the existing
 Superset login. Other routes end in `olx-home/`, `olx-exits/`, and `olx-health/`.
 Unauthenticated visits redirect to Superset login. Expired data requests retain charts and show a sign-in link. Docker builds hashed local assets; runtime needs no Node service or CDN JavaScript.
 
+Accounts with only `OLX Guest` can view Home, Market Overview and Exits, with
+filters, tables and maps. Health is omitted from navigation and denied on direct
+page/API requests. This role has one custom-viewer permission, no dataset grants
+and no native Superset dashboard/chart/dataset access. `superset-access` provisions its exact scope;
+assign it to the account through Superset's `/users/list/` administration page.
+
 ## Data and interactions
 
 The authenticated `/olx/api/dashboard/<uid>` endpoint executes one read-only
@@ -33,7 +39,7 @@ The Filters panel starts collapsed, supports search/reset/Escape and becomes a p
 
 Authorization is rechecked before every data or cached page response. Dataset
 definitions must match the provisioned source SQL. If an author changes those
-definitions, reseed/rebuild or use Superset. Guest tokens and impersonated
+definitions, reseed/rebuild or use Superset. Embedded guest tokens and impersonated
 connections are unsupported. If Superset RLS rules are added, this viewer denies
 access until their policies are supported; the native Superset path remains
 available. Browser data is never stored in persistent local storage.

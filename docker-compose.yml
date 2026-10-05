@@ -302,6 +302,7 @@ services:
     environment: *superset-environment
     volumes:
       - ./superset/access.py:/app/access.py:ro
+      - ./superset/guest_access.py:/app/guest_access.py:ro
       - ./superset/validate_access.py:/app/validate_access.py:ro
       - ./superset/client.py:/app/client.py:ro
       - ./superset/provisioning.py:/app/provisioning.py:ro

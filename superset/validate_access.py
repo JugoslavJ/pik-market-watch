@@ -1,6 +1,7 @@
-"""Check a temporary viewer account, then restore publication and remove the account."""
+"""Check temporary viewer and guest accounts, restoring publication and removing accounts."""
 
 import json
+import re
 import secrets
 import urllib.error
 import urllib.request
@@ -10,6 +11,101 @@ from superset import create_app, db, security_manager
 from access import prepare_access, TITLES
 from client import BASE, SupersetAPI
 from provisioning import query_context, stable_uuid, verify_chart
+from guest_access import GUEST_BOARDS, GUEST_PERMISSION, GUEST_ROLE
+
+
+def expect_forbidden(api, method, endpoint, payload=None):
+    try:
+        api.call(method, endpoint, payload)
+    except RuntimeError as error:
+        if "HTTP 403" not in str(error):
+            raise
+    else:
+        raise RuntimeError(f"Guest access was allowed: {method} {endpoint}")
+
+
+def validate_guest_access():
+    """Exercise the real guest login, all allowed pages, and forbidden APIs."""
+    from superset.models.dashboard import Dashboard
+
+    guest = security_manager.find_role(GUEST_ROLE)
+    if {(p.permission.name, p.view_menu.name) for p in guest.permissions} != {GUEST_PERMISSION}:
+        raise RuntimeError("OLX Guest must have exactly the custom-viewer permission")
+    boards = db.session.query(Dashboard).all()
+    managed = {board.slug.removesuffix("-superset"): board for board in boards
+               if board.slug and board.slug.endswith("-superset")}
+    assigned = {board.slug.removesuffix("-superset") for board in boards if guest in board.roles}
+    if assigned != set(GUEST_BOARDS):
+        raise RuntimeError("OLX Guest must be assigned only Home, Market Overview and Exits")
+    original = {uid: managed[uid].published for uid in GUEST_BOARDS}
+    username = "guest_acceptance_" + secrets.token_hex(8)
+    password = secrets.token_urlsafe(32)
+    user = None
+    try:
+        user = security_manager.add_user(username, "Acceptance", "Guest",
+                                         username + "@example.invalid", guest, password)
+        if not user:
+            raise RuntimeError("Could not create temporary guest")
+        for uid in GUEST_BOARDS:
+            managed[uid].published = True
+        db.session.commit()
+        api = SupersetAPI(username=username, password=password)
+        api.authenticate(csrf=False)
+        api.authenticate_browser()
+        for uid in GUEST_BOARDS:
+            for suffix in ("", "", "?days=7"):
+                packet = api.call("GET", "/olx/api/dashboard/" + uid + suffix)
+                if not packet.get("rows") or not packet.get("panels"):
+                    raise RuntimeError("Guest dashboard returned no data")
+            with api.opener.open(BASE + "/olx/dashboard/" + uid + "/", timeout=30) as response:
+                html = response.read().decode("utf-8")
+            bootstrap = re.search(r'<script id="viewer-bootstrap"[^>]*>(.*?)</script>', html, re.S)
+            if not bootstrap or {b["uid"] for b in json.loads(bootstrap[1])["boards"]} != set(GUEST_BOARDS):
+                raise RuntimeError("Guest navigation must contain only the three allowed dashboards")
+        for endpoint in ("/olx/api/dashboard/olx-health", "/olx/dashboard/olx-health/"):
+            expect_forbidden(api, "GET", endpoint)
+        # Native APIs remain forbidden even for the three backing dashboards.
+        for board in boards:
+            expect_forbidden(api, "GET", f"/api/v1/dashboard/{board.id}")
+        for endpoint in ("/api/v1/dashboard/", "/api/v1/chart/", "/api/v1/dataset/",
+                         "/api/v1/database/", "/api/v1/dashboard/export/",
+                         "/api/v1/chart/export/",
+                         "/api/v1/security/csrf_token/"):
+            expect_forbidden(api, "GET", endpoint)
+        for endpoint in ("/api/v1/chart/data", "/api/v1/dashboard_data/data",
+                         "/api/v1/sqllab/execute/"):
+            expect_forbidden(api, "POST", endpoint, {})
+        chart = managed["olx-overview"].slices[0]
+        expect_forbidden(api, "PUT", f"/api/v1/chart/{chart.id}", {"slice_name": chart.slice_name})
+        board = managed["olx-overview"]
+        endpoint = "/olx/api/dashboard/olx-overview"
+        # Verify published state, dashboard grants and account roles on cache hits.
+        board.published = False
+        db.session.commit()
+        try:
+            expect_forbidden(api, "GET", endpoint)
+        finally:
+            board.published = True
+            db.session.commit()
+        board.roles.remove(guest)
+        db.session.commit()
+        try:
+            expect_forbidden(api, "GET", endpoint)
+        finally:
+            board.roles.append(guest)
+            db.session.commit()
+        user.roles = []
+        db.session.commit()
+        expect_forbidden(api, "GET", endpoint)
+        expect_forbidden(api, "GET", "/olx/dashboard/olx-overview/")
+        print("Guest acceptance passed: three dashboards and scoped navigation; Health, native data APIs, "
+              "exports, edits, SQL Lab, draft dashboards and revoked access denied")
+    finally:
+        for uid, published in original.items():
+            managed[uid].published = published
+        if user is not None:
+            db.session.delete(user)
+        db.session.commit()
 
 
 def main():
@@ -118,6 +214,7 @@ def main():
             if user is not None:
                 db.session.delete(user)
             db.session.commit()
+        validate_guest_access()
 
 
 if __name__ == "__main__":

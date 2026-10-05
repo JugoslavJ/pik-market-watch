@@ -15,6 +15,7 @@ from sqlalchemy.orm import joinedload
 
 from superset import appbuilder, db, security_manager
 from viewer_queries import BOARDS, CANONICAL, compile_dashboard, presentation, selections, validate_cross
+from guest_access import GUEST_BOARDS, GUEST_PERMISSION
 
 ROOT = Path(__file__).parent / "viewer_dist"
 cache = SimpleCache(threshold=100, default_timeout=600)
@@ -48,6 +49,30 @@ def viewer_login_required(view):
     return protected
 
 
+def can_view_board(uid, board):
+    """Guest access requires a published, explicitly assigned allowed dashboard."""
+    if security_manager.is_guest_user():
+        return False
+    if security_manager.can_access("can_read", "Dashboard"):
+        return security_manager.can_access_dashboard(board)
+    return (uid in GUEST_BOARDS and security_manager.can_access(*GUEST_PERMISSION)
+            and board.published and bool(
+                {role.id for role in board.roles}
+                & {role.id for role in security_manager.get_user_roles()}))
+
+
+def visible_boards():
+    from superset.models.dashboard import Dashboard
+
+    boards = db.session.query(Dashboard).filter(Dashboard.slug.in_(
+        [uid + "-superset" for uid in BOARDS])).options(
+            joinedload(Dashboard.roles), joinedload(Dashboard.owners)).all()
+    allowed = {board.slug for board in boards
+               if can_view_board(board.slug.removesuffix("-superset"), board)}
+    return [{"uid": uid, "title": board["title"]} for uid, board in BOARDS.items()
+            if uid + "-superset" in allowed]
+
+
 def authorized(uid):
     from superset.connectors.sqla.models import RowLevelSecurityFilter, SqlaTable
     from superset.models.dashboard import Dashboard, dashboard_slices
@@ -55,7 +80,9 @@ def authorized(uid):
     from superset.models.core import Database
     if uid not in BOARDS:
         abort(404)
-    if security_manager.is_guest_user() or not security_manager.can_access("can_read", "Dashboard"):
+    if security_manager.is_guest_user() or not (
+            security_manager.can_access("can_read", "Dashboard")
+            or (uid in GUEST_BOARDS and security_manager.can_access(*GUEST_PERMISSION))):
         abort(403)
     board = db.session.query(Dashboard).filter_by(slug=uid + "-superset").options(
         joinedload(Dashboard.roles), joinedload(Dashboard.owners),
@@ -68,7 +95,7 @@ def authorized(uid):
         .filter(dashboard_slices.c.dashboard_id == board.id).options(
             joinedload(SqlaTable.database).load_only(Database.id, Database.database_name,
                 Database.changed_on, Database.impersonate_user)).all()
-    if not sources or not security_manager.can_access_dashboard(board):
+    if not sources or not can_view_board(uid, board):
         abort(403)
     expected = CANONICAL[uid]
     if (set(source.table_name for source in sources) != set(expected)
@@ -173,12 +200,14 @@ def dashboard_page(uid):
     manifest = json.loads((ROOT / ".vite" / "manifest.json").read_text())
     entry = manifest["src/main.jsx"]
     css = entry.get("css", []) + [css for name in entry.get("imports", []) for css in manifest[name].get("css", [])]
-    html_key = f"{g.user.get_id()}:{uid}:{data['asOf']}:{data['cached']}:{entry['file']}"
+    boards = visible_boards()
+    navigation = ",".join(board["uid"] for board in boards)
+    html_key = f"{g.user.get_id()}:{uid}:{data['asOf']}:{data['cached']}:{entry['file']}:{navigation}"
     html = page_cache.get(html_key) if data["ttl"] else None
     if html is None:
         html = render_template_string(PAGE, data=data, entry=entry,
             css=css, imports=[manifest[name]["file"] for name in entry.get("imports", [])],
-            boards=[{"uid": uid, "title": board["title"]} for uid, board in BOARDS.items()])
+            boards=boards)
         if data["ttl"]:
             page_cache.set(html_key, html, timeout=data["ttl"])
     # Add a fresh CSP nonce after retrieving principal-scoped, authorized cached HTML.

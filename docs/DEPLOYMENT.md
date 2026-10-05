@@ -71,8 +71,10 @@ The gate checks all 71 panels against source SQL, API latency, temporary viewer 
 
 Through the existing public HTTPS hostname, verify:
 
-- `/` opens the viewer after login, and navigation shows only four dashboards.
+- `/` opens the viewer after login, and navigation shows only authorized dashboards.
 - A real `OLX Viewer` account can open each board, with Secure session cookies.
+- An account with only `OLX Guest` can open Home, Market Overview and Exits;
+  Health pages/APIs and native Superset data APIs are denied.
 - Sidebar filters and chart clicks intersect; clearing restores the prior data.
 - Previous chart values remain visible during updates; expired sessions offer sign-in.
 - Maps fetch vector tiles, listing links work, and CSV/sorting work on tables.

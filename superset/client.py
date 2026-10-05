@@ -6,8 +6,19 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from http.cookiejar import CookieJar, DefaultCookiePolicy
+from html.parser import HTMLParser
 
 BASE = "http://superset:8088"
+
+
+class LoginCSRFParser(HTMLParser):
+    """Read the public login form without requiring security API permissions."""
+    token = None
+
+    def handle_starttag(self, tag, attrs):
+        fields = dict(attrs)
+        if tag == "input" and fields.get("name") == "csrf_token":
+            self.token = fields.get("value")
 
 
 class InternalServiceCookiePolicy(DefaultCookiePolicy):
@@ -65,7 +76,7 @@ class SupersetAPI:
                     message = message.replace(urllib.parse.quote(secret, safe=""), "[redacted]")
             raise RuntimeError(f"Superset {method} {path}: HTTP {error.code}: {message}") from None
 
-    def authenticate(self):
+    def authenticate(self, csrf=True):
         login = self.call(
             "POST",
             "/api/v1/security/login",
@@ -77,12 +88,19 @@ class SupersetAPI:
             },
         )
         self.token = login["access_token"]
-        self.csrf = self.call("GET", "/api/v1/security/csrf_token/")["result"]
+        self.csrf = self.call("GET", "/api/v1/security/csrf_token/")["result"] if csrf else None
 
     def authenticate_browser(self):
         """Deck.gl's legacy endpoint requires a Flask login session."""
         if self.browser_authenticated:
             return
+        if self.csrf is None:
+            parser = LoginCSRFParser()
+            with self.opener.open(BASE + "/login/", timeout=30) as response:
+                parser.feed(response.read().decode("utf-8"))
+            if not parser.token:
+                raise RuntimeError("Superset login form did not provide a CSRF token")
+            self.csrf = parser.token
         request = urllib.request.Request(
             BASE + "/login/",
             data=urllib.parse.urlencode({
