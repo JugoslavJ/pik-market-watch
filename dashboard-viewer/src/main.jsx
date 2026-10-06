@@ -456,7 +456,7 @@ function App() {
             <a
               key={board.uid}
               className={board.uid === data.uid ? "active" : ""}
-              href={`/olx/dashboard/${board.uid}/`}
+              href={`/olx/dashboard/${encodeURIComponent(board.uid)}/`}
             >
               {board.title.replace("OLX.ba ", "").replace("OLX ", "")}
             </a>
