@@ -1,4 +1,4 @@
-"""Batch source SQL with shared facts, scoped filters and bound client values."""
+"""Batch definition SQL with shared facts, scoped filters and bound client values."""
 import hashlib
 import json
 import math
@@ -9,7 +9,8 @@ from functools import lru_cache
 from jinja2 import Environment, pass_context
 from listing_filters import options_sql, viewer_variables
 from parity import (TABLE_DIMENSIONS, TABLE_SCAN, compile_sql, cross_filter_columns, dataset_name,
-                    panels, push_cross_filters, shared_source_sql, SOURCE_DIR)
+                    default_days, expand_filters, expand_time, filters, panels, push_cross_filters,
+                    shared_source_sql, SOURCE_DIR)
 
 BOARDS = {board["uid"]: board for path in sorted(SOURCE_DIR.glob("*.json"))
           if (board := json.loads(path.read_text(encoding="utf-8-sig")))}
@@ -36,13 +37,12 @@ def filter_template(source):
 def selections(board, supplied):
     if not isinstance(supplied, dict):
         raise ValueError("Expected filter selections")
-    defined = {v["name"]: v for v in [*board.get("templating", {}).get("list", []), *viewer_variables(board)]}
+    defined = {v["name"]: v for v in [*filters(board), *viewer_variables(board)]}
     if set(supplied) - set(defined):
         raise ValueError("Unknown dashboard filter")
     values = {}
     for name, variable in defined.items():
-        value = supplied.get(name, variable.get("current", {}).get("value", variable.get("default", "All")))
-        value = "All" if value == "$__all" else value
+        value = supplied.get(name, variable.get("default", "All"))
         value = value if isinstance(value, list) else [value]
         if not 1 <= len(value) <= 100 or any(not isinstance(v, (str, int, float)) for v in value):
             raise ValueError("Invalid filter values")
@@ -87,7 +87,7 @@ def compile_dashboard(board, supplied=None, cross=None, days=None, until=None):
         property_filters.setdefault(variable["column"], []).append({
             "op": variable["op"], "val": value if variable["op"] == "IN" else float(value[0])})
     until = until or datetime.now(timezone.utc)
-    days = float(days if days is not None else (2 if board["uid"] == "olx-health" else 90))
+    days = float(days if days is not None else default_days(board))
     if not 0 < days <= 365:
         raise ValueError("Invalid time window")
     params, ctes, groups = {}, {}, {}
@@ -111,17 +111,10 @@ def compile_dashboard(board, supplied=None, cross=None, days=None, until=None):
         if key in groups:
             continue
         sql = shared_source_sql(board, panel).strip().rstrip(";")
-        sql = re.sub(r"\$\{(\w+):sqlstring\}",
-                     lambda m: ",".join(bind(v) for v in selected[m[1]]), sql)
-        panel_days = days
-        if panel.get("timeFrom") and days == (2 if board["uid"] == "olx-health" else 90):
-            match = re.fullmatch(r"(\d+)([dhm])", panel["timeFrom"])
-            if match:
-                panel_days = int(match[1]) * {"d": 1, "h": 1 / 24, "m": 1 / 1440}[match[2]]
-        start = "CAST(" + bind((until - timedelta(days=panel_days)).isoformat()) + " AS timestamptz)"
+        sql = expand_filters(sql, lambda name: ",".join(bind(v) for v in selected[name]))
+        start = "CAST(" + bind((until - timedelta(days=days)).isoformat()) + " AS timestamptz)"
         end = "CAST(" + bind(until.isoformat()) + " AS timestamptz)"
-        sql = re.sub(r"\$__timeFilter\(([^)]+)\)", lambda m: f"({m[1]} BETWEEN {start} AND {end})", sql)
-        sql = sql.replace("$__timeFrom()", start).replace("$__timeTo()", end)
+        sql = expand_time(sql, start, end)
         permitted = cross_filter_columns(sql)
         applicable = {name: [{"op": "IN", "val": values}] for name, values in cross.items() if name in permitted or name == "category"}
         for name, predicates in property_filters.items():
@@ -150,9 +143,9 @@ def compile_dashboard(board, supplied=None, cross=None, days=None, until=None):
 
     # Native filter option lists share this same database round trip.
     options = {}
-    for variable in board.get("templating", {}).get("list", []):
-        if variable["type"] == "query":
-            options[variable["name"]] = variable["query"]
+    for variable in filters(board):
+        if "options_sql" in variable:
+            options[variable["name"]] = variable["options_sql"]
     # Inline lifecycle facts to preserve indexed lateral lookups for the next exit.
     entries = [f"'{key}', (SELECT coalesce(jsonb_agg(to_jsonb(r)), '[]'::jsonb) FROM ({sql}) r)"
                for key, sql in groups.items()]
@@ -172,20 +165,17 @@ def compile_dashboard(board, supplied=None, cross=None, days=None, until=None):
     return statement, {key: value for key, value in params.items() if key in used}, len(groups)
 
 
+PRESENTED_FIELDS = ("field", "category", "value", "x", "y", "bars", "suffix", "decimals")
+
+
 def presentation(board):
-    result = []
-    for panel in panels(board):
-        defaults = panel.get("fieldConfig", {}).get("defaults", {})
-        result.append({"id": panel["id"], "key": dataset_name(board, panel),
-                       "title": panel["title"], "type": panel["type"], "grid": panel["gridPos"],
-                       "unit": defaults.get("unit", "none"),
-                       "decimals": defaults.get("decimals", 1 if defaults.get("unit") == "percent" else 0),
-                       "metric": panel.get("options", {}).get("reduceOptions", {}).get("fields"),
-                       "options": panel.get("options", {}), "transformations": panel.get("transformations", []),
-                       "drawStyle": defaults.get("custom", {}).get("drawStyle", "line")})
+    result = [{"id": panel["id"], "key": dataset_name(board, panel), "title": panel["title"],
+               "type": panel["type"], "grid": panel["layout"],
+               **{name: panel[name] for name in PRESENTED_FIELDS if name in panel}}
+              for panel in panels(board)]
     return {"uid": board["uid"], "title": board["title"], "panels": result,
+            "defaultDays": default_days(board),
             "variables": [{"name": v["name"], "label": v.get("label", v["name"]),
                            "type": v["type"], "multi": v.get("multi", False),
-                           "default": "All" if v.get("current", {}).get("value") == "$__all" else v.get("current", {}).get("value", "All"),
-                           "choices": v.get("query", "").split(",") if v["type"] == "custom" else []}
-                          for v in board.get("templating", {}).get("list", [])] + viewer_variables(board)}
+                           "default": v.get("default", "All"), "choices": v.get("options", [])}
+                          for v in filters(board)] + viewer_variables(board)}

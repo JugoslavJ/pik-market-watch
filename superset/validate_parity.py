@@ -1,9 +1,8 @@
-"""Compare native chart results with source dashboard SQL on the reporting database."""
+"""Compare native chart results with dashboard definition SQL on the reporting database."""
 
 import json
 import math
 import os
-import re
 import sys
 import time
 import urllib.parse
@@ -13,7 +12,8 @@ from decimal import Decimal
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-from parity import SOURCE_DIR, chart_name, panels, source_sql, variable_names
+from parity import (SOURCE_DIR, chart_name, default_days, expand_filters, expand_time, filters, panels,
+                    source_sql, variable_names)
 from client import SupersetAPI
 
 
@@ -22,19 +22,11 @@ def quote(value):
 
 
 def reference_sql(board, panel, selection, since, until):
-    values = {}
-    for variable in board.get("templating", {}).get("list", []):
-        value = variable.get("current", {}).get("value", "")
-        if value == "$__all":
-            value = variable.get("allValue", "'All'").strip("'")
-        values[variable["name"]] = value if isinstance(value, list) else [value]
+    values = {variable["name"]: [variable.get("default", "All")] for variable in filters(board)}
     values.update(selection)
-    sql = re.sub(r"\$\{(\w+):sqlstring\}",
-                 lambda m: ",".join(quote(v) for v in values[m[1]]),
-                 source_sql(board, panel))
+    sql = expand_filters(source_sql(board, panel), lambda name: ",".join(quote(v) for v in values[name]))
     start, end = quote(since.isoformat()) + "::timestamptz", quote(until.isoformat()) + "::timestamptz"
-    sql = re.sub(r"\$__timeFilter\(([^)]+)\)", lambda m: f"({m[1]} BETWEEN {start} AND {end})", sql)
-    return sql.replace("$__timeFrom()", start).replace("$__timeTo()", end).strip().rstrip(";")
+    return expand_time(sql, start, end).strip().rstrip(";")
 
 
 def context_for(saved, selection, since, until, cross_selection=None):
@@ -119,22 +111,22 @@ def main():
         until = cursor.fetchone()["as_of"].replace(microsecond=0)
         for path in sorted(SOURCE_DIR.glob("*.json")):
             board = json.loads(path.read_text(encoding="utf-8-sig"))
-            since = until - timedelta(hours=48) if board["uid"] == "olx-health" else until - timedelta(days=90)
+            since = until - timedelta(days=default_days(board))
             for panel in panels(board):
                 title = chart_name(board, panel)
                 chart = api.find("chart", "slice_name", title)
                 if not chart:
-                    raise RuntimeError(f"Missing source counterpart: {title}")
+                    raise RuntimeError(f"Missing native chart: {title}")
                 saved = api.call("GET", f"/api/v1/chart/{chart['id']}")["result"]
                 scenarios = [{}]
                 variables = variable_names(source_sql(board, panel))
-                if "deal" in variables and panel["type"] in ("stat", "geomap"):
+                if "deal" in variables and panel["type"] in ("big_number", "map"):
                     scenarios += [{"deal": ["sell"]}, {"deal": ["rent"]}]
-                if "min_sqm" in variables and panel["type"] == "stat":
+                if "min_sqm" in variables and panel["type"] == "big_number":
                     scenarios.append({"deal": ["sell"], "min_sqm": ["40"], "max_sqm": ["100"]})
                 scenarios = [(selection, {}) for selection in scenarios]
                 if "rooms" in variables:
-                    # Same source result, reached through chart clicks rather
+                    # Same definition result, reached through chart clicks rather
                     # than synthetic sidebar controls, including maps/KPIs.
                     scenarios += [({}, {"rooms": ["2"]}),
                                   ({"deal": ["sell"]}, {"rooms": ["2"]})]
@@ -143,7 +135,7 @@ def main():
                     cursor.execute(reference_sql(board, panel, {**selection, **cross_selection}, since, until))
                     expected = cursor.fetchall()
                     context = context_for(saved, selection, since, until, cross_selection)
-                    if panel["type"] == "geomap":
+                    if panel["type"] == "map":
                         encoded = urllib.parse.quote(json.dumps(context["form_data"]))
                         response = api.call("GET", "/superset/explore_json/?force=true&form_data=" + encoded)
                         if response.get("error") or response.get("status") == "failed":
@@ -160,12 +152,10 @@ def main():
                         if result.get("rejected_filters"):
                             raise RuntimeError(f"{title}: native filters were rejected")
                         actual = result["data"]
-                        if panel["type"] == "stat":
-                            columns = [panel["options"]["reduceOptions"]["fields"]]
-                        elif panel["type"] == "xychart":
-                            series = panel["options"]["series"][0]
-                            columns = [series[a]["matcher"]["options"] for a in ("x", "y")]
-                            columns += ["title"]
+                        if panel["type"] == "big_number":
+                            columns = [panel["field"]]
+                        elif panel["type"] == "scatter":
+                            columns = [panel["x"], panel["y"], "title"]
                         elif panel["type"] == "table":
                             form = context["form_data"]
                             columns = [c for c in form.get("all_columns", [
@@ -176,9 +166,9 @@ def main():
                             columns = list(expected[0]) if expected else []
                     compare(expected, actual, columns, title, time.monotonic() - started)
                     checked += 1
-                print(f"Compared source dashboard source: {title} ({len(scenarios)} filter states)")
+                print(f"Compared native chart: {title} ({len(scenarios)} filter states)")
     connection.close()
-    print(f"Passed {checked} source comparisons across all 71 panel counterparts.")
+    print(f"Passed {checked} comparisons across all native charts.")
 
 
 if __name__ == "__main__":

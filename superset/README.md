@@ -4,9 +4,9 @@ Apache Superset 6.0.0 provides authentication, administration and reporting for 
 
 ## Terms
 
-- **Dashboard definition**: one JSON file per dashboard in `dashboards/` (`olx-home`, `olx-overview`, `olx-exits`, `olx-health`). It holds the panels, filter variables, time windows, units and layout, and is the single source for both the viewer and the native dashboards.
-- **Panel**: one stat, chart, table or map in a definition. A panel either has its own SQL or reuses another panel's query (`panelId`) and shows one of its fields.
-- **Definition SQL**: a panel's query. It can use `${name:sqlstring}` filter placeholders and the `$__timeFilter(column)`, `$__timeFrom()` and `$__timeTo()` time macros, which both compilers expand.
+- **Dashboard definition**: one JSON file per dashboard in [`dashboards/`](dashboards/README.md) (`olx-home`, `olx-overview`, `olx-exits`, `olx-health`). It holds the panels, filter variables, time windows, units and layout, and is the single source for both the viewer and the native dashboards.
+- **Panel**: one big number, chart, table or map in a definition. A panel either has its own SQL or reuses another panel's query (`source_panel`).
+- **Definition SQL**: a panel's query, using the filter and time [macros](dashboards/README.md) that both compilers expand.
 - **Viewer**: the React app at `/olx/dashboard/<uid>/`. `viewer_queries.py` compiles each dashboard into one batched, parameterized statement.
 - **Native dashboards**: ordinary Superset dashboards (slug `<uid>-superset`) that `parity.py` compiles from the same definitions. The viewer uses them for permissions and dataset checks.
 - **Companion dashboards**: six extra native dashboards that `seed.py` creates for exploring the data in Superset. They are not in the viewer navigation.

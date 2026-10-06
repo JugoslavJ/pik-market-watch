@@ -15,6 +15,7 @@ from sqlalchemy import create_engine, text, and_
 from sqlalchemy.orm import joinedload
 
 from superset import appbuilder, db, security_manager
+from parity import default_days
 from viewer_queries import BOARDS, CANONICAL, compile_dashboard, presentation, selections, validate_cross
 from guest_access import GUEST_BOARDS, GUEST_PERMISSION
 
@@ -134,7 +135,7 @@ def payload(uid, database, revision):
     source = BOARDS[uid]
     selected = selections(source, json.loads(request.args.get("s", "{}")))
     cross = validate_cross(json.loads(request.args.get("c", "{}")))
-    days = float(request.args.get("days", 2 if uid == "olx-health" else 90))
+    days = float(request.args.get("days", default_days(source)))
     if not 0 < days <= 365:
         raise ValueError("Invalid time range")
     identity = {"uid": uid, "user": g.user.get_id(),
@@ -231,8 +232,8 @@ PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 {% for path in imports %}<link rel="modulepreload" href="/olx/assets/{{path}}">{% endfor %}
 </head><body><div id="root"><header><a class="brand" href="/olx/dashboard/olx-overview/">OLX Market Watch</a>
 <h1>{{data.title}}</h1></header><main class="initial"><div class="grid">
-{% for panel in data.panels if panel.type == 'stat' %}<section class="panel stat" style="grid-column:span {{panel.grid.w}}">
-<h2>{{panel.title}}</h2><div class="value">{{data.rows[panel.key][0][panel.metric] if data.rows[panel.key] else '—'}}</div></section>{% endfor %}
+{% for panel in data.panels if panel.type == 'big_number' %}<section class="panel stat" style="grid-column:span {{panel.grid.w}}">
+<h2>{{panel.title}}</h2><div class="value">{{data.rows[panel.key][0][panel.field] if data.rows[panel.key] else '—'}}</div></section>{% endfor %}
 </div></main></div><script id="viewer-bootstrap" type="application/json" nonce="__OLX_NONCE__">{{{'data':data,'boards':boards}|tojson}}</script>
 <script type="module" src="/olx/assets/{{entry.file}}" nonce="__OLX_NONCE__"></script></body></html>"""
 

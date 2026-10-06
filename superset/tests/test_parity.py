@@ -35,7 +35,7 @@ class ParityContracts(unittest.TestCase):
         if not cls.boards:
             raise RuntimeError("Dashboard definitions must be mounted for parity tests")
 
-    def test_every_source_panel_has_a_visual_counterpart(self):
+    def test_every_panel_has_a_native_chart(self):
         expected = {"olx-home": 11, "olx-overview": 25,
                     "olx-exits": 14, "olx-health": 21}
         for board in self.boards:
@@ -46,17 +46,17 @@ class ParityContracts(unittest.TestCase):
                 names.add(parity.chart_name(board, panel))
                 viz = parity.viz_type(panel)
                 self.assertEqual(viz == "table", panel["type"] == "table")
-                if panel["type"] == "xychart":
+                if panel["type"] == "scatter":
                     self.assertEqual(viz, "bubble_v2")
                 sql = parity.compile_sql(board, panel)
-                self.assertNotRegex(sql, r"\$\{|\$__")
+                self.assertNotIn("${", sql)
                 self.assertIn("lean.", render(sql))
             self.assertEqual(len(names), len(source))
 
-    def test_shared_dashboard_kpis_keep_their_source_query(self):
+    def test_reused_panels_share_their_source_query(self):
         for board in self.boards:
             for panel in parity.panels(board):
-                source_id = panel["targets"][0].get("panelId")
+                source_id = panel.get("source_panel")
                 if source_id:
                     source = next(p for p in parity.panels(board) if p["id"] == source_id)
                     self.assertEqual(parity.dataset_name(board, panel),
@@ -74,7 +74,7 @@ class ParityContracts(unittest.TestCase):
         for card in cards:
             form = parity.chart_form(board, card, 7, [])
             self.assertEqual(len(form['dashboard_shared_metrics']), 4)
-            self.assertIn(card['options']['reduceOptions']['fields'], sql)
+            self.assertIn(card['field'], sql)
 
     def test_native_values_are_sql_quoted_inside_source_aggregates(self):
         board = next(b for b in self.boards if b["uid"] == "olx-overview")
@@ -95,9 +95,9 @@ class ParityContracts(unittest.TestCase):
     def test_time_macros_preserve_health_window_and_include_today(self):
         for board in self.boards:
             for panel in parity.panels(board):
-                if "$__time" not in parity.source_sql(board, panel):
+                if not parity.uses_time(parity.source_sql(board, panel)):
                     continue
-                window = parity.time_range(board, panel)
+                window = parity.time_range(board)
                 self.assertTrue(window.endswith(": now"))
                 self.assertIn("-48, hour" if board["uid"] == "olx-health" else "-90, day", window)
                 sql = render(parity.compile_sql(board, panel),
@@ -114,7 +114,7 @@ class ParityContracts(unittest.TestCase):
         count = 0
         for board in self.boards:
             for panel in parity.panels(board):
-                if panel["type"] != "geomap":
+                if panel["type"] != "map":
                     continue
                 count += 1
                 form = parity.chart_form(board, panel, 7,

@@ -31,9 +31,6 @@ export const FILTER_DIMENSIONS = new Set([
   "status",
 ]);
 
-const rowsToFields = (panel) =>
-  panel.transformations.find((t) => t.id === "rowsToFields").options;
-
 export function number(value, panel = {}) {
   if (value == null || !Number.isFinite(Number(value))) return "—";
   return Number(value).toLocaleString("en-GB", {
@@ -42,10 +39,7 @@ export function number(value, panel = {}) {
   });
 }
 export function unit(panel) {
-  const value = panel.unit || "none";
-  return value.startsWith("suffix:")
-    ? value.slice(7).trim()
-    : { percent: "%", s: "seconds", m: "minutes" }[value] || "";
+  return panel.suffix || "";
 }
 
 export function chartOption(panel, rows) {
@@ -59,10 +53,8 @@ export function chartOption(panel, rows) {
     legend: { bottom: 0, textStyle: { color: "#a9b9c9" }, type: "scroll" },
     color: ["#36d7ba", "#79a8ff", "#ffbb63", "#e680a8", "#aa94ef"],
   };
-  if (panel.type === "xychart") {
-    const mapping = panel.options.series[0];
-    const x = mapping.x.matcher.options,
-      y = mapping.y.matcher.options;
+  if (panel.type === "scatter") {
+    const { x, y } = panel;
     return {
       ...base,
       tooltip: {
@@ -82,8 +74,8 @@ export function chartOption(panel, rows) {
       ],
     };
   }
-  if (panel.type === "bargauge") {
-    const { nameField: dimension, valueField: measure } = rowsToFields(panel);
+  if (panel.type === "bar") {
+    const { category: dimension, value: measure } = panel;
     return {
       ...base,
       legend: { show: false },
@@ -125,7 +117,7 @@ export function chartOption(panel, rows) {
     },
     series: measures.map((measure) => ({
       name: measure,
-      type: panel.drawStyle === "bars" ? "bar" : "line",
+      type: panel.bars ? "bar" : "line",
       showSymbol: false,
       data: rows.map((row) => [Date.parse(row[time]), row[measure]]),
     })),
@@ -135,8 +127,8 @@ export function chartOption(panel, rows) {
 export function selectionFor(panel, rows, index) {
   const row = rows[index];
   if (!row) return null;
-  if (panel.type === "bargauge") {
-    const dimension = rowsToFields(panel).nameField;
+  if (panel.type === "bar") {
+    const dimension = panel.category;
     if (FILTER_DIMENSIONS.has(dimension))
       return { dimension, value: row[dimension] };
   }

@@ -1,1118 +1,294 @@
 {
+  "uid": "olx-health",
+  "title": "OLX Scraper Health",
   "description": "Direct views of current listings, recorded price changes, scrape runs, and observed closures in the lean schema. Historical charts use retained event timestamps rather than reconstructed daily inventory.",
+  "time_range": "48h",
+  "filters": [
+    {
+      "name": "category",
+      "label": "Category (search tables)",
+      "type": "select",
+      "multi": false,
+      "options_sql": "SELECT DISTINCT category AS __value FROM lean.saved_searches WHERE category IS NOT NULL ORDER BY 1"
+    }
+  ],
   "panels": [
     {
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short",
-          "noValue": "—"
-        },
-        "overrides": []
-      },
-      "gridPos": {
+      "id": 1,
+      "title": "Searches watched",
+      "type": "big_number",
+      "layout": {
         "x": 0,
         "y": 0,
         "w": 8,
         "h": 4
       },
-      "title": "Searches watched",
-      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
-      "type": "stat",
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "searches",
-          "values": false
-        },
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "targets": [
-        {
-          "rawSql": "SELECT count(*) AS searches FROM lean.saved_searches"
-        }
-      ],
-      "id": 1
+      "sql": "SELECT count(*) AS searches FROM lean.saved_searches",
+      "field": "searches"
     },
     {
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 1
-              },
-              {
-                "color": "red",
-                "value": 4
-              }
-            ]
-          },
-          "unit": "short",
-          "noValue": "0"
-        },
-        "overrides": []
-      },
-      "gridPos": {
+      "id": 2,
+      "title": "Failed runs · 24 h",
+      "type": "big_number",
+      "layout": {
         "x": 8,
         "y": 0,
         "w": 8,
         "h": 4
       },
-      "title": "Failed runs · 24 h",
-      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
-      "type": "stat",
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "failed_24h",
-          "values": false
-        },
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "targets": [
-        {
-          "rawSql": "WITH a AS (\n  SELECT count(*) FILTER (WHERE status='error' AND started_at>now()-INTERVAL '24 hours') AS failed_24h,\n    count(*) FILTER (WHERE status='ok' AND started_at>now()-INTERVAL '24 hours') AS ok_24h,\n    count(*) FILTER (WHERE status IN ('ok','error') AND started_at>now()-INTERVAL '24 hours') AS finished_24h,\n    max(finished_at) FILTER (WHERE status='ok' AND is_complete) AS last_success,\n    coalesce(sum(cards) FILTER (WHERE status='ok' AND started_at>now()-INTERVAL '24 hours'),0) AS cards_24h,\n    count(*) FILTER (WHERE NOT is_complete AND status IN ('ok','error') AND finished_at IS NOT NULL AND started_at>now()-INTERVAL '24 hours') AS incomplete\n  FROM lean.scrape_runs\n)\nSELECT failed_24h,\n  round(100.0*ok_24h/NULLIF(finished_24h,0),0) AS success_rate,\n  round(EXTRACT(EPOCH FROM (now()-last_success)))::bigint AS seconds_since_success,\n  cards_24h, incomplete\nFROM a"
-        }
-      ],
-      "id": 2
+      "sql": "WITH a AS (\n  SELECT count(*) FILTER (WHERE status='error' AND started_at>now()-INTERVAL '24 hours') AS failed_24h,\n    count(*) FILTER (WHERE status='ok' AND started_at>now()-INTERVAL '24 hours') AS ok_24h,\n    count(*) FILTER (WHERE status IN ('ok','error') AND started_at>now()-INTERVAL '24 hours') AS finished_24h,\n    max(finished_at) FILTER (WHERE status='ok' AND is_complete) AS last_success,\n    coalesce(sum(cards) FILTER (WHERE status='ok' AND started_at>now()-INTERVAL '24 hours'),0) AS cards_24h,\n    count(*) FILTER (WHERE NOT is_complete AND status IN ('ok','error') AND finished_at IS NOT NULL AND started_at>now()-INTERVAL '24 hours') AS incomplete\n  FROM lean.scrape_runs\n)\nSELECT failed_24h,\n  round(100.0*ok_24h/NULLIF(finished_24h,0),0) AS success_rate,\n  round(EXTRACT(EPOCH FROM (now()-last_success)))::bigint AS seconds_since_success,\n  cards_24h, incomplete\nFROM a",
+      "field": "failed_24h"
     },
     {
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 80
-              },
-              {
-                "color": "green",
-                "value": 95
-              }
-            ]
-          },
-          "unit": "percent",
-          "noValue": "Unknown"
-        },
-        "overrides": []
-      },
-      "gridPos": {
+      "id": 3,
+      "title": "Success rate · 24 h",
+      "type": "big_number",
+      "layout": {
         "x": 16,
         "y": 0,
         "w": 8,
         "h": 4
       },
-      "title": "Success rate · 24 h",
-      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
-      "type": "stat",
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "success_rate",
-          "values": false
-        },
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "targets": [
-        {
-          "panelId": 2
-        }
-      ],
-      "id": 3
+      "source_panel": 2,
+      "field": "success_rate",
+      "suffix": "%",
+      "decimals": 1
     },
     {
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 7200
-              },
-              {
-                "color": "red",
-                "value": 21600
-              }
-            ]
-          },
-          "unit": "s",
-          "noValue": "—"
-        },
-        "overrides": []
-      },
-      "gridPos": {
+      "id": 4,
+      "title": "Since last successful scrape",
+      "type": "big_number",
+      "layout": {
         "x": 0,
         "y": 4,
         "w": 12,
         "h": 4
       },
-      "title": "Since last successful scrape",
-      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
-      "type": "stat",
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "seconds_since_success",
-          "values": false
-        },
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "targets": [
-        {
-          "panelId": 2
-        }
-      ],
-      "id": 4
+      "source_panel": 2,
+      "field": "seconds_since_success",
+      "suffix": "seconds"
     },
     {
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short",
-          "noValue": "—"
-        },
-        "overrides": []
-      },
-      "gridPos": {
+      "id": 5,
+      "title": "Cards scraped · 24 h",
+      "type": "big_number",
+      "layout": {
         "x": 12,
         "y": 4,
         "w": 12,
         "h": 4
       },
-      "title": "Cards scraped · 24 h",
-      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
-      "type": "stat",
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "cards_24h",
-          "values": false
-        },
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "targets": [
-        {
-          "panelId": 2
-        }
-      ],
-      "id": 5
+      "source_panel": 2,
+      "field": "cards_24h"
     },
     {
-      "type": "row",
-      "title": "Throughput",
-      "gridPos": {
-        "x": 0,
-        "y": 8,
-        "w": 24,
-        "h": 1
-      },
-      "panels": [],
-      "id": 6
-    },
-    {
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "drawStyle": "bars",
-            "fillOpacity": 80,
-            "lineWidth": 0,
-            "showPoints": "never",
-            "spanNulls": false
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
+      "id": 7,
+      "title": "Runs per hour — ok vs error",
+      "type": "timeseries",
+      "layout": {
         "x": 0,
         "y": 9,
         "w": 24,
         "h": 9
       },
-      "title": "Runs per hour — ok vs error",
-      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
-      "type": "timeseries",
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "targets": [
-        {
-          "rawSql": "SELECT date_trunc('hour',started_at) AS time,count(*) FILTER (WHERE status='ok') AS ok,count(*) FILTER (WHERE status='error') AS error,count(*) FILTER (WHERE status='running') AS running FROM lean.scrape_runs WHERE $__timeFilter(started_at) GROUP BY 1 ORDER BY 1"
-        }
-      ],
-      "id": 7
+      "sql": "SELECT date_trunc('hour',started_at) AS time,count(*) FILTER (WHERE status='ok') AS ok,count(*) FILTER (WHERE status='error') AS error,count(*) FILTER (WHERE status='running') AS running FROM lean.scrape_runs WHERE ${time_filter:started_at} GROUP BY 1 ORDER BY 1",
+      "bars": true
     },
     {
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 2,
-            "showPoints": "never",
-            "spanNulls": true
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
+      "id": 8,
+      "title": "Cards & pages per run — hourly averages",
+      "type": "timeseries",
+      "layout": {
         "x": 0,
         "y": 18,
         "w": 24,
         "h": 9
       },
-      "title": "Cards & pages per run — hourly averages",
-      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
-      "type": "timeseries",
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "targets": [
-        {
-          "rawSql": "SELECT date_trunc('hour',started_at) AS time,round(avg(cards))::int AS \"avg cards\",round(avg(pages))::int AS \"avg pages\" FROM lean.scrape_runs WHERE $__timeFilter(started_at) GROUP BY 1 ORDER BY 1"
-        }
-      ],
-      "id": 8
+      "sql": "SELECT date_trunc('hour',started_at) AS time,round(avg(cards))::int AS \"avg cards\",round(avg(pages))::int AS \"avg pages\" FROM lean.scrape_runs WHERE ${time_filter:started_at} GROUP BY 1 ORDER BY 1"
     },
     {
-      "type": "row",
-      "title": "Saved searches",
-      "gridPos": {
-        "x": 0,
-        "y": 27,
-        "w": 24,
-        "h": 1
-      },
-      "panels": [],
-      "id": 9
-    },
-    {
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": false
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
+      "id": 10,
+      "title": "Saved searches — stalest first",
+      "type": "table",
+      "layout": {
         "x": 0,
         "y": 28,
         "w": 24,
         "h": 10
       },
-      "title": "Saved searches — stalest first",
-      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
+      "sql": "SELECT name,coalesce(category,'(none)') AS category,listing_count AS listings,median_ppm2 AS \"median KM/m2\",new_count AS new,drop_count AS drops,round(EXTRACT(EPOCH FROM (now()-last_scraped_at))/60)::int AS age_min,url FROM lean.saved_searches WHERE ${category}='All' OR category=${category} ORDER BY last_scraped_at NULLS FIRST"
+    },
+    {
+      "id": 12,
+      "title": "Recent scrape runs — newest 50",
       "type": "table",
-      "options": {
-        "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": [
-            "sum"
-          ],
-          "show": false
-        },
-        "showHeader": true
-      },
-      "targets": [
-        {
-          "rawSql": "SELECT name,coalesce(category,'(none)') AS category,listing_count AS listings,median_ppm2 AS \"median KM/m2\",new_count AS new,drop_count AS drops,round(EXTRACT(EPOCH FROM (now()-last_scraped_at))/60)::int AS age_min,url FROM lean.saved_searches WHERE ${category:sqlstring}='All' OR category=${category:sqlstring} ORDER BY last_scraped_at NULLS FIRST"
-        }
-      ],
-      "id": 10
-    },
-    {
-      "type": "row",
-      "title": "Scrape runs",
-      "gridPos": {
-        "x": 0,
-        "y": 38,
-        "w": 24,
-        "h": 1
-      },
-      "panels": [],
-      "id": 11
-    },
-    {
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": false
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
+      "layout": {
         "x": 0,
         "y": 39,
         "w": 24,
         "h": 11
       },
-      "title": "Recent scrape runs — newest 50",
-      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
-      "type": "table",
-      "options": {
-        "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": [
-            "sum"
-          ],
-          "show": false
-        },
-        "showHeader": true
-      },
-      "targets": [
-        {
-          "rawSql": "SELECT r.id,coalesce(s.category,'(none)') AS category,r.search_key,r.status,r.pages,r.cards,r.started_at AS started,r.finished_at AS finished,r.error FROM lean.scrape_runs r LEFT JOIN lean.saved_searches s USING(search_key) ORDER BY r.id DESC LIMIT 50"
-        }
-      ],
-      "id": 12
+      "sql": "SELECT r.id,coalesce(s.category,'(none)') AS category,r.search_key,r.status,r.pages,r.cards,r.started_at AS started,r.finished_at AS finished,r.error FROM lean.scrape_runs r LEFT JOIN lean.saved_searches s USING(search_key) ORDER BY r.id DESC LIMIT 50"
     },
     {
-      "type": "row",
-      "title": "Data quality & upstream",
-      "gridPos": {
-        "x": 0,
-        "y": 50,
-        "w": 24,
-        "h": 1
-      },
-      "panels": [],
-      "id": 13
-    },
-    {
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 50
-              },
-              {
-                "color": "green",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "percent",
-          "noValue": "—"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "x": 0,
-        "y": 51,
-        "w": 12,
-        "h": 4
-      },
+      "id": 14,
       "title": "Geo pins · actives",
-      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
-      "type": "stat",
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "pinned_pct",
-          "values": false
-        },
-        "textMode": "auto",
-        "wideLayout": true
+      "type": "big_number",
+      "layout": {
+        "x": 0,
+        "y": 51,
+        "w": 12,
+        "h": 4
       },
-      "targets": [
-        {
-          "rawSql": "SELECT round(100.0*count(*) FILTER (WHERE latitude IS NOT NULL AND longitude IS NOT NULL)/NULLIF(count(*),0)) AS pinned_pct,\n  round(100.0*count(details_fetched_at)/NULLIF(count(*),0)) AS details_pct,\n  round(100.0*count(*) FILTER (WHERE ppm2>0)/NULLIF(count(*),0)) AS priced_pct,\n  round(100.0*count(api_status)/NULLIF(count(*),0)) AS api_status_pct\nFROM lean.listings WHERE closed_at IS NULL"
-        }
-      ],
-      "id": 14
+      "sql": "SELECT round(100.0*count(*) FILTER (WHERE latitude IS NOT NULL AND longitude IS NOT NULL)/NULLIF(count(*),0)) AS pinned_pct,\n  round(100.0*count(details_fetched_at)/NULLIF(count(*),0)) AS details_pct,\n  round(100.0*count(*) FILTER (WHERE ppm2>0)/NULLIF(count(*),0)) AS priced_pct,\n  round(100.0*count(api_status)/NULLIF(count(*),0)) AS api_status_pct\nFROM lean.listings WHERE closed_at IS NULL",
+      "field": "pinned_pct",
+      "suffix": "%",
+      "decimals": 1
     },
     {
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 50
-              },
-              {
-                "color": "green",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "percent",
-          "noValue": "—"
-        },
-        "overrides": []
-      },
-      "gridPos": {
+      "id": 15,
+      "title": "Details fetched · actives",
+      "type": "big_number",
+      "layout": {
         "x": 12,
         "y": 51,
         "w": 12,
         "h": 4
       },
-      "title": "Details fetched · actives",
-      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
-      "type": "stat",
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "details_pct",
-          "values": false
-        },
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "targets": [
-        {
-          "panelId": 14
-        }
-      ],
-      "id": 15
+      "source_panel": 14,
+      "field": "details_pct",
+      "suffix": "%",
+      "decimals": 1
     },
     {
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 50
-              },
-              {
-                "color": "green",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "percent",
-          "noValue": "—"
-        },
-        "overrides": []
-      },
-      "gridPos": {
+      "id": 16,
+      "title": "KM/m² known · actives",
+      "type": "big_number",
+      "layout": {
         "x": 0,
         "y": 55,
         "w": 12,
         "h": 4
       },
-      "title": "KM/m² known · actives",
-      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
-      "type": "stat",
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "priced_pct",
-          "values": false
-        },
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "targets": [
-        {
-          "panelId": 14
-        }
-      ],
-      "id": 16
+      "source_panel": 14,
+      "field": "priced_pct",
+      "suffix": "%",
+      "decimals": 1
     },
     {
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "yellow",
-                "value": null
-              },
-              {
-                "color": "green",
-                "value": 50
-              }
-            ]
-          },
-          "unit": "percent",
-          "noValue": "—"
-        },
-        "overrides": []
-      },
-      "gridPos": {
+      "id": 17,
+      "title": "OLX status known · actives",
+      "type": "big_number",
+      "layout": {
         "x": 12,
         "y": 55,
         "w": 12,
         "h": 4
       },
-      "title": "OLX status known · actives",
-      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
-      "type": "stat",
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "api_status_pct",
-          "values": false
-        },
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "targets": [
-        {
-          "panelId": 14
-        }
-      ],
-      "id": 17
+      "source_panel": 14,
+      "field": "api_status_pct",
+      "suffix": "%",
+      "decimals": 1
     },
     {
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": false
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
+      "id": 18,
+      "title": "OLX status vs closure state · recently seen",
+      "type": "table",
+      "layout": {
         "x": 0,
         "y": 59,
         "w": 24,
         "h": 8
       },
-      "title": "OLX status vs closure state · recently seen",
-      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
-      "type": "table",
-      "options": {
-        "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": [
-            "sum"
-          ],
-          "show": false
-        },
-        "showHeader": true
-      },
-      "targets": [
-        {
-          "rawSql": "SELECT coalesce(api_status,'(not exposed)') AS olx_says,CASE WHEN closed_at IS NOT NULL THEN 'closed' ELSE 'open' END AS we_say,count(*) AS listings FROM lean.listings WHERE last_seen>now()-INTERVAL '14 days' GROUP BY 1,2 ORDER BY 3 DESC"
-        }
-      ],
-      "id": 18
+      "sql": "SELECT coalesce(api_status,'(not exposed)') AS olx_says,CASE WHEN closed_at IS NOT NULL THEN 'closed' ELSE 'open' END AS we_say,count(*) AS listings FROM lean.listings WHERE last_seen>now()-INTERVAL '14 days' GROUP BY 1,2 ORDER BY 3 DESC"
     },
     {
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": false
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
+      "id": 19,
+      "title": "Search duration — slowest first",
+      "type": "table",
+      "layout": {
         "x": 0,
         "y": 67,
         "w": 24,
         "h": 8
       },
-      "title": "Search duration — slowest first",
-      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
-      "type": "table",
-      "options": {
-        "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": [
-            "sum"
-          ],
-          "show": false
-        },
-        "showHeader": true
-      },
-      "targets": [
-        {
-          "rawSql": "SELECT s.name,coalesce(s.category,'(none)') AS category,count(r.id) AS runs,round(avg(EXTRACT(EPOCH FROM (r.finished_at-r.started_at))))::int AS avg_s,max(EXTRACT(EPOCH FROM (r.finished_at-r.started_at)))::int AS max_s FROM lean.scrape_runs r JOIN lean.saved_searches s USING(search_key) WHERE r.finished_at IS NOT NULL AND $__timeFilter(r.started_at) GROUP BY 1,2 ORDER BY 4 DESC"
-        }
-      ],
-      "id": 19
-    },
-    {
-      "type": "row",
-      "title": "Data quality",
-      "id": 23,
-      "gridPos": {
-        "x": 0,
-        "y": 75,
-        "w": 24,
-        "h": 1
-      },
-      "panels": []
+      "sql": "SELECT s.name,coalesce(s.category,'(none)') AS category,count(r.id) AS runs,round(avg(EXTRACT(EPOCH FROM (r.finished_at-r.started_at))))::int AS avg_s,max(EXTRACT(EPOCH FROM (r.finished_at-r.started_at)))::int AS max_s FROM lean.scrape_runs r JOIN lean.saved_searches s USING(search_key) WHERE r.finished_at IS NOT NULL AND ${time_filter:r.started_at} GROUP BY 1,2 ORDER BY 4 DESC"
     },
     {
       "id": 24,
       "title": "Incomplete searches · 24 h",
-      "type": "stat",
-      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
-      "gridPos": {
+      "type": "big_number",
+      "layout": {
         "x": 0,
         "y": 76,
         "w": 12,
         "h": 4
       },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "noValue": "—"
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "incomplete",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "panelId": 2
-        }
-      ]
+      "source_panel": 2,
+      "field": "incomplete"
     },
     {
       "id": 25,
       "title": "Detail backlog · eligible actives",
-      "type": "stat",
-      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
-      "gridPos": {
+      "type": "big_number",
+      "layout": {
         "x": 12,
         "y": 76,
         "w": 12,
         "h": 4
       },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "noValue": "—"
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "backlog",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "rawSql": "SELECT count(*) AS backlog FROM lean.listings WHERE closed_at IS NULL AND (details_fetched_at IS NULL OR details_fetched_at<now()-INTERVAL '7 days') AND (last_enrichment_attempted_at IS NULL OR last_enrichment_attempted_at<now()-INTERVAL '12 hours')"
-        }
-      ]
+      "sql": "SELECT count(*) AS backlog FROM lean.listings WHERE closed_at IS NULL AND (details_fetched_at IS NULL OR details_fetched_at<now()-INTERVAL '7 days') AND (last_enrichment_attempted_at IS NULL OR last_enrichment_attempted_at<now()-INTERVAL '12 hours')",
+      "field": "backlog"
     },
     {
       "id": 26,
       "title": "Listings with invalid latest price state · 30 d",
-      "type": "stat",
-      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
-      "gridPos": {
+      "type": "big_number",
+      "layout": {
         "x": 0,
         "y": 80,
         "w": 12,
         "h": 4
       },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "noValue": "—"
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "invalid_latest",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "rawSql": "SELECT count(*) AS invalid_latest FROM lean.listings WHERE extra->>'latest_price_state' IN ('invalid','conflict') AND last_seen>now()-INTERVAL '30 days'"
-        }
-      ]
+      "sql": "SELECT count(*) AS invalid_latest FROM lean.listings WHERE extra->>'latest_price_state' IN ('invalid','conflict') AND last_seen>now()-INTERVAL '30 days'",
+      "field": "invalid_latest"
     },
     {
-      "type": "row",
-      "title": "Errors & latency",
-      "gridPos": {
-        "x": 0,
-        "y": 84,
-        "w": 24,
-        "h": 1
-      },
-      "panels": [],
-      "id": 20
-    },
-    {
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": false
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
+      "id": 21,
+      "title": "Errors grouped — last 7 d",
+      "type": "table",
+      "layout": {
         "x": 0,
         "y": 85,
         "w": 24,
         "h": 10
       },
-      "title": "Errors grouped — last 7 d",
-      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
-      "type": "table",
-      "options": {
-        "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": [
-            "sum"
-          ],
-          "show": false
-        },
-        "showHeader": true
-      },
-      "targets": [
-        {
-          "rawSql": "SELECT count(*)::int AS runs,left(regexp_replace(coalesce(error,'(no message)'), '[0-9]+','#','g'),120) AS failure_pattern,max(started_at) AS last_seen FROM lean.scrape_runs WHERE status='error' AND started_at>now()-INTERVAL '7 days' GROUP BY 2 ORDER BY 1 DESC"
-        }
-      ],
-      "id": 21
+      "sql": "SELECT count(*)::int AS runs,left(regexp_replace(coalesce(error,'(no message)'), '[0-9]+','#','g'),120) AS failure_pattern,max(started_at) AS last_seen FROM lean.scrape_runs WHERE status='error' AND started_at>now()-INTERVAL '7 days' GROUP BY 2 ORDER BY 1 DESC"
     },
     {
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 2,
-            "showPoints": "never",
-            "spanNulls": true
-          },
-          "unit": "m"
-        },
-        "overrides": []
-      },
-      "gridPos": {
+      "id": 22,
+      "title": "Run duration over time",
+      "type": "timeseries",
+      "layout": {
         "x": 0,
         "y": 95,
         "w": 24,
         "h": 9
       },
-      "title": "Run duration over time",
-      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
-      "type": "timeseries",
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "targets": [
-        {
-          "rawSql": "SELECT date_trunc('hour',started_at) AS time,round(avg(EXTRACT(EPOCH FROM (finished_at-started_at)))/60.0,1) AS \"avg min\",round(max(EXTRACT(EPOCH FROM (finished_at-started_at)))/60.0,1) AS \"max min\" FROM lean.scrape_runs WHERE finished_at IS NOT NULL AND $__timeFilter(started_at) GROUP BY 1 ORDER BY 1"
-        }
-      ],
-      "id": 22
+      "sql": "SELECT date_trunc('hour',started_at) AS time,round(avg(EXTRACT(EPOCH FROM (finished_at-started_at)))/60.0,1) AS \"avg min\",round(max(EXTRACT(EPOCH FROM (finished_at-started_at)))/60.0,1) AS \"max min\" FROM lean.scrape_runs WHERE finished_at IS NOT NULL AND ${time_filter:started_at} GROUP BY 1 ORDER BY 1",
+      "suffix": "minutes"
     },
     {
       "id": 28,
       "title": "Per-search freshness & phases",
       "type": "table",
-      "description": "Uses current listing state, observed timestamps, or recorded price changes from lean tables.",
-      "gridPos": {
+      "layout": {
         "x": 0,
         "y": 104,
         "w": 24,
         "h": 12
       },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": false
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "options": {
-        "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": [
-            "sum"
-          ],
-          "show": false
-        },
-        "showHeader": true
-      },
-      "targets": [
-        {
-          "rawSql": "SELECT s.name,s.category,s.search_key,CASE WHEN r.status='error' THEN 'failed' WHEN r.status='running' THEN 'running' WHEN r.finished_at<now()-INTERVAL '26 hours' THEN 'stale' ELSE coalesce(r.status,'never') END AS phase,round(EXTRACT(EPOCH FROM (now()-r.finished_at))/60)::int AS age_min,r.started_at,r.finished_at,r.error,s.url FROM lean.saved_searches s LEFT JOIN LATERAL (SELECT * FROM lean.scrape_runs WHERE search_key=s.search_key ORDER BY id DESC LIMIT 1) r ON TRUE WHERE ${category:sqlstring}='All' OR s.category=${category:sqlstring} ORDER BY r.finished_at NULLS FIRST"
-        }
-      ]
+      "sql": "SELECT s.name,s.category,s.search_key,CASE WHEN r.status='error' THEN 'failed' WHEN r.status='running' THEN 'running' WHEN r.finished_at<now()-INTERVAL '26 hours' THEN 'stale' ELSE coalesce(r.status,'never') END AS phase,round(EXTRACT(EPOCH FROM (now()-r.finished_at))/60)::int AS age_min,r.started_at,r.finished_at,r.error,s.url FROM lean.saved_searches s LEFT JOIN LATERAL (SELECT * FROM lean.scrape_runs WHERE search_key=s.search_key ORDER BY id DESC LIMIT 1) r ON TRUE WHERE ${category}='All' OR s.category=${category} ORDER BY r.finished_at NULLS FIRST"
     }
-  ],
-  "tags": [
-    "olx",
-    "scraper",
-    "ops",
-    "responsive"
-  ],
-  "templating": {
-    "list": [
-      {
-        "current": {
-          "selected": true,
-          "text": "All",
-          "value": "$__all"
-        },
-        "definition": "SELECT DISTINCT category AS __value,category AS __text FROM lean.saved_searches WHERE category IS NOT NULL ORDER BY 1",
-        "includeAll": true,
-        "label": "Category (search tables)",
-        "multi": false,
-        "name": "category",
-        "options": [],
-        "query": "SELECT DISTINCT category AS __value,category AS __text FROM lean.saved_searches WHERE category IS NOT NULL ORDER BY 1",
-        "refresh": 1,
-        "regex": "",
-        "skipUrlSync": false,
-        "sort": 1,
-        "type": "query",
-        "description": "Filters the Saved searches and Per-search freshness tables.",
-        "allValue": "All"
-      }
-    ]
-  },
-  "time": {
-    "from": "now-48h",
-    "to": "now"
-  },
-  "timezone": "Europe/Sarajevo",
-  "title": "OLX Scraper Health",
-  "uid": "olx-health"
+  ]
 }

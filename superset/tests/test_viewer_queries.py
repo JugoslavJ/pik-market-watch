@@ -27,11 +27,10 @@ class ViewerQueryTests(unittest.TestCase):
         for board in BOARDS.values():
             sql, params, groups = compile_dashboard(board)
             self.assertNotIn('${', sql)
-            self.assertNotIn('$__', sql)
             self.assertNotIn('{%', sql)
             self.assertIn('jsonb_build_object', sql)
             self.assertTrue(params)
-            count += len([p for p in board['panels'] if p['type'] != 'row'])
+            count += len(board['panels'])
         self.assertEqual(count, 71)
 
     def test_filter_values_are_parameters_not_sql(self):
