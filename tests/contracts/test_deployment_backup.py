@@ -51,10 +51,10 @@ esac
         self.tmp.cleanup()
 
     def configure(self):
-        secrets = ["POSTGRES_PASSWORD", "POSTGRES_MIGRATOR_PASSWORD", "POSTGRES_APP_PASSWORD",
-                   "POSTGRES_REPORTING_PASSWORD", "POSTGRES_BACKUP_PASSWORD",
-                   "SUPERSET_META_PASSWORD", "SUPERSET_ADMIN_PASSWORD", "SUPERSET_SECRET_KEY"]
-        lines = [f"{key}=fixture-secret" for key in secrets]
+        required = ["POSTGRES_PASSWORD", "POSTGRES_MIGRATOR_PASSWORD", "POSTGRES_APP_PASSWORD",
+                    "POSTGRES_REPORTING_PASSWORD", "POSTGRES_BACKUP_PASSWORD",
+                    "SUPERSET_META_PASSWORD", "SUPERSET_ADMIN_PASSWORD", "SUPERSET_SECRET_KEY"]
+        lines = [f"{name}=fixture-value" for name in required]
         lines.extend(["SUPERSET_BIND=127.0.0.1", "SUPERSET_DOMAIN=dashboard.example.com",
                       "SUPERSET_ROOT_URL=https://dashboard.example.com/", "SUPERSET_COOKIE_SECURE=true"])
         (self.root / ".env").write_text("\n".join(lines) + "\n")
