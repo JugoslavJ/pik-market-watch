@@ -24,7 +24,7 @@ case "${1:-}" in ''|--check) ;; *) echo "Usage: deploy-stack.sh [--check]" >&2; 
 require_secret() {
   local value
   value=$(read_env_value "$1")
-  case "$value" in ''|change-me*) echo "✗ $1 must be configured (see docs/OPERATIONS.md)." >&2; exit 1 ;; esac
+  case "$value" in ''|change-me*) echo "✗ $1 must be configured (see docs/CONFIGURATION.md)." >&2; exit 1 ;; esac
 }
 for v in POSTGRES_PASSWORD POSTGRES_MIGRATOR_PASSWORD POSTGRES_APP_PASSWORD \
          POSTGRES_REPORTING_PASSWORD POSTGRES_BACKUP_PASSWORD \

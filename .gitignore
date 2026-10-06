@@ -27,8 +27,3 @@ desktop.ini
 .claude/
 CLAUDE.md
 CLAUDE.local.md
-
-# ── Geo pipeline intermediates (offline tooling, see geo/README.md) ───
-geo/debug/
-geo/pdf-pages/
-geo/scripts/node_modules/

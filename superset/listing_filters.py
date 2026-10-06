@@ -112,7 +112,7 @@ def options_sql():
 
 
 def viewer_variables(board):
-    existing = {v["name"] for v in board.get("templating", {}).get("list", [])}
+    existing = {v["name"] for v in board.get("filters", [])}
     result = []
     for name, label, kind, _ in FILTERS:
         if name in existing or (name == "sqm" and "min_sqm" in existing):
@@ -120,11 +120,11 @@ def viewer_variables(board):
         column = PREFIX + name
         if kind == "range":
             result.extend({"name": column + suffix, "column": column, "op": op,
-                           "label": label + " " + bound, "type": "textbox", "default": "",
+                           "label": label + " " + bound, "type": "number", "default": "",
                            "multi": False, "min": 0,
                            "choices": [], "property": True}
                           for suffix, op, bound in [("_min", ">=", "minimum"), ("_max", "<=", "maximum")])
         else:
             result.append({"name": column, "column": column, "op": "IN", "label": label,
-                           "type": "query", "multi": True, "default": "All", "choices": [], "property": True})
+                           "type": "select", "multi": True, "default": "All", "choices": [], "property": True})
     return result

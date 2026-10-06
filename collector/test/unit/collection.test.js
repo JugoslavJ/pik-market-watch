@@ -106,17 +106,27 @@ function fakeDb(queueImpl) {
   };
 }
 
+// Mirrors fetchSearchPage: wait on the budget, then observe rate-limit headers.
+function budgetAware(handler) {
+  return async (url, _timeoutMs, { rateBudget } = {}) => {
+    await rateBudget?.waitIfBlocked();
+    const page = await handler(url);
+    rateBudget?.observeValues(page.remaining ?? null, page.limit ?? null);
+    return page;
+  };
+}
+
 function pageFetcher(pages) {
   const fetched = [];
   const failOn = pages.__failOn || [];
-  const fn = async (url) => {
+  const fn = budgetAware(async (url) => {
     const no = Number(url.searchParams.get("page"));
     fetched.push(no);
     if (failOn.includes(no)) throw new Error(`HTTP 500 for page ${no}`);
     const p = pages[no];
     if (!p) throw new Error(`fake has no page ${no}`);
     return p;
-  };
+  });
   fn.fetched = fetched;
   return fn;
 }
@@ -130,8 +140,12 @@ function paceRecorder() {
   return fn;
 }
 
-const run = (db, cfg, deps) =>
-  collectSearch(db, SEARCH, baseCfg(cfg), () => {}, deps);
+// The runtime supplies one budget per cycle; mirror that here.
+const run = (db, cfg, deps = {}) =>
+  collectSearch(db, SEARCH, baseCfg(cfg), () => {}, {
+    rateBudget: new RateBudget({ wait: deps.pace }),
+    ...deps,
+  });
 
 // pagination
 test("single-page search: one fetch, ok run, correct stats and refresh", async () => {
@@ -268,12 +282,12 @@ test("a supplied rate budget can be shared across searches", async () => {
     now: () => 0,
     wait: async (ms) => waits.push(ms),
   });
-  const fetchPage = async () => ({
+  const fetchPage = budgetAware(async () => ({
     items: [rawCard(700)],
     remaining: RATE_RESERVE - 1,
     limit: 60,
     meta: meta(1, 1, 1),
-  });
+  }));
 
   await collectSearch(
     fakeDb(),

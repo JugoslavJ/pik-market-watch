@@ -1,3 +1,0 @@
-[out:json][timeout:120];
-relation(2528156);
-out geom;

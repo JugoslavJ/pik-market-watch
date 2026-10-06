@@ -14,7 +14,7 @@ async function collectSearch(
     fetchSearchPage = api.fetchSearchPage,
     fetchDetailsInBatches = api.fetchDetailsInBatches,
     pace = sleep,
-    rateBudget: suppliedRateBudget = null,
+    rateBudget = null,
   } = {},
 ) {
   const base = api.toApiSearchUrl(search.url, cfg.perPage);
@@ -25,17 +25,6 @@ async function collectSearch(
         `Re-create the search on olx.ba and copy the category_id/cities URL.`,
     );
   }
-
-  const rateBudget =
-    suppliedRateBudget ||
-    new api.RateBudget({
-      cooldownMs: cfg.rateLimitCooldownMs,
-      wait: pace,
-      onLow: (remaining, limit) =>
-        log(
-          `⚠ rate budget low (${remaining}/${limit ?? "?"} left) — throttling this cycle`,
-        ),
-    });
 
   let runId = null;
   let ingestionCommitted = false;

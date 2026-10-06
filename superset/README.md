@@ -2,20 +2,20 @@
 
 Apache Superset 6.0.0 provides authentication, administration and reporting for the [React viewer](../dashboard-viewer/README.md) at `http://127.0.0.1:3000/` (container port 8088). Production uses [Cloudflare Tunnel](../docs/DEPLOYMENT.md).
 
-## Start locally
+## Terms
 
-Configure the required PostgreSQL and Superset credentials in the root `.env`
-from `.env.example`. The volume command uses the default `POSTGRES_VOLUME_NAME`;
-use your configured name if different. Local HTTP uses `SUPERSET_COOKIE_SECURE=false`.
+- **Dashboard definition**: one JSON file per dashboard in [`dashboards/`](dashboards/README.md) (`olx-home`, `olx-overview`, `olx-exits`, `olx-health`). It holds the panels, filter variables, time windows, units and layout, and is the single source for both the viewer and the native dashboards.
+- **Panel**: one big number, chart, table or map in a definition. A panel either has its own SQL or reuses another panel's query (`source_panel`).
+- **Definition SQL**: a panel's query, using the filter and time [macros](dashboards/README.md) that both compilers expand.
+- **Viewer**: the React app at `/olx/dashboard/<uid>/`. `viewer_queries.py` compiles each dashboard into one batched, parameterized statement.
+- **Native dashboards**: ordinary Superset dashboards (slug `<uid>-superset`) that `parity.py` compiles from the same definitions. The viewer uses them for permissions and dataset checks.
+- **Companion dashboards**: six extra native dashboards that `seed.py` creates for exploring the data in Superset. They are not in the viewer navigation.
+- **Managed dashboards and datasets**: the ten dashboards and their datasets owned by the seed and access jobs. The viewer refuses to run (HTTP 409) when a managed dataset no longer matches the repository.
+- **Parity**: the guarantee that native charts and the viewer return the same results as the definition SQL. `validate_parity.py` and `validate_viewer.py` check it against a live database.
 
-```bash
-docker volume create olx-price-ext_pgdata_pg18
-docker compose up -d --build
-docker compose run --rm superset-seed
-docker compose run --rm superset-access
-```
+## Accounts and publication
 
-Sign in as `admin`. Public signup is disabled. The seed creates new native
+Start the stack as described in the [README](../README.md#start-locally), then sign in as `admin`. Public signup is disabled. The seed creates new native
 dashboards as drafts and preserves existing publication and role assignments.
 The production deployment publishes managed dashboards after readiness checks.
 For a local authenticated viewer account, publish explicitly with
@@ -42,9 +42,9 @@ docker compose --profile superset --profile superset-ops run --rm --no-deps supe
 The four JSON files in `dashboards/` define 71 panels, scoped filter variables,
 SQL, time windows, units and layouts. `viewer_queries.py` binds viewer selections
 as SQL parameters and batches shared facts into one dashboard data statement.
-`parity.py` compiles the same definitions into native Superset charts. Six
-companion dashboards support exploration in Superset, for ten managed native
-dashboards in total. Viewer navigation exposes Home, Overview, Exits and Health.
+`parity.py` compiles the same definitions into native Superset charts. With the
+six companion dashboards, the jobs manage ten native dashboards. Viewer navigation
+exposes Home, Overview, Exits and Health.
 
 Dataset SQL lives in `datasets/` and `active-listings.sql`:
 
@@ -110,10 +110,10 @@ bash scripts/deploy-stack.sh --check
 bash scripts/superset-readiness.sh --snapshot
 ```
 
-Readiness checks viewer/source parity, authenticated API latency, temporary
+Readiness checks viewer parity, authenticated API latency, temporary
 viewer and guest permissions, revoked and anonymous access, and verified backups.
 API budgets are two seconds fresh and one second cached. These checks exclude
-browser rendering; see [measured performance](PERFORMANCE.md).
+browser rendering.
 
 Native chart parity and API benchmarks are also available:
 

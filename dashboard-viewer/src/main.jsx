@@ -41,7 +41,7 @@ const client = new QueryClient({
 });
 const EMPTY = [];
 const PAGE_SIZE = 25;
-const DEFAULT_DAYS = boot.data.uid === "olx-health" ? 2 : 90;
+const DEFAULT_DAYS = boot.data.defaultDays;
 const FILTER_COLUMNS = new Set([...FILTER_DIMENSIONS, "article_id"]);
 const asArray = (value) => (Array.isArray(value) ? value : [value]);
 const filterParams = (selection, cross, days) =>
@@ -108,7 +108,7 @@ const Plot = memo(function Plot({ panel, rows, onSelect }) {
       const { rows, onSelect } = current.current;
       const selection = selectionFor(panel, rows, event.dataIndex);
       if (selection) onSelect(selection.dimension, selection.value);
-      else if (panel.type === "xychart" && rows[event.dataIndex]?.url)
+      else if (panel.type === "scatter" && rows[event.dataIndex]?.url)
         openAd(rows[event.dataIndex].url);
     });
     window.__olxChartInstances ||= new Map();
@@ -305,19 +305,19 @@ const Pins = memo(function Pins({ panel, rows }) {
 const Panel = memo(function Panel({ panel, rows, onSelect }) {
   return (
     <section
-      className={"panel " + (panel.type === "stat" ? "stat" : "")}
+      className={"panel " + (panel.type === "big_number" ? "stat" : "")}
       data-panel={panel.id}
       style={{ gridColumn: `span ${panel.grid.w}` }}
     >
       <h2>{panel.title}</h2>
-      {panel.type === "stat" ? (
+      {panel.type === "big_number" ? (
         <>
-          <div className="value">{number(rows[0]?.[panel.metric], panel)}</div>
+          <div className="value">{number(rows[0]?.[panel.field], panel)}</div>
           <div className="unit">{unit(panel)}</div>
         </>
       ) : panel.type === "table" ? (
         <ListingTable rows={rows} onSelect={onSelect} />
-      ) : panel.type === "geomap" ? (
+      ) : panel.type === "map" ? (
         <Pins panel={panel} rows={rows} />
       ) : (
         <Plot panel={panel} rows={rows} onSelect={onSelect} />
@@ -520,7 +520,7 @@ function App() {
                 .map((variable) => (
                   <label key={variable.name}>
                     {variable.label}
-                    {variable.type === "textbox" ? (
+                    {variable.type === "number" ? (
                       <AreaInput
                         label={variable.label}
                         min={variable.min ?? 0}

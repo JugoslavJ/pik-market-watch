@@ -53,8 +53,6 @@ async function harvestSearchPages({
       const response = await fetchSearchPage(url, cfg.apiTimeoutMs, {
         rateBudget,
       });
-      rateBudget.observeValues(response.remaining, response.limit);
-      await rateBudget.waitIfBlocked();
       await archivePage(url, response);
       const parsed = mapSearchItems(response.items);
       const total = Number(response.meta?.total);

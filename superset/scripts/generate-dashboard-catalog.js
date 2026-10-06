@@ -4,34 +4,30 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "../..");
 const dir = path.join(root, "superset", "dashboards");
 const output = path.join(root, "superset", "DASHBOARD_CATALOG.md");
-const flatten = (panels = []) =>
-  panels.flatMap((panel) =>
-    panel.type === "row" ? flatten(panel.panels) : [panel],
-  );
 const inline = (value) =>
   String(value || "")
     .replaceAll("|", "\\|")
     .replaceAll("\n", "<br>");
 const queryCell = (value) =>
   String(value).replaceAll("|", "&#124;").replaceAll("\n", "<br>");
-function targetDataset(dashboard, panel) {
+// Mirrors parity.dataset_name: the four exit cards share one aggregate.
+function dataset(dashboard, panel) {
   const sourceId =
     dashboard.uid === "olx-exits" && [1, 2, 3, 4].includes(panel.id)
       ? 1
-      : panel.targets[0].panelId || panel.id;
+      : (panel.source_panel ?? panel.id);
   return "source_" + dashboard.uid.replaceAll("-", "_") + "_" + sourceId;
 }
 function nativeViz(panel) {
   const types = {
-    stat: "big_number_total",
+    big_number: "big_number_total",
     table: "table",
-    geomap: "deck_scatter (CARTO vector)",
-    xychart: "bubble_v2",
-    bargauge: "echarts_timeseries_bar",
-    timeseries:
-      panel.fieldConfig?.defaults?.custom?.drawStyle === "bars"
-        ? "echarts_timeseries_bar"
-        : "echarts_timeseries_line",
+    map: "deck_scatter (CARTO vector)",
+    scatter: "bubble_v2",
+    bar: "echarts_timeseries_bar",
+    timeseries: panel.bars
+      ? "echarts_timeseries_bar"
+      : "echarts_timeseries_line",
   };
   if (!types[panel.type])
     throw new Error("No Superset counterpart for " + panel.type);
@@ -42,9 +38,9 @@ const lines = [
   "",
   "Generated from `superset/dashboards/*.json` and the Superset alert checker by `superset/scripts/generate-dashboard-catalog.js`.",
   "",
-  "Every row identifies its source owner and exact query for same-snapshot comparison. Each native chart is named Owner / source panel on a Superset dashboard with the same title. superset/parity.py translates source variables and time macros and preserves the grouping and widths, with chart heights adjusted for readable labels. Maps use dark CARTO vector basemaps. Deployment readiness validates the viewer against these queries.",
+  "Each native chart is named Dashboard / panel and reads the listed dataset. `superset/parity.py` compiles the definition SQL, filters and time macros into those datasets and preserves the layout, with chart heights adjusted for readable labels. Deployment readiness compares the viewer with the same SQL.",
   "",
-  "| Owner / source panel | Source time and filters | Unit / links | Superset target | Expected result / comparison query |",
+  "| Dashboard / panel | Filters and time range | Unit | Superset dataset / chart | Definition SQL |",
   "|---|---|---|---|---|",
 ];
 let count = 0;
@@ -53,63 +49,24 @@ for (const file of fs
   .filter((name) => name.endsWith(".json"))
   .sort()) {
   const dashboard = JSON.parse(fs.readFileSync(path.join(dir, file), "utf8"));
-  const owner = dashboard.title || path.basename(file, ".json");
-  const vars =
-    (dashboard.templating?.list || [])
-      .map((v) => {
-        const current =
-          v.current?.value ??
-          v.current?.text ??
-          v.default ??
-          "dashboard default";
-        return `${v.name}=${JSON.stringify(current)}${v.query ? ` [${v.query}]` : ""}`;
+  const filters =
+    (dashboard.filters || [])
+      .map((filter) => {
+        const source = filter.options_sql || filter.options?.join(",") || "";
+        return `${filter.name}=${JSON.stringify(filter.default ?? "All")}${source ? ` [${source}]` : ""}`;
       })
       .join("; ") || "none";
-  const dashboardTime = `${dashboard.time?.from || "dashboard default"} to ${dashboard.time?.to || "now"}`;
-  for (const panel of flatten(dashboard.panels)) {
-    const title = panel.title || `panel ${panel.id ?? "?"}`;
-    const queries = (panel.targets || [])
-      .map((target) => {
-        if (target.rawSql) return target.rawSql;
-        const sourcePanel = target.panelId
-          ? `dashboard panel ${target.panelId}`
-          : "dashboard expression";
-        const field = panel.options?.reduceOptions?.fields;
-        const calculation = panel.options?.reduceOptions?.calcs?.join(", ");
-        return `${sourcePanel}; reduce field: ${field || "default"}; calculation: ${calculation || "panel-defined"}`;
-      })
-      .filter(Boolean);
+  for (const panel of dashboard.panels) {
     const query =
-      queries.join("\n\n") || "No datasource query is defined on this panel.";
-    const fieldLinks = [
-      ...(panel.fieldConfig?.defaults?.links || []),
-      ...(panel.fieldConfig?.overrides || []).flatMap((override) =>
-        (override.properties || [])
-          .filter((property) => property.id === "links")
-          .flatMap((property) => property.value || []),
-      ),
-    ];
-    const links =
-      [...(panel.links || []), ...fieldLinks]
-        .map((link) => link.title || link.url || "dashboard/data link")
-        .join("; ") || "none";
-    const overrideUnits = (panel.fieldConfig?.overrides || []).flatMap(
-      (override) =>
-        (override.properties || [])
-          .filter((property) => property.id === "unit")
-          .map((property) => property.value),
-    );
+      panel.sql ?? `reuses panel ${panel.source_panel}; field: ${panel.field}`;
     const unit = [
-      panel.fieldConfig?.defaults?.unit || "default",
-      ...overrideUnits,
-    ].join(", ");
-    const panelTime = panel.timeFrom
-      ? `${panel.timeFrom} to now`
-      : dashboardTime;
-    const filters = `vars: ${vars}; time: ${panelTime}; panel time shift: ${panel.timeShift || "none"}`;
-    const compare = `<details><summary>SQL</summary><code>${queryCell(query)}</code></details>`;
+      panel.suffix || "none",
+      panel.decimals ? `${panel.decimals} decimals` : "",
+    ]
+      .filter(Boolean)
+      .join(", ");
     lines.push(
-      `| \`${inline(owner)} / ${inline(title)}\` | ${inline(filters)} | ${inline(unit)} / ${inline(links)} | \`${targetDataset(dashboard, panel) + " / " + nativeViz(panel)}\` | ${compare} |`,
+      `| \`${inline(dashboard.title)} / ${inline(panel.title)}\` | ${inline(`filters: ${filters}; time range: ${dashboard.time_range}`)} | ${inline(unit)} | \`${dataset(dashboard, panel)} / ${nativeViz(panel)}\` | <details><summary>SQL</summary><code>${queryCell(query)}</code></details> |`,
     );
     count += 1;
   }
@@ -132,7 +89,7 @@ lines.push(
   "",
   "## Alert predicates",
   "",
-  "| Owner / rule | Evaluation | Superset target | Expected result / comparison query | Status |",
+  "| Rule | Evaluation | Evaluated by | SQL |",
   "|---|---|---|---|",
 );
 for (const [title, hold, threshold, query] of alerts)
@@ -141,7 +98,7 @@ for (const [title, hold, threshold, query] of alerts)
   );
 lines.push(
   "",
-  `**Inventory:** ${count} non-row panels and ${alerts.length} alert rules.`,
+  `**Inventory:** ${count} panels and ${alerts.length} alert rules.`,
   "",
   "Closure semantics: observed listing exit, not confirmed sale; snapshot price is the last recorded asking price. All monetary datasets return BAM values only and label rent values as monthly rent. Operational datasets bypass chart caching (-1 second timeout); market datasets use a 10-minute cache.",
   "",

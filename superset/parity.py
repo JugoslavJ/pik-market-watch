@@ -1,4 +1,4 @@
-"""Compile source panels into native charts; filter before aggregation and preserve measures."""
+"""Compile dashboard definitions into native charts; filter before aggregation and preserve measures."""
 
 import json
 import re
@@ -12,6 +12,9 @@ from provisioning import (cross_filter_metadata, ensure_dataset, save_chart,
 
 SOURCE_DIR = Path(__file__).resolve().parent / "dashboards"
 FILTER_PREFIX = "__source_"
+FILTER_MACRO = re.compile(r"\$\{(\w+)\}")
+TIME_FILTER_MACRO = re.compile(r"\$\{time_filter:([^}]+)\}")
+TIME_MACROS = {"time_from", "time_to"}
 
 # Chart selections intersect the separate __source_* sidebar filters.
 LISTING_DIMENSIONS = {
@@ -100,24 +103,36 @@ def push_cross_filters(sql, unknown_label="unknown", columns=None):
 
 
 def panels(dashboard):
-    for panel in dashboard.get("panels", []):
-        if panel["type"] == "row":
-            yield from panels(panel)
-        else:
-            yield panel
+    return dashboard["panels"]
+
+
+def filters(dashboard):
+    return dashboard.get("filters", [])
+
+
+def uses_time(sql):
+    return "${time_" in sql
+
+
+def expand_time(sql, start, end, predicate="({column} BETWEEN {start} AND {end})"):
+    sql = TIME_FILTER_MACRO.sub(lambda m: predicate.format(column=m[1], start=start, end=end), sql)
+    return sql.replace("${time_from}", start).replace("${time_to}", end)
+
+
+def expand_filters(sql, replacement):
+    return FILTER_MACRO.sub(lambda m: m[0] if m[1] in TIME_MACROS else replacement(m[1]), sql)
 
 
 def source_sql(dashboard, panel):
-    target = panel["targets"][0]
-    if "rawSql" in target:
-        return target["rawSql"]
-    source = next(p for p in panels(dashboard) if p["id"] == target["panelId"])
+    if "sql" in panel:
+        return panel["sql"]
+    source = next(p for p in panels(dashboard) if p["id"] == panel["source_panel"])
     return source_sql(dashboard, source)
 
 
 def dataset_name(dashboard, panel):
-    # Dashboard-datasource KPIs share their original summary query and cache.
-    source_id = panel["targets"][0].get("panelId", panel["id"])
+    # Big numbers that reuse a panel share its summary query and cache.
+    source_id = panel.get("source_panel", panel["id"])
     if dashboard["uid"] == "olx-exits" and panel["id"] in (1, 2, 3, 4):
         source_id = 1
     return f"source_{dashboard['uid'].replace('-', '_')}_{source_id}"
@@ -125,7 +140,7 @@ def dataset_name(dashboard, panel):
 
 def shared_source_sql(dashboard, panel):
     """Fold the four exit cards into one aggregate over their identical base."""
-    source_id = panel["targets"][0].get("panelId", panel["id"])
+    source_id = panel.get("source_panel", panel["id"])
     if ((dashboard["uid"] == "olx-home" and source_id == 9)
             or (dashboard["uid"] == "olx-health" and source_id == 2)):
         summary = """WITH recent AS (
@@ -175,35 +190,33 @@ def chart_name(dashboard, panel):
 
 def viz_type(panel):
     return {
-        "stat": "big_number_total",
-        "timeseries": "echarts_timeseries_bar" if
-            panel.get("fieldConfig", {}).get("defaults", {}).get("custom", {})
-            .get("drawStyle") == "bars" else "echarts_timeseries_line",
-        "bargauge": "echarts_timeseries_bar",
+        "big_number": "big_number_total",
+        "timeseries": "echarts_timeseries_bar" if panel.get("bars") else "echarts_timeseries_line",
+        "bar": "echarts_timeseries_bar",
         "table": "table",
-        "geomap": "deck_scatter",
-        "xychart": "bubble_v2",
+        "map": "deck_scatter",
+        "scatter": "bubble_v2",
     }[panel["type"]]
 
 
 def variable_names(sql):
-    return set(re.findall(r"\$\{(\w+):sqlstring\}", sql))
-
-
-def bar_dimension(panel):
-    transform = next(t for t in panel["transformations"] if t["id"] == "rowsToFields")
-    return transform["options"]["nameField"]
+    return set(FILTER_MACRO.findall(sql)) - TIME_MACROS
 
 
 def bar_axis(column):
     return {"rooms": "Room count", "floor": "Floor position"}.get(column, column + " label")
 
 
-def time_range(dashboard, panel):
-    value = panel.get("timeFrom", dashboard.get("time", {}).get("from", "now-90d"))
-    match = re.fullmatch(r"(?:now-)?(\d+)([dhm])", value)
-    if not match or dashboard.get("time", {}).get("to", "now") != "now":
-        raise ValueError(f"Unsupported source dashboard time window: {value}")
+def default_days(dashboard):
+    amount, unit = re.fullmatch(r"(\d+)([dhm])", dashboard.get("time_range", "90d")).groups()
+    return int(amount) * {"d": 1, "h": 1 / 24, "m": 1 / 1440}[unit]
+
+
+def time_range(dashboard):
+    value = dashboard.get("time_range", "90d")
+    match = re.fullmatch(r"(\d+)([dhm])", value)
+    if not match:
+        raise ValueError(f"Unsupported dashboard time range: {value}")
     amount, unit = match.groups()
     unit_name = dict(d="day", h="hour", m="minute")[unit]
     # "Last 90 days" ends at midnight in Superset, and "Last 48 hours" is
@@ -214,11 +227,11 @@ def time_range(dashboard, panel):
 def compile_sql(dashboard, panel, add_links=False):
     sql = shared_source_sql(dashboard, panel).strip().rstrip(";")
     variables = variable_names(sql)
-    definitions = {v["name"]: v for v in dashboard.get("templating", {}).get("list", [])}
+    definitions = {v["name"]: v for v in filters(dashboard)}
     header = []
     for name in sorted(variables - {"min_sqm", "max_sqm"}):
         if name not in definitions:
-            raise ValueError(f"Undefined source dashboard variable: {name}")
+            raise ValueError(f"Undefined dashboard filter: {name}")
         header.append("{% set source_" + name + " = filter_values('" + FILTER_PREFIX
                       + name + "', remove_filter=True) %}")
         if name == "neighborhood":
@@ -227,7 +240,7 @@ def compile_sql(dashboard, panel, add_links=False):
             # Scalar source variables stay single-select. SQL tuples with a
             # single element are parenthesized scalar expressions in Postgres.
             replacement = "{{ (source_" + name + " or ['All'])[:1] | where_in }}"
-        sql = sql.replace("${" + name + ":sqlstring}", replacement)
+        sql = sql.replace("${" + name + "}", replacement)
     if variables & {"min_sqm", "max_sqm"}:
         header.extend([
             "{% set source_area = namespace(min='0', max='99999') %}",
@@ -237,10 +250,10 @@ def compile_sql(dashboard, panel, add_links=False):
             "{% endfor %}",
         ])
         for name, bound in [("min_sqm", "min"), ("max_sqm", "max")]:
-            sql = sql.replace("${" + name + ":sqlstring}",
+            sql = sql.replace("${" + name + "}",
                               "{{ [source_area." + bound + "] | where_in }}")
-    if "$__time" in sql:
-        window = time_range(dashboard, panel)
+    if uses_time(sql):
+        window = time_range(dashboard)
         amount, unit = re.search(r"-(\d+), (day|hour|minute)", window).groups()
         interval = f"{amount} {unit}s"
         # Metadata discovery explicitly requests No filter; it still needs
@@ -249,22 +262,19 @@ def compile_sql(dashboard, panel, add_links=False):
         to_expr = '{{ source_time.to_expr or "now()" }}'
         header.append("{% set source_time = get_time_filter(default='"
                       + window + "', remove_filter=True) %}")
-        sql = re.sub(r"\$__timeFilter\(([^)]+)\)",
-                     lambda m: f"({m[1]} >= {from_expr} AND {m[1]} <= {to_expr})", sql)
-        sql = sql.replace("$__timeFrom()", from_expr)
-        sql = sql.replace("$__timeTo()", to_expr)
-    if re.search(r"\$\{|\$__", sql):
-        raise ValueError(f"Untranslated source dashboard macro in {chart_name(dashboard, panel)}")
+        sql = expand_time(sql, from_expr, to_expr, "({column} >= {start} AND {column} <= {end})")
+    if "${" in sql:
+        raise ValueError(f"Untranslated dashboard macro in {chart_name(dashboard, panel)}")
     sql = push_cross_filters(sql)
-    if panel["type"] == "bargauge" and bar_dimension(panel) in cross_filter_columns(source_sql(dashboard, panel)):
-        dimension = bar_dimension(panel)
+    if panel["type"] == "bar" and panel["category"] in cross_filter_columns(source_sql(dashboard, panel)):
+        dimension = panel["category"]
         # Separate display-axis labels from selection columns to avoid duplicate labels.
         sql = ('SELECT source.*, source."' + dimension + '" AS "' + bar_axis(dimension)
                + '" FROM (' + sql + ') AS source')
-    if panel["type"] == "geomap":
+    if panel["type"] == "map":
         # Deck.gl groups rows; keep event identities so coincident exits remain separate.
         sql = "SELECT source.*, row_number() OVER () AS map_point_id FROM (" + sql + ") AS source"
-    if panel["type"] == "xychart":
+    if panel["type"] == "scatter":
         sql = "SELECT source.*, row_number() OVER () AS scatter_point_id FROM (" + sql + ") AS source"
     if add_links:
         # Keep the original rows and ordering; add a safe clickable companion.
@@ -289,15 +299,9 @@ def metric(column, label=None):
 
 
 def unit_settings(panel):
-    defaults = panel.get("fieldConfig", {}).get("defaults", {})
-    unit = defaults.get("unit", "none")
-    suffix = unit.split(":", 1)[1].strip() if unit.startswith("suffix:") else {
-        "percent": "%", "s": "seconds", "m": "minutes",
-    }.get(unit, "")
-    decimals = defaults.get("decimals", 1 if unit == "percent" else 0)
-    # Source percent values already use the 0..100 scale. d3 '%' would
-    # multiply them by 100 again.
-    return {"y_axis_format": f",.{decimals}f", "y_axis_title": suffix}
+    # Percent values already use the 0..100 scale, so the suffix is plain text;
+    # d3 '%' would multiply them by 100 again.
+    return {"y_axis_format": f",.{panel.get('decimals', 0)}f", "y_axis_title": panel.get("suffix", "")}
 
 
 def chart_form(dashboard, panel, dataset_id, columns):
@@ -306,15 +310,15 @@ def chart_form(dashboard, panel, dataset_id, columns):
     sql = source_sql(dashboard, panel)
     common = {
         "datasource": f"{dataset_id}__table", "viz_type": kind,
-        "time_range": time_range(dashboard, panel) if "$__time" in sql else "No filter",
+        "time_range": time_range(dashboard) if uses_time(sql) else "No filter",
         "cache_timeout": -1 if "lean.scrape_runs" in sql or dashboard["uid"] == "olx-health" else 600,
         "row_limit": 50000, "adhoc_filters": [],
         "color_scheme": "supersetColors", **unit_settings(panel),
     }
-    if panel["type"] == "stat":
-        column = panel["options"]["reduceOptions"]["fields"]
-        shared = sorted({p["options"]["reduceOptions"]["fields"]
-                         for p in panels(dashboard) if p["type"] == "stat"
+    if panel["type"] == "big_number":
+        column = panel["field"]
+        shared = sorted({p["field"]
+                         for p in panels(dashboard) if p["type"] == "big_number"
                          and dataset_name(dashboard, p) == dataset_name(dashboard, panel)})
         return {**common, "metric": metric(column),
                 "dashboard_shared_metrics": [metric(name) for name in shared],
@@ -324,36 +328,33 @@ def chart_form(dashboard, panel, dataset_id, columns):
                 "header_font_size": 0.4, "show_metric_name": False,
                 "subtitle": common["y_axis_title"], "subtitle_font_size": 0.125,
                 "subheader": "", "subheader_font_size": 0.125}
-    if panel["type"] in ("timeseries", "bargauge"):
-        if panel["type"] == "bargauge":
-            transform = next(t for t in panel["transformations"] if t["id"] == "rowsToFields")
-            x = transform["options"]["nameField"]
-            values = [transform["options"]["valueField"]]
+    if panel["type"] in ("timeseries", "bar"):
+        if panel["type"] == "bar":
+            x, values = panel["category"], [panel["value"]]
         else:
             x, values = "time", [n for n in names if n != "time"]
-        clickable = panel["type"] == "bargauge" and x in cross_filter_columns(sql)
+        clickable = panel["type"] == "bar" and x in cross_filter_columns(sql)
         return {**common, "x_axis": bar_axis(x) if clickable else x,
-                "groupby": [x] if panel["type"] == "bargauge"
+                "groupby": [x] if panel["type"] == "bar"
                     and x in cross_filter_columns(sql) else [],
                 # Each category has one nonzero series. Stacking keeps a full
                 # width bar rather than reserving one narrow slot per series.
                 "stack": "stack" if clickable else None,
                 "metrics": [metric(n) for n in values],
-                "orientation": "horizontal" if panel["type"] == "bargauge" else "vertical",
-                "x_axis_force_categorical": panel["type"] == "bargauge",
+                "orientation": "horizontal" if panel["type"] == "bar" else "vertical",
+                "x_axis_force_categorical": panel["type"] == "bar",
                 "show_legend": len(values) > 1, "legend_type": "scroll",
                 "legend_orientation": "bottom", "rich_tooltip": True,
-                "show_value": panel["type"] == "bargauge", "zoomable": False,
-                "x_axis_label_interval": 0 if panel["type"] == "bargauge" else "auto",
+                "show_value": panel["type"] == "bar", "zoomable": False,
+                "x_axis_label_interval": 0 if panel["type"] == "bar" else "auto",
                 "x_axis_time_format": "%d %b", "tooltip_time_format": "%d %b %Y",
                 "y_axis_title_margin": 36, "x_axis_title_margin": 30,
                 "legend_margin": 16,
                 "series_type": "bar" if kind.endswith("bar") else "line",
                 "time_grain_sqla": None, "truncate_metric": False,
                 "x_axis_sort_asc": True, "order_desc": False}
-    if panel["type"] == "xychart":
-        series = panel["options"]["series"][0]
-        x, y = [series[axis]["matcher"]["options"] for axis in ("x", "y")]
+    if panel["type"] == "scatter":
+        x, y = panel["x"], panel["y"]
         return {**common, "entity": "scatter_point_id", "series": "title",
                 "x": metric(x), "y": metric(y),
                 "size": {"expressionType": "SQL", "sqlExpression": "1",
@@ -361,8 +362,8 @@ def chart_form(dashboard, panel, dataset_id, columns):
                 "max_bubble_size": 5, "show_legend": False, "opacity": 0.7,
                 "x_axis_label": x, "y_axis_label": y,
                 "xAxisFormat": ",.1f", "y_axis_format": ",.1f"}
-    if panel["type"] == "geomap":
-        view = panel["options"]["view"]
+    if panel["type"] == "map":
+        view = panel["view"]
         return {**common, **map_controls(names, {
                     "longitude": view["lon"], "latitude": view["lat"],
                     "zoom": view["zoom"], "bearing": 0, "pitch": 0}),
@@ -388,11 +389,11 @@ def chart_form(dashboard, panel, dataset_id, columns):
 
 
 def panel_height(panel):
-    if panel["type"] == "stat":
+    if panel["type"] == "big_number":
         return 24
-    minimum = {"bargauge": 56, "timeseries": 52, "xychart": 56,
-               "geomap": 64, "table": 48}[panel["type"]]
-    return max(minimum, panel["gridPos"]["h"] * 4)
+    minimum = {"bar": 56, "timeseries": 52, "scatter": 56,
+               "map": 64, "table": 48}[panel["type"]]
+    return max(minimum, panel["layout"]["h"] * 4)
 
 
 def dashboard_layout(dashboard, charts, stable_uuid):
@@ -401,8 +402,8 @@ def dashboard_layout(dashboard, charts, stable_uuid):
               "GRID_ID": {"type": "GRID", "id": "GRID_ID", "parents": ["ROOT_ID"], "children": []},
               "HEADER_ID": {"type": "HEADER", "id": "HEADER_ID", "meta": {"text": dashboard["title"]}}}
     rows = {}
-    for panel in sorted(panels(dashboard), key=lambda p: (p["gridPos"]["y"], p["gridPos"]["x"])):
-        grid = panel["gridPos"]
+    for panel in sorted(panels(dashboard), key=lambda p: (p["layout"]["y"], p["layout"]["x"])):
+        grid = panel["layout"]
         row_id = f"ROW-{grid['y']}"
         if row_id not in rows:
             rows[row_id] = True
@@ -423,11 +424,11 @@ def dashboard_layout(dashboard, charts, stable_uuid):
 def filter_options(variable):
     name = variable["name"]
     column = FILTER_PREFIX + name
-    if variable["type"] == "query":
-        return f'SELECT __value AS "{column}" FROM ({variable["query"]}) AS options'
-    if variable["type"] == "custom":
-        values = variable["query"].split(",")
-        return " UNION ALL ".join(f"SELECT '{v.replace(chr(39), chr(39) * 2)}' AS {column}" for v in values)
+    if "options_sql" in variable:
+        return f'SELECT __value AS "{column}" FROM ({variable["options_sql"]}) AS options'
+    if "options" in variable:
+        return " UNION ALL ".join(f"SELECT '{v.replace(chr(39), chr(39) * 2)}' AS {column}"
+                                  for v in variable["options"])
     raise ValueError(f"Unsupported filter option source: {name}")
 
 
@@ -462,16 +463,16 @@ def install(api, database_id, source_dir=SOURCE_DIR):
             title = chart_name(dashboard, panel)
             chart = save_chart(api, title, dataset["id"], board["id"], form)
             chart_ids[panel["id"]], forms[panel["id"]] = chart["id"], form
-        filters = []
-        for variable in dashboard.get("templating", {}).get("list", []):
-            if variable["type"] == "textbox":
+        native_filters = []
+        for variable in filters(dashboard):
+            if variable["type"] == "number":
                 continue
             column = FILTER_PREFIX + variable["name"]
             option_name = f"source_{dashboard['uid'].replace('-', '_')}_options_{variable['name']}"
             options = ensure_dataset(api, database_id, option_name, filter_options(variable))
             excluded = [chart_ids[p["id"]] for p in panels(dashboard)
                         if variable["name"] not in variable_names(source_sql(dashboard, p))]
-            filters.append({
+            native_filters.append({
                 "id": f"NATIVE_FILTER-{stable_uuid('filter', option_name)}",
                 "name": variable.get("label", variable["name"]),
                 "filterType": "filter_select", "type": "NATIVE_FILTER",
@@ -481,21 +482,21 @@ def install(api, database_id, source_dir=SOURCE_DIR):
                                   "enableEmptyFilter": False, "defaultToFirstItem": False},
                 "cascadeParentIds": [], "scope": {"rootPath": ["ROOT_ID"], "excluded": excluded},
             })
-        if any(v["name"] == "min_sqm" for v in dashboard.get("templating", {}).get("list", [])):
+        if any(v["name"] == "min_sqm" for v in filters(dashboard)):
             name = f"source_{dashboard['uid'].replace('-', '_')}_options_sqm"
             options = ensure_dataset(api, database_id, name,
                                      "SELECT sqm AS __source_sqm FROM lean.listings WHERE sqm >= 0")
-            filters.append({"id": f"NATIVE_FILTER-{stable_uuid('filter', name)}",
+            native_filters.append({"id": f"NATIVE_FILTER-{stable_uuid('filter', name)}",
                             "name": "Area (m²)", "filterType": "filter_range", "type": "NATIVE_FILTER",
                             "targets": [{"datasetId": options["id"], "column": {"name": "__source_sqm"}}],
                             "defaultDataMask": {"extraFormData": {}, "filterState": {}, "ownState": {}},
                             "controlValues": {}, "cascadeParentIds": [],
                             "scope": {"rootPath": ["ROOT_ID"], "excluded": [chart_ids[p["id"]]
                                       for p in panels(dashboard) if "min_sqm" not in variable_names(source_sql(dashboard, p))]}})
-        timed = [chart_ids[p["id"]] for p in panels(dashboard) if "$__time" in source_sql(dashboard, p)]
+        timed = [chart_ids[p["id"]] for p in panels(dashboard) if uses_time(source_sql(dashboard, p))]
         if timed:
-            window = time_range(dashboard, next(p for p in panels(dashboard) if chart_ids[p["id"]] in timed))
-            filters.append({"id": f"NATIVE_FILTER-{stable_uuid('filter', dashboard['uid'] + ':time')}",
+            window = time_range(dashboard)
+            native_filters.append({"id": f"NATIVE_FILTER-{stable_uuid('filter', dashboard['uid'] + ':time')}",
                             "name": "Time range", "filterType": "filter_time", "type": "NATIVE_FILTER",
                             "targets": [{}], "controlValues": {}, "cascadeParentIds": [],
                             "defaultDataMask": {"extraFormData": {"time_range": window},
@@ -503,14 +504,14 @@ def install(api, database_id, source_dir=SOURCE_DIR):
                             "scope": {"rootPath": ["ROOT_ID"], "excluded": [c for c in chart_ids.values() if c not in timed]}})
         source_panels = list(panels(dashboard))
         from provisioning import add_property_filters
-        filters = add_property_filters(api, database_id, filters, [
+        native_filters = add_property_filters(api, database_id, native_filters, [
             (chart_ids[p["id"]], shared_source_sql(dashboard, p)) for p in source_panels
         ])
         metadata = {
             **cross_filter_metadata(
                 [{"id": chart_ids[p["id"]], "slice_name": chart_name(dashboard, p)} for p in source_panels],
             ),
-            "native_filter_configuration": filters, "filter_bar_orientation": "VERTICAL",
+            "native_filter_configuration": native_filters, "filter_bar_orientation": "VERTICAL",
             "refresh_frequency": 0,
         }
         save_dashboard(api, board, dashboard_layout(dashboard, chart_ids, stable_uuid), metadata)

@@ -6,7 +6,6 @@ on:
     paths-ignore:
       - '**.md'
       - 'docs/**'
-      - 'geo/**'
   pull_request:
   workflow_dispatch:
 

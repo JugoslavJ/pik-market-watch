@@ -2,15 +2,15 @@
 
 React, ECharts, TanStack Query and MapLibre GL render four dashboards with 71 panels. Superset supplies authentication and reporting; `superset/dashboards/` holds the definitions.
 
-Build and run with the existing service:
+The viewer is built into the Superset image. Rebuild and restart that service:
 
 ```sh
 docker compose --profile superset --profile superset-ops build superset
 docker compose --profile superset --profile superset-ops up -d --no-deps superset
 ```
 
-Open `http://127.0.0.1:3000/` (Market Overview) and use the existing
-Superset login. Other routes end in `olx-home/`, `olx-exits/`, and `olx-health/`.
+Open `http://127.0.0.1:3000/` (Market Overview) and sign in with a
+Superset account. Other routes end in `olx-home/`, `olx-exits/`, and `olx-health/`.
 Unauthenticated visits redirect to Superset login. Expired data requests retain charts and show a sign-in link. Docker builds hashed local assets; runtime needs no Node service or CDN JavaScript.
 
 Accounts with only `OLX Guest` can view Home, Market Overview and Exits, with
@@ -44,7 +44,7 @@ connections are unsupported. If Superset RLS rules are added, this viewer denies
 access until their policies are supported; the native Superset path remains
 available. Browser data is never stored in persistent local storage.
 
-## Validation and timings
+## Validation
 
 ```sh
 npm ci
@@ -59,4 +59,3 @@ docker compose --profile superset --profile superset-ops run --rm --no-deps \
 Run the Docker command from the repository root. Browser scripts use installed Edge, falling back to Playwright Chromium. Set `SUPERSET_TEST_BROWSER` to choose an executable. Install Playwright with
 `npm install --prefix data/superset-validation --no-save playwright` from the
 repository root; they read the login secret without printing it. Shared configuration lives in `tests/helpers/browser.cjs`.
-See [performance measurements](../superset/PERFORMANCE.md) for timings and methodology.
