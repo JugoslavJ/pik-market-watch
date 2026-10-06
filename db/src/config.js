@@ -1,7 +1,7 @@
 "use strict";
 const fs = require("node:fs");
 const path = require("node:path");
-const { integer, boolean } = require("@pik-market-watch/config");
+const { boolean } = require("@pik-market-watch/config");
 
 module.exports = {
   get databaseUrl() {
@@ -25,10 +25,4 @@ module.exports = {
       "/db/init",
       path.join(__dirname, "..", "init-lean"),
     ].find((dir) => dir && fs.existsSync(dir)) || null,
-  rawResponseRetentionCount: integer(
-    "RAW_RESPONSE_RETENTION_COUNT",
-    process.env.RAW_RESPONSE_RETENTION_COUNT,
-    3,
-    { min: 1 },
-  ),
 };

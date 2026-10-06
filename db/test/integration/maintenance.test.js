@@ -94,9 +94,8 @@ needsDb(
 );
 
 needsDb(
-  "archive retention deletes expired evidence and keeps newest responses per stream across bounded batches",
+  "archive retention keeps the newest payload and diagnostic per URL across bounded batches",
   async () => {
-    db.rawResponseRetentionCount = 2;
     for (const requestKind of ["search", "detail"]) {
       for (const requestUrl of [
         "https://olx.ba/api/a",
@@ -112,25 +111,29 @@ needsDb(
         }
       }
     }
-    await db.archiveSearchResponse({
-      requestKind: "search",
-      requestUrl: "https://olx.ba/api/expired",
-      sourcePayload: { index: 9 },
-    });
-    await db.pool.query(
-      "UPDATE lean.raw_api_responses SET expires_at=now()-interval '1 second' WHERE request_url='https://olx.ba/api/expired'",
-    );
-    assert.equal(await db.purgeRawResponses(2), 9);
+    for (const message of ["first failure", "second failure"])
+      await db.archiveResponseDiagnostic({
+        requestKind: "detail",
+        requestUrl: "https://olx.ba/api/a",
+        error: new Error(message),
+      });
+    assert.equal(await db.purgeRawResponses(2), 13);
     const { rows } = await db.pool.query(
-      "SELECT request_kind,request_url,array_agg((coalesce(payload,source_payload)->>'index')::int ORDER BY id) AS kept FROM lean.raw_api_responses GROUP BY request_kind,request_url ORDER BY request_kind,request_url",
+      `SELECT request_kind,request_url,archive_format,
+              array_agg(coalesce((coalesce(payload,source_payload)->>'index'),
+                                 diagnostic->>'message') ORDER BY id) AS kept
+         FROM lean.raw_api_responses
+        GROUP BY request_kind,request_url,archive_format
+        ORDER BY request_kind,request_url,archive_format`,
     );
     assert.deepEqual(
-      rows.map((row) => row.kept),
+      rows.map((row) => [row.request_kind, row.archive_format, row.kept]),
       [
-        [2, 3],
-        [2, 3],
-        [2, 3],
-        [2, 3],
+        ["detail", "canonical-v2", ["3"]],
+        ["detail", "diagnostic-v2", ["second failure"]],
+        ["detail", "canonical-v2", ["3"]],
+        ["search", "canonical-v2", ["3"]],
+        ["search", "canonical-v2", ["3"]],
       ],
     );
     assert.equal(await db.purgeRawResponses(2), 0);

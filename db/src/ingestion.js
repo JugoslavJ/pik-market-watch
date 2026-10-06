@@ -36,32 +36,43 @@ function hasValidPrice(item) {
   );
 }
 
+// Containing boundaries are an indexed lookup; only points outside every
+// neighborhood pay for geodesic distances, prefiltered to at least 5 km.
 async function classify(client, ids) {
   if (!ids.length) return;
   await client.query(
     `UPDATE lean.listings l SET
-       property_type = CASE WHEN cardinality(l.search_keys)=0 THEN l.property_type ELSE (
-         SELECT CASE WHEN count(DISTINCT s.category) = 1
-                       AND bool_and(s.category IN ('apartments','houses','vacation_homes'))
-                     THEN min(s.category) ELSE NULL END
-           FROM unnest(l.search_keys) k
-           JOIN lean.saved_searches s ON s.search_key = k
-       ) END,
-       neighborhood = COALESCE(
-         (SELECT n.name FROM lean.neighborhoods n
-           WHERE n.name = NULLIF(BTRIM(l.extra->>'location'), '')
-           LIMIT 1),
-         (SELECT n.name FROM lean.neighborhoods n
-          WHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL
-            AND (ST_Covers(n.boundary, ST_SetSRID(ST_MakePoint(l.longitude, l.latitude), 4326))
-              OR ST_DWithin(n.boundary::geography,
-                ST_SetSRID(ST_MakePoint(l.longitude,l.latitude),4326)::geography,5000))
-          ORDER BY ST_Covers(n.boundary, ST_SetSRID(ST_MakePoint(l.longitude,l.latitude),4326)) DESC,
-            ST_Distance(n.boundary::geography,
-              ST_SetSRID(ST_MakePoint(l.longitude,l.latitude),4326)::geography),n.name
-          LIMIT 1),
-         l.neighborhood)
-     WHERE l.article_id = ANY($1::bigint[])`,
+       property_type=c.property_type,neighborhood=c.neighborhood
+     FROM (
+       SELECT s.article_id,
+         CASE WHEN cardinality(s.search_keys)=0 THEN s.property_type ELSE (
+           SELECT CASE WHEN count(DISTINCT ss.category) = 1
+                         AND bool_and(ss.category IN ('apartments','houses','vacation_homes'))
+                       THEN min(ss.category) ELSE NULL END
+             FROM unnest(s.search_keys) k
+             JOIN lean.saved_searches ss ON ss.search_key = k
+         ) END AS property_type,
+         COALESCE(
+           (SELECT n.name FROM lean.neighborhoods n
+             WHERE n.name = NULLIF(BTRIM(s.extra->>'location'), '')
+             LIMIT 1),
+           (SELECT n.name FROM lean.neighborhoods n
+             WHERE ST_Covers(n.boundary, pt.p) ORDER BY n.name LIMIT 1),
+           (SELECT n.name FROM lean.neighborhoods n
+             WHERE ST_DWithin(n.boundary, pt.p, 5500 / (111320 * cos(radians(s.latitude))))
+               AND ST_DWithin(n.boundary::geography, pt.p::geography, 5000)
+             ORDER BY ST_Distance(n.boundary::geography, pt.p::geography), n.name
+             LIMIT 1),
+           s.neighborhood) AS neighborhood
+       FROM lean.listings s
+       CROSS JOIN LATERAL (
+         SELECT ST_SetSRID(ST_MakePoint(s.longitude, s.latitude), 4326) AS p
+       ) pt
+       WHERE s.article_id = ANY($1::bigint[])
+     ) c
+     WHERE l.article_id = c.article_id
+       AND (l.property_type,l.neighborhood)
+           IS DISTINCT FROM (c.property_type,c.neighborhood)`,
     [ids],
   );
 }

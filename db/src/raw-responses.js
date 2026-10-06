@@ -67,24 +67,23 @@ async function recordScrapePageManifest(page) {
   });
 }
 
+// Keep the newest payload and the newest diagnostic for each request URL.
 async function purgeRawResponses(limit = 1000) {
   const cap = Math.max(1, Math.floor(Number(limit) || 1));
   let deleted = 0;
   const sql = `WITH ranked AS (
-       SELECT id,expires_at,row_number() OVER (
-         PARTITION BY request_kind,request_url ORDER BY fetched_at DESC,id DESC) AS rank
+       SELECT id,row_number() OVER (
+         PARTITION BY request_kind,request_url,archive_format
+         ORDER BY fetched_at DESC,id DESC) AS rank
        FROM lean.raw_api_responses
      ), doomed AS (
-       SELECT id FROM ranked WHERE rank>$1 OR expires_at<=now() LIMIT $2
+       SELECT id FROM ranked WHERE rank>1 LIMIT $1
      ), deleted AS (
        DELETE FROM lean.raw_api_responses r USING doomed d
        WHERE r.id=d.id RETURNING r.id
      ) SELECT count(*)::int AS deleted FROM deleted`;
   for (;;) {
-    const result = await this.pool.query(sql, [
-      this.rawResponseRetentionCount,
-      cap,
-    ]);
+    const result = await this.pool.query(sql, [cap]);
     const count = Number(result.rows[0].deleted);
     deleted += count;
     if (count < cap) return deleted;
@@ -131,11 +130,10 @@ module.exports = {
         : null;
     await this.pool.query(
       `INSERT INTO lean.raw_api_responses
-         (run_id, article_id, request_kind, request_url, fetched_at, expires_at,
+         (run_id, article_id, request_kind, request_url, fetched_at,
           parser_version, payload, source_payload, request_metadata,
           response_metadata, build_version, diagnostic, archive_format)
-       VALUES ($1, $2, $3, $4, $5::timestamptz,
-                'infinity'::timestamptz, $6,
+       VALUES ($1, $2, $3, $4, $5::timestamptz, $6,
                 $7::jsonb, $8::jsonb,
                 $9::jsonb, $10::jsonb, $11, $12::jsonb, $13)`,
       [
@@ -165,13 +163,12 @@ module.exports = {
     if (!rows.length) return 0;
     const result = await this.pool.query(
       `INSERT INTO lean.raw_api_responses
-         (run_id, article_id, request_kind, request_url, fetched_at, expires_at,
+         (run_id, article_id, request_kind, request_url, fetched_at,
           parser_version, payload, source_payload, request_metadata,
           response_metadata, build_version, diagnostic, archive_format)
          SELECT NULL, article_id, 'detail',
               'https://olx.ba/api/listings/' || article_id::text,
               fetched_at,
-              'infinity'::timestamptz,
                'detail-v1', payload, NULL,
                request_metadata, response_metadata, build_version, NULL,
                'canonical-v2'

@@ -22,7 +22,7 @@ Tests live with their packages. Cross-component deployment and security checks l
 | `lean.price_history` | Source-reported asking prices by listing, date, and source |
 | `lean.listing_lifecycle_events` | Append-only closure and reopen events with event-time snapshots |
 | `lean.neighborhoods` | Banja Luka neighborhood boundaries used to classify map pins |
-| `lean.raw_api_responses` | Retained search/detail payloads and request diagnostics |
+| `lean.raw_api_responses` | Latest detail payload per listing, malformed search pages and request diagnostics |
 | `lean.scrape_run_pages` | Page-level response, parse, and completeness evidence |
 
 Dashboard trends derive their summaries from observed prices, lifecycle

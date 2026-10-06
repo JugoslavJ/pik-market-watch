@@ -236,9 +236,12 @@ fi
 restore_ok=1
 finish_phase restore-and-grants
 
-# Reconnect Superset to olx; the metadata database is outside this restore.
-if ! docker compose up -d --no-deps --force-recreate --wait --wait-timeout 120 superset; then
-  echo "RESTORE_ERROR: database restored, but dashboard refresh failed; check Superset logs and recreate the service (no need to repeat the scrape/restore)" >&2
+# Drop reporting sessions opened before the schema swap. Superset's pools
+# reconnect on their next checkout and cached results expire within ten minutes.
+if ! docker compose exec -T db psql -v ON_ERROR_STOP=1 -U "$boot_user" -d "$db_name" -q -c "
+    SELECT count(pg_terminate_backend(pid)) FROM pg_stat_activity
+     WHERE datname = '$db_name' AND usename = '$reporting_user'" >/dev/null; then
+  echo "RESTORE_ERROR: database restored, but reporting sessions could not be reset; restart Superset (no need to repeat the scrape/restore)" >&2
   exit 1
 fi
 finish_phase superset-reconnect

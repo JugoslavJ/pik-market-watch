@@ -7,6 +7,8 @@ const API_ORIGIN = "https://olx.ba";
 
 // Pause before exhausting the rate window shared by search and detail requests.
 const RATE_RESERVE = 10;
+// OLX counts requests in fixed one-minute windows: remaining jumps back to the limit.
+const RATE_WINDOW_MS = 61_000;
 
 const MAX_BODY_BYTES = 5 * 1024 * 1024;
 const MAX_REQUEST_ATTEMPTS = 3;
@@ -88,6 +90,7 @@ class RateBudget {
     this.lowHandled = false;
     this.remaining = null;
     this.limit = null;
+    this.windowStartedAt = null;
   }
 
   async waitIfBlocked() {
@@ -105,15 +108,26 @@ class RateBudget {
   }
 
   observeValues(remaining, limit = null) {
+    // A rising count starts a new window. Responses arrive after the window
+    // opened, so this estimate never makes the reset look earlier than it is.
+    if (
+      remaining != null &&
+      (this.remaining == null || remaining > this.remaining)
+    )
+      this.windowStartedAt = this.now();
     if (remaining != null) this.remaining = remaining;
     if (limit != null) this.limit = limit;
     // A reset window can reach the low-water mark again in the same cycle.
     if (remaining != null && remaining >= this.reserve) this.lowHandled = false;
     if (remaining != null && remaining < this.reserve && !this.lowHandled) {
       this.lowHandled = true;
+      // Wait for the window to reset; the cooldown bounds the wait.
       this.blockedUntil = Math.max(
         this.blockedUntil,
-        this.now() + this.cooldownMs,
+        Math.min(
+          this.now() + this.cooldownMs,
+          this.windowStartedAt + RATE_WINDOW_MS,
+        ),
       );
       this.onLow(remaining, limit);
     }

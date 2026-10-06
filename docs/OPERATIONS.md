@@ -24,7 +24,7 @@ A one-off `compose run` does not inherit the restart policy. The maintenance job
 
 The migrator verifies filenames and checksums and fails on edited applied files; see [schema rules](../db/README.md).
 
-**Retention.** The scraper applies raw-response retention after every cycle. The maintenance job runs the same retention without contacting OLX, for example on a dashboard-only host. Listing and price history are never pruned.
+**Retention.** The scraper applies raw-response retention after every cycle: it keeps the newest payload and the newest diagnostic for each request URL, so each listing keeps its latest detail response. Search pages are archived only when they are malformed. The maintenance job runs the same retention without contacting OLX, for example on a dashboard-only host. Listing and price history are never pruned.
 
 **Detail backfill** fetches details outside the normal per-cycle cap. By default it targets open listings with missing pins, floor area or missing/stale details; `--all` includes closed listings.
 
@@ -53,7 +53,7 @@ Autovacuum handles normal updates. After a large restore, run `ANALYZE` on `lean
 ```bash
 docker compose run --rm --no-deps db-backup --once
 docker compose exec -T db-backup sh /usr/local/bin/backup.sh --check
-docker compose exec -T db pg_dump -U olx_backup -Fc -f /backups/manual.dump olx
+docker compose exec -T db pg_dump -U olx_backup -Fc -Z zstd:9 -f /backups/manual.dump olx
 docker compose exec -T db pg_restore -l /backups/manual.dump
 ```
 

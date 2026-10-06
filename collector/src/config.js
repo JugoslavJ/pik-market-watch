@@ -105,7 +105,8 @@ module.exports = {
   maxPages: integer("MAX_PAGES", process.env.MAX_PAGES, 30, { min: 1 }),
   concurrency: integer("CONCURRENCY", process.env.CONCURRENCY, 3, { min: 1 }),
   pageDelayMs: integer("PAGE_DELAY_MS", process.env.PAGE_DELAY_MS, 1500),
-  perPage: integer("API_PER_PAGE", process.env.API_PER_PAGE, 40, { min: 1 }),
+  // The API accepts up to at least 500; fewer pages leave rate budget for details.
+  perPage: integer("API_PER_PAGE", process.env.API_PER_PAGE, 200, { min: 1 }),
   apiTimeoutMs: integer("API_TIMEOUT_MS", process.env.API_TIMEOUT_MS, 20000, {
     min: 1,
   }),

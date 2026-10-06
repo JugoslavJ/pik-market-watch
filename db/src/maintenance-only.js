@@ -4,9 +4,7 @@ const Db = require("./client");
 const applyMigrations = require("./migrate");
 
 async function main() {
-  const db = new Db(config.databaseUrl, {
-    rawResponseRetentionCount: config.rawResponseRetentionCount,
-  });
+  const db = new Db(config.databaseUrl);
   let lease;
   try {
     await db.waitUntilReady();

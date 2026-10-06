@@ -71,12 +71,11 @@ Compose passes the settings marked `.env` to the scraper. Pass the others with `
 | `MAX_DETAIL_FETCHES` | `25` | `.env` | Detail requests per search per cycle; `0` disables enrichment. |
 | `DETAIL_REFRESH_DAYS` | `7` | `.env` | Age before successful details are refreshed. |
 | `DETAIL_CONCURRENCY`, `DETAIL_DELAY_MS` | `2`, `1200` | `.env` | Detail request batch size and gap. |
-| `RAW_RESPONSE_RETENTION_COUNT` | `3` | `.env` | Newest archived responses kept per request kind and URL. |
 | `ABANDONED_RUN_AFTER_MINUTES` | `180` | `.env` | Age at which unfinished runs are marked failed at startup. |
 | `HEALTH_BIND` | `0.0.0.0` | `.env` | Health listener inside the container; the host port stays on loopback. Bare processes default to `127.0.0.1`. |
 | `MAX_PAGES`, `CONCURRENCY`, `PAGE_DELAY_MS` | `30`, `3`, `1500` | `-e` | Search pagination cap, parallel pages and wave gap. |
-| `API_PER_PAGE`, `API_TIMEOUT_MS` | `40`, `20000` | `-e` | Results per search page and request timeout. |
-| `RATE_LIMIT_COOLDOWN_MS` | `65000` | `-e` | Pause when the shared rate budget runs low, or after a 429 without `Retry-After`. |
+| `API_PER_PAGE`, `API_TIMEOUT_MS` | `200`, `20000` | `-e` | Results per search page and request timeout. |
+| `RATE_LIMIT_COOLDOWN_MS` | `65000` | `-e` | Longest pause when the shared rate budget runs low (it waits for the observed one-minute window to reset), and the pause after a 429 without `Retry-After`. |
 | `SCRAPE_MIN_GAP_MINUTES` | `45` | `-e` | Skip a search that completed this recently, except in `--once` runs. |
 | `HEALTH_PORT`, `HEALTH_FAILURE_THRESHOLD` | `9100`, `3` | `-e` | Health port, and consecutive failed cycles before it reports 503. |
 | `SCRAPE_USER_AGENT` | browser UA | `-e` | Request user agent. |

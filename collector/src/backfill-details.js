@@ -14,9 +14,7 @@ const log = makeLogger("backfill");
   const maxArg = process.argv.find((a) => /^--max=\d+$/.test(a));
   const max = maxArg ? parseInt(maxArg.split("=")[1], 10) : Infinity;
 
-  const db = new Db(dbConfig.databaseUrl, {
-    rawResponseRetentionCount: dbConfig.rawResponseRetentionCount,
-  });
+  const db = new Db(dbConfig.databaseUrl);
   await db.waitUntilReady();
 
   const targets = (

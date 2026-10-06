@@ -168,6 +168,7 @@ test("single-page search: one fetch, ok run, correct stats and refresh", async (
   assert.equal(db.rec.upserts[0].listingCount, 2);
   assert.equal(db.rec.pageManifests[0].responseState, "ok");
   assert.equal(db.rec.pageManifests[0].isAuthoritative, true);
+  assert.equal(db.rec.archived, undefined, "clean pages are not archived");
 });
 
 test("multi-page search: waves cover pages 2..last_page", async () => {
@@ -259,7 +260,7 @@ test("a failing page inside a wave marks the run incomplete", async () => {
 });
 
 // rate budget
-test("low rate budget pauses once (65 s), latch prevents repeat backoffs", async () => {
+test("low rate budget pauses once until the window resets, latch prevents repeat backoffs", async () => {
   const low = RATE_RESERVE - 1;
   const db = fakeDb();
   const fetchPage = pageFetcher({
@@ -272,7 +273,8 @@ test("low rate budget pauses once (65 s), latch prevents repeat backoffs", async
   // Exactly one real backoff; other pace() calls are 0 ms wave gaps.
   const backoffs = pace.delays.filter((ms) => ms >= 60000);
   assert.equal(backoffs.length, 1);
-  assert.ok(backoffs[0] >= 64999 && backoffs[0] <= 65000);
+  // The first response opened the window, so the reset is at most 61 s away.
+  assert.ok(backoffs[0] > 60000 && backoffs[0] <= 61000);
 });
 
 test("a supplied rate budget can be shared across searches", async () => {
@@ -364,6 +366,10 @@ test("malformed empty page 1 retries and never commits closures", async () => {
   assert.deepEqual(
     db.rec.pageManifests.map((row) => row.responseState),
     ["malformed", "malformed"],
+  );
+  assert.deepEqual(
+    db.rec.archived.map((row) => row.payload.meta.total),
+    [4, 4],
   );
 });
 

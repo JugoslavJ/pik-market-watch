@@ -132,6 +132,29 @@ needsDb(
   },
 );
 
+needsDb(
+  "lean neighborhood pin fallback prefers a containing boundary, then the nearest within 5 km",
+  async () => {
+    const neighborhoodAt = async (latitude, longitude) => {
+      await db.pool.query(
+        "UPDATE lean.listings SET latitude=$2,longitude=$3 WHERE article_id=$1",
+        [9108, latitude, longitude],
+      );
+      await commit(SEARCH_A, [card(9108)]);
+      const result = await db.pool.query(
+        "SELECT neighborhood FROM lean.listings WHERE article_id=9108",
+      );
+      return result.rows[0].neighborhood;
+    };
+    await commit(SEARCH_A, [card(9108)]);
+    assert.equal(await neighborhoodAt(44.78554, 17.167138), "Laus 2");
+    // About 1 km outside the nearest boundary.
+    assert.equal(await neighborhoodAt(44.853589, 17.248978), "Prijecani");
+    // Over 25 km from every boundary keeps the previous classification.
+    assert.equal(await neighborhoodAt(44.5, 17.6), "Prijecani");
+  },
+);
+
 needsDb("lean records each scrape page manifest", async () => {
   await db.registerSavedSearch(SEARCH_A);
   const runId = await db.startRun(SEARCH_A.searchKey);

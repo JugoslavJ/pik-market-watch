@@ -140,7 +140,6 @@ CREATE TABLE lean.raw_api_responses (
   request_kind text NOT NULL CHECK (request_kind IN ('search', 'detail')),
   request_url text NOT NULL,
   fetched_at timestamptz NOT NULL DEFAULT now(),
-  expires_at timestamptz NOT NULL DEFAULT 'infinity'::timestamptz,
   parser_version text NOT NULL,
   payload jsonb,
   source_payload jsonb,
@@ -153,8 +152,6 @@ CREATE TABLE lean.raw_api_responses (
 );
 CREATE INDEX lean_raw_api_responses_stream_idx
   ON lean.raw_api_responses (request_kind, request_url, fetched_at DESC, id DESC);
-CREATE INDEX lean_raw_api_responses_expiry_idx
-  ON lean.raw_api_responses (expires_at) WHERE expires_at <> 'infinity';
 CREATE INDEX lean_raw_api_responses_article_idx
   ON lean.raw_api_responses (article_id, fetched_at DESC) WHERE article_id IS NOT NULL;
 

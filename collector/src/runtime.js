@@ -213,9 +213,7 @@ function createRuntime(
   }
 
   async function main() {
-    const db = new Db(dbConfig.databaseUrl, {
-      rawResponseRetentionCount: dbConfig.rawResponseRetentionCount,
-    });
+    const db = new Db(dbConfig.databaseUrl);
     await db.waitUntilReady();
     if (dbConfig.migrationsOnStartup) {
       await applyMigrations(db.pool, dbConfig.migrationsDir, log);

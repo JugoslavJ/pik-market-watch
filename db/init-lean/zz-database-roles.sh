@@ -38,7 +38,8 @@
     exit 1
   fi
 
-  psql -v ON_ERROR_STOP=1 \
+  # -q hides one command tag per repaired object; notices and errors still print.
+  psql -q -v ON_ERROR_STOP=1 \
        -U "${POSTGRES_USER:-postgres}" \
        -d "${POSTGRES_DB:-${POSTGRES_USER:-postgres}}" \
        -v admin_user="${POSTGRES_USER:-postgres}" \
@@ -183,7 +184,7 @@ SELECT format('ALTER ROLE %I SET idle_in_transaction_session_timeout = %L', :'re
 SELECT format('ALTER ROLE %I WITH CONNECTION LIMIT %s', :'reporting_user', 30) \gexec
 SQL
 
-  psql -v ON_ERROR_STOP=1 \
+  psql -q -v ON_ERROR_STOP=1 \
        -U "${POSTGRES_USER:-postgres}" \
        -d "${SUPERSET_META_DB:-superset_meta}" \
        -v meta_user="${SUPERSET_META_USER:-superset_meta}" \

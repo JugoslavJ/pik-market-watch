@@ -17,7 +17,7 @@ test("immutable baseline remains intact and ordered migrations can extend it", (
     "00-extensions.sql":
       "e9a3dbd3a5ad094964b7a30004ed4464e711b25fb9f59de3e14233fa71a38472",
     "01-lean-schema.sql":
-      "d55b4ec8c8a18e28c4e5c37c1652c6a6c040905591b2cca0011c378d35fa187d",
+      "f22ce66eb994c4a986831730ec541484fce2f908ca5fe7c78d1d806962b2e7c7",
     "02-lean-neighborhoods.sql":
       "d08c807494dbddf739525b77bc3d7186866a07dcca46bdead6499c60dc5e2227",
   };

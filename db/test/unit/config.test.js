@@ -73,7 +73,7 @@ test("database configuration ignores invalid collection settings and saved searc
     const script = `
       const cfg = require(${JSON.stringify(CONFIG_PATH)});
       process.stdout.write(JSON.stringify({
-        retention: cfg.rawResponseRetentionCount,
+        migrationsOnStartup: cfg.migrationsOnStartup,
         migrationsDir: cfg.migrationsDir,
       }));
     `;
@@ -84,19 +84,14 @@ test("database configuration ignores invalid collection settings and saved searc
           SEARCHES_FILE: file,
           CONCURRENCY: "0",
           API_TIMEOUT_MS: "invalid",
-          RAW_RESPONSE_RETENTION_COUNT: "5",
+          MIGRATIONS_ON_STARTUP: "0",
         },
         encoding: "utf8",
       }),
     );
-    assert.equal(output.retention, 5);
+    assert.equal(output.migrationsOnStartup, false);
     assert.ok(fs.existsSync(output.migrationsDir));
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
-});
-
-test("database retention configuration rejects zero and numeric prefixes", () => {
-  runConfigFailure({ RAW_RESPONSE_RETENTION_COUNT: "0" });
-  runConfigFailure({ RAW_RESPONSE_RETENTION_COUNT: "3rows" });
 });

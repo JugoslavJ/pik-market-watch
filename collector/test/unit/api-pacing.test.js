@@ -66,3 +66,25 @@ test("rate budget can pause again after an upstream window reset", async () => {
 
   assert.deepEqual(waits, [1000, 1000]);
 });
+
+test("rate budget waits only until the observed window resets", async () => {
+  const waits = [];
+  let clock = 0;
+  const budget = new RateBudget({
+    reserve: 10,
+    cooldownMs: 65000,
+    wait: async (ms) => waits.push(ms),
+    now: () => clock,
+  });
+
+  budget.observeValues(59, 60);
+  clock = 30000;
+  budget.observeValues(40, 60);
+  budget.observeValues(41, 60); // an older concurrent response arriving late
+  clock = 45000;
+  budget.observeValues(9, 60);
+  await budget.waitIfBlocked();
+
+  // The late response moved the window estimate to 30 s, never earlier.
+  assert.deepEqual(waits, [46000]);
+});

@@ -53,7 +53,6 @@ async function harvestSearchPages({
       const response = await fetchSearchPage(url, cfg.apiTimeoutMs, {
         rateBudget,
       });
-      await archivePage(url, response);
       const parsed = mapSearchItems(response.items);
       const total = Number(response.meta?.total);
       const reportedLastPage = Number(response.meta?.last_page);
@@ -95,7 +94,11 @@ async function harvestSearchPages({
         : malformed
           ? "malformed"
           : "ok";
-      if (malformed) malformedPages.add(pageNo);
+      // Clean pages are reproducible; keep only bodies that need diagnosis.
+      if (malformed) {
+        malformedPages.add(pageNo);
+        await archivePage(url, response);
+      }
 
       let fresh = 0;
       let duplicates = 0;

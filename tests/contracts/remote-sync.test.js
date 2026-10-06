@@ -5,14 +5,30 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { spawnSync } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 
 const ROOT = path.resolve(__dirname, "..", "..");
 const shell =
   process.platform === "win32" ? "C:/Program Files/Git/usr/bin/sh.exe" : "sh";
 const shellAvailable = spawnSync(shell, ["-c", "exit 0"]).status === 0;
 
-function restore({ provision = "0", fail = "" } = {}) {
+// Each scenario owns its directory and lock, so scenarios run concurrently.
+function run(command, args, { input, ...options }) {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, options);
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8").on("data", (chunk) => (stdout += chunk));
+    child.stderr.setEncoding("utf8").on("data", (chunk) => (stderr += chunk));
+    child.on("error", (error) =>
+      resolve({ status: null, stdout, stderr, error }),
+    );
+    child.on("close", (status) => resolve({ status, stdout, stderr }));
+    child.stdin.end(input);
+  });
+}
+
+async function restore({ provision = "0", fail = "" } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "olx-remote-sync-test-"));
   try {
     for (const directory of ["scripts/lib", "backups", "bin"])
@@ -34,7 +50,7 @@ function restore({ provision = "0", fail = "" } = {}) {
       `#!/bin/sh
 printf '%s\\n' "$*" >> commands
 case "$*" in
-  *'up -d --no-deps --force-recreate'*) [ "$MOCK_FAIL" != refresh ] ;;
+  *'pg_terminate_backend'*) [ "$MOCK_FAIL" != refresh ] ;;
   *'exec -T db pg_restore -U'*) [ "$MOCK_FAIL" != restore ] ;;
   *'/app/check_sync.py'*) [ "$MOCK_FAIL" != check ] ;;
   *'run --rm --no-deps superset-seed') [ "$MOCK_FAIL" != seed ] ;;
@@ -56,10 +72,9 @@ esac
       MOCK_FAIL: fail,
     };
     delete env.OLX_SYNC_PROVISION_DASHBOARDS;
-    const result = spawnSync(shell, ["restore.sh"], {
+    const result = await run(shell, ["restore.sh"], {
       cwd: root,
       input: Buffer.alloc(30000),
-      encoding: "utf8",
       timeout: 30000,
       env,
     });
@@ -80,70 +95,84 @@ esac
   }
 }
 
-test(
-  "remote sync checks restored charts and provisions only when requested",
-  { skip: !shellAvailable ? "POSIX shell unavailable" : false },
-  () => {
-    for (const provision of ["0", "1"]) {
-      const result = restore({ provision });
-      assert.equal(result.status, 0, result.error?.message || result.stderr);
-      assert.match(result.stdout, /RESTORE_OK/);
-      assert.match(result.stdout, /RESTORE_STAGE restore-and-grants \d+s/);
-      assert.match(result.stdout, /RESTORE_STAGE dashboard-query-check \d+s/);
-      const commands = result.commands;
-      const repair = commands.indexOf("zz-database-roles.sh");
-      const audit = commands.indexOf("awk");
-      const reset = commands.indexOf("DROP SCHEMA IF EXISTS lean");
-      const refresh = commands.indexOf("--force-recreate --wait");
-      const check = commands.indexOf("/app/check_sync.py");
-      const finalRepair = commands.lastIndexOf("zz-database-roles.sh");
-      assert.ok(repair >= 0 && repair < audit && audit < reset);
-      assert.ok(
-        finalRepair > reset && refresh > finalRepair && check > refresh,
+test.describe("remote sync", { concurrency: true }, () => {
+  test(
+    "remote sync checks restored charts and provisions only when requested",
+    { skip: !shellAvailable ? "POSIX shell unavailable" : false },
+    async () => {
+      const results = await Promise.all(
+        ["0", "1"].map(async (provision) => ({
+          provision,
+          result: await restore({ provision }),
+        })),
       );
-      assert.equal(
-        commands.includes("run --rm --no-deps superset-seed"),
-        provision === "1",
-      );
-      assert.equal(
-        commands.includes("run --rm --no-deps superset-access"),
-        provision === "1",
-      );
-      if (provision === "1") {
+      for (const { provision, result } of results) {
+        assert.equal(result.status, 0, result.error?.message || result.stderr);
+        assert.match(result.stdout, /RESTORE_OK/);
+        assert.match(result.stdout, /RESTORE_STAGE restore-and-grants \d+s/);
+        assert.match(result.stdout, /RESTORE_STAGE dashboard-query-check \d+s/);
+        const commands = result.commands;
+        const repair = commands.indexOf("zz-database-roles.sh");
+        const audit = commands.indexOf("awk");
+        const reset = commands.indexOf("DROP SCHEMA IF EXISTS lean");
+        const refresh = commands.indexOf("pg_terminate_backend");
+        const check = commands.indexOf("/app/check_sync.py");
+        const finalRepair = commands.lastIndexOf("zz-database-roles.sh");
+        assert.ok(repair >= 0 && repair < audit && audit < reset);
         assert.ok(
-          commands.indexOf("--no-deps superset-seed") <
-            commands.indexOf("--no-deps superset-access"),
+          finalRepair > reset && refresh > finalRepair && check > refresh,
         );
-        assert.ok(commands.indexOf("--no-deps superset-access") < check);
+        assert.equal(
+          commands.includes("run --rm --no-deps superset-seed"),
+          provision === "1",
+        );
+        assert.equal(
+          commands.includes("run --rm --no-deps superset-access"),
+          provision === "1",
+        );
+        if (provision === "1") {
+          assert.ok(
+            commands.indexOf("--no-deps superset-seed") <
+              commands.indexOf("--no-deps superset-access"),
+          );
+          assert.ok(commands.indexOf("--no-deps superset-access") < check);
+        }
+        assert.ok(result.incomingRemoved && result.lockRemoved);
       }
-      assert.ok(result.incomingRemoved && result.lockRemoved);
-    }
-  },
-);
+    },
+  );
 
-test(
-  "invalid provisioning configuration fails before database operations",
-  { skip: !shellAvailable ? "POSIX shell unavailable" : false },
-  () => {
-    const result = restore({ provision: "invalid" });
-    assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /OLX_SYNC_PROVISION_DASHBOARDS must be 0 or 1/);
-    assert.equal(result.commands, "");
-  },
-);
+  test(
+    "invalid provisioning configuration fails before database operations",
+    { skip: !shellAvailable ? "POSIX shell unavailable" : false },
+    async () => {
+      const result = await restore({ provision: "invalid" });
+      assert.notEqual(result.status, 0);
+      assert.match(
+        result.stderr,
+        /OLX_SYNC_PROVISION_DASHBOARDS must be 0 or 1/,
+      );
+      assert.equal(result.commands, "");
+    },
+  );
 
-test(
-  "remote sync withholds success on restore, refresh, provisioning or query failure",
-  { skip: !shellAvailable ? "POSIX shell unavailable" : false },
-  () => {
-    for (const fail of ["restore", "refresh", "seed", "access", "check"]) {
-      const result = restore({ provision: "1", fail });
-      assert.notEqual(result.status, 0, fail);
-      assert.doesNotMatch(result.stdout, /RESTORE_OK/);
-      assert.match(result.stderr, /RESTORE_ERROR/);
-      if (fail !== "check")
-        assert.ok(!result.commands.includes("/app/check_sync.py"), fail);
-      assert.ok(result.incomingRemoved && result.lockRemoved, fail);
-    }
-  },
-);
+  test(
+    "remote sync withholds success on restore, refresh, provisioning or query failure",
+    { skip: !shellAvailable ? "POSIX shell unavailable" : false },
+    async () => {
+      const failures = ["restore", "refresh", "seed", "access", "check"];
+      const results = await Promise.all(
+        failures.map((fail) => restore({ provision: "1", fail })),
+      );
+      for (const [index, result] of results.entries()) {
+        const fail = failures[index];
+        assert.notEqual(result.status, 0, fail);
+        assert.doesNotMatch(result.stdout, /RESTORE_OK/);
+        assert.match(result.stderr, /RESTORE_ERROR/);
+        if (fail !== "check")
+          assert.ok(!result.commands.includes("/app/check_sync.py"), fail);
+        assert.ok(result.incomingRemoved && result.lockRemoved, fail);
+      }
+    },
+  );
+});

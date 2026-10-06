@@ -9,9 +9,8 @@ const SCRAPE_CYCLE_LOCK = "pik-market-watch scrape cycle";
 const LEAN_MAINTENANCE_LOCK = "pik-market-watch lean maintenance";
 
 class Db {
-  constructor(connectionString, { rawResponseRetentionCount = 3 } = {}) {
+  constructor(connectionString) {
     this.pool = new Pool({ connectionString, max: 5 });
-    this.rawResponseRetentionCount = rawResponseRetentionCount;
   }
 
   async waitUntilReady({ retries = 30, delayMs = 2000 } = {}) {
