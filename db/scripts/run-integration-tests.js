@@ -88,7 +88,7 @@ const up = docker([
 ]);
 if (up.status !== 0) {
   // A failed port bind still leaves a created container behind.
-  docker(["rm", "-f", NAME]);
+  docker(["rm", "-f", "-v", NAME]);
   if (REPORTING) docker(["network", "rm", NETWORK]);
   console.error(up.stderr);
   process.exit(1);
@@ -194,7 +194,7 @@ try {
       console.error(logs.stderr.trim().split(/\r?\n/).slice(-120).join("\n"));
     }
   }
-  docker(["rm", "-f", NAME]);
+  docker(["rm", "-f", "-v", NAME]);
   if (REPORTING) docker(["network", "rm", NETWORK]);
 }
 process.exit(exit);
