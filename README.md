@@ -78,7 +78,6 @@ See the [collector](collector/README.md), [database](db/README.md) and [Superset
 - [Operations](docs/OPERATIONS.md)
 - [Lean database baseline](db/README.md)
 - [Security policy](SECURITY.md)
-- [Geographic data workflow](geo/README.md)
 - [Data provenance and licensing](DATA.md)
 
 ## License

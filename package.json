@@ -18,9 +18,9 @@
     "fixtures": "npm run fixtures --workspace @pik-market-watch/collector",
     "replay:response": "npm run replay:response --workspace @pik-market-watch/collector --",
     "benchmark:ingestion": "npm run benchmark:ingestion --workspace @pik-market-watch/db",
-    "lint": "eslint collector db config scripts tests superset/tests superset/scripts superset/dashboard_requests.js dashboard-viewer/tests \"dashboard-viewer/src/*.js\" dashboard-viewer/vite.config.js geo/scripts",
-    "format": "prettier --write collector db/src db/scripts db/test config/env.js config/package.json scripts/*.js superset/scripts/*.js tests/contracts/*.js tests/helpers/*.cjs superset/dashboard_requests.js \"superset/tests/*.cjs\" dashboard-viewer/src dashboard-viewer/tests dashboard-viewer/vite.config.js geo/scripts package.json eslint.config.js .prettierrc.json",
-    "format:check": "prettier --check collector db/src db/scripts db/test config/env.js config/package.json scripts/*.js superset/scripts/*.js tests/contracts/*.js tests/helpers/*.cjs superset/dashboard_requests.js \"superset/tests/*.cjs\" dashboard-viewer/src dashboard-viewer/tests dashboard-viewer/vite.config.js geo/scripts package.json eslint.config.js .prettierrc.json",
+    "lint": "eslint collector db config scripts tests superset/tests superset/scripts superset/dashboard_requests.js dashboard-viewer/tests \"dashboard-viewer/src/*.js\" dashboard-viewer/vite.config.js",
+    "format": "prettier --write collector db/src db/scripts db/test config/env.js config/package.json scripts/*.js superset/scripts/*.js tests/contracts/*.js tests/helpers/*.cjs superset/dashboard_requests.js \"superset/tests/*.cjs\" dashboard-viewer/src dashboard-viewer/tests dashboard-viewer/vite.config.js package.json eslint.config.js .prettierrc.json",
+    "format:check": "prettier --check collector db/src db/scripts db/test config/env.js config/package.json scripts/*.js superset/scripts/*.js tests/contracts/*.js tests/helpers/*.cjs superset/dashboard_requests.js \"superset/tests/*.cjs\" dashboard-viewer/src dashboard-viewer/tests dashboard-viewer/vite.config.js package.json eslint.config.js .prettierrc.json",
     "check:dashboards": "node superset/scripts/generate-dashboard-catalog.js --check"
   },
   "engines": {

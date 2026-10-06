@@ -48,8 +48,8 @@ See [viewer details](../dashboard-viewer/README.md), [performance measurements](
 
 ## Geography
 
-`geo/banja-luka-mz-final.geojson` is the source for the generated
-`db/init-lean/02-lean-neighborhoods.sql` seed. Regenerate it with
-`node geo/scripts/gen-lean-sql.js`. The PostGIS polygons support point
-containment and a nearest-boundary fallback within five kilometres. See
-[the geography workflow](../geo/README.md) and [data provenance](../DATA.md).
+`db/init-lean/02-lean-neighborhoods.sql` seeds approximate Banja Luka
+neighborhood boundaries. The PostGIS polygons support point containment and a
+nearest-boundary fallback within five kilometres. The seed is an applied
+baseline; ship boundary changes as a new ordered migration. See
+[data provenance](../DATA.md).
