@@ -13,18 +13,9 @@ function pagesInWave(start, lastPage, cfg) {
 }
 
 function pageFailureState(error) {
-  const status = Number(error?.status);
   if (error?.kind === "decode") return "blocked";
   if (["schema", "parser"].includes(error?.kind)) return "malformed";
-  if ([401, 403, 429].includes(status)) return "blocked";
-  if (/blocked|challeng|non-JSON/i.test(String(error?.message || error))) {
-    return "blocked";
-  }
-  if (
-    /payload shape|lacks data|parser/i.test(String(error?.message || error))
-  ) {
-    return "malformed";
-  }
+  if ([401, 403, 429].includes(Number(error?.status))) return "blocked";
   return "error";
 }
 

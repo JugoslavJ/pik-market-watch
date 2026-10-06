@@ -1,6 +1,5 @@
 "use strict";
 
-// Override the browser user agent with SCRAPE_USER_AGENT.
 const USER_AGENT =
   process.env.SCRAPE_USER_AGENT ||
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) " +

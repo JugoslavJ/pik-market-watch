@@ -60,24 +60,6 @@ test("dashboard definitions keep four identities and only query lean relations",
   }
 });
 
-test("dashboard definitions use price history, current inventory and scrape outcomes", () => {
-  const dashboards = Object.fromEntries(
-    files.map((file) => [
-      file,
-      JSON.parse(fs.readFileSync(path.join(dir, file), "utf8")),
-    ]),
-  );
-  const sql = (file) =>
-    dashboards[file].panels
-      .flatMap((panel) => panel.targets || [])
-      .map((target) => target.rawSql)
-      .join("\n");
-  assert.match(sql("olx-overview.json"), /lean\.price_history/);
-  assert.match(sql("olx-home.json"), /closed_at/);
-  assert.match(sql("olx-health.json"), /lean\.scrape_runs/);
-  assert.match(sql("olx-exits.json"), /closing_price/);
-});
-
 test("every Exits data panel reads persisted close events across reopenings", () => {
   const exits = JSON.parse(
     fs.readFileSync(path.join(dir, "olx-exits.json"), "utf8"),

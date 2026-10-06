@@ -29,7 +29,7 @@ async function collectSearch(
   const rateBudget =
     suppliedRateBudget ||
     new api.RateBudget({
-      cooldownMs: cfg.rateLimitCooldownMs ?? 65000,
+      cooldownMs: cfg.rateLimitCooldownMs,
       wait: pace,
       onLow: (remaining, limit) =>
         log(

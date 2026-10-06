@@ -27,6 +27,15 @@ function rate(price, sqm, deal) {
   return result >= 1 && result <= 15000 ? result : null;
 }
 
+function hasValidPrice(item) {
+  return (
+    item.pricePresent !== false &&
+    item.priceState !== "invalid" &&
+    item.priceState !== "unpriced" &&
+    item.price != null
+  );
+}
+
 async function classify(client, ids) {
   if (!ids.length) return;
   await client.query(
@@ -173,11 +182,7 @@ async function commitSearchIngestion(payload) {
               (!Object.hasOwn(card, "dealType") && card.isRent === false)
             ? "sale"
             : "unknown";
-      const validPrice =
-        card.pricePresent !== false &&
-        card.priceState !== "invalid" &&
-        card.priceState !== "unpriced" &&
-        card.price != null;
+      const validPrice = hasValidPrice(card);
       const prior = byId.get(Number(card.articleId));
       const price = validPrice
         ? card.price
@@ -432,11 +437,7 @@ async function enrichListings(rows) {
             : Object.hasOwn(row, "dealType")
               ? "unknown"
               : prior.deal;
-      const validPrice =
-        row.pricePresent !== false &&
-        row.priceState !== "invalid" &&
-        row.priceState !== "unpriced" &&
-        row.price != null;
+      const validPrice = hasValidPrice(row);
       const price = validPrice
         ? row.price
         : deal !== prior.deal

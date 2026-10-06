@@ -1,5 +1,4 @@
 "use strict";
-// Reject non-JSON responses so upstream errors cannot look like an empty market.
 
 const { USER_AGENT, sleep } = require("./util");
 const { mapListingDetail, MAPPER_BUILD_VERSION } = require("./payload-mapper");
@@ -89,10 +88,6 @@ class RateBudget {
     this.lowHandled = false;
     this.remaining = null;
     this.limit = null;
-  }
-
-  async beforeRequest() {
-    await this.waitIfBlocked();
   }
 
   async waitIfBlocked() {
@@ -216,7 +211,7 @@ async function fetchJson(url, timeoutMs, policy = {}) {
   const random = policy.random ?? Math.random;
   const rateBudget = policy.rateBudget;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    if (rateBudget) await rateBudget.beforeRequest();
+    if (rateBudget) await rateBudget.waitIfBlocked();
     let res;
     try {
       res = await fetch(target, {

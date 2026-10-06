@@ -19,6 +19,21 @@ echarts.use([
 ]);
 export { echarts };
 
+export const FILTER_DIMENSIONS = new Set([
+  "rooms",
+  "neighborhood",
+  "floor",
+  "seller_type",
+  "segment",
+  "deal",
+  "category",
+  "search_key",
+  "status",
+]);
+
+const rowsToFields = (panel) =>
+  panel.transformations.find((t) => t.id === "rowsToFields").options;
+
 export function number(value, panel = {}) {
   if (value == null || !Number.isFinite(Number(value))) return "—";
   return Number(value).toLocaleString("en-GB", {
@@ -39,7 +54,7 @@ export function chartOption(panel, rows) {
     animation: false,
     backgroundColor: "transparent",
     textStyle: { color: "#a9b9c9", fontFamily: "system-ui" },
-    grid: { left: 65, right: 22, top: 24, bottom: 55, containLabel: false },
+    grid: { left: 65, right: 22, top: 24, bottom: 55 },
     tooltip: { trigger: "axis", confine: true, renderMode: "richText" },
     legend: { bottom: 0, textStyle: { color: "#a9b9c9" }, type: "scroll" },
     color: ["#36d7ba", "#79a8ff", "#ffbb63", "#e680a8", "#aa94ef"],
@@ -68,11 +83,7 @@ export function chartOption(panel, rows) {
     };
   }
   if (panel.type === "bargauge") {
-    const transform = panel.transformations.find(
-      (t) => t.id === "rowsToFields",
-    );
-    const dimension = transform.options.nameField,
-      measure = transform.options.valueField;
+    const { nameField: dimension, valueField: measure } = rowsToFields(panel);
     return {
       ...base,
       legend: { show: false },
@@ -116,7 +127,6 @@ export function chartOption(panel, rows) {
       name: measure,
       type: panel.drawStyle === "bars" ? "bar" : "line",
       showSymbol: false,
-      connectNulls: false,
       data: rows.map((row) => [Date.parse(row[time]), row[measure]]),
     })),
   };
@@ -126,21 +136,8 @@ export function selectionFor(panel, rows, index) {
   const row = rows[index];
   if (!row) return null;
   if (panel.type === "bargauge") {
-    const dimension = panel.transformations.find((t) => t.id === "rowsToFields")
-      .options.nameField;
-    if (
-      [
-        "rooms",
-        "neighborhood",
-        "floor",
-        "seller_type",
-        "segment",
-        "deal",
-        "category",
-        "search_key",
-        "status",
-      ].includes(dimension)
-    )
+    const dimension = rowsToFields(panel).nameField;
+    if (FILTER_DIMENSIONS.has(dimension))
       return { dimension, value: row[dimension] };
   }
   return null;

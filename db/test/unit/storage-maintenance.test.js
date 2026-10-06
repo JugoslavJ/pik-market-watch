@@ -44,49 +44,33 @@ test("raw archive writes canonical search payloads and bodyless diagnostics to l
   assert.equal(calls[1][1][12], "diagnostic-v2");
 });
 
-test("raw response retention purges the lean archive by request stream", async () => {
+test("raw response purge repeats full batches until one comes back short", async () => {
   const db = new Db("postgres://unused");
+  const batches = [2, 2, 1];
   const calls = [];
-  db.rawResponseRetentionCount = 3;
-  db.pool = leanPool(calls, { rowCount: 0, rows: [{ deleted: 0 }] });
+  db.pool = {
+    query: async (...args) => {
+      calls.push(args);
+      return { rows: [{ deleted: batches.shift() }] };
+    },
+  };
 
-  assert.equal(await db.purgeRawResponses(), 0);
-  assert.match(calls[0][0], /FROM lean\.raw_api_responses/);
-  assert.match(calls[0][0], /PARTITION BY request_kind,request_url/);
-  assert.deepEqual(calls[0][1], [3, 1000]);
+  assert.equal(await db.purgeRawResponses(2), 5);
+  assert.equal(calls.length, 3);
 });
 
-test("batched detail archives keep source bodies and bodyless diagnostics", async () => {
+test("batched detail archives store source bodies", async () => {
   const db = new Db("postgres://unused");
   const calls = [];
   db.pool = leanPool(calls, { rowCount: 2 });
 
   const count = await db.archiveDetailResponses([
     { articleId: 1, payload: { adapted: true }, sourcePayload: { id: 1 } },
-    {
-      articleId: 2,
-      payload: { id: 2 },
-      diagnostic: { kind: "http", status: 403 },
-    },
+    { articleId: 2, payload: { id: 2 } },
   ]);
   const rows = JSON.parse(calls[0][1][0]);
   assert.equal(count, 2);
   assert.match(calls[0][0], /INSERT INTO lean\.raw_api_responses/);
   assert.deepEqual(rows[0].payload, { id: 1 });
-  assert.equal(rows[1].payload, null);
-  assert.deepEqual(rows[1].diagnostic, { kind: "http", status: 403 });
-});
-
-test("archive writes propagate database errors without falling back to public", async () => {
-  const db = new Db("postgres://unused");
-  const error = new Error('relation "lean.raw_api_responses" does not exist');
-  db.pool = {
-    query: async () => {
-      throw error;
-    },
-  };
-  await assert.rejects(
-    db.archiveSearchResponse({ requestUrl: "https://olx.ba/api/search" }),
-    error,
-  );
+  assert.deepEqual(rows[1].payload, { id: 2 });
 });

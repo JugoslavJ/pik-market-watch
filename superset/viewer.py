@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from functools import wraps
 from pathlib import Path
 from time import perf_counter
+from urllib.parse import urlencode
 
 from cachelib import SimpleCache
 from flask import Blueprint, abort, g, jsonify, make_response, redirect, render_template_string, request, send_from_directory, url_for
@@ -36,7 +37,6 @@ def viewer_login_required(view):
         target = url_for("olx_viewer.dashboard_page", uid=kwargs["uid"]) if api_request else request.path
         arguments = request.args.to_dict(flat=False)
         arguments.pop("force", None)
-        from urllib.parse import urlencode
         if arguments:
             target += "?" + urlencode(arguments, doseq=True)
         login = login_url(appbuilder.get_url_for_login, next_url=target)

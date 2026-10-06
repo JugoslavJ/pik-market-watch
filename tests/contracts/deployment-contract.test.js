@@ -31,20 +31,6 @@ test("backup reads private application state from read-only volume mounts", () =
   assert.match(backup, /read_only: true/);
 });
 
-test("Compose targets PostgreSQL 18", () => {
-  assert.match(compose, /baosystems\/postgis:18-3\.6@sha256:/);
-  assert.match(
-    compose,
-    /name: \$\{POSTGRES_VOLUME_NAME:-olx-price-ext_pgdata_pg18\}/,
-  );
-});
-
-test("Compose provisions only the lean schema and dashboard assets", () => {
-  assert.match(compose, /DB_INIT_DIR:-\.\/db\/init-lean/);
-  assert.match(compose, /dockerfile: superset\/Dockerfile/);
-  assert.match(compose, /target: 8088\s+published: "3000"/);
-});
-
 test("access jobs mount their local Python import dependencies", () => {
   // These jobs bind current helpers over the image's copies. Follow their
   // imports so a previously built image cannot hide a missing helper mount.

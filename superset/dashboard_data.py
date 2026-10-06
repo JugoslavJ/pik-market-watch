@@ -132,7 +132,7 @@ class DashboardDataRestApi(ChartDataRestApi):
                         cached = response_cache.get(key)
                         if cached is not None:
                             lightweight.raise_for_access()
-                            yield ({"status": 200, "body": cached, "cached": True})
+                            yield {"status": 200, "body": cached, "cached": True}
                             continue
                     context = schema.load(body)
                     if (context.result_format != ChartDataResultFormat.JSON
@@ -150,7 +150,7 @@ class DashboardDataRestApi(ChartDataRestApi):
                         key = cache_key(body, context, rls_revision)
                     cached = response_cache.get(key) if key and not context.force else None
                     if cached is not None:
-                        yield ({"status": 200, "body": cached, "cached": True})
+                        yield {"status": 200, "body": cached, "cached": True}
                         continue
                     response = self._send_chart_response(command.run(), form_data=context.form_data,
                                                         datasource=context.datasource)
@@ -160,16 +160,16 @@ class DashboardDataRestApi(ChartDataRestApi):
                         for result in cached_payload["result"]:
                             result["is_cached"] = True
                         response_cache.set(key, json.dumps(cached_payload), timeout=timeout)
-                    yield ({"status": response.status_code, "body": content, "cached": False})
+                    yield {"status": response.status_code, "body": content, "cached": False}
                 except DatasourceNotFound:
-                    yield ({"status": 404, "body": '{"message":"Datasource not found"}'})
+                    yield {"status": 404, "body": '{"message":"Datasource not found"}'}
                 except SupersetSecurityException:
-                    yield ({"status": 403, "body": '{"message":"Access denied"}'})
+                    yield {"status": 403, "body": '{"message":"Access denied"}'}
                 except (ValidationError, QueryObjectValidationError, ChartDataQueryFailedError) as error:
-                    yield ({"status": 400, "body": json.dumps({"message": str(error)})})
+                    yield {"status": 400, "body": json.dumps({"message": str(error)})}
                 except Exception:
                     logger.exception("Dashboard chart request failed")
-                    yield ({"status": 500, "body": '{"message":"Chart query failed"}'})
+                    yield {"status": 500, "body": '{"message":"Chart query failed"}'}
 
         if request.headers.get("X-Dashboard-Stream") == "1":
             def stream():

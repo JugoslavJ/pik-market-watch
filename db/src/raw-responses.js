@@ -173,25 +173,21 @@ module.exports = {
               fetched_at,
               'infinity'::timestamptz,
                'detail-v1', payload, NULL,
-               request_metadata, response_metadata, build_version, diagnostic,
-               CASE WHEN diagnostic IS NULL THEN 'canonical-v2' ELSE 'diagnostic-v2' END
+               request_metadata, response_metadata, build_version, NULL,
+               'canonical-v2'
          FROM jsonb_to_recordset($1::jsonb) AS r(
            article_id bigint, fetched_at timestamptz, payload jsonb,
            request_metadata jsonb, response_metadata jsonb,
-           build_version text, diagnostic jsonb)`,
+           build_version text)`,
       [
         JSON.stringify(
           rows.map((row) => ({
             article_id: row.articleId,
             fetched_at: row.fetchedAt || new Date(),
-            payload:
-              row.diagnostic != null
-                ? null
-                : (row.sourcePayload ?? row.payload ?? null),
+            payload: row.sourcePayload ?? row.payload ?? null,
             request_metadata: row.requestMetadata ?? {},
             response_metadata: row.responseMetadata ?? {},
             build_version: String(row.buildVersion || "unknown").slice(0, 128),
-            diagnostic: row.diagnostic ?? null,
           })),
         ),
       ],

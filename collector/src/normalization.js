@@ -287,7 +287,6 @@ function parseJsonArray(value) {
 module.exports = {
   PRICE_STATES,
   dateFromUnixSeconds,
-  dealTypeOf,
   finiteNumber,
   normalizeArea,
   normalizeDealType,

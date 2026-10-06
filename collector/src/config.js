@@ -84,7 +84,6 @@ function loadSearches() {
   }
 }
 
-// Keep the first occurrence of each normalized search.
 function dedupeBySearchKey(searches) {
   const seen = new Set();
   return searches.filter(({ searchKey }) => {

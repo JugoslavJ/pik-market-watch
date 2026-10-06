@@ -14,7 +14,14 @@ import {
   keepPreviousData,
   useQuery,
 } from "@tanstack/react-query";
-import { chartOption, echarts, number, selectionFor, unit } from "./charts";
+import {
+  FILTER_DIMENSIONS,
+  chartOption,
+  echarts,
+  number,
+  selectionFor,
+  unit,
+} from "./charts";
 import { validAd, openAd } from "./links";
 import { tableRows } from "./table";
 import "./style.css";
@@ -33,6 +40,16 @@ const client = new QueryClient({
   },
 });
 const EMPTY = [];
+const PAGE_SIZE = 25;
+const DEFAULT_DAYS = boot.data.uid === "olx-health" ? 2 : 90;
+const FILTER_COLUMNS = new Set([...FILTER_DIMENSIONS, "article_id"]);
+const asArray = (value) => (Array.isArray(value) ? value : [value]);
+const filterParams = (selection, cross, days) =>
+  new URLSearchParams({
+    s: JSON.stringify(selection),
+    c: JSON.stringify(cross),
+    days: String(days),
+  });
 
 function AreaInput({ value, label, min = 0, onCommit }) {
   const [draft, setDraft] = useState(value);
@@ -65,15 +82,12 @@ function useVisible(ref) {
         return;
       }
     }
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          setVisible(true);
-          observer.disconnect();
-        }
-      },
-      { rootMargin: "0px" },
-    );
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        setVisible(true);
+        observer.disconnect();
+      }
+    });
     if (ref.current) observer.observe(ref.current);
     return () => observer.disconnect();
   }, []);
@@ -114,10 +128,7 @@ const Plot = memo(function Plot({ panel, rows, onSelect }) {
   }, [visible, panel]);
   useEffect(() => {
     if (instance.current) {
-      instance.current.setOption(chartOption(panel, rows), {
-        notMerge: true,
-        lazyUpdate: false,
-      });
+      instance.current.setOption(chartOption(panel, rows), { notMerge: true });
       ref.current.dataset.ready = "true";
     }
   }, [panel, rows, visible]);
@@ -200,43 +211,34 @@ const ListingTable = memo(function ListingTable({ rows, onSelect }) {
                 </tr>
               </thead>
               <tbody>
-                {filtered.slice(page * 25, page * 25 + 25).map((row, index) => (
-                  <tr key={index}>
-                    {columns.map((column) => (
-                      <td key={column}>
-                        {column === "title" && validAd(row.url) ? (
-                          <a href={row.url} target="_blank" rel="noreferrer">
-                            {row[column]}
-                          </a>
-                        ) : [
-                            "rooms",
-                            "neighborhood",
-                            "floor",
-                            "seller_type",
-                            "segment",
-                            "category",
-                            "status",
-                            "search_key",
-                            "deal",
-                            "article_id",
-                          ].includes(column) ? (
-                          <button
-                            className="cell-filter"
-                            onClick={() => onSelect(column, row[column])}
-                          >
-                            {String(row[column] ?? "unknown")}
-                          </button>
-                        ) : typeof row[column] === "number" ? (
-                          row[column].toLocaleString("en-GB", {
-                            maximumFractionDigits: 2,
-                          })
-                        ) : (
-                          String(row[column] ?? "—")
-                        )}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
+                {filtered
+                  .slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+                  .map((row, index) => (
+                    <tr key={index}>
+                      {columns.map((column) => (
+                        <td key={column}>
+                          {column === "title" && validAd(row.url) ? (
+                            <a href={row.url} target="_blank" rel="noreferrer">
+                              {row[column]}
+                            </a>
+                          ) : FILTER_COLUMNS.has(column) ? (
+                            <button
+                              className="cell-filter"
+                              onClick={() => onSelect(column, row[column])}
+                            >
+                              {String(row[column] ?? "unknown")}
+                            </button>
+                          ) : typeof row[column] === "number" ? (
+                            row[column].toLocaleString("en-GB", {
+                              maximumFractionDigits: 2,
+                            })
+                          ) : (
+                            String(row[column] ?? "—")
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>
@@ -245,10 +247,11 @@ const ListingTable = memo(function ListingTable({ rows, onSelect }) {
               Previous
             </button>
             <span>
-              Page {page + 1} / {Math.max(1, Math.ceil(filtered.length / 25))}
+              Page {page + 1} /{" "}
+              {Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))}
             </span>
             <button
-              disabled={(page + 1) * 25 >= filtered.length}
+              disabled={(page + 1) * PAGE_SIZE >= filtered.length}
               onClick={() => setPage((p) => p + 1)}
             >
               Next
@@ -352,11 +355,7 @@ function App() {
     staleTime: boot.data.ttl * 1000,
     placeholderData: keepPreviousData,
     queryFn: async ({ signal }) => {
-      const params = new URLSearchParams({
-        s: JSON.stringify(selection),
-        c: JSON.stringify(cross),
-        days: String(days),
-      });
+      const params = filterParams(selection, cross, days);
       if (force) params.set("force", "true");
       const response = await fetch(
         `/olx/api/dashboard/${boot.data.uid}?${params}`,
@@ -389,16 +388,11 @@ function App() {
     data.variables.filter((variable) => {
       const value = selection[variable.name] || [variable.default];
       return (
-        JSON.stringify(value) !==
-        JSON.stringify(
-          Array.isArray(variable.default)
-            ? variable.default
-            : [variable.default],
-        )
+        JSON.stringify(value) !== JSON.stringify(asArray(variable.default))
       );
     }).length +
     Object.keys(cross).length +
-    (days !== (data.uid === "olx-health" ? 2 : 90) ? 1 : 0);
+    (days !== DEFAULT_DAYS ? 1 : 0);
   const onSelect = useCallback(
     (dimension, value) =>
       setCross((previous) => {
@@ -411,12 +405,7 @@ function App() {
     [],
   );
   useEffect(() => {
-    const params = new URLSearchParams({
-      s: JSON.stringify(selection),
-      c: JSON.stringify(cross),
-      days: String(days),
-    });
-    history.replaceState(null, "", "?" + params);
+    history.replaceState(null, "", "?" + filterParams(selection, cross, days));
   }, [selection, cross, days]);
   useEffect(() => {
     window.__olxViewer = {
@@ -598,13 +587,10 @@ function App() {
               <button
                 onClick={() => {
                   setCross({});
-                  setDays(boot.data.uid === "olx-health" ? 2 : 90);
+                  setDays(DEFAULT_DAYS);
                   setSelection(
                     Object.fromEntries(
-                      data.variables.map((v) => [
-                        v.name,
-                        Array.isArray(v.default) ? v.default : [v.default],
-                      ]),
+                      data.variables.map((v) => [v.name, asArray(v.default)]),
                     ),
                   );
                 }}

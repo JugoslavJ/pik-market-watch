@@ -31,7 +31,6 @@ function inBiH(lat, lon) {
   );
 }
 
-// value coercion helpers
 function numOrNull(v, min, max) {
   const n = finiteNumber(v);
   return Number.isFinite(n) && n >= min && n <= max ? n : null;
@@ -71,7 +70,6 @@ function furnishedFromText(v) {
   return null;
 }
 
-// characteristic codes → typed columns
 // Unknown attribute codes remain available in raw characteristics.
 const CHAR_CODE_HANDLERS = {
   "broj-soba": (v, o) => {
@@ -121,7 +119,6 @@ const CHAR_CODE_HANDLERS = {
   },
 };
 
-// shared bits
 const SELLER_TYPES = new Set(["shop", "private"]);
 
 function specialLabelValue(item, label) {
@@ -144,7 +141,6 @@ function pinOf(loc) {
   return { latitude: lat, longitude: lon };
 }
 
-// search results
 function mapSearchItem(item) {
   if (!item || typeof item !== "object") return null;
   const id = normalizeId(item.id);
@@ -324,9 +320,7 @@ function mapListingDetail(json, fallbackId) {
     const trimmed = String(raw).trim();
     if (trimmed === "") continue;
 
-    const parsedNumeric = finiteNumber(trimmed);
-    const numeric = parsedNumeric !== null;
-    detail.characteristics[code] = numeric ? parsedNumeric : trimmed;
+    detail.characteristics[code] = finiteNumber(trimmed) ?? trimmed;
 
     const handler = CHAR_CODE_HANDLERS[code];
     if (handler) handler(trimmed, detail);
@@ -337,10 +331,7 @@ function mapListingDetail(json, fallbackId) {
     detail.furnished = furnishedFromText(detail.characteristics.opremljenost);
   }
 
-  if (detail.characteristics["kvadrata"] != null) {
-    const v = normalizeArea(detail.characteristics["kvadrata"]);
-    if (v !== null) detail.sqm = v;
-  }
+  detail.sqm = normalizeArea(detail.characteristics.kvadrata);
 
   return detail;
 }

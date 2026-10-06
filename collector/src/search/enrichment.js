@@ -20,8 +20,8 @@ async function enrichSearchResults({
       allCards.map((card) => card.articleId),
       cfg.maxDetailFetches,
       {
-        refreshDays: cfg.detailRefreshDays ?? 7,
-        retryAfterMinutes: Math.max(1, cfg.intervalMinutes ?? 720),
+        refreshDays: cfg.detailRefreshDays,
+        retryAfterMinutes: cfg.intervalMinutes,
       },
     );
     const cardsById = new Map(allCards.map((card) => [card.articleId, card]));
