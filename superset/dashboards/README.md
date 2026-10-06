@@ -1,6 +1,6 @@
 # Dashboard definitions
 
-Four JSON files define 71 panels shared by the native Superset charts and React viewer: SQL, scoped filters, units, time windows and layouts. Superset manages datasource provisioning and annotations.
+Four JSON files define 71 panels shared by the native Superset charts and React viewer: SQL, scoped filters, units, time windows and layouts. The seed job provisions the Superset datasets and charts from them.
 
 `parity.py` compiles native charts with quoted filters; `viewer_queries.py` binds selections as database parameters and batches queries. Both resolve `${name:sqlstring}` selections and `$__timeFilter`, `$__timeFrom`, `$__timeTo` time macros.
 

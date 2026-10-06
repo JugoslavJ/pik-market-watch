@@ -20,7 +20,7 @@ node collector/scripts/check-api.js
 Collection and replay require `DATABASE_URL`. Configure searches through
 `SEARCHES_FILE` or `SEARCH_URLS`; the default file is `/config/searches.json`.
 Fixtures and the live probe contact OLX, while unit tests use recorded fixtures.
-`MAPPER_BUILD_VERSION` identifies archived mapping evidence; `PARSER_BUILD_VERSION` is a supported alias.
+`MAPPER_BUILD_VERSION` labels archived responses with the mapper version (default: the package version).
 
 Build the collector/database runtime from the repository root:
 

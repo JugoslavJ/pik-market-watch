@@ -27,7 +27,7 @@ Collection can run on a separate machine using the [sync workflow](docs/OPERATIO
 
 ## Configure searches
 
-Add filtered OLX browser URLs to `config/searches.json`. The collector rejects URLs without an API-recognized filter. `name` and `category` are optional; category is a dashboard label.
+Add filtered OLX browser URLs to `config/searches.json`; `name` and `category` are optional. See [configuration](docs/CONFIGURATION.md#searches) for accepted filters and all settings.
 
 ```json
 {
@@ -75,8 +75,10 @@ See the [collector](collector/README.md), [database](db/README.md) and [Superset
 ## Documentation
 
 - [Architecture and data model](docs/ARCHITECTURE.md)
+- [Configuration](docs/CONFIGURATION.md)
 - [Operations](docs/OPERATIONS.md)
-- [Lean database baseline](db/README.md)
+- [Deployment](docs/DEPLOYMENT.md)
+- [Database and migrations](db/README.md)
 - [Security policy](SECURITY.md)
 - [Data provenance and licensing](DATA.md)
 

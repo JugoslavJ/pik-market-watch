@@ -2,11 +2,8 @@
 
 const BIH_BBOX = { latMin: 42.4, latMax: 46.4, lonMin: 15.5, lonMax: 19.9 };
 
-// Preserve the legacy version override for archived evidence.
 const MAPPER_BUILD_VERSION = String(
-  process.env.MAPPER_BUILD_VERSION ||
-    process.env.PARSER_BUILD_VERSION ||
-    require("../package.json").version,
+  process.env.MAPPER_BUILD_VERSION || require("../package.json").version,
 )
   .trim()
   .slice(0, 128);

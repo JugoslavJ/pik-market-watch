@@ -42,9 +42,9 @@ Superset supplies login, permissions, datasets and the viewer API. Container por
 
 Each fresh viewer request executes one reporting data statement with shared facts and aggregates. Charts keep their previous values during filter updates. Market/exit snapshots expire after ten minutes; operational Home/Health results are uncached. Tables provide links and CSV; MapLibre uses CARTO vector basemaps.
 
-Definitions in `superset/dashboards/` supply panel SQL for both compilers and parity checks. Migration, writer, reporting and backup roles have separate privileges.
+[Dashboard definitions](../superset/README.md#terms) in `superset/dashboards/` supply the panel SQL for both the viewer and the native Superset dashboards. Migration, writer, reporting and backup roles have separate privileges.
 
-See [viewer details](../dashboard-viewer/README.md), [performance measurements](../superset/PERFORMANCE.md) and [instance deployment](DEPLOYMENT.md).
+See [viewer details](../dashboard-viewer/README.md) and [deployment](DEPLOYMENT.md).
 
 ## Geography
 
