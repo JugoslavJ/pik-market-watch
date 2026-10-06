@@ -7,13 +7,25 @@ const path = require("node:path");
 
 const NAME = `pik-pg-test-${process.pid}`;
 const REPORTING_ONLY = process.argv.includes("--reporting-only");
+// --with-reporting runs the integration files, then the reporting suite, on one database.
+const REPORTING = REPORTING_ONLY || process.argv.includes("--with-reporting");
 const NETWORK = `${NAME}-network`;
 const PORT = process.env.TEST_DB_PORT || "55432";
 const DB_DIR = path.resolve(__dirname, "..");
 const INIT_DIR = path.join(DB_DIR, "init-lean");
-const IMAGE =
-  process.env.TEST_POSTGRES_IMAGE ||
-  "ghcr.io/baosystems/postgis:18-3.6@sha256:4117c8beae9081e76a23a1577c64d05260a61fb0a3c212f37596054ef4c190d8";
+// Reuse the database image pinned in Compose so tests never pull a second copy.
+function composeDatabaseImage() {
+  const compose = fs.readFileSync(
+    path.join(DB_DIR, "..", "docker-compose.yml"),
+    "utf8",
+  );
+  const image = compose.match(
+    /^ {4}image: (ghcr\.io\/baosystems\/postgis:\S+)$/m,
+  );
+  if (!image) throw new Error("docker-compose.yml pins no PostGIS image");
+  return image[1];
+}
+const IMAGE = process.env.TEST_POSTGRES_IMAGE || composeDatabaseImage();
 const DB_URL = `postgres://olx:olx@127.0.0.1:${PORT}/olx`;
 
 const docker = (args, opts = {}) =>
@@ -42,7 +54,7 @@ function waitUntilReady() {
 }
 
 let exit;
-if (REPORTING_ONLY) {
+if (REPORTING) {
   const network = docker(["network", "create", NETWORK]);
   if (network.status !== 0) throw new Error(network.stderr);
 }
@@ -51,7 +63,7 @@ const up = docker([
   "-d",
   "--name",
   NAME,
-  ...(REPORTING_ONLY ? ["--network", NETWORK] : []),
+  ...(REPORTING ? ["--network", NETWORK] : []),
   "-e",
   "POSTGRES_USER=olx",
   "-e",
@@ -77,7 +89,7 @@ const up = docker([
 if (up.status !== 0) {
   // A failed port bind still leaves a created container behind.
   docker(["rm", "-f", NAME]);
-  if (REPORTING_ONLY) docker(["network", "rm", NETWORK]);
+  if (REPORTING) docker(["network", "rm", NETWORK]);
   console.error(up.stderr);
   process.exit(1);
 }
@@ -141,7 +153,7 @@ try {
     }
     schemaReady = true;
   }
-  if (REPORTING_ONLY) {
+  if (REPORTING && exit === 0) {
     const root = path.resolve(DB_DIR, "..");
     const result = docker(
       [
@@ -183,6 +195,6 @@ try {
     }
   }
   docker(["rm", "-f", NAME]);
-  if (REPORTING_ONLY) docker(["network", "rm", NETWORK]);
+  if (REPORTING) docker(["network", "rm", NETWORK]);
 }
 process.exit(exit);

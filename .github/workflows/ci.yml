@@ -30,10 +30,11 @@ jobs:
       - run: npm run lint
       - name: Require PowerShell for executable sync tests
         run: pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
-      - run: npm test
-      # Unit-only floor; database modules are exercised by the integration run.
+      # Run the workspace unit tests once, under the unit-only coverage floor;
+      # database modules are exercised by the integration run.
       - run: npm run test:coverage
-      - run: npm run test:integration
+      - run: npm run test:contracts
+      - run: npm run test:dashboards
       - name: Build scraper image for vulnerability scanning
         run: docker build --tag pik-market-watch-scraper:ci --file collector/Dockerfile .
       - name: Scan scraper image with Trivy
@@ -51,9 +52,16 @@ jobs:
       - name: Check deployment and backup contracts
         working-directory: .
         run: python3 -m unittest discover -v -s tests/contracts -p '*.py'
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Build the production Superset image
-        working-directory: .
-        run: docker build --tag pik-market-watch-superset:ci --file superset/Dockerfile .
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: superset/Dockerfile
+          tags: pik-market-watch-superset:ci
+          load: true
+          cache-from: type=gha,scope=superset
+          cache-to: type=gha,scope=superset,mode=max
       - name: Check Superset Python assets compile
         working-directory: .
         run: >-
@@ -67,8 +75,10 @@ jobs:
           -v "$PWD/scripts:/repo/scripts:ro" -v "$PWD/db:/repo/db:ro"
           --entrypoint python pik-market-watch-superset:ci
           -m unittest discover -v -s /assets/tests
-      - name: Check dashboard results against a known market fixture
-        run: npm run test:reporting
+      # One disposable database serves the integration files, then the
+      # dashboard results check against a known market fixture.
+      - name: Run database integration and dashboard reporting tests
+        run: node db/scripts/run-integration-tests.js --with-reporting
 
   # Deploy tested main revisions; git archive preserves ignored instance configuration.
   deploy:

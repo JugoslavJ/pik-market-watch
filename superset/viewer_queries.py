@@ -75,7 +75,7 @@ def validate_cross(cross):
     return cross
 
 
-def compile_dashboard(board, supplied=None, cross=None, days=None, until=None):
+def compile_dashboard(board, supplied=None, cross=None, days=None, until=None, include_options=True):
     selected = selections(board, supplied or {})
     cross = validate_cross(cross or {})
     variables = viewer_variables(board)
@@ -143,7 +143,8 @@ def compile_dashboard(board, supplied=None, cross=None, days=None, until=None):
 
     # Native filter option lists share this same database round trip.
     options = {}
-    for variable in filters(board):
+    # Callers that already hold the option lists skip them; they never depend on the selection.
+    for variable in filters(board) if include_options else ():
         if "options_sql" in variable:
             options[variable["name"]] = variable["options_sql"]
     # Inline lifecycle facts to preserve indexed lateral lookups for the next exit.
@@ -151,16 +152,17 @@ def compile_dashboard(board, supplied=None, cross=None, days=None, until=None):
                for key, sql in groups.items()]
     option_entries = [f"'{key}', (SELECT coalesce(jsonb_agg(r.__value), '[]'::jsonb) FROM ({sql}) r)"
                       for key, sql in options.items() if sql]
-    ctes["property_options"] = (options_sql(), True)
-    for variable in variables:
-        if variable["op"] == "IN":
-            column = variable["column"]
-            option_entries.append(f"'{variable['name']}', (SELECT coalesce(jsonb_agg(v ORDER BY v), '[]'::jsonb) "
-                                  f'FROM (SELECT DISTINCT "{column}" AS v FROM property_options) o)')
-    prefix = "WITH " + ",\n".join(f"{name} AS {'MATERIALIZED' if materialized else 'NOT MATERIALIZED'} ({sql})"
-                                  for name, (sql, materialized) in ctes.items())
-    option_sql = "jsonb_build_object(" + ",".join(option_entries) + ")"
-    statement = prefix + " SELECT jsonb_build_object('rows', jsonb_build_object(" + ",".join(entries) + "), 'options', " + option_sql + ")"
+    if include_options:
+        ctes["property_options"] = (options_sql(), True)
+        for variable in variables:
+            if variable["op"] == "IN":
+                column = variable["column"]
+                option_entries.append(f"'{variable['name']}', (SELECT coalesce(jsonb_agg(v ORDER BY v), '[]'::jsonb) "
+                                      f'FROM (SELECT DISTINCT "{column}" AS v FROM property_options) o)')
+    prefix = ("WITH " + ",\n".join(f"{name} AS {'MATERIALIZED' if materialized else 'NOT MATERIALIZED'} ({sql})"
+                                   for name, (sql, materialized) in ctes.items())) if ctes else ""
+    option_sql = (", 'options', jsonb_build_object(" + ",".join(option_entries) + ")") if include_options else ""
+    statement = prefix + " SELECT jsonb_build_object('rows', jsonb_build_object(" + ",".join(entries) + ")" + option_sql + ")"
     used = set(re.findall(r":(v\d+)\b", statement))
     return statement, {key: value for key, value in params.items() if key in used}, len(groups)
 

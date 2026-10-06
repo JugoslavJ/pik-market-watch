@@ -33,6 +33,15 @@ class ViewerQueryTests(unittest.TestCase):
             count += len(board['panels'])
         self.assertEqual(count, 71)
 
+    def test_cached_option_lists_are_left_out_of_the_statement(self):
+        for uid, board in BOARDS.items():
+            with self.subTest(uid=uid):
+                sql, _, _ = compile_dashboard(board, include_options=False)
+                self.assertNotIn('property_options', sql)
+                self.assertNotIn("'options'", sql)
+                self.assertNotRegex(sql, r'^s*WITHs+SELECT')
+                self.assertIn("'options'", compile_dashboard(board)[0])
+
     def test_filter_values_are_parameters_not_sql(self):
         hostile = "x'); DROP TABLE lean.listings; --"
         sql, params, _ = compile_dashboard(BOARDS['olx-overview'], {'neighborhood': [hostile]}, {'rooms': [hostile]})

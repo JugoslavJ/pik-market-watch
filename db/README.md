@@ -24,6 +24,7 @@ The numbered SQL files run in lexical order:
 | `01-lean-schema.sql` | Complete schema, including daily prices and lifecycle events, raw archives, page manifests, and dashboard indexes |
 | `02-lean-neighborhoods.sql` | Generated neighborhood boundaries |
 | `03-price-evidence.sql` | Allows explicit `unknown` deal and currency values |
+| `04-drop-unused-indexes.sql` | Drops coordinate, search-key and archive-article indexes that no query uses |
 | `zz-database-roles.sh` | Runtime, migration, reporting, Superset metadata and backup roles |
 
 The migrator records checksums in `public.schema_migrations` and rejects changed files. When Docker has already initialized a database from the `00`–`02` baseline, the migrator records those files without replaying them; later files run normally. Keep applied SQL files immutable and append new ordered migrations under `init-lean/`.

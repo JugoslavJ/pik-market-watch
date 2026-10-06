@@ -182,6 +182,8 @@ SELECT format('REVOKE CONNECT ON DATABASE %I FROM PUBLIC', :'meta_db') \gexec
 SELECT format('ALTER ROLE %I SET statement_timeout = %L', :'reporting_user', '60s') \gexec
 SELECT format('ALTER ROLE %I SET idle_in_transaction_session_timeout = %L', :'reporting_user', '30s') \gexec
 SELECT format('ALTER ROLE %I WITH CONNECTION LIMIT %s', :'reporting_user', 30) \gexec
+-- Dashboard statements are large but cheap; JIT compilation costs more than it saves.
+SELECT format('ALTER ROLE %I SET jit = off', :'reporting_user') \gexec
 SQL
 
   psql -q -v ON_ERROR_STOP=1 \

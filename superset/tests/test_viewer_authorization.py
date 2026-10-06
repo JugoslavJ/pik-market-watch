@@ -53,6 +53,7 @@ class AuthorizationTests(unittest.TestCase):
         self.manager.can_access.side_effect = lambda *permission: permission == ("can_read", "Dashboard")
         self.manager.can_access_dashboard.return_value = True
         self.manager.can_access_datasource.return_value = True
+        self.manager.can_access_all_datasources.return_value = False
         self.manager.get_user_roles.return_value = [self.role]
 
         database = Mock()
@@ -107,6 +108,13 @@ class AuthorizationTests(unittest.TestCase):
         self.manager.can_access_datasource.side_effect = lambda source: source is not self.sources[0]
         self.assertEqual(status(viewer.authorized, self.uid), 403)
 
+    def test_all_datasource_access_skips_per_dataset_checks(self):
+        self.board.published = False
+        self.manager.can_access_all_datasources.return_value = True
+        self.manager.can_access_datasource.return_value = False
+        self.assertEqual(status(viewer.authorized, self.uid), 200)
+        self.manager.can_access_datasource.assert_not_called()
+
     def test_edited_dataset_sql_does_not_authorize_repository_queries(self):
         self.sources[0].sql = "SELECT * FROM lean.listings"
         self.assertEqual(status(viewer.authorized, self.uid), 409)
@@ -152,6 +160,7 @@ class CacheIsolationTests(unittest.TestCase):
                 patch.object(viewer, "compile_dashboard", return_value=("SELECT 1", {}, [])),
                 patch.object(viewer, "presentation", return_value={}),
                 patch.object(viewer, "cache", SimpleCache()),
+                patch.object(viewer, "option_cache", SimpleCache()),
                 patch.object(viewer, "generations", SimpleCache())):
             replacement.start()
             self.addCleanup(replacement.stop)
@@ -198,6 +207,17 @@ class CacheIsolationTests(unittest.TestCase):
             with self.subTest(uid=uid):
                 self.load(uid)
                 self.assertFalse(self.load(uid)["cached"])
+
+    def test_operational_dashboards_reuse_option_lists_until_a_forced_refresh(self):
+        with patch.object(viewer, "compile_dashboard", return_value=("SELECT 1", {}, [])) as compiled:
+            self.load("olx-home")
+            second = self.load("olx-home")
+            self.load("olx-home", user="2")
+            self.load("olx-home", query="?force=true")
+        self.assertFalse(second["cached"])
+        self.assertEqual(second["options"], {})
+        self.assertEqual([call.kwargs["include_options"] for call in compiled.call_args_list],
+                         [True, False, True, True])
 
     def test_out_of_range_time_windows_are_rejected(self):
         for days in ("0", "366", "-1"):

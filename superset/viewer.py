@@ -22,6 +22,7 @@ from guest_access import GUEST_BOARDS, GUEST_PERMISSION
 ROOT = Path(__file__).parent / "viewer_dist"
 cache = SimpleCache(threshold=100, default_timeout=600)
 page_cache = SimpleCache(threshold=100, default_timeout=600)
+option_cache = SimpleCache(threshold=100, default_timeout=600)
 generations = SimpleCache(threshold=1000, default_timeout=3600)
 engines = {}
 engine_lock = threading.Lock()
@@ -105,7 +106,10 @@ def authorized(uid):
         abort(409, description="Dashboard definition changed. Open it in Superset.")
     dashboard_role_access = board.published and bool(
         {r.id for r in board.roles} & {r.id for r in security_manager.get_user_roles()})
-    if not dashboard_role_access and not all(security_manager.can_access_datasource(source) for source in sources):
+    # All-datasource access answers every per-dataset check; ask the database once.
+    if not dashboard_role_access and not (
+            security_manager.can_access_all_datasources()
+            or all(security_manager.can_access_datasource(source) for source in sources)):
         abort(403)
     # Deny viewer access until any Superset RLS policies are supported by the compiler.
     if db.session.query(RowLevelSecurityFilter.id).first() is not None:
@@ -150,19 +154,29 @@ def payload(uid, database, revision):
             generations.set(generation_key, generation)
     identity["generation"] = generation
     key = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
+    # Option lists cover all listings, not the selection, so even the uncached
+    # operational dashboards reuse them between loads.
+    option_identity = {name: identity[name] for name in ("uid", "user", "roles", "revision", "generation")}
+    option_key = hashlib.sha256(json.dumps(option_identity, sort_keys=True).encode()).hexdigest()
+    options = option_cache.get(option_key) if not forced else None
     cached = cache.get(key) if not forced else None
     # Health and Home contain live operational ages: never replay those.
     ttl = 0 if uid in ("olx-health", "olx-home") else 600
     if cached is not None and ttl:
         return {**cached, "cached": True, "queries": 0}
     until = datetime.now(timezone.utc)
-    sql, params, groups = compile_dashboard(source, selected, cross, days, until)
+    sql, params, groups = compile_dashboard(source, selected, cross, days, until,
+                                            include_options=options is None)
     engine = reporting_engine(database)
     started = perf_counter()
     with engine.connect() as connection, connection.begin():
         # Disable JIT startup overhead; settings and data share one driver round trip.
         data = connection.execute(text("SET TRANSACTION READ ONLY; "
             "SET LOCAL statement_timeout = '8s'; SET LOCAL jit = off; " + sql), params).scalar_one()
+    if options is None:
+        option_cache.set(option_key, data.get("options", {}), timeout=600)
+    else:
+        data = {**data, "options": options}
     result = {**presentation(source), **data, "selection": selected, "cross": cross,
               "days": days, "asOf": until.isoformat(), "ttl": ttl,
               "cached": False, "queries": 1, "sources": groups,
