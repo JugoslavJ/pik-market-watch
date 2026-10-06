@@ -1,6 +1,7 @@
 "use strict";
 
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const assert = require("node:assert/strict");
 const { Pool } = require("pg");
@@ -14,6 +15,56 @@ const SQL_FILES = fs
   .filter((file) => file.endsWith(".sql"))
   .sort();
 const log = () => {};
+
+needsDb(
+  "baseline adoption executes appended migrations and failed migrations roll back",
+  async () => {
+    const pool = new Pool({
+      connectionString: await recreateDatabase("mig_lean_incremental"),
+    });
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pik-migration-test-"));
+    try {
+      for (const file of SQL_FILES.slice(0, 3)) {
+        const sql = fs.readFileSync(path.join(LEAN_DIR, file), "utf8");
+        fs.writeFileSync(path.join(dir, file), sql);
+        await pool.query(sql);
+      }
+      fs.writeFileSync(
+        path.join(dir, "03-test.sql"),
+        "BEGIN;\nALTER TABLE lean.listings ADD COLUMN test_marker text;\nCOMMIT;\n",
+      );
+      await applyMigrations(pool, dir);
+      assert.equal(
+        (
+          await pool.query(
+            "SELECT count(*)::int AS n FROM information_schema.columns WHERE table_schema='lean' AND table_name='listings' AND column_name='test_marker'",
+          )
+        ).rows[0].n,
+        1,
+      );
+      await applyMigrations(pool, dir, () =>
+        assert.fail("migration must apply once"),
+      );
+      fs.writeFileSync(
+        path.join(dir, "04-fail.sql"),
+        "BEGIN;\nALTER TABLE lean.listings ADD COLUMN must_rollback text;\nSELECT 1/0;\nCOMMIT;\n",
+      );
+      await assert.rejects(applyMigrations(pool, dir), /division by zero/);
+      assert.equal(
+        (
+          await pool.query(
+            "SELECT count(*)::int AS n FROM information_schema.columns WHERE table_schema='lean' AND table_name='listings' AND column_name='must_rollback'",
+          )
+        ).rows[0].n,
+        0,
+      );
+      assert.equal((await recordedFiles(pool)).includes("04-fail.sql"), false);
+    } finally {
+      await pool.end();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  },
+);
 
 async function recreateDatabase(name) {
   const admin = new Pool({ connectionString: process.env.TEST_DATABASE_URL });

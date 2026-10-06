@@ -43,16 +43,15 @@ async function collectSearch(
   let allCards = [];
   let pagesDone;
   try {
-    runId = await db.startRun(search.searchKey);
-    log(`▶ "${search.name}" started (run #${runId})`);
-
-    // Register inside the run lifecycle so a registration failure also finalizes the run.
+    // Runs reference saved_searches, including on the first collection.
     await db.registerSavedSearch({
       searchKey: search.searchKey,
       name: search.name,
       url: base.href,
       category: search.category,
     });
+    runId = await db.startRun(search.searchKey);
+    log(`▶ "${search.name}" started (run #${runId})`);
 
     const harvested = await harvestSearchPages({
       db,

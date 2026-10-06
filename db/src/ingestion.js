@@ -166,7 +166,13 @@ async function commitSearchIngestion(payload) {
     );
     const newIds = ids.filter((id) => !byId.has(id));
     const observations = cards.map((card) => {
-      const deal = card.dealType === "rent" || card.isRent ? "rent" : "sale";
+      const deal =
+        card.dealType === "rent" || card.isRent === true
+          ? "rent"
+          : card.dealType === "sale" ||
+              (!Object.hasOwn(card, "dealType") && card.isRent === false)
+            ? "sale"
+            : "unknown";
       const validPrice =
         card.pricePresent !== false &&
         card.priceState !== "invalid" &&
@@ -188,7 +194,7 @@ async function commitSearchIngestion(payload) {
         rooms: card.rooms ?? null,
         price,
         price_text: card.priceText ?? null,
-        currency: card.priceCurrency || "BAM",
+        currency: card.priceCurrency || "unknown",
         ppm2: rate(price, sqm, deal),
         latitude: card.latitude ?? null,
         longitude: card.longitude ?? null,
@@ -423,7 +429,9 @@ async function enrichListings(rows) {
           ? "rent"
           : row.dealType === "sale" || row.isRent === false
             ? "sale"
-            : prior.deal;
+            : Object.hasOwn(row, "dealType")
+              ? "unknown"
+              : prior.deal;
       const validPrice =
         row.pricePresent !== false &&
         row.priceState !== "invalid" &&
@@ -482,7 +490,9 @@ async function enrichListings(rows) {
           row.articleId,
           deal,
           price,
-          row.priceCurrency ?? null,
+          Object.hasOwn(row, "priceCurrency")
+            ? row.priceCurrency || "unknown"
+            : null,
           row.priceText ?? null,
           row.sqm ?? null,
           row.latitude ?? null,
@@ -503,7 +513,7 @@ async function enrichListings(rows) {
         article_id: Number(row.articleId),
         reported_at: event.date,
         price: event.price,
-        currency: event.currency ?? row.priceCurrency ?? null,
+        currency: event.currency || "unknown",
         ordinal: ordinal + 1,
       }));
       if (apiHistory.length) {
@@ -523,7 +533,7 @@ async function enrichListings(rows) {
               ORDER BY article_id,price_date,reported_at DESC,ordinal DESC
            )
            INSERT INTO lean.price_history (article_id,price_date,price,currency,source)
-           SELECT article_id,price_date,price,COALESCE(NULLIF(BTRIM(currency),''),'BAM'),
+           SELECT article_id,price_date,price,COALESCE(NULLIF(BTRIM(currency),''),'unknown'),
                   'api_price_history'
              FROM daily
            ON CONFLICT (article_id,price_date,source) DO UPDATE

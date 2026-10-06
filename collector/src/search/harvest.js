@@ -17,6 +17,8 @@ async function harvestSearchPages({
   const seen = new Set();
   const allCards = [];
   let lastPage = Infinity;
+  let expectedTotal = null;
+  let expectedLastPage = null;
   const failedPages = new Set();
   const malformedPages = new Set();
   let truncatedPagination = false;
@@ -59,12 +61,18 @@ async function harvestSearchPages({
       const reportedLastPage = Number(response.meta?.last_page);
       const currentPage = Number(response.meta?.current_page);
       const perPage = Number(response.meta?.per_page);
+      if (expectedTotal === null && pageNo === 1) {
+        expectedTotal = total;
+        expectedLastPage = reportedLastPage;
+      }
       if (Number.isFinite(reportedLastPage) && reportedLastPage > 0) {
         lastPage = Math.min(lastPage, reportedLastPage);
       }
       const metadataCoherent =
-        Number.isFinite(total) &&
+        Number.isSafeInteger(total) &&
         total >= 0 &&
+        total === expectedTotal &&
+        reportedLastPage === expectedLastPage &&
         Number.isInteger(reportedLastPage) &&
         reportedLastPage > 0 &&
         Number.isInteger(currentPage) &&
@@ -204,7 +212,9 @@ async function harvestSearchPages({
         ? `pagination capped below reported end (${cfg.maxPages}/${lastPage})`
         : truncatedPagination
           ? "pagination ended before the reported end"
-          : null;
+          : allCards.length !== expectedTotal
+            ? `result count does not match reported total (${allCards.length}/${expectedTotal})`
+            : null;
   if (incompleteReason) {
     const outcome = {
       status: "error",

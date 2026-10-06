@@ -32,6 +32,8 @@ jobs:
       - name: Require PowerShell for executable sync tests
         run: pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
       - run: npm test
+      # Unit-only floor; database modules are exercised by the integration run.
+      - run: npm run test:coverage
       - run: npm run test:integration
       - name: Build scraper image for vulnerability scanning
         run: docker build --tag pik-market-watch-scraper:ci --file collector/Dockerfile .
@@ -66,6 +68,8 @@ jobs:
           -v "$PWD/scripts:/repo/scripts:ro" -v "$PWD/db:/repo/db:ro"
           --entrypoint python pik-market-watch-superset:ci
           -m unittest discover -v -s /assets/tests
+      - name: Check dashboard results against a known market fixture
+        run: npm run test:reporting
 
   # Deploy tested main revisions; git archive preserves ignored instance configuration.
   deploy:

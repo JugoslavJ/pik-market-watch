@@ -6,6 +6,11 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const BASELINE_FILES = new Set([
+  "00-extensions.sql",
+  "01-lean-schema.sql",
+  "02-lean-neighborhoods.sql",
+]);
 
 function migrationChecksum(sql) {
   const canonicalSql = String(sql).replace(/\r\n?/g, "\n");
@@ -117,7 +122,9 @@ async function applyMigrations(pool, dir, log = () => {}) {
     // Adopt Docker-initialized schemas without replaying non-idempotent DDL.
     if (recorded.size === 0 && files.length > 0) {
       if (await schemaIsCurrent(client)) {
-        for (const file of files) {
+        // The schema probe recognizes the baseline only. Never mark newer
+        // migrations as applied merely because those original tables exist.
+        for (const file of files.filter((file) => BASELINE_FILES.has(file))) {
           const checksum = migrationChecksum(
             fs.readFileSync(path.join(dir, file), "utf8"),
           );
@@ -160,7 +167,9 @@ async function applyMigrations(pool, dir, log = () => {}) {
       }
 
       try {
-        await client.query(sql);
+        // Init files also run standalone in Docker. The migrator owns the
+        // transaction and lease, so their outer wrappers must not commit it.
+        await client.query(sql.replace(/^\s*(?:BEGIN|COMMIT);\s*$/gim, ""));
         await client.query(
           "INSERT INTO schema_migrations (filename, checksum) VALUES ($1, $2)",
           [file, checksum],

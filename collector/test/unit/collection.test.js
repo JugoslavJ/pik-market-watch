@@ -554,7 +554,7 @@ test("enrichment failure preserves the committed successful run", async () => {
   );
 });
 
-test("registration failure finishes the started run once", async () => {
+test("registration failure creates no orphan run", async () => {
   const db = fakeDb();
   db.registerSavedSearch = async () => {
     throw new Error("saved search write failed");
@@ -564,12 +564,8 @@ test("registration failure finishes the started run once", async () => {
     run(db, {}, { fetchSearchPage: pageFetcher({}) }),
     /saved search write failed/,
   );
-  assert.equal(db.rec.finishedRuns.length, 1);
-  assert.equal(db.rec.finishedRuns[0].isComplete, false);
-  assert.match(
-    db.rec.finishedRuns[0].failureReason,
-    /saved search write failed/,
-  );
+  assert.equal(db.rec.startRun, 0);
+  assert.deepEqual(db.rec.finishedRuns, []);
 });
 
 // pagesInWave: pure pagination boundary rules

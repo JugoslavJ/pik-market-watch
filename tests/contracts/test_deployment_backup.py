@@ -76,6 +76,20 @@ esac
         self.assertNotEqual(self.run_deploy("--check").returncode, 0)
         self.assertFalse((self.root / "commands").exists())
 
+    def test_invalid_origin_and_insecure_cookies_fail_before_docker(self):
+        for key, value in [("SUPERSET_DOMAIN", "localhost"),
+                           ("SUPERSET_ROOT_URL", "http://dashboard.example.com/"),
+                           ("SUPERSET_ROOT_URL", "https://other.example.com/"),
+                           ("SUPERSET_COOKIE_SECURE", "false")]:
+            with self.subTest(key=key, value=value):
+                self.configure()
+                file = self.root / ".env"
+                lines = file.read_text().splitlines()
+                file.write_text("\n".join(f"{key}={value}" if line.startswith(key + "=") else line
+                                          for line in lines) + "\n")
+                self.assertNotEqual(self.run_deploy("--check").returncode, 0)
+                self.assertFalse((self.root / "commands").exists())
+
     def test_failed_viewer_parity_gate_prevents_publication(self):
         self.configure()
         self.env["MOCK_FAIL_PARITY"] = "1"
@@ -92,6 +106,11 @@ esac
         commands = (self.root / "commands").read_text()
         self.assertIn("up -d --build db db-backup superset superset-alert-check", commands)
         self.assertLess(commands.index("compose build superset"), commands.index("up -d --build db db-backup superset"))
+        repair = commands.index("zz-database-roles.sh")
+        migrate = commands.index("compose --profile migrate run")
+        start = commands.index("up -d --build db db-backup superset")
+        self.assertLess(repair, migrate)
+        self.assertLess(migrate, start)
         self.assertLess(commands.index("benchmark_viewer.py"), commands.index("superset-access --publish"))
 
     def test_superset_profile_and_services_are_selected(self):
@@ -112,7 +131,7 @@ class BackupContracts(unittest.TestCase):
         (self.root / "home/state.json").write_text('{}')
         for name, body in {
             "pg_dump": 'for arg do target=$arg; done; printf valid > "$target"; [ "${FAIL_DUMP:-0}" = 0 ]',
-            "pg_restore": 'for arg do target=$arg; done; [ "$(cat "$target")" = valid ]',
+            "pg_restore": 'for arg do target=$arg; done; [ "${FAIL_VERIFY:-0}" = 0 ] && [ "$(cat "$target")" = valid ]',
         }.items():
             file = self.root / "bin" / name
             file.write_text("#!/bin/sh\n" + body + "\n")
@@ -150,6 +169,14 @@ class BackupContracts(unittest.TestCase):
         self.assertEqual(self.backup("--once").returncode, 0)
         next((self.root / "backups").glob("*.tar.gz")).write_text("corrupt")
         self.assertNotEqual(self.backup("--check").returncode, 0)
+
+    def test_failed_archive_validation_never_replaces_a_good_backup(self):
+        self.assertEqual(self.backup("--once").returncode, 0)
+        before = {p.name: p.read_bytes() for p in (self.root / "backups").glob("*.dump")}
+        self.env["FAIL_VERIFY"] = "1"
+        self.assertNotEqual(self.backup("--once").returncode, 0)
+        self.assertEqual(before, {p.name: p.read_bytes() for p in (self.root / "backups").glob("*.dump")})
+        self.assertFalse(list((self.root / "backups").glob("*.partial.*")))
 
 
 if __name__ == "__main__":

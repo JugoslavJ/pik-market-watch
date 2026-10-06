@@ -91,9 +91,16 @@ test(
       assert.match(result.stdout, /RESTORE_STAGE restore-and-grants \d+s/);
       assert.match(result.stdout, /RESTORE_STAGE dashboard-query-check \d+s/);
       const commands = result.commands;
+      const repair = commands.indexOf("zz-database-roles.sh");
+      const audit = commands.indexOf("awk");
+      const reset = commands.indexOf("DROP SCHEMA IF EXISTS lean");
       const refresh = commands.indexOf("--force-recreate --wait");
       const check = commands.indexOf("/app/check_sync.py");
-      assert.ok(refresh >= 0 && check > refresh);
+      const finalRepair = commands.lastIndexOf("zz-database-roles.sh");
+      assert.ok(repair >= 0 && repair < audit && audit < reset);
+      assert.ok(
+        finalRepair > reset && refresh > finalRepair && check > refresh,
+      );
       assert.equal(
         commands.includes("run --rm --no-deps superset-seed"),
         provision === "1",

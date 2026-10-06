@@ -5,7 +5,9 @@ const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const NAME = "olx-pg-test";
+const NAME = `pik-pg-test-${process.pid}`;
+const REPORTING_ONLY = process.argv.includes("--reporting-only");
+const NETWORK = `${NAME}-network`;
 const PORT = process.env.TEST_DB_PORT || "55432";
 const DB_DIR = path.resolve(__dirname, "..");
 const INIT_DIR = path.join(DB_DIR, "init-lean");
@@ -40,12 +42,16 @@ function waitUntilReady() {
 }
 
 let exit;
-docker(["rm", "-f", NAME]); // stale container from a crashed run
+if (REPORTING_ONLY) {
+  const network = docker(["network", "create", NETWORK]);
+  if (network.status !== 0) throw new Error(network.stderr);
+}
 const up = docker([
   "run",
   "-d",
   "--name",
   NAME,
+  ...(REPORTING_ONLY ? ["--network", NETWORK] : []),
   "-e",
   "POSTGRES_USER=olx",
   "-e",
@@ -69,6 +75,9 @@ const up = docker([
   IMAGE,
 ]);
 if (up.status !== 0) {
+  // A failed port bind still leaves a created container behind.
+  docker(["rm", "-f", NAME]);
+  if (REPORTING_ONLY) docker(["network", "rm", NETWORK]);
   console.error(up.stderr);
   process.exit(1);
 }
@@ -110,7 +119,7 @@ try {
   if (files.length === 0) throw new Error("no integration test files matched");
   exit = 0;
   let schemaReady = false;
-  for (const file of files) {
+  for (const file of REPORTING_ONLY ? [] : files) {
     const testArgs = ["--test", "--test-concurrency=1"];
     if (process.env.TEST_NAME_PATTERN) {
       testArgs.push(`--test-name-pattern=${process.env.TEST_NAME_PATTERN}`);
@@ -132,6 +141,36 @@ try {
     }
     schemaReady = true;
   }
+  if (REPORTING_ONLY) {
+    const root = path.resolve(DB_DIR, "..");
+    const result = docker(
+      [
+        "run",
+        "--rm",
+        "--network",
+        NETWORK,
+        "-v",
+        `${path.join(root, "superset")}:/assets:ro`,
+        "-e",
+        `TEST_REPORTING_DATABASE_URL=postgresql://olx_reporting:integration-reporting@${NAME}:5432/olx`,
+        "-e",
+        `TEST_SEED_DATABASE_URL=postgresql://olx:olx@${NAME}:5432/olx`,
+        "--entrypoint",
+        "python",
+        process.env.TEST_SUPERSET_IMAGE || "pik-market-watch-superset:ci",
+        "-m",
+        "unittest",
+        "discover",
+        "-v",
+        "-s",
+        "/assets/tests",
+        "-p",
+        "test_reporting.py",
+      ],
+      { stdio: "inherit" },
+    );
+    exit = result.status ?? 1;
+  }
 } finally {
   if (exit !== 0) {
     const logs = docker(["logs", NAME]);
@@ -144,5 +183,6 @@ try {
     }
   }
   docker(["rm", "-f", NAME]);
+  if (REPORTING_ONLY) docker(["network", "rm", NETWORK]);
 }
 process.exit(exit);

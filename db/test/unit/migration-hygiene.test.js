@@ -4,19 +4,40 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const { migrationChecksum } = require("../../src/migrate");
 
 const leanInit = path.resolve(__dirname, "../../../db/init-lean");
 
-test("lean baseline contains the complete installed schema", () => {
+test("immutable baseline remains intact and ordered migrations can extend it", () => {
   const sqlFiles = fs
     .readdirSync(leanInit)
     .filter((name) => name.endsWith(".sql"))
     .sort();
-  assert.deepEqual(sqlFiles, [
-    "00-extensions.sql",
-    "01-lean-schema.sql",
-    "02-lean-neighborhoods.sql",
-  ]);
+  const baseline = {
+    "00-extensions.sql":
+      "e9a3dbd3a5ad094964b7a30004ed4464e711b25fb9f59de3e14233fa71a38472",
+    "01-lean-schema.sql":
+      "d55b4ec8c8a18e28c4e5c37c1652c6a6c040905591b2cca0011c378d35fa187d",
+    "02-lean-neighborhoods.sql":
+      "d08c807494dbddf739525b77bc3d7186866a07dcca46bdead6499c60dc5e2227",
+  };
+  assert.deepEqual(sqlFiles.slice(0, 3), Object.keys(baseline));
+  const numbers = sqlFiles.map((file) => {
+    assert.match(file, /^\d{2,}-[a-z0-9-]+\.sql$/);
+    return Number(file.split("-")[0]);
+  });
+  assert.equal(
+    new Set(numbers).size,
+    numbers.length,
+    "migration numbers must be unique",
+  );
+  for (const [file, checksum] of Object.entries(baseline)) {
+    assert.equal(
+      migrationChecksum(fs.readFileSync(path.join(leanInit, file), "utf8")),
+      checksum,
+      `${file}: append a migration instead of rewriting the baseline`,
+    );
+  }
   const neighborhoods = fs.readFileSync(
     path.join(leanInit, "02-lean-neighborhoods.sql"),
     "utf8",
@@ -53,7 +74,7 @@ test("lean baseline contains the complete installed schema", () => {
   assert.match(schema, /lean_scrape_runs_started_at_idx/);
   assert.match(schema, /lean_scrape_runs_search_latest_idx/);
   assert.match(schema, /lean_price_history_api_article_date_idx/);
-  for (const file of sqlFiles) {
+  for (const file of Object.keys(baseline)) {
     const sql = fs.readFileSync(path.join(leanInit, file), "utf8");
     assert.doesNotMatch(
       sql,

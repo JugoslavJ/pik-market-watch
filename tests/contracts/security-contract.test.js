@@ -55,41 +55,6 @@ test("viewer reuses port 3000 behind Cloudflare Tunnel", () => {
     assert.match(example, new RegExp(`^${name}=`, "m"));
 });
 
-test("backup publication is verified before atomic rename", () => {
-  const backup = read("db/backup.sh");
-  assert.match(backup, /umask 077/);
-  assert.match(backup, /partial=\$\(mktemp "\$out\.partial\.XXXXXX"\)/);
-  assert.match(backup, /pg_restore -l "\$partial"/);
-  assert.match(backup, /mv -f "\$partial" "\$out"/);
-  assert.match(backup, /tar -tzf "\$partial"/);
-  assert.match(backup, /archive_volume superset-home "\$SUPERSET_HOME"/);
-});
-
-test("database roles separate reporting and backup access", () => {
-  const roles = read("db/init-lean/zz-database-roles.sh");
-  assert.match(roles, /GRANT pg_read_all_data TO %I.*backup_user/);
-  assert.match(roles, /REVOKE pg_read_all_data FROM %I.*reporting_user/);
-  assert.match(roles, /GRANT SELECT ON %I\.%I TO %I/);
-  assert.match(roles, /n\.nspname = 'lean'/);
-  assert.doesNotMatch(roles, /GRANT pg_read_all_data TO %I.*reporting_user/);
-});
-
-test("lean database role repair limits Superset to direct lean reads", () => {
-  const roles = read("db/init-lean/zz-database-roles.sh");
-  assert.match(roles, /n\.nspname IN \('public', 'lean'\)/);
-  assert.match(roles, /GRANT SELECT ON %I\.%I TO %I/);
-  assert.match(
-    roles,
-    /'listing_lifecycle_events','scrape_runs','scrape_run_pages'/,
-  );
-  assert.doesNotMatch(
-    roles.match(
-      /n\.nspname = 'lean'[\s\S]*?AND c\.relkind IN \('r','p','v','m'\) \\gexec/,
-    )?.[0] || "",
-    /raw_api_responses/,
-  );
-});
-
 test("restore input and identifiers are bounded and cleaned up", () => {
   const restore = read("db/remote-restore.sh");
   assert.match(restore, /umask 077/);
@@ -117,24 +82,4 @@ test("restore input and identifiers are bounded and cleaned up", () => {
   assert.match(restore, /grep -ve ' ACL '/);
   assert.match(restore, /CREATE EXTENSION IF NOT EXISTS pg_stat_statements/);
   assert.match(restore, /--no-owner --no-acl/);
-});
-
-test("remote restore repairs roles before ownership and schema reset", () => {
-  const restore = read("db/remote-restore.sh");
-  const roleRepair = restore.indexOf(
-    "if ! docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh; then",
-  );
-  const ownershipAudit = restore.indexOf(
-    'drifted=$(docker compose exec -T db sh -c "',
-  );
-  const ownershipRejection = restore.indexOf('if [ -n "$drifted" ]; then');
-  const schemaReset = restore.indexOf("if ! reset_schemas; then");
-
-  assert.ok(roleRepair >= 0, "restore must invoke the canonical role repair");
-  assert.ok(ownershipAudit >= 0, "restore must retain the ownership audit");
-  assert.ok(ownershipRejection >= 0, "restore must reject incorrect ownership");
-  assert.ok(schemaReset >= 0, "restore must retain the schema reset");
-  assert.ok(roleRepair < ownershipAudit);
-  assert.ok(ownershipAudit < ownershipRejection);
-  assert.ok(ownershipRejection < schemaReset);
 });

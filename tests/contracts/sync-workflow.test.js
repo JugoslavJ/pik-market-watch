@@ -16,6 +16,9 @@ for (const scenario of [
   "scrape-failure",
   "dump-failure",
   "restore-failure",
+  "stale-dependencies",
+  "attached-dependencies",
+  "running-dependencies",
 ]) {
   test(
     `home sync workflow: ${scenario}`,

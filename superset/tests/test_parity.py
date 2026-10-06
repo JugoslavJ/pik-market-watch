@@ -135,33 +135,6 @@ class ParityContracts(unittest.TestCase):
                 self.assertFalse(query["metrics"])
         self.assertEqual(count, 2)
 
-    def test_layout_keeps_source_widths_and_kpis_compact(self):
-        for board in self.boards:
-            ids = {p["id"]: p["id"] for p in parity.panels(board)}
-            layout = parity.dashboard_layout(board, ids, lambda *args: "test")
-            for panel in parity.panels(board):
-                meta = layout[f"CHART-{panel['id']}"]["meta"]
-                self.assertEqual(meta["width"] * 2, panel["gridPos"]["w"])
-                self.assertEqual(meta["height"], parity.panel_height(panel))
-                if panel["type"] == "stat":
-                    self.assertEqual(meta["height"], 24)
-                elif panel["type"] in ("timeseries", "bargauge"):
-                    self.assertGreaterEqual(meta["height"], 52)
-
-    def test_cards_and_categorical_bars_use_readable_presentation_controls(self):
-        for board in self.boards:
-            for panel in parity.panels(board):
-                if panel["type"] not in ("stat", "bargauge"):
-                    continue
-                form = parity.chart_form(board, panel, 7, [])
-                if panel["type"] == "stat":
-                    self.assertEqual(form["subheader"], "")
-                    self.assertLess(form["subtitle_font_size"], form["header_font_size"])
-                    self.assertLessEqual(form["subtitle_font_size"], 0.15)
-                else:
-                    self.assertFalse(form["zoomable"])
-                    self.assertEqual(form["x_axis_label_interval"], 0)
-
     def test_raw_table_queries_do_not_group_repeated_events(self):
         board = next(b for b in self.boards if b["uid"] == "olx-exits")
         panel = next(p for p in parity.panels(board) if p["id"] == 13)

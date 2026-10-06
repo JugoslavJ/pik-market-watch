@@ -1,6 +1,6 @@
 #requires -Version 7
 param(
-  [ValidateSet('success', 'build-failure', 'scrape-failure', 'dump-failure', 'restore-failure')]
+  [ValidateSet('success', 'build-failure', 'scrape-failure', 'dump-failure', 'restore-failure', 'stale-dependencies', 'attached-dependencies', 'running-dependencies')]
   [string]$Scenario
 )
 $ErrorActionPreference = 'Stop'
@@ -23,7 +23,19 @@ function global:docker {
   $command = $DockerArguments -join ' '
   $global:SyncVerificationCommands.Add($command)
   if ($command -eq 'info --format ok') { return 'ok' }
-  if ($command -like 'compose --profile scrape ps -aq *') { return }
+  if ($command -like 'compose --profile scrape ps -aq *') {
+    if ($global:SyncVerificationScenario -like '*-dependencies') { return ('fixture-' + $DockerArguments[-1]) }
+    return
+  }
+  if ($DockerArguments[0] -eq 'inspect') {
+    if ($DockerArguments[2] -eq '{{.State.Status}}') {
+      if ($global:SyncVerificationScenario -eq 'running-dependencies') { return 'running' }
+      return 'exited'
+    }
+    if ($global:SyncVerificationScenario -eq 'attached-dependencies') { return '{"backend":{"NetworkID":"live-network"}}' }
+    return '{"backend":{"NetworkID":""}}'
+  }
+  if ($command -like 'rm -f fixture-*') { return }
   if ($command -eq 'compose --profile scrape ps --status running -q scraper') {
     return 'fixture-scraper'
   }
@@ -111,7 +123,7 @@ function Invoke-SshRestore([string]$dumpPath) {
     Assert-Condition ($buildAt -lt $readyAt -and $readyAt -lt $ownershipAt -and $ownershipAt -lt $stopAt) "Build/database/ownership order changed: $($commands -join '; '); failure=$failure"
     Assert-Condition ($stopAt -lt $scrapeAt -and $scrapeAt -lt $resumeAt) 'Scraper was not paused and restored around sync'
     Assert-Condition (($commands | Where-Object { $_ -eq 'compose --profile scrape start scraper' }).Count -eq 1) 'Scraper must resume exactly once'
-    if ($Scenario -eq 'success') {
+    if ($Scenario -eq 'success' -or $Scenario -like '*-dependencies') {
       Assert-Condition ($null -eq $failure) "Successful sync failed: $failure"
       Assert-Condition ($scrapeAt -lt $restoreAt -and $restoreAt -lt $resumeAt) 'Restore ran outside the paused snapshot window'
       $log = Get-Content -LiteralPath (Join-Path $fixtureRoot 'logs/sync.log')
@@ -119,6 +131,14 @@ function Invoke-SshRestore([string]$dumpPath) {
       Assert-Condition (($log | Where-Object { $_ -match 'remote: Checked sync chart: fixture' }).Count -eq 1) 'Remote chart output was lost'
       Assert-Condition (($log | Where-Object { $_ -match 'remote: RESTORE_OK' }).Count -eq 1) 'Restore protocol was not saved'
       Assert-Condition (($log | Where-Object { $_ -match 'remote output saved in' }).Count -eq 1) 'Output-saving duration was not logged'
+      if ($Scenario -eq 'stale-dependencies') {
+        foreach ($service in 'db', 'migrator') {
+          $removeAt = $commands.IndexOf("rm -f fixture-$service")
+          Assert-Condition ($removeAt -ge 0 -and $removeAt -lt $buildAt) 'Stale dependency must be removed before rebuilding'
+        }
+      } else {
+        Assert-Condition (($commands | Where-Object { $_ -like 'rm -f fixture-*' }).Count -eq 0) 'Attached or running dependencies must be preserved'
+      }
     } else {
       Assert-Condition ($null -ne $failure) 'Failure did not abort sync'
       if ($Scenario -in @('scrape-failure', 'dump-failure')) {
