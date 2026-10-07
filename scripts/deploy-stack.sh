@@ -70,11 +70,15 @@ if [ "${1:-}" = --check ]; then
   exit 0
 fi
 
-pull_services=(db db-backup)
-docker compose pull "${pull_services[@]}" || echo "⚠ pull failed, using local images"
-
+# The database image is digest-pinned, so `up` pulls it only when missing.
 echo "▶ Starting database for ownership checks"
 docker compose up -d db
+
+# Build each image once (in parallel); later steps reuse them. Superset
+# services share one image, so building `superset` covers all of them.
+echo "▶ Building scraper and Superset images"
+docker compose --profile migrate build migrator superset
+
 db_deadline=$((SECONDS + 120))
 until docker compose exec -T db sh -c 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"' >/dev/null 2>&1; do
   if [ "$SECONDS" -ge "$db_deadline" ]; then
@@ -90,25 +94,21 @@ echo "▶ Ensuring database role ownership"
 docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
 
 echo "▶ Applying database migrations"
-docker compose --profile migrate run --build --rm migrator
+docker compose --profile migrate run --rm migrator
 
 # Apply grants for objects added by migrations.
 echo "▶ Applying database role grants"
 docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
 
 echo "▶ Upgrading Superset metadata and syncing security permissions"
-docker compose run --build --rm superset-init
+docker compose run --rm superset-init
 
-docker compose build superset superset-alert-check
-
+# Superset services depend on superset-init, and Compose reruns that
+# dependency (db upgrade + init, minutes each) for every `up` or `run`
+# that resolves dependencies. It has just run, so skip it from here on.
 read -r -a services <<< "$(stack_services)"
 echo "▶ Starting Superset dashboard stack"
-docker compose up -d --build "${services[@]}"
-docker compose run --build --rm superset-seed
-docker compose run --rm superset-access
-
-echo "▶ Taking and verifying a fresh database and application-state backup"
-docker compose run --rm --no-deps db-backup --once
+docker compose up -d --no-deps "${services[@]}"
 
 deadline=$((SECONDS + 360))
 while :; do
@@ -128,7 +128,13 @@ while :; do
   sleep 10
 done
 
+# The readiness gate below prepares viewer access before validating it.
+docker compose run --rm --no-deps superset-seed
+
+echo "▶ Taking and verifying a fresh database and application-state backup"
+docker compose run --rm --no-deps db-backup --once
+
 bash scripts/superset-readiness.sh
-docker compose run --rm superset-access --publish
+docker compose run --rm --no-deps superset-access --publish
 echo "✓ Stack healthy — deployed ${GIT_SHA:-unknown} (Superset)."
 echo "  React dashboards use the Cloudflare Tunnel origin at 127.0.0.1:3000."

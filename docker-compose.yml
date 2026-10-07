@@ -250,6 +250,7 @@ services:
       timeout: 5s
       retries: 8
       start_period: 90s
+      start_interval: 5s
 
   superset-seed:
     # Explicit jobs must not race each other during a normal profile startup.
@@ -346,7 +347,10 @@ services:
       interval: 5m
       timeout: 5s
       retries: 3
-      start_period: 45s
+      # Docker first checks after `interval`; probe sooner while starting so
+      # deployments see the first alert-state write within seconds.
+      start_period: 2m
+      start_interval: 5s
 
   db-backup:
     # Match pg_dump to the database major version.
@@ -393,6 +397,7 @@ services:
       timeout: 30s
       retries: 3
       start_period: 5m
+      start_interval: 15s
 
 volumes:
   # Stable deployed volume identities preserve data across checkout renames.

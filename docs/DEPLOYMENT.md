@@ -29,8 +29,8 @@ CI runs on pull requests and on pushes to `main` that change more than Markdown 
 
 On `main`, the deploy job ships tracked files to the instance with `git archive`. It deletes only files that a previous deployment shipped and the new revision dropped, never ignored configuration, backups, logs or volumes. It then runs `scripts/deploy-stack.sh`, which:
 
-1. Repairs database ownership and grants, and applies migrations.
-2. Upgrades Superset metadata and builds the images.
+1. Builds the scraper and Superset images once, repairs database ownership and grants, and applies migrations.
+2. Upgrades Superset metadata.
 3. Starts Superset, the alert checker and backups, then seeds datasets and viewer permissions.
 4. Takes and verifies a fresh backup, and runs the readiness gates.
 5. Publishes the managed dashboards once the gates pass.
