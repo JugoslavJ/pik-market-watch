@@ -104,13 +104,30 @@ esac
         result = self.run_deploy()
         self.assertEqual(result.returncode, 0, result.stderr)
         commands = (self.root / "commands").read_text()
-        self.assertIn("up -d --build db db-backup superset superset-alert-check", commands)
-        self.assertLess(commands.index("compose build superset"), commands.index("up -d --build db db-backup superset"))
+        self.assertIn("up -d --no-deps db db-backup superset superset-alert-check", commands)
+        # Images are built once, before anything runs them.
+        self.assertEqual(commands.count(" build "), 1)
+        self.assertNotIn("--build", commands)
+        build = commands.index("compose --profile migrate build migrator superset")
         repair = commands.index("zz-database-roles.sh")
         migrate = commands.index("compose --profile migrate run")
-        start = commands.index("up -d --build db db-backup superset")
+        init = commands.index("run --rm superset-init")
+        start = commands.index("up -d --no-deps db db-backup superset")
+        self.assertLess(build, migrate)
+        self.assertLess(build, init)
         self.assertLess(repair, migrate)
         self.assertLess(migrate, start)
+        self.assertLess(init, start)
+        # Superset services depend on superset-init; anything after the explicit
+        # run must skip dependencies or Compose reruns the init.
+        later = [line for line in commands[init:].splitlines()[1:]
+                 if line.startswith("compose run") or line.startswith("compose up")]
+        self.assertTrue(later)
+        for line in later:
+            self.assertIn("--no-deps", line)
+        seed = commands.index("--no-deps superset-seed")
+        self.assertLess(commands.index("inspect "), seed)
+        self.assertLess(seed, commands.index("db-backup --once"))
         self.assertLess(commands.index("benchmark_viewer.py"), commands.index("superset-access --publish"))
 
     def test_superset_profile_and_services_are_selected(self):
