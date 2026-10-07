@@ -366,7 +366,7 @@ h1 {
 .legend-count {
   color: var(--ink-muted);
 }
-.maplibregl-popup-content {
+.maplibregl-popup .maplibregl-popup-content {
   background: var(--page);
   color: var(--ink);
   border: 1px solid var(--border-strong);
@@ -375,24 +375,24 @@ h1 {
   font-size: 12px;
   box-shadow: 0 8px 24px #0009;
 }
-.maplibregl-popup-tip {
+.maplibregl-popup .maplibregl-popup-tip {
   display: none;
 }
-.maplibregl-popup-content strong {
+.maplibregl-popup .maplibregl-popup-content strong {
   display: block;
   margin-bottom: 6px;
   line-height: 1.35;
 }
-.maplibregl-popup-content dl {
+.maplibregl-popup .maplibregl-popup-content dl {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 2px 12px;
   margin: 0;
 }
-.maplibregl-popup-content dt {
+.maplibregl-popup .maplibregl-popup-content dt {
   color: var(--ink-muted);
 }
-.maplibregl-popup-content dd {
+.maplibregl-popup .maplibregl-popup-content dd {
   margin: 0;
   text-align: right;
   font-variant-numeric: tabular-nums;

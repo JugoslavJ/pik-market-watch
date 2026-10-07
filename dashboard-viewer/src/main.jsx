@@ -378,7 +378,7 @@ const Pins = memo(function Pins({ panel, rows }) {
   }, [visible]);
   useEffect(() => {
     if (mapRef.current?.map.isStyleLoaded())
-      mapRef.current.updatePins(mapRef.current.map, rows, false, scale);
+      mapRef.current.updatePins(mapRef.current.map, rows, true, scale);
   }, [rows, scale]);
   return (
     <div className="map-wrap">

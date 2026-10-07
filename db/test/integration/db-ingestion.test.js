@@ -296,6 +296,25 @@ needsDb(
 );
 
 needsDb(
+  "lean search keeps a deal that details derived from the declared ad kind",
+  async () => {
+    await commit(SEARCH_A, [card(9108, 3000)]);
+    await db.enrichListings([
+      {
+        articleId: 9108,
+        dealType: "rent",
+        price: 3000,
+        characteristics: { "vrsta-oglasa": "Iznajmljivanje" },
+      },
+    ]);
+    await commit(SEARCH_A, [{ ...card(9108, 3000), dealType: "sale" }]);
+    const row = await listing(9108);
+    assert.equal(row.deal, "rent");
+    assert.equal(row.price, "3000.00");
+  },
+);
+
+needsDb(
   "lean ingestion rolls back every write when finishing a run fails",
   async () => {
     await db.registerSavedSearch(SEARCH_A);
