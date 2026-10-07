@@ -136,6 +136,9 @@ def main():
             chart_count = 0
             filter_count = 0
             batch_count = 0
+            # Filters on different dashboards share option datasets; query each
+            # dataset column once, since access is granted per dataset.
+            checked_targets = set()
             for board in boards:
                 api.call("GET", f"/api/v1/dashboard/{board.id}")
                 chart = next((c for c in board.slices if c.viz_type == "deck_scatter"), board.slices[0])
@@ -153,6 +156,10 @@ def main():
                     for target in config.get("targets", []):
                         if "datasetId" not in target:
                             continue
+                        key = (target["datasetId"], target["column"]["name"])
+                        if key in checked_targets:
+                            continue
+                        checked_targets.add(key)
                         form = {"viz_type": "table", "query_mode": "raw", "row_limit": 10,
                                 "all_columns": [target["column"]["name"]]}
                         response = api.call("POST", "/api/v1/chart/data", json.loads(
@@ -207,7 +214,7 @@ def main():
                     raise
             else:
                 raise RuntimeError("Anonymous dashboard access was allowed")
-            print(f"Viewer acceptance passed: {chart_count} dashboards/charts, {filter_count} filter targets, {batch_count} batches; edits, SQL Lab, role revocation, and anonymous access denied")
+            print(f"Viewer acceptance passed: {chart_count} dashboards/charts, {filter_count} distinct filter targets, {batch_count} batches; edits, SQL Lab, role revocation, and anonymous access denied")
         finally:
             for board in boards:
                 board.published = original[board.id]
