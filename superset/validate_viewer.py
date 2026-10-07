@@ -111,7 +111,7 @@ def main():
                     checked += 1
                 print(f'Compared {uid}: {len(list(panels(board)))} panels, selection={selected}, cross={cross}')
     connection.close()
-    print(f'Passed {checked} viewer/source comparisons across 71 panels.')
+    print(f'Passed {checked} viewer/source comparisons across 63 panels.')
 
 
 if __name__ == '__main__':

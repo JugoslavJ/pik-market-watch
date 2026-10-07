@@ -167,7 +167,8 @@ def compile_dashboard(board, supplied=None, cross=None, days=None, until=None, i
     return statement, {key: value for key, value in params.items() if key in used}, len(groups)
 
 
-PRESENTED_FIELDS = ("field", "category", "value", "x", "y", "bars", "suffix", "decimals")
+PRESENTED_FIELDS = ("description", "section", "field", "category", "value", "x", "y", "bars", "suffix",
+                    "decimals")
 
 
 def presentation(board):

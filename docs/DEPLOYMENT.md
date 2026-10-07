@@ -52,7 +52,7 @@ curl -f http://127.0.0.1:3000/health
 systemctl status cloudflared
 ```
 
-Readiness compares all 71 viewer panels with their definition SQL run directly against the database, and checks API latency (p95 under 2 s fresh, 1 s cached), temporary viewer and guest permissions, revoked access and backups. It does not measure browser rendering.
+Readiness compares all 63 viewer panels with their definition SQL run directly against the database, and checks API latency (p95 under 2 s fresh, 1 s cached), temporary viewer and guest permissions, revoked access and backups. It does not measure browser rendering.
 
 Then, through the public hostname:
 

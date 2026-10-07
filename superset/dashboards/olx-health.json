@@ -14,54 +14,14 @@
   ],
   "panels": [
     {
-      "id": 1,
-      "title": "Searches watched",
-      "type": "big_number",
-      "layout": {
-        "x": 0,
-        "y": 0,
-        "w": 8,
-        "h": 4
-      },
-      "sql": "SELECT count(*) AS searches FROM lean.saved_searches",
-      "field": "searches"
-    },
-    {
-      "id": 2,
-      "title": "Failed runs · 24 h",
-      "type": "big_number",
-      "layout": {
-        "x": 8,
-        "y": 0,
-        "w": 8,
-        "h": 4
-      },
-      "sql": "WITH a AS (\n  SELECT count(*) FILTER (WHERE status='error' AND started_at>now()-INTERVAL '24 hours') AS failed_24h,\n    count(*) FILTER (WHERE status='ok' AND started_at>now()-INTERVAL '24 hours') AS ok_24h,\n    count(*) FILTER (WHERE status IN ('ok','error') AND started_at>now()-INTERVAL '24 hours') AS finished_24h,\n    max(finished_at) FILTER (WHERE status='ok' AND is_complete) AS last_success,\n    coalesce(sum(cards) FILTER (WHERE status='ok' AND started_at>now()-INTERVAL '24 hours'),0) AS cards_24h,\n    count(*) FILTER (WHERE NOT is_complete AND status IN ('ok','error') AND finished_at IS NOT NULL AND started_at>now()-INTERVAL '24 hours') AS incomplete\n  FROM lean.scrape_runs\n)\nSELECT failed_24h,\n  round(100.0*ok_24h/NULLIF(finished_24h,0),0) AS success_rate,\n  round(EXTRACT(EPOCH FROM (now()-last_success)))::bigint AS seconds_since_success,\n  cards_24h, incomplete\nFROM a",
-      "field": "failed_24h"
-    },
-    {
-      "id": 3,
-      "title": "Success rate · 24 h",
-      "type": "big_number",
-      "layout": {
-        "x": 16,
-        "y": 0,
-        "w": 8,
-        "h": 4
-      },
-      "source_panel": 2,
-      "field": "success_rate",
-      "suffix": "%",
-      "decimals": 1
-    },
-    {
       "id": 4,
-      "title": "Since last successful scrape",
+      "title": "Last successful scrape",
+      "section": "Status",
       "type": "big_number",
       "layout": {
         "x": 0,
-        "y": 4,
-        "w": 12,
+        "y": 0,
+        "w": 6,
         "h": 4
       },
       "source_panel": 2,
@@ -69,25 +29,112 @@
       "suffix": "seconds"
     },
     {
-      "id": 5,
-      "title": "Cards scraped · 24 h",
+      "id": 3,
+      "title": "Success rate · 24 h",
+      "section": "Status",
+      "type": "big_number",
+      "layout": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "source_panel": 2,
+      "field": "success_rate",
+      "suffix": "%"
+    },
+    {
+      "id": 2,
+      "title": "Failed runs · 24 h",
+      "section": "Status",
       "type": "big_number",
       "layout": {
         "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "sql": "WITH a AS (\n  SELECT count(*) FILTER (WHERE status='error' AND started_at>now()-INTERVAL '24 hours') AS failed_24h,\n    count(*) FILTER (WHERE status='ok' AND started_at>now()-INTERVAL '24 hours') AS ok_24h,\n    count(*) FILTER (WHERE status IN ('ok','error') AND started_at>now()-INTERVAL '24 hours') AS finished_24h,\n    max(finished_at) FILTER (WHERE status='ok' AND is_complete) AS last_success,\n    coalesce(sum(cards) FILTER (WHERE status='ok' AND started_at>now()-INTERVAL '24 hours'),0) AS cards_24h,\n    count(*) FILTER (WHERE NOT is_complete AND status IN ('ok','error') AND finished_at IS NOT NULL AND started_at>now()-INTERVAL '24 hours') AS incomplete\n  FROM lean.scrape_runs\n)\nSELECT failed_24h,\n  round(100.0*ok_24h/NULLIF(finished_24h,0),0) AS success_rate,\n  round(EXTRACT(EPOCH FROM (now()-last_success)))::bigint AS seconds_since_success,\n  cards_24h, incomplete\nFROM a",
+      "field": "failed_24h"
+    },
+    {
+      "id": 24,
+      "title": "Incomplete searches · 24 h",
+      "section": "Status",
+      "type": "big_number",
+      "layout": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "source_panel": 2,
+      "field": "incomplete"
+    },
+    {
+      "id": 5,
+      "title": "Cards scraped · 24 h",
+      "section": "Status",
+      "type": "big_number",
+      "layout": {
+        "x": 0,
         "y": 4,
-        "w": 12,
+        "w": 6,
         "h": 4
       },
       "source_panel": 2,
       "field": "cards_24h"
     },
     {
+      "id": 1,
+      "title": "Searches watched",
+      "section": "Status",
+      "type": "big_number",
+      "layout": {
+        "x": 6,
+        "y": 4,
+        "w": 6,
+        "h": 4
+      },
+      "sql": "SELECT count(*) AS searches FROM lean.saved_searches",
+      "field": "searches"
+    },
+    {
+      "id": 25,
+      "title": "Detail backlog",
+      "section": "Status",
+      "type": "big_number",
+      "layout": {
+        "x": 12,
+        "y": 4,
+        "w": 6,
+        "h": 4
+      },
+      "sql": "SELECT count(*) AS backlog FROM lean.listings WHERE closed_at IS NULL AND (details_fetched_at IS NULL OR details_fetched_at<now()-INTERVAL '7 days') AND (last_enrichment_attempted_at IS NULL OR last_enrichment_attempted_at<now()-INTERVAL '12 hours')",
+      "field": "backlog"
+    },
+    {
+      "id": 26,
+      "title": "Invalid latest price · 30 d",
+      "section": "Status",
+      "type": "big_number",
+      "layout": {
+        "x": 18,
+        "y": 4,
+        "w": 6,
+        "h": 4
+      },
+      "sql": "SELECT count(*) AS invalid_latest FROM lean.listings WHERE extra->>'latest_price_state' IN ('invalid','conflict') AND last_seen>now()-INTERVAL '30 days'",
+      "field": "invalid_latest"
+    },
+    {
       "id": 7,
-      "title": "Runs per hour — ok vs error",
+      "title": "Runs per hour",
+      "section": "Runs",
       "type": "timeseries",
       "layout": {
         "x": 0,
-        "y": 9,
+        "y": 8,
         "w": 24,
         "h": 9
       },
@@ -96,48 +143,40 @@
     },
     {
       "id": 8,
-      "title": "Cards & pages per run — hourly averages",
+      "title": "Average cards per run · hourly",
+      "section": "Runs",
       "type": "timeseries",
       "layout": {
         "x": 0,
-        "y": 18,
-        "w": 24,
+        "y": 17,
+        "w": 12,
         "h": 9
       },
-      "sql": "SELECT date_trunc('hour',started_at) AS time,round(avg(cards))::int AS \"avg cards\",round(avg(pages))::int AS \"avg pages\" FROM lean.scrape_runs WHERE ${time_filter:started_at} GROUP BY 1 ORDER BY 1"
+      "sql": "SELECT date_trunc('hour',started_at) AS time,round(avg(cards))::int AS \"avg cards\" FROM lean.scrape_runs WHERE ${time_filter:started_at} GROUP BY 1 ORDER BY 1"
     },
     {
-      "id": 10,
-      "title": "Saved searches — stalest first",
-      "type": "table",
+      "id": 22,
+      "title": "Run duration · hourly",
+      "section": "Runs",
+      "type": "timeseries",
       "layout": {
-        "x": 0,
-        "y": 28,
-        "w": 24,
-        "h": 10
+        "x": 12,
+        "y": 17,
+        "w": 12,
+        "h": 9
       },
-      "sql": "SELECT name,coalesce(category,'(none)') AS category,listing_count AS listings,median_ppm2 AS \"median KM/m2\",new_count AS new,drop_count AS drops,round(EXTRACT(EPOCH FROM (now()-last_scraped_at))/60)::int AS age_min,url FROM lean.saved_searches WHERE ${category}='All' OR category=${category} ORDER BY last_scraped_at NULLS FIRST"
-    },
-    {
-      "id": 12,
-      "title": "Recent scrape runs — newest 50",
-      "type": "table",
-      "layout": {
-        "x": 0,
-        "y": 39,
-        "w": 24,
-        "h": 11
-      },
-      "sql": "SELECT r.id,coalesce(s.category,'(none)') AS category,r.search_key,r.status,r.pages,r.cards,r.started_at AS started,r.finished_at AS finished,r.error FROM lean.scrape_runs r LEFT JOIN lean.saved_searches s USING(search_key) ORDER BY r.id DESC LIMIT 50"
+      "sql": "SELECT date_trunc('hour',started_at) AS time,round(avg(EXTRACT(EPOCH FROM (finished_at-started_at)))/60.0,1) AS \"avg min\",round(max(EXTRACT(EPOCH FROM (finished_at-started_at)))/60.0,1) AS \"max min\" FROM lean.scrape_runs WHERE finished_at IS NOT NULL AND ${time_filter:started_at} GROUP BY 1 ORDER BY 1",
+      "suffix": "minutes"
     },
     {
       "id": 14,
-      "title": "Geo pins · actives",
+      "title": "Geo pins",
+      "section": "Coverage of active listings",
       "type": "big_number",
       "layout": {
         "x": 0,
-        "y": 51,
-        "w": 12,
+        "y": 26,
+        "w": 6,
         "h": 4
       },
       "sql": "SELECT round(100.0*count(*) FILTER (WHERE latitude IS NOT NULL AND longitude IS NOT NULL)/NULLIF(count(*),0)) AS pinned_pct,\n  round(100.0*count(details_fetched_at)/NULLIF(count(*),0)) AS details_pct,\n  round(100.0*count(*) FILTER (WHERE ppm2>0)/NULLIF(count(*),0)) AS priced_pct,\n  round(100.0*count(api_status)/NULLIF(count(*),0)) AS api_status_pct\nFROM lean.listings WHERE closed_at IS NULL",
@@ -147,12 +186,13 @@
     },
     {
       "id": 15,
-      "title": "Details fetched · actives",
+      "title": "Details fetched",
+      "section": "Coverage of active listings",
       "type": "big_number",
       "layout": {
-        "x": 12,
-        "y": 51,
-        "w": 12,
+        "x": 6,
+        "y": 26,
+        "w": 6,
         "h": 4
       },
       "source_panel": 14,
@@ -162,12 +202,13 @@
     },
     {
       "id": 16,
-      "title": "KM/m² known · actives",
+      "title": "KM/m² known",
+      "section": "Coverage of active listings",
       "type": "big_number",
       "layout": {
-        "x": 0,
-        "y": 55,
-        "w": 12,
+        "x": 12,
+        "y": 26,
+        "w": 6,
         "h": 4
       },
       "source_panel": 14,
@@ -177,12 +218,13 @@
     },
     {
       "id": 17,
-      "title": "OLX status known · actives",
+      "title": "OLX status known",
+      "section": "Coverage of active listings",
       "type": "big_number",
       "layout": {
-        "x": 12,
-        "y": 55,
-        "w": 12,
+        "x": 18,
+        "y": 26,
+        "w": 6,
         "h": 4
       },
       "source_panel": 14,
@@ -192,103 +234,68 @@
     },
     {
       "id": 18,
-      "title": "OLX status vs closure state · recently seen",
+      "title": "OLX status vs closure state · seen in 14 d",
+      "section": "Coverage of active listings",
       "type": "table",
       "layout": {
         "x": 0,
-        "y": 59,
+        "y": 30,
         "w": 24,
         "h": 8
       },
       "sql": "SELECT coalesce(api_status,'(not exposed)') AS olx_says,CASE WHEN closed_at IS NOT NULL THEN 'closed' ELSE 'open' END AS we_say,count(*) AS listings FROM lean.listings WHERE last_seen>now()-INTERVAL '14 days' GROUP BY 1,2 ORDER BY 3 DESC"
     },
     {
-      "id": 19,
-      "title": "Search duration — slowest first",
+      "id": 28,
+      "title": "Per-search freshness",
+      "section": "Searches",
       "type": "table",
       "layout": {
         "x": 0,
-        "y": 67,
+        "y": 38,
+        "w": 24,
+        "h": 12
+      },
+      "sql": "SELECT s.name,s.category,s.search_key,CASE WHEN r.status='error' THEN 'failed' WHEN r.status='running' THEN 'running' WHEN r.finished_at<now()-INTERVAL '26 hours' THEN 'stale' ELSE coalesce(r.status,'never') END AS phase,round(EXTRACT(EPOCH FROM (now()-r.finished_at))/60)::int AS age_min,r.started_at,r.finished_at,r.error,s.url FROM lean.saved_searches s LEFT JOIN LATERAL (SELECT * FROM lean.scrape_runs WHERE search_key=s.search_key ORDER BY id DESC LIMIT 1) r ON TRUE WHERE ${category}='All' OR s.category=${category} ORDER BY r.finished_at NULLS FIRST"
+    },
+    {
+      "id": 19,
+      "title": "Search duration · slowest first",
+      "section": "Searches",
+      "type": "table",
+      "layout": {
+        "x": 0,
+        "y": 50,
         "w": 24,
         "h": 8
       },
       "sql": "SELECT s.name,coalesce(s.category,'(none)') AS category,count(r.id) AS runs,round(avg(EXTRACT(EPOCH FROM (r.finished_at-r.started_at))))::int AS avg_s,max(EXTRACT(EPOCH FROM (r.finished_at-r.started_at)))::int AS max_s FROM lean.scrape_runs r JOIN lean.saved_searches s USING(search_key) WHERE r.finished_at IS NOT NULL AND ${time_filter:r.started_at} GROUP BY 1,2 ORDER BY 4 DESC"
     },
     {
-      "id": 24,
-      "title": "Incomplete searches · 24 h",
-      "type": "big_number",
-      "layout": {
-        "x": 0,
-        "y": 76,
-        "w": 12,
-        "h": 4
-      },
-      "source_panel": 2,
-      "field": "incomplete"
-    },
-    {
-      "id": 25,
-      "title": "Detail backlog · eligible actives",
-      "type": "big_number",
-      "layout": {
-        "x": 12,
-        "y": 76,
-        "w": 12,
-        "h": 4
-      },
-      "sql": "SELECT count(*) AS backlog FROM lean.listings WHERE closed_at IS NULL AND (details_fetched_at IS NULL OR details_fetched_at<now()-INTERVAL '7 days') AND (last_enrichment_attempted_at IS NULL OR last_enrichment_attempted_at<now()-INTERVAL '12 hours')",
-      "field": "backlog"
-    },
-    {
-      "id": 26,
-      "title": "Listings with invalid latest price state · 30 d",
-      "type": "big_number",
-      "layout": {
-        "x": 0,
-        "y": 80,
-        "w": 12,
-        "h": 4
-      },
-      "sql": "SELECT count(*) AS invalid_latest FROM lean.listings WHERE extra->>'latest_price_state' IN ('invalid','conflict') AND last_seen>now()-INTERVAL '30 days'",
-      "field": "invalid_latest"
-    },
-    {
       "id": 21,
-      "title": "Errors grouped — last 7 d",
+      "title": "Errors grouped · 7 d",
+      "section": "Errors",
       "type": "table",
       "layout": {
         "x": 0,
-        "y": 85,
+        "y": 58,
         "w": 24,
         "h": 10
       },
       "sql": "SELECT count(*)::int AS runs,left(regexp_replace(coalesce(error,'(no message)'), '[0-9]+','#','g'),120) AS failure_pattern,max(started_at) AS last_seen FROM lean.scrape_runs WHERE status='error' AND started_at>now()-INTERVAL '7 days' GROUP BY 2 ORDER BY 1 DESC"
     },
     {
-      "id": 22,
-      "title": "Run duration over time",
-      "type": "timeseries",
-      "layout": {
-        "x": 0,
-        "y": 95,
-        "w": 24,
-        "h": 9
-      },
-      "sql": "SELECT date_trunc('hour',started_at) AS time,round(avg(EXTRACT(EPOCH FROM (finished_at-started_at)))/60.0,1) AS \"avg min\",round(max(EXTRACT(EPOCH FROM (finished_at-started_at)))/60.0,1) AS \"max min\" FROM lean.scrape_runs WHERE finished_at IS NOT NULL AND ${time_filter:started_at} GROUP BY 1 ORDER BY 1",
-      "suffix": "minutes"
-    },
-    {
-      "id": 28,
-      "title": "Per-search freshness & phases",
+      "id": 12,
+      "title": "Recent scrape runs",
+      "section": "Errors",
       "type": "table",
       "layout": {
         "x": 0,
-        "y": 104,
+        "y": 68,
         "w": 24,
-        "h": 12
+        "h": 11
       },
-      "sql": "SELECT s.name,s.category,s.search_key,CASE WHEN r.status='error' THEN 'failed' WHEN r.status='running' THEN 'running' WHEN r.finished_at<now()-INTERVAL '26 hours' THEN 'stale' ELSE coalesce(r.status,'never') END AS phase,round(EXTRACT(EPOCH FROM (now()-r.finished_at))/60)::int AS age_min,r.started_at,r.finished_at,r.error,s.url FROM lean.saved_searches s LEFT JOIN LATERAL (SELECT * FROM lean.scrape_runs WHERE search_key=s.search_key ORDER BY id DESC LIMIT 1) r ON TRUE WHERE ${category}='All' OR s.category=${category} ORDER BY r.finished_at NULLS FIRST"
+      "sql": "SELECT r.id,coalesce(s.category,'(none)') AS category,r.search_key,r.status,r.pages,r.cards,r.started_at AS started,r.finished_at AS finished,r.error FROM lean.scrape_runs r LEFT JOIN lean.saved_searches s USING(search_key) ORDER BY r.id DESC LIMIT 50"
     }
   ]
 }

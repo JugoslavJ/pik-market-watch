@@ -22,7 +22,7 @@ class ViewerQueryTests(unittest.TestCase):
         self.assertEqual(filter_template.cache_info().currsize, 256)
         self.assertIsNot(filter_template(source), template)
 
-    def test_all_71_panels_have_shared_sources_and_no_unexpanded_macros(self):
+    def test_all_63_panels_have_shared_sources_and_no_unexpanded_macros(self):
         count = 0
         for board in BOARDS.values():
             sql, params, groups = compile_dashboard(board)
@@ -31,7 +31,7 @@ class ViewerQueryTests(unittest.TestCase):
             self.assertIn('jsonb_build_object', sql)
             self.assertTrue(params)
             count += len(board['panels'])
-        self.assertEqual(count, 71)
+        self.assertEqual(count, 63)
 
     def test_cached_option_lists_are_left_out_of_the_statement(self):
         for uid, board in BOARDS.items():
