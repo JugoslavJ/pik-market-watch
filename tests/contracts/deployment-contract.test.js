@@ -58,3 +58,26 @@ test("access jobs mount their local Python import dependencies", () => {
     }
   }
 });
+
+test("deploy runs the synced script as a file and requires its success line", () => {
+  const workflow = fs.readFileSync(
+    path.join(ROOT, ".github/workflows/ci.yml"),
+    "utf8",
+  );
+  const step = workflow.split("- name: Rebuild stack and wait for health")[1];
+  assert.ok(step, "deploy step is missing");
+  // Piped into `bash -s`, a stdin-reading command swallows the script.
+  assert.doesNotMatch(step, /bash -s/);
+  assert.doesNotMatch(step, /<\s*scripts\/deploy-stack\.sh/);
+  assert.match(step, /bash scripts\/deploy-stack\.sh"[\s\\]*<\s*\/dev\/null/);
+  assert.match(
+    step,
+    /grep -Fq "✓ Stack healthy — deployed \$\{\{ github\.sha \}\} "/,
+  );
+  const script = fs.readFileSync(
+    path.join(ROOT, "scripts/deploy-stack.sh"),
+    "utf8",
+  );
+  assert.match(script, /✓ Stack healthy — deployed \$\{GIT_SHA:-unknown\} /);
+  assert.match(script, /exec <\/dev\/null/);
+});
