@@ -244,6 +244,34 @@ test("detail: localized values map while raw history retains rejected duplicates
   assert.equal(detail.priceHistoryRejections[0].reason, "duplicate");
 });
 
+test("detail: declared ad kind overrides a contradicting listing_type", () => {
+  // A real live case: a 3.000 KM/month house rental posted as a sale.
+  const rental = mapListingDetail({
+    id: "79447263",
+    price: 120,
+    listing_type: "sell",
+    attributes: [{ attr_code: "vrsta-oglasa", value: "Iznajmljivanje" }],
+  });
+  assert.equal(rental.dealType, "rent");
+  assert.equal(rental.isRent, true);
+  // The rent minimum applies, so a nightly holiday-home price survives.
+  assert.equal(rental.price, 120);
+  const sale = mapListingDetail({
+    id: "104",
+    price: 90000,
+    listing_type: "rent",
+    attributes: [{ attr_code: "vrsta-oglasa", value: "Prodaja" }],
+  });
+  assert.equal(sale.dealType, "sale");
+  const fallback = mapListingDetail({
+    id: "105",
+    price: 500,
+    listing_type: "rent",
+    attributes: [{ attr_code: "vrsta-oglasa", value: "Zamjena" }],
+  });
+  assert.equal(fallback.dealType, "rent");
+});
+
 test("detail: empty/garbage payload tolerated", () => {
   assert.equal(mapListingDetail(null), null);
   const d = mapListingDetail({ id: 42 });

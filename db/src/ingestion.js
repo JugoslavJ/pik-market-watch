@@ -178,7 +178,9 @@ async function commitSearchIngestion(payload) {
       ],
     );
     const previous = await client.query(
-      "SELECT article_id,price,ppm2,deal,closed_at FROM lean.listings WHERE article_id=ANY($1::bigint[]) FOR UPDATE",
+      `SELECT article_id,price,ppm2,deal,closed_at,
+              extra->'characteristics' ? 'vrsta-oglasa' AS deal_declared
+         FROM lean.listings WHERE article_id=ANY($1::bigint[]) FOR UPDATE`,
       [ids],
     );
     const byId = new Map(
@@ -186,15 +188,18 @@ async function commitSearchIngestion(payload) {
     );
     const newIds = ids.filter((id) => !byId.has(id));
     const observations = cards.map((card) => {
-      const deal =
-        card.dealType === "rent" || card.isRent === true
+      const prior = byId.get(Number(card.articleId));
+      // Search cards only carry listing_type; keep a deal that details
+      // derived from the ad's declared kind until the next detail fetch.
+      const deal = prior?.deal_declared
+        ? prior.deal
+        : card.dealType === "rent" || card.isRent === true
           ? "rent"
           : card.dealType === "sale" ||
               (!Object.hasOwn(card, "dealType") && card.isRent === false)
             ? "sale"
             : "unknown";
       const validPrice = hasValidPrice(card);
-      const prior = byId.get(Number(card.articleId));
       const price = validPrice
         ? card.price
         : prior?.deal !== deal

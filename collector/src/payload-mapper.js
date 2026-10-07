@@ -254,7 +254,13 @@ function mapListingDetail(json, fallbackId) {
 
   const displayPrice =
     typeof json.display_price === "string" ? json.display_price.trim() : "";
-  const dealType = normalizeDealType(json.listing_type);
+  const attributes = Array.isArray(json.attributes) ? json.attributes : [];
+  // listing_type follows the posting category, which advertisers often get
+  // wrong; the ad's own "vrsta-oglasa" (ad kind) attribute is more reliable.
+  const declaredDeal = normalizeDealType(
+    attributes.find((attr) => attr && attr.attr_code === "vrsta-oglasa")?.value,
+  );
+  const dealType = declaredDeal ?? normalizeDealType(json.listing_type);
   const isRent = dealType === "rent";
   const priceQuality = normalizePrice(json.price, dealType, { displayPrice });
   const historyResult = normalizeHistoryWithRejections(json.price_history, {
@@ -309,7 +315,7 @@ function mapListingDetail(json, fallbackId) {
     priceHistoryRejections: historyResult.rejected,
   };
 
-  for (const attr of Array.isArray(json.attributes) ? json.attributes : []) {
+  for (const attr of attributes) {
     const code = attr && attr.attr_code;
     if (!code || detail.characteristics[code] !== undefined) continue;
     const raw = attr.value;
