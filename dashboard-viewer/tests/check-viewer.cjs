@@ -100,7 +100,7 @@ async function main() {
       0,
     );
     const initial = await page.locator('[data-panel="1"] .value').innerText();
-    assert.equal(await page.locator("[data-panel]").count(), 25);
+    assert.equal(await page.locator("[data-panel]").count(), 20);
     console.log("Viewer loaded; checking chart click");
     await page.locator('[data-panel="8"]').scrollIntoViewIfNeeded();
     await page.waitForFunction(() => window.__olxChartInstances?.has(8));
@@ -201,15 +201,18 @@ async function main() {
         throw error;
       });
     assert.ok(tiles.length, "Map must fetch vector tiles");
-    await page.locator('[data-panel="14"]').scrollIntoViewIfNeeded();
-    await page.locator('[data-panel="14"] table').waitFor();
+    await page.locator('[data-panel="16"]').scrollIntoViewIfNeeded();
+    await page.locator('[data-panel="16"] table').waitFor();
     assert.ok(
-      await page.locator('[data-panel="14"] td a[href^="https://"]').count(),
+      await page.locator('[data-panel="16"] td a[href^="https://"]').count(),
     );
-    await page.locator('[data-panel="14"] th button').first().click();
+    await page.locator('[data-panel="16"] th button').first().click();
     const downloadPromise = page.waitForEvent("download");
-    await page.locator('[data-panel="14"] button', { hasText: "CSV" }).click();
-    assert.equal((await downloadPromise).suggestedFilename(), "listings.csv");
+    await page.locator('[data-panel="16"] button', { hasText: "CSV" }).click();
+    assert.equal(
+      (await downloadPromise).suggestedFilename(),
+      "best-value-lowest-km-m-sales.csv",
+    );
     assert.deepEqual(errors, []);
     assert.deepEqual(await page.evaluate(() => window.__csp), []);
     await page.screenshot({

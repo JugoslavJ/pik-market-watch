@@ -8,10 +8,12 @@
     {
       "id": 2,
       "title": "Active listings",
+      "description": "Open listings across every watched search.",
+      "section": "Market",
       "type": "big_number",
       "layout": {
         "x": 0,
-        "y": 1,
+        "y": 0,
         "w": 8,
         "h": 4
       },
@@ -21,10 +23,11 @@
     {
       "id": 3,
       "title": "Median KM/m² · sales",
+      "section": "Market",
       "type": "big_number",
       "layout": {
         "x": 8,
-        "y": 1,
+        "y": 0,
         "w": 8,
         "h": 4
       },
@@ -35,10 +38,11 @@
     {
       "id": 4,
       "title": "Median rent · KM/mo",
+      "section": "Market",
       "type": "big_number",
       "layout": {
         "x": 16,
-        "y": 1,
+        "y": 0,
         "w": 8,
         "h": 4
       },
@@ -48,11 +52,13 @@
     },
     {
       "id": 5,
-      "title": "Asking rent / sale · annualized",
+      "title": "Gross rental yield · asking",
+      "description": "Median monthly rent × 12 ÷ median sale price, both from active asking prices.",
+      "section": "Market",
       "type": "big_number",
       "layout": {
         "x": 0,
-        "y": 5,
+        "y": 4,
         "w": 8,
         "h": 4
       },
@@ -63,11 +69,13 @@
     },
     {
       "id": 6,
-      "title": "Observed exit ratio diagnostic · 30 d",
+      "title": "Exit share · 30 d",
+      "description": "Listings that left OLX in the last 30 days as a share of those plus current actives. Exits are not confirmed sales.",
+      "section": "Market",
       "type": "big_number",
       "layout": {
         "x": 8,
-        "y": 5,
+        "y": 4,
         "w": 8,
         "h": 4
       },
@@ -78,11 +86,13 @@
     },
     {
       "id": 7,
-      "title": "Median KM/m² of newly seen sales · this week vs last",
+      "title": "New sales KM/m² · week over week",
+      "description": "Median KM/m² of sale listings first seen this week, compared with last week.",
+      "section": "Market",
       "type": "big_number",
       "layout": {
         "x": 16,
-        "y": 5,
+        "y": 4,
         "w": 8,
         "h": 4
       },
@@ -92,12 +102,28 @@
       "decimals": 1
     },
     {
+      "id": 13,
+      "title": "New vs closed listings per day",
+      "description": "All categories. Closed means the listing disappeared from a complete search.",
+      "section": "Inventory flow",
+      "type": "timeseries",
+      "layout": {
+        "x": 0,
+        "y": 8,
+        "w": 24,
+        "h": 10
+      },
+      "sql": "WITH days AS (SELECT generate_series(date(${time_from} AT TIME ZONE 'Europe/Sarajevo'), date(${time_to} AT TIME ZONE 'Europe/Sarajevo'), INTERVAL '1 day')::date AS day), movements AS (SELECT first_seen AS day, 1 AS new_n, 0 AS closed_n FROM lean.listings UNION ALL SELECT closed_at, 0, 1 FROM lean.listings WHERE closed_at IS NOT NULL) SELECT d.day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time, COALESCE(sum(m.new_n),0)::int AS new_n, COALESCE(sum(m.closed_n),0)::int AS closed_n FROM days d LEFT JOIN movements m USING(day) GROUP BY d.day ORDER BY d.day",
+      "bars": true
+    },
+    {
       "id": 9,
-      "title": "Since last successful scrape",
+      "title": "Last successful scrape",
+      "section": "Collection",
       "type": "big_number",
       "layout": {
         "x": 0,
-        "y": 10,
+        "y": 18,
         "w": 8,
         "h": 4
       },
@@ -108,10 +134,11 @@
     {
       "id": 10,
       "title": "Failed runs · 24 h",
+      "section": "Collection",
       "type": "big_number",
       "layout": {
         "x": 8,
-        "y": 10,
+        "y": 18,
         "w": 8,
         "h": 4
       },
@@ -121,41 +148,16 @@
     {
       "id": 11,
       "title": "Cards scraped · 24 h",
+      "section": "Collection",
       "type": "big_number",
       "layout": {
         "x": 16,
-        "y": 10,
+        "y": 18,
         "w": 8,
         "h": 4
       },
       "source_panel": 9,
       "field": "cards_24h"
-    },
-    {
-      "id": 13,
-      "title": "Inventory flow — new vs closed per day · all categories",
-      "type": "timeseries",
-      "layout": {
-        "x": 0,
-        "y": 15,
-        "w": 24,
-        "h": 10
-      },
-      "sql": "WITH days AS (SELECT generate_series(date(${time_from} AT TIME ZONE 'Europe/Sarajevo'), date(${time_to} AT TIME ZONE 'Europe/Sarajevo'), INTERVAL '1 day')::date AS day), movements AS (SELECT first_seen AS day, 1 AS new_n, 0 AS closed_n FROM lean.listings UNION ALL SELECT closed_at, 0, 1 FROM lean.listings WHERE closed_at IS NOT NULL) SELECT d.day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time, COALESCE(sum(m.new_n),0)::int AS new_n, COALESCE(sum(m.closed_n),0)::int AS closed_n FROM days d LEFT JOIN movements m USING(day) GROUP BY d.day ORDER BY d.day"
-    },
-    {
-      "id": 14,
-      "title": "Closed / estimated active — daily · all categories",
-      "type": "timeseries",
-      "layout": {
-        "x": 0,
-        "y": 25,
-        "w": 24,
-        "h": 10
-      },
-      "sql": "WITH flow AS (WITH days AS (SELECT generate_series(date(${time_from} AT TIME ZONE 'Europe/Sarajevo'), date(${time_to} AT TIME ZONE 'Europe/Sarajevo'), INTERVAL '1 day')::date AS day), movements AS (SELECT first_seen AS day, 1 AS new_n, 0 AS closed_n FROM lean.listings UNION ALL SELECT closed_at, 0, 1 FROM lean.listings WHERE closed_at IS NOT NULL) SELECT d.day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time, COALESCE(sum(m.new_n),0)::int AS new_n, COALESCE(sum(m.closed_n),0)::int AS closed_n FROM days d LEFT JOIN movements m USING(day) GROUP BY d.day ORDER BY d.day),\nbounds AS (SELECT min(time) AS start_time, min((time AT TIME ZONE 'Europe/Sarajevo')::date) AS start_day FROM flow),\nseed AS (\n  SELECT count(*) AS active FROM lean.listings l CROSS JOIN bounds b\n  WHERE l.first_seen <= b.start_time AND (l.closed_at IS NULL OR l.closed_at >= b.start_day)\n), changes AS (\n  SELECT day, sum(delta) AS delta FROM (\n    SELECT (first_seen AT TIME ZONE 'Europe/Sarajevo')::date +\n      CASE WHEN first_seen AT TIME ZONE 'Europe/Sarajevo' = date_trunc('day', first_seen AT TIME ZONE 'Europe/Sarajevo') THEN 0 ELSE 1 END AS day,\n      count(*)::bigint AS delta\n    FROM lean.listings GROUP BY 1\n    UNION ALL\n    SELECT closed_at + 1 AS day, -count(*)::bigint AS delta\n    FROM lean.listings WHERE closed_at IS NOT NULL GROUP BY 1\n  ) events GROUP BY day\n), active AS (\n  SELECT f.time, f.closed_n,\n    seed.active + sum(CASE WHEN f.time > bounds.start_time THEN coalesce(changes.delta,0) ELSE 0 END)\n      OVER (ORDER BY f.time) AS active_n\n  FROM flow f CROSS JOIN bounds CROSS JOIN seed\n  LEFT JOIN changes ON changes.day = (f.time AT TIME ZONE 'Europe/Sarajevo')::date\n)\nSELECT time, round(100.0*closed_n/NULLIF(active_n,0),2) AS \"closed / observed active %\"\nFROM active ORDER BY time",
-      "suffix": "%",
-      "decimals": 1
     }
   ]
 }

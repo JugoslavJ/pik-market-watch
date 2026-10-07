@@ -231,23 +231,22 @@ async function main() {
     }
 
     errors.length = violations.length = 0;
-    await page.goto(origin + "/superset/dashboard/olx-overview-superset/", {
+    const holder = (board, title) =>
+      page.locator(".dashboard-component-chart-holder").filter({
+        has: page.getByText(board + " / " + title, { exact: true }),
+      });
+    // Percentage KPIs live on Home; categorical bars on Market Overview.
+    const cards = [
+      "Gross rental yield · asking",
+      "New sales KM/m² · week over week",
+    ];
+    await page.goto(origin + "/superset/dashboard/olx-home-superset/", {
       waitUntil: "domcontentloaded",
     });
-    const holder = (title) =>
-      page.locator(".dashboard-component-chart-holder").filter({
-        has: page.getByText("OLX.ba Market Overview / " + title, {
-          exact: true,
-        }),
-      });
-    const cards = [
-      "Annualized asking rent / sale ratio",
-      "Median KM/m² of newly seen sales · this week vs last",
-    ];
     for (const width of [1280, 1819]) {
       await page.setViewportSize({ width, height: 1000 });
       for (const title of cards) {
-        const card = holder(title);
+        const card = holder("OLX.ba Home", title);
         await card.scrollIntoViewIfNeeded();
         await card
           .locator(".subtitle-line")
@@ -280,7 +279,20 @@ async function main() {
         assert.equal(size.overflowing, false, "KPI content overflows its card");
         console.log(JSON.stringify({ card: title, width, ...size }));
       }
-      const bars = holder("Median KM/m² by floor position · sales");
+      await holder("OLX.ba Home", cards[0]).scrollIntoViewIfNeeded();
+      await page.screenshot({
+        path: path.join(artifacts, `cards-${width}.png`),
+      });
+    }
+    await page.goto(origin + "/superset/dashboard/olx-overview-superset/", {
+      waitUntil: "domcontentloaded",
+    });
+    for (const width of [1280, 1819]) {
+      await page.setViewportSize({ width, height: 1000 });
+      const bars = holder(
+        "OLX.ba Market Overview",
+        "Median KM/m² by floor position · sales",
+      );
       await bars.scrollIntoViewIfNeeded();
       await bars
         .locator("canvas")
@@ -289,10 +301,6 @@ async function main() {
       assert.ok(box.height >= 400, "Categorical bars are compressed");
       await bars.screenshot({
         path: path.join(artifacts, `floor-bars-${width}.png`),
-      });
-      await holder(cards[0]).scrollIntoViewIfNeeded();
-      await page.screenshot({
-        path: path.join(artifacts, `cards-${width}.png`),
       });
     }
     assert.deepEqual(errors, [], "Dashboard JavaScript errors");

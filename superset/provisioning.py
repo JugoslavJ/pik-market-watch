@@ -57,6 +57,23 @@ def verify_chart(api, chart, form=None):
     return sum(len(r["data"]) for r in results)
 
 
+def prune_charts(api, dashboard_id, prefix, keep):
+    """Delete this dashboard's charts for removed or renamed panels.
+
+    The viewer requires the dashboard's datasets to match the definitions exactly,
+    so leftovers would make it refuse to load. Charts without the prefix are not ours.
+    """
+    removed = []
+    for chart in api.call("GET", f"/api/v1/dashboard/{dashboard_id}/charts")["result"]:
+        if chart["id"] not in keep and chart.get("slice_name", "").startswith(prefix):
+            api.call("DELETE", f"/api/v1/chart/{chart['id']}")
+            removed.append(chart["slice_name"])
+    rows = getattr(api, "resource_rows", None)
+    if isinstance(rows, dict) and "chart" in rows:
+        rows["chart"] = [row for row in rows["chart"] if row.get("slice_name") not in removed]
+    return removed
+
+
 def save_dashboard(api, dashboard, positions, metadata):
     # Reseeding preserves publication and assigned roles.
     api.call("PUT", f"/api/v1/dashboard/{dashboard['id']}", {

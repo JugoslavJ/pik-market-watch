@@ -7,8 +7,22 @@ import {
 } from "maplibre-gl";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { cell, label, PIN_COLORS, PIN_MISSING } from "./format";
 import { openAd } from "./links";
 setWorkerUrl(workerUrl);
+
+const POPUP_FIELDS = [
+  "price",
+  "ppm2",
+  "closing_price",
+  "closing_ppm2",
+  "sqm",
+  "rooms",
+  "location",
+  "neighborhood",
+  "days_listed",
+  "last_seen",
+];
 
 export function createMap(container) {
   const map = new Map({
@@ -19,8 +33,13 @@ export function createMap(container) {
     attributionControl: true,
     cooperativeGestures: true,
   });
-  map.addControl(new NavigationControl(), "top-right");
-  const popup = new Popup({ closeButton: false, closeOnClick: false });
+  map.addControl(new NavigationControl({ showCompass: false }), "top-right");
+  const popup = new Popup({
+    closeButton: false,
+    closeOnClick: false,
+    offset: 10,
+    maxWidth: "280px",
+  });
   map.on("mouseenter", "listings", () => {
     map.getCanvas().style.cursor = "pointer";
   });
@@ -35,23 +54,21 @@ export function createMap(container) {
     const title = document.createElement("strong");
     title.textContent = feature.properties.title || "OLX listing";
     content.append(title);
-    for (const name of [
-      "price",
-      "ppm2",
-      "closing_price",
-      "closing_ppm2",
-      "sqm",
-      "rooms",
-      "neighborhood",
-      "days_listed",
-      "last_seen",
-    ]) {
-      if (feature.properties[name] != null) {
-        const line = document.createElement("div");
-        line.textContent = `${name}: ${feature.properties[name]}`;
-        content.append(line);
-      }
+    const list = document.createElement("dl");
+    for (const name of POPUP_FIELDS) {
+      const value = feature.properties[name];
+      if (value == null || value === "null") continue;
+      const term = document.createElement("dt");
+      const detail = document.createElement("dd");
+      term.textContent = label(name);
+      detail.textContent = cell(
+        typeof value === "string" && /^-?\d+(\.\d+)?$/.test(value)
+          ? Number(value)
+          : value,
+      );
+      list.append(term, detail);
     }
+    content.append(list);
     popup
       .setLngLat(feature.geometry.coordinates)
       .setDOMContent(content)
@@ -63,7 +80,23 @@ export function createMap(container) {
   return map;
 }
 
-export function updatePins(map, rows, fit) {
+function circleColor(scale) {
+  if (!scale) return PIN_COLORS[2];
+  const value = ["to-number", ["get", scale.field], 0];
+  const steps = scale.breaks.flatMap((limit, index) => [
+    limit,
+    scale.colors[index + 1],
+  ]);
+  // Rentals and listings without a KM/m² stay neutral rather than "cheap".
+  return [
+    "case",
+    [">", value, 0],
+    ["step", value, scale.colors[0], ...steps],
+    PIN_MISSING,
+  ];
+}
+
+export function updatePins(map, rows, fit, scale) {
   const features = rows
     .filter(
       (row) =>
@@ -89,13 +122,14 @@ export function updatePins(map, rows, fit) {
       type: "circle",
       source: "listings",
       paint: {
-        "circle-radius": 5,
-        "circle-color": "#36d7ba",
+        "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, 4, 15, 7],
         "circle-stroke-width": 1,
-        "circle-stroke-color": "#102e31",
+        "circle-stroke-color": "#0b1118",
+        "circle-opacity": 0.9,
       },
     });
   }
+  map.setPaintProperty("listings", "circle-color", circleColor(scale));
   if (fit && features.length) {
     const bounds = new LngLatBounds();
     features.forEach((feature) => bounds.extend(feature.geometry.coordinates));

@@ -5,7 +5,8 @@ from unittest.mock import Mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from client import InternalServiceCookiePolicy, SupersetAPI
-from provisioning import add_property_filters, query_context, raw_table, save_dashboard, verify_chart
+from provisioning import (add_property_filters, prune_charts, query_context, raw_table, save_dashboard,
+                          verify_chart)
 
 
 class SeedContracts(unittest.TestCase):
@@ -23,6 +24,20 @@ class SeedContracts(unittest.TestCase):
         save_dashboard(api, {"id": 1, "dashboard_title": "Live", "published": True}, {}, {})
         self.assertTrue(api.call.call_args_list[0].args[2]["published"])
         self.assertNotIn("roles", api.call.call_args_list[0].args[2])
+
+    def test_reseed_deletes_only_this_dashboards_stale_panel_charts(self):
+        api = SupersetAPI()
+        api.resource_rows = {"chart": [{"id": 2, "slice_name": "Board / Old"},
+                                       {"id": 1, "slice_name": "Board / Kept"}]}
+        api.call = Mock(return_value={"result": [
+            {"id": 1, "slice_name": "Board / Kept"},
+            {"id": 2, "slice_name": "Board / Old"},
+            {"id": 3, "slice_name": "Other dashboard chart"},
+        ]})
+        self.assertEqual(prune_charts(api, 9, "Board / ", {1}), ["Board / Old"])
+        self.assertEqual([c.args for c in api.call.call_args_list],
+                         [("GET", "/api/v1/dashboard/9/charts"), ("DELETE", "/api/v1/chart/2")])
+        self.assertIsNone(api.find("chart", "slice_name", "Board / Old"))
 
     def test_map_validation_requires_a_features_payload(self):
         api = Mock()

@@ -22,7 +22,8 @@ Each JSON file defines one dashboard. The same definitions drive the React viewe
 
 - `time_range` is the default window (`d`, `h` or `m`); the viewer lets users change it.
 - `select` filters default to `All`. Their options come from `options_sql` (returning `__value`) or a fixed `options` list. `number` filters need a `default`.
-- `layout` uses a 24-column grid. `section` optionally names the group a panel belongs to.
+- `layout` uses a 24-column grid. `section` optionally names the group a panel belongs to; the viewer renders consecutive panels with the same section under one heading, so keep each section's panels together and in row order.
+- `description` is a short reader-facing note. The viewer shows it under chart and table titles and as a hover hint on cards.
 - A panel has either its own `sql` or a `source_panel` whose query it reuses.
 - Panel types and their extra fields: `big_number` (`field`), `timeseries` (`bars: true` for bars; the `time` column is the x axis), `bar` (`category`, `value`), `table`, `map` (`view`: `lat`, `lon`, `zoom`), `scatter` (`x`, `y`). `suffix` and `decimals` format values.
 
@@ -34,4 +35,4 @@ SQL can use these macros, which both compilers expand:
 | `${time_filter:column}` | `column` within the selected time window |
 | `${time_from}`, `${time_to}` | The window's start and end timestamps |
 
-After changing definitions, regenerate the catalog with `node superset/scripts/generate-dashboard-catalog.js`, rebuild the Superset image and rerun the seed and access jobs. Keep panel IDs and titles stable: native chart names and dataset names derive from them.
+After changing definitions, regenerate the catalog with `node superset/scripts/generate-dashboard-catalog.js`, rebuild the Superset image and rerun the seed and access jobs. Native chart names and dataset names derive from panel titles and IDs. The seed job deletes native charts on each dashboard whose panel was removed or renamed, because the viewer refuses to serve a dashboard whose datasets differ from the definitions.

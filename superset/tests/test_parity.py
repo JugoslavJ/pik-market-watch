@@ -36,8 +36,8 @@ class ParityContracts(unittest.TestCase):
             raise RuntimeError("Dashboard definitions must be mounted for parity tests")
 
     def test_every_panel_has_a_native_chart(self):
-        expected = {"olx-home": 11, "olx-overview": 25,
-                    "olx-exits": 14, "olx-health": 21}
+        expected = {"olx-home": 10, "olx-overview": 20,
+                    "olx-exits": 13, "olx-health": 20}
         for board in self.boards:
             source = list(parity.panels(board))
             self.assertEqual(len(source), expected[board["uid"]])
@@ -137,7 +137,7 @@ class ParityContracts(unittest.TestCase):
 
     def test_raw_table_queries_do_not_group_repeated_events(self):
         board = next(b for b in self.boards if b["uid"] == "olx-exits")
-        panel = next(p for p in parity.panels(board) if p["id"] == 13)
+        panel = next(p for p in parity.panels(board) if p["id"] == 9)
         form = parity.chart_form(board, panel, 7,
                                  [{"column_name": n} for n in
                                   ["title", "url", "closed_at", "ad_link"]])
@@ -199,8 +199,8 @@ class ParityContracts(unittest.TestCase):
         self.assertEqual(sql.count("coalesce(cf.rooms::text, 'unknown') IN ('2')"), 2)
 
     def test_chart_selections_filter_source_measures_without_sidebar_variables(self):
-        board = next(b for b in self.boards if b["uid"] == "olx-overview")
-        global_panel = next(p for p in parity.panels(board) if p["id"] == 10)
+        board = next(b for b in self.boards if b["uid"] == "olx-home")
+        global_panel = next(p for p in parity.panels(board) if p["id"] == 13)
         self.assertFalse(parity.variable_names(parity.source_sql(board, global_panel)))
         sql = render(parity.compile_sql(board, global_panel), {"rooms": [{"op": "IN", "val": ["3"]}]})
         self.assertIn("coalesce(cf.rooms::text, 'unknown') IN ('3')", sql)

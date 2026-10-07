@@ -16,12 +16,14 @@ import {
 } from "@tanstack/react-query";
 import {
   FILTER_DIMENSIONS,
+  chartHeight,
   chartOption,
   echarts,
   number,
   selectionFor,
   unit,
 } from "./charts";
+import { PIN_MISSING, cell, compact, isDate, label, pinScale } from "./format";
 import { validAd, openAd } from "./links";
 import { tableRows } from "./table";
 import "./style.css";
@@ -43,6 +45,20 @@ const EMPTY = [];
 const PAGE_SIZE = 25;
 const DEFAULT_DAYS = boot.data.defaultDays;
 const FILTER_COLUMNS = new Set([...FILTER_DIMENSIONS, "article_id"]);
+const HIDDEN_COLUMNS = new Set(["url", "latitude", "longitude"]);
+const STATUS_COLUMNS = new Set(["status", "phase"]);
+const BOARD_ORDER = ["olx-home", "olx-overview", "olx-exits", "olx-health"];
+const boards = [...boot.boards].sort(
+  (a, b) => BOARD_ORDER.indexOf(a.uid) - BOARD_ORDER.indexOf(b.uid),
+);
+const WINDOWS = [
+  [2, "48 h"],
+  [7, "7 d"],
+  [30, "30 d"],
+  [90, "90 d"],
+  [180, "180 d"],
+  [365, "1 y"],
+];
 const asArray = (value) => (Array.isArray(value) ? value : [value]);
 const filterParams = (selection, cross, days) =>
   new URLSearchParams({
@@ -94,7 +110,7 @@ function useVisible(ref) {
   return visible;
 }
 
-const Plot = memo(function Plot({ panel, rows, onSelect }) {
+const Plot = memo(function Plot({ panel, rows, selected, onSelect }) {
   const ref = useRef(null),
     instance = useRef(null),
     current = useRef({ rows, onSelect });
@@ -128,20 +144,85 @@ const Plot = memo(function Plot({ panel, rows, onSelect }) {
   }, [visible, panel]);
   useEffect(() => {
     if (instance.current) {
-      instance.current.setOption(chartOption(panel, rows), { notMerge: true });
+      instance.current.setOption(chartOption(panel, rows, selected), {
+        notMerge: true,
+      });
+      instance.current.resize();
       ref.current.dataset.ready = "true";
     }
-  }, [panel, rows, visible]);
-  return <div className="plot" ref={ref} aria-label={panel.title} />;
+  }, [panel, rows, selected, visible]);
+  return (
+    <div className="plot-wrap">
+      <div
+        className="plot"
+        ref={ref}
+        aria-label={panel.title}
+        style={{ height: chartHeight(panel, rows) }}
+      />
+      {!rows.length && <p className="empty">No data for these filters</p>}
+    </div>
+  );
 });
 
-const ListingTable = memo(function ListingTable({ rows, onSelect }) {
+// jsonb rows lose SQL column order: lead with the title, then labels,
+// figures and dates.
+function columnLayout(rows) {
+  const names = Object.keys(rows[0] || {}).filter(
+    (name) => !HIDDEN_COLUMNS.has(name),
+  );
+  const kind = (name) => {
+    if (name === "title") return 0;
+    const sample = rows.find((row) => row[name] != null)?.[name];
+    if (FILTER_COLUMNS.has(name)) return 1;
+    if (typeof sample === "number") return 2;
+    return isDate(sample) ? 3 : 1;
+  };
+  const kinds = Object.fromEntries(names.map((name) => [name, kind(name)]));
+  const columns = names
+    .map((name, index) => [name, index])
+    .sort((a, b) => kinds[a[0]] - kinds[b[0]] || a[1] - b[1])
+    .map(([name]) => name);
+  return {
+    columns,
+    numeric: new Set(columns.filter((name) => kinds[name] === 2)),
+  };
+}
+
+function Cell({ column, row, onSelect }) {
+  const value = row[column];
+  if (column === "title" && validAd(row.url))
+    return (
+      <a href={row.url} target="_blank" rel="noreferrer" title={value}>
+        {value}
+      </a>
+    );
+  if (FILTER_COLUMNS.has(column))
+    return (
+      <button className="cell-filter" onClick={() => onSelect(column, value)}>
+        {String(value ?? "unknown")}
+      </button>
+    );
+  if (STATUS_COLUMNS.has(column) && value != null)
+    return (
+      <span className={"pill pill-" + String(value)}>{String(value)}</span>
+    );
+  const text = cell(value);
+  return typeof value === "string" && value.length > 60 ? (
+    <span className="long" title={value}>
+      {text}
+    </span>
+  ) : (
+    text
+  );
+}
+
+const ListingTable = memo(function ListingTable({ panel, rows, onSelect }) {
   const ref = useRef(null),
     visible = useVisible(ref);
   const [sort, setSort] = useState(null),
     [page, setPage] = useState(0),
     [search, setSearch] = useState("");
-  const columns = Object.keys(rows[0] || {}).filter((name) => name !== "url");
+  const { columns, numeric } = useMemo(() => columnLayout(rows), [rows]);
   const filtered = useMemo(
     () => tableRows(rows, search, sort),
     [rows, sort, search],
@@ -166,7 +247,11 @@ const ListingTable = memo(function ListingTable({ rows, onSelect }) {
     );
     const link = document.createElement("a");
     link.href = href;
-    link.download = "listings.csv";
+    link.download =
+      panel.title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "") + ".csv";
     link.click();
     URL.revokeObjectURL(href);
   }
@@ -189,7 +274,17 @@ const ListingTable = memo(function ListingTable({ rows, onSelect }) {
               <thead>
                 <tr>
                   {columns.map((column) => (
-                    <th key={column}>
+                    <th
+                      key={column}
+                      className={numeric.has(column) ? "num" : undefined}
+                      aria-sort={
+                        sort?.column === column
+                          ? sort.direction === 1
+                            ? "ascending"
+                            : "descending"
+                          : undefined
+                      }
+                    >
                       <button
                         onClick={() =>
                           setSort({
@@ -199,7 +294,7 @@ const ListingTable = memo(function ListingTable({ rows, onSelect }) {
                           })
                         }
                       >
-                        {column.replaceAll("_", " ")}{" "}
+                        {label(column)}{" "}
                         {sort?.column === column
                           ? sort.direction === 1
                             ? "↑"
@@ -216,25 +311,11 @@ const ListingTable = memo(function ListingTable({ rows, onSelect }) {
                   .map((row, index) => (
                     <tr key={index}>
                       {columns.map((column) => (
-                        <td key={column}>
-                          {column === "title" && validAd(row.url) ? (
-                            <a href={row.url} target="_blank" rel="noreferrer">
-                              {row[column]}
-                            </a>
-                          ) : FILTER_COLUMNS.has(column) ? (
-                            <button
-                              className="cell-filter"
-                              onClick={() => onSelect(column, row[column])}
-                            >
-                              {String(row[column] ?? "unknown")}
-                            </button>
-                          ) : typeof row[column] === "number" ? (
-                            row[column].toLocaleString("en-GB", {
-                              maximumFractionDigits: 2,
-                            })
-                          ) : (
-                            String(row[column] ?? "—")
-                          )}
+                        <td
+                          key={column}
+                          className={numeric.has(column) ? "num" : undefined}
+                        >
+                          <Cell column={column} row={row} onSelect={onSelect} />
                         </td>
                       ))}
                     </tr>
@@ -242,21 +323,24 @@ const ListingTable = memo(function ListingTable({ rows, onSelect }) {
               </tbody>
             </table>
           </div>
-          <div className="pagination">
-            <button disabled={!page} onClick={() => setPage((p) => p - 1)}>
-              Previous
-            </button>
-            <span>
-              Page {page + 1} /{" "}
-              {Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))}
-            </span>
-            <button
-              disabled={(page + 1) * PAGE_SIZE >= filtered.length}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Next
-            </button>
-          </div>
+          {!rows.length && <p className="empty">No rows for these filters</p>}
+          {filtered.length > PAGE_SIZE && (
+            <div className="pagination">
+              <button disabled={!page} onClick={() => setPage((p) => p - 1)}>
+                Previous
+              </button>
+              <span>
+                Page {page + 1} /{" "}
+                {Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))}
+              </span>
+              <button
+                disabled={(page + 1) * PAGE_SIZE >= filtered.length}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Next
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>
@@ -269,7 +353,8 @@ const Pins = memo(function Pins({ panel, rows }) {
     latest = useRef(rows),
     [failed, setFailed] = useState(false);
   const visible = useVisible(ref);
-  latest.current = rows;
+  const scale = useMemo(() => pinScale(rows), [rows]);
+  latest.current = { rows, scale };
   useEffect(() => {
     if (!visible) return;
     let closed = false,
@@ -280,7 +365,7 @@ const Pins = memo(function Pins({ panel, rows }) {
         map = createMap(ref.current);
         mapRef.current = { map, updatePins };
         map.on("load", () => {
-          updatePins(map, latest.current, true);
+          updatePins(map, latest.current.rows, true, latest.current.scale);
           ref.current.dataset.ready = "true";
         });
       })
@@ -293,38 +378,87 @@ const Pins = memo(function Pins({ panel, rows }) {
   }, [visible]);
   useEffect(() => {
     if (mapRef.current?.map.isStyleLoaded())
-      mapRef.current.updatePins(mapRef.current.map, rows, false);
-  }, [rows]);
+      mapRef.current.updatePins(mapRef.current.map, rows, false, scale);
+  }, [rows, scale]);
   return (
-    <div className="map" ref={ref} aria-label={panel.title}>
-      {failed && <p>Map unavailable. Listing links are in the table below.</p>}
+    <div className="map-wrap">
+      <div className="map" ref={ref} aria-label={panel.title}>
+        {failed && <p className="empty">Map unavailable.</p>}
+      </div>
+      {scale && (
+        <div className="map-legend" aria-label="Pin colors">
+          <span>{label(scale.field)}</span>
+          {scale.colors.map((color, index) => (
+            <span key={color} className="legend-step">
+              <i style={{ background: color }} />
+              {index === 0
+                ? "< " + compact(scale.breaks[0])
+                : index === scale.breaks.length
+                  ? "≥ " + compact(scale.breaks[index - 1])
+                  : compact(scale.breaks[index - 1]) +
+                    "–" +
+                    compact(scale.breaks[index])}
+            </span>
+          ))}
+          {scale.missing > 0 && (
+            <span className="legend-step">
+              <i style={{ background: PIN_MISSING }} />
+              Rent or unknown
+            </span>
+          )}
+          <span className="legend-count">
+            {rows.length.toLocaleString()} pins
+          </span>
+        </div>
+      )}
     </div>
   );
 });
 
-const Panel = memo(function Panel({ panel, rows, onSelect }) {
+const Panel = memo(function Panel({ panel, rows, selected, onSelect }) {
+  const stat = panel.type === "big_number";
   return (
-    <section
-      className={"panel " + (panel.type === "big_number" ? "stat" : "")}
+    <article
+      className={"panel " + (stat ? "stat" : "panel-" + panel.type)}
       data-panel={panel.id}
       style={{ gridColumn: `span ${panel.grid.w}` }}
+      title={stat ? panel.description : undefined}
     >
-      <h2>{panel.title}</h2>
-      {panel.type === "big_number" ? (
-        <>
-          <div className="value">{number(rows[0]?.[panel.field], panel)}</div>
-          <div className="unit">{unit(panel)}</div>
-        </>
+      <h3>{panel.title}</h3>
+      {!stat && panel.description && (
+        <p className="description">{panel.description}</p>
+      )}
+      {stat ? (
+        <p className="figure">
+          <span className="value">{number(rows[0]?.[panel.field], panel)}</span>
+          {unit(panel) && <span className="unit">{unit(panel)}</span>}
+        </p>
       ) : panel.type === "table" ? (
-        <ListingTable rows={rows} onSelect={onSelect} />
+        <ListingTable panel={panel} rows={rows} onSelect={onSelect} />
       ) : panel.type === "map" ? (
         <Pins panel={panel} rows={rows} />
       ) : (
-        <Plot panel={panel} rows={rows} onSelect={onSelect} />
+        <Plot
+          panel={panel}
+          rows={rows}
+          selected={selected}
+          onSelect={onSelect}
+        />
       )}
-    </section>
+    </article>
   );
 });
+
+// Consecutive panels that share a section render under one heading.
+function sectionsOf(panels) {
+  const groups = [];
+  for (const panel of panels) {
+    const last = groups[groups.length - 1];
+    if (last && last.name === (panel.section || "")) last.panels.push(panel);
+    else groups.push({ name: panel.section || "", panels: [panel] });
+  }
+  return groups;
+}
 
 function App() {
   const [selection, setSelection] = useState(boot.data.selection),
@@ -384,15 +518,14 @@ function App() {
   }, [query.error, closeFilters]);
   // Preserve panel objects as filters change so chart instances stay mounted.
   const panels = boot.data.panels;
+  const sections = useMemo(() => sectionsOf(panels), [panels]);
   const activeFilters =
     data.variables.filter((variable) => {
       const value = selection[variable.name] || [variable.default];
       return (
         JSON.stringify(value) !== JSON.stringify(asArray(variable.default))
       );
-    }).length +
-    Object.keys(cross).length +
-    (days !== DEFAULT_DAYS ? 1 : 0);
+    }).length + Object.keys(cross).length;
   const onSelect = useCallback(
     (dimension, value) =>
       setCross((previous) => {
@@ -438,10 +571,11 @@ function App() {
     <>
       <header>
         <a className="brand" href="/olx/dashboard/olx-overview/">
+          <span className="brand-mark" aria-hidden="true" />
           OLX Market Watch
         </a>
         <nav>
-          {boot.boards.map((board) => (
+          {boards.map((board) => (
             <a
               key={board.uid}
               className={board.uid === data.uid ? "active" : ""}
@@ -455,20 +589,34 @@ function App() {
       <main>
         <div className="heading">
           <div>
-            <p className="eyebrow">MARKET INTELLIGENCE</p>
-            <h1>{data.title}</h1>
+            <h1>{data.title.replace("OLX.ba ", "").replace("OLX ", "")}</h1>
+            <p className="eyebrow">
+              Observed OLX.ba asking prices. Exits are not confirmed sales.
+            </p>
           </div>
           <div className="freshness">
-            <span role="status">
+            <span role="status" className={query.isFetching ? "busy" : ""}>
               {query.isFetching
                 ? "Updating…"
-                : "As of " +
+                : "Updated " +
                   new Date(data.asOf).toLocaleTimeString([], {
                     hour: "2-digit",
                     minute: "2-digit",
                   })}
             </span>
+            <div className="segmented" role="group" aria-label="Time window">
+              {WINDOWS.map(([value, text]) => (
+                <button
+                  key={value}
+                  aria-pressed={days === value}
+                  onClick={() => setDays(value)}
+                >
+                  {text}
+                </button>
+              ))}
+            </div>
             <button
+              className="filters-toggle"
               ref={filtersButton}
               aria-expanded={filtersOpen}
               aria-controls="dashboard-filters"
@@ -476,8 +624,13 @@ function App() {
             >
               Filters{activeFilters ? ` (${activeFilters})` : ""}
             </button>
-            <button onClick={refresh} disabled={query.isFetching}>
-              Refresh
+            <button
+              onClick={refresh}
+              disabled={query.isFetching}
+              aria-label="Refresh"
+              title="Refresh data"
+            >
+              ↻
             </button>
           </div>
         </div>
@@ -570,20 +723,6 @@ function App() {
                     )}
                   </label>
                 ))}
-              <label>
-                Time window
-                <select
-                  aria-label="Time window"
-                  value={days}
-                  onChange={(e) => setDays(Number(e.target.value))}
-                >
-                  {[2, 7, 30, 90, 180, 365].map((value) => (
-                    <option key={value} value={value}>
-                      Last {value} days
-                    </option>
-                  ))}
-                </select>
-              </label>
               <button
                 onClick={() => {
                   setCross({});
@@ -613,7 +752,8 @@ function App() {
                       })
                     }
                   >
-                    {dimension}: {values.join(", ")} ×
+                    {label(dimension)}: {values.join(", ")}{" "}
+                    <span aria-hidden="true">×</span>
                   </button>
                 ))}
               </div>
@@ -629,21 +769,38 @@ function App() {
                 )}
               </p>
             )}
-            <div className="grid">
-              {panels.map((panel) => (
-                <Panel
-                  key={panel.id}
-                  panel={panel}
-                  rows={data.rows[panel.key] || EMPTY}
-                  onSelect={onSelect}
-                />
+            <div className={query.isFetching ? "sections busy" : "sections"}>
+              {sections.map((section) => (
+                <section
+                  className="dash-section"
+                  key={section.name + section.panels[0].id}
+                  aria-label={section.name || undefined}
+                >
+                  {section.name && <h2>{section.name}</h2>}
+                  <div className="grid">
+                    {section.panels.map((panel) => (
+                      <Panel
+                        key={panel.id}
+                        panel={panel}
+                        rows={data.rows[panel.key] || EMPTY}
+                        selected={
+                          panel.type === "bar"
+                            ? cross[panel.category]
+                            : undefined
+                        }
+                        onSelect={onSelect}
+                      />
+                    ))}
+                  </div>
+                </section>
               ))}
             </div>
           </div>
         </div>
       </main>
       <footer>
-        Observed asking prices and listing exits. Exits are not confirmed sales.
+        Data collected from OLX.ba listings. Prices are asking prices in KM; an
+        exit means a listing left the site, not that it sold.
       </footer>
     </>
   );

@@ -245,9 +245,9 @@ PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 {% for path in css %}<link rel="stylesheet" href="/olx/assets/{{path}}">{% endfor %}
 {% for path in imports %}<link rel="modulepreload" href="/olx/assets/{{path}}">{% endfor %}
 </head><body><div id="root"><header><a class="brand" href="/olx/dashboard/olx-overview/">OLX Market Watch</a>
-<h1>{{data.title}}</h1></header><main class="initial"><div class="grid">
-{% for panel in data.panels if panel.type == 'big_number' %}<section class="panel stat" style="grid-column:span {{panel.grid.w}}">
-<h2>{{panel.title}}</h2><div class="value">{{data.rows[panel.key][0][panel.field] if data.rows[panel.key] else '—'}}</div></section>{% endfor %}
+</header><main class="initial"><div class="heading"><h1>{{data.title}}</h1></div><div class="grid">
+{% for panel in data.panels if panel.type == 'big_number' %}<article class="panel stat" style="grid-column:span {{panel.grid.w}}">
+<h3>{{panel.title}}</h3><p class="figure"><span class="value">{{data.rows[panel.key][0][panel.field] if data.rows[panel.key] else '—'}}</span></p></article>{% endfor %}
 </div></main></div><script id="viewer-bootstrap" type="application/json" nonce="__OLX_NONCE__">{{{'data':data,'boards':boards}|tojson}}</script>
 <script type="module" src="/olx/assets/{{entry.file}}" nonce="__OLX_NONCE__"></script></body></html>"""
 

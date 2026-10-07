@@ -39,7 +39,7 @@ docker compose --profile superset --profile superset-ops run --rm --no-deps supe
 
 ## Definitions and datasets
 
-The four JSON files in `dashboards/` define 71 panels, scoped filter variables,
+The four JSON files in `dashboards/` define 63 panels, scoped filter variables,
 SQL, time windows, units and layouts. `viewer_queries.py` binds viewer selections
 as SQL parameters and batches shared facts into one dashboard data statement.
 `parity.py` compiles the same definitions into native Superset charts. With the

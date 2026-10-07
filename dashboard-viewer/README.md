@@ -1,6 +1,6 @@
 # OLX dashboard viewer
 
-React, ECharts, TanStack Query and MapLibre GL render four dashboards with 71 panels. Superset supplies authentication and reporting; `superset/dashboards/` holds the definitions.
+React, ECharts, TanStack Query and MapLibre GL render four dashboards with 63 panels. Superset supplies authentication and reporting; `superset/dashboards/` holds the definitions.
 
 The viewer is built into the Superset image. Rebuild and restart that service:
 

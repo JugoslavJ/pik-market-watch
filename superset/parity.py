@@ -6,7 +6,7 @@ from pathlib import Path
 
 from maps import MAP_STYLE, map_controls
 from listing_filters import EXPRESSIONS, EVENT_EXPRESSIONS
-from provisioning import (cross_filter_metadata, ensure_dataset, save_chart,
+from provisioning import (cross_filter_metadata, ensure_dataset, prune_charts, save_chart,
                           save_dashboard, stable_uuid, verify_chart)
 
 
@@ -514,6 +514,8 @@ def install(api, database_id, source_dir=SOURCE_DIR):
             "native_filter_configuration": native_filters, "filter_bar_orientation": "VERTICAL",
             "refresh_frequency": 0,
         }
+        for name in prune_charts(api, board["id"], dashboard["title"] + " / ", set(chart_ids.values())):
+            print(f"Removed native chart for a deleted or renamed panel: {name}")
         save_dashboard(api, board, dashboard_layout(dashboard, chart_ids, stable_uuid), metadata)
         for panel in panels(dashboard):
             chart_id, form = chart_ids[panel["id"]], forms[panel["id"]]

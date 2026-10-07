@@ -139,10 +139,10 @@ async function main() {
     await card.locator(".header-line").waitFor({ state: "visible" });
     const baseline = await card.locator(".header-line").innerText();
     console.log("Loaded market overview; baseline inventory: " + baseline);
-    const ratio = holder("Annualized asking rent / sale ratio");
-    await ratio.scrollIntoViewIfNeeded();
-    await ratio.locator(".header-line").waitFor({ state: "visible" });
-    const ratioBaseline = await ratio.locator(".header-line").innerText();
+    const median = holder("Median KM/m² · sales");
+    await median.scrollIntoViewIfNeeded();
+    await median.locator(".header-line").waitFor({ state: "visible" });
+    const medianBaseline = await median.locator(".header-line").innerText();
     const bars = holder("Active sale listings by rooms");
     await bars.scrollIntoViewIfNeeded();
     await bars.locator("canvas").first().waitFor({ state: "visible" });
@@ -184,9 +184,7 @@ async function main() {
       );
       return card?.querySelector(".header-line")?.textContent !== baseline;
     }, baseline);
-    await holder(
-      "Listing map — click a pin to open the ad",
-    ).scrollIntoViewIfNeeded();
+    await holder("Listing map").scrollIntoViewIfNeeded();
     await page.waitForTimeout(3000);
     assert.ok(
       requests.filter((r) => r.filters.some((f) => f.col === "rooms")).length >=
@@ -224,18 +222,16 @@ async function main() {
       count >= point.minimum,
       "Filtered inventory is smaller than the selected sale bar",
     );
-    await ratio.scrollIntoViewIfNeeded();
+    await median.scrollIntoViewIfNeeded();
     await page.waitForFunction((baseline) => {
       const card = [
         ...document.querySelectorAll(".dashboard-component-chart-holder"),
       ].find((el) =>
-        el.innerText.includes(
-          "OLX.ba Market Overview / Annualized asking rent / sale ratio",
-        ),
+        el.innerText.includes("OLX.ba Market Overview / Median KM/m² · sales"),
       );
       const value = card?.querySelector(".header-line")?.textContent;
       return value && value !== baseline;
-    }, ratioBaseline);
+    }, medianBaseline);
     assert.doesNotMatch(
       await page.locator("body").innerText(),
       /Data error|Minified React error|EvalError/,
