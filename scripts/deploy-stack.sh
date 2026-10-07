@@ -2,6 +2,14 @@
 # Run on the instance after syncing the checkout; accepts DEPLOY_DIR and GIT_SHA.
 set -euo pipefail
 
+# Read from a pipe (`bash -s`), any command that reads stdin swallows the rest
+# of this script and the deploy silently stops early with status 0.
+if [ ! -f "${BASH_SOURCE[0]:-}" ]; then
+  echo "✗ Run deploy-stack.sh as a file, not through bash -s." >&2
+  exit 2
+fi
+exec </dev/null
+
 DEPLOY_DIR="${DEPLOY_DIR:-$HOME/pik-market-watch}"
 cd "$DEPLOY_DIR"
 echo "▶ Deploying ${GIT_SHA:-unknown} in $(pwd) on $(hostname)"

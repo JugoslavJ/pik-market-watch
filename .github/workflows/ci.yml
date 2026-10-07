@@ -154,7 +154,14 @@ jobs:
 
       - name: Rebuild stack and wait for health
         run: |
+          set -euo pipefail
+          # Run the synced script as a file. Streamed over stdin, the first
+          # command reading stdin (docker compose exec) swallowed the rest of
+          # the script and the step passed without deploying.
           ssh -i ~/.ssh/oci_deploy_key -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o StrictHostKeyChecking=yes \
               -o BatchMode=yes -o ServerAliveInterval=30 \
-              "$OCI_USER@$OCI_HOST" "DEPLOY_DIR=$DEPLOY_DIR GIT_SHA=${{ github.sha }} bash -s" \
-            < scripts/deploy-stack.sh
+              "$OCI_USER@$OCI_HOST" \
+              "cd $DEPLOY_DIR && DEPLOY_DIR=$DEPLOY_DIR GIT_SHA=${{ github.sha }} bash scripts/deploy-stack.sh" \
+            < /dev/null | tee deploy.log
+          # A truncated run must fail the job, not pass it.
+          grep -Fq "✓ Stack healthy — deployed ${{ github.sha }} " deploy.log
