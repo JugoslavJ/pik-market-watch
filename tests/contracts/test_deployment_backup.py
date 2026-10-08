@@ -126,19 +126,20 @@ esac
         self.assertTrue(later)
         for line in later:
             self.assertIn("--no-deps", line)
-        access = commands.index("run --rm --no-deps superset-access\n")
+        # validate_access.py prepares the roles itself; no separate access job runs.
+        self.assertNotIn("run --rm --no-deps superset-access\n", commands)
         self.assertLess(commands.index("inspect "), commands.index("db-backup --once"))
-        self.assertLess(commands.index("db-backup --once"), access)
-        self.assertLess(access, commands.index("validate_viewer.py"))
+        self.assertLess(commands.index("db-backup --once"), commands.index("validate_viewer.py"))
         self.assertLess(commands.index("validate_viewer.py"), commands.index("benchmark_viewer.py"))
+        self.assertLess(commands.index("benchmark_viewer.py"), commands.index("validate_access.py"))
 
-    def test_superset_profile_and_services_are_selected(self):
+    def test_superset_profile_is_selected(self):
         self.configure()
-        command = '. scripts/lib/superset-stack.sh; configure_superset_stack; printf "%s|%s|" "$COMPOSE_FILE" "$COMPOSE_PROFILES"; stack_services'
+        command = '. scripts/lib/superset-stack.sh; configure_superset_stack; printf "%s|%s" "$COMPOSE_FILE" "$COMPOSE_PROFILES"'
         result = subprocess.run(["sh", "-c", command], cwd=self.root, env=self.env,
                                 capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout.strip(), "docker-compose.yml|superset|db db-backup superset superset-alert-check")
+        self.assertEqual(result.stdout, "docker-compose.yml|superset")
 
 
 class BackupContracts(unittest.TestCase):

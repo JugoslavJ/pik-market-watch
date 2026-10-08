@@ -40,33 +40,23 @@ for v in POSTGRES_PASSWORD POSTGRES_MIGRATOR_PASSWORD POSTGRES_APP_PASSWORD \
   require_secret "$v"
 done
 
-validate_origin() {
-  local prefix=$1 bind domain url root_host
-  bind=$(read_env_value "${prefix}_BIND")
-  domain=$(read_env_value "${prefix}_DOMAIN")
-  url=$(read_env_value "${prefix}_ROOT_URL")
-  if [ "$bind" != 127.0.0.1 ]; then
-    echo "✗ ${prefix}_BIND must be 127.0.0.1 in production." >&2; exit 1
-  fi
-  if ! printf '%s' "$domain" | grep -Eq '^([A-Za-z0-9]([-A-Za-z0-9]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$'; then
-    echo "✗ ${prefix}_DOMAIN must be a public DNS hostname." >&2; exit 1
-  fi
-  case "$url" in
-    https://*/)
-      root_host=${url#https://}; root_host=${root_host%%/*}
-      [ "$url" = "https://$domain/" ] && [ "$root_host" = "$domain" ] || {
-        echo "✗ ${prefix}_ROOT_URL must match https://${prefix}_DOMAIN/." >&2; exit 1;
-      } ;;
-    *) echo "✗ ${prefix}_ROOT_URL must use HTTPS and end in /." >&2; exit 1 ;;
-  esac
-  if [ "$(read_env_value "${prefix}_COOKIE_SECURE")" != true ]; then
-    echo "✗ ${prefix}_COOKIE_SECURE must be true in production." >&2; exit 1
-  fi
-}
-validate_origin SUPERSET
+domain=$(read_env_value SUPERSET_DOMAIN)
+url=$(read_env_value SUPERSET_ROOT_URL)
+if [ "$(read_env_value SUPERSET_BIND)" != 127.0.0.1 ]; then
+  echo "✗ SUPERSET_BIND must be 127.0.0.1 in production." >&2; exit 1
+fi
+if ! printf '%s' "$domain" | grep -Eq '^([A-Za-z0-9]([-A-Za-z0-9]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$'; then
+  echo "✗ SUPERSET_DOMAIN must be a public DNS hostname." >&2; exit 1
+fi
+if [ "$url" != "https://$domain/" ]; then
+  echo "✗ SUPERSET_ROOT_URL must be https://SUPERSET_DOMAIN/." >&2; exit 1
+fi
+if [ "$(read_env_value SUPERSET_COOKIE_SECURE)" != true ]; then
+  echo "✗ SUPERSET_COOKIE_SECURE must be true in production." >&2; exit 1
+fi
 docker compose config --quiet
 if [ "${1:-}" = --check ]; then
-  echo "✓ Production preflight passed (Superset); no services changed."
+  echo "✓ Production preflight passed; no services changed."
   exit 0
 fi
 
@@ -106,7 +96,7 @@ docker compose run --rm superset-init
 # Superset services depend on superset-init, and Compose reruns that
 # dependency (db upgrade + init, minutes each) for every `up` or `run`
 # that resolves dependencies. It has just run, so skip it from here on.
-read -r -a services <<< "$(stack_services)"
+services=(db db-backup superset superset-alert-check)
 echo "▶ Starting Superset dashboard stack"
 docker compose up -d --no-deps "${services[@]}"
 
@@ -131,8 +121,7 @@ done
 echo "▶ Taking and verifying a fresh database and application-state backup"
 docker compose run --rm --no-deps db-backup --once
 
-# Prepare the viewer roles; the readiness gate then checks every role.
-docker compose run --rm --no-deps superset-access
+# validate_access.py in the readiness gate prepares the viewer roles before checking them.
 bash scripts/superset-readiness.sh
 echo "✓ Stack healthy — deployed ${GIT_SHA:-unknown} (Superset)."
 echo "  React dashboards use the Cloudflare Tunnel origin at 127.0.0.1:3000."

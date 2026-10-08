@@ -351,7 +351,8 @@ test("malformed empty page 1 retries and never commits closures", async () => {
     if (Number(url.searchParams.get("page")) !== 1)
       throw new Error("should stop at page 1");
     page1Visits += 1;
-    return { items: [], meta: meta(4, 1, 1) };
+    const body = { data: [], meta: meta(4, 1, 1) };
+    return { items: body.data, meta: body.meta, sourcePayload: body };
   };
   const db = fakeDb();
 
@@ -368,7 +369,7 @@ test("malformed empty page 1 retries and never commits closures", async () => {
     ["malformed", "malformed"],
   );
   assert.deepEqual(
-    db.rec.archived.map((row) => row.payload.meta.total),
+    db.rec.archived.map((row) => row.sourcePayload.meta.total),
     [4, 4],
   );
 });

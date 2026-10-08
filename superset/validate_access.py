@@ -35,7 +35,7 @@ def validate_role(name, allowed):
         raise RuntimeError(f"Could not create a temporary {name} account")
     try:
         api = SupersetAPI(username=username, password=password)
-        api.authenticate(csrf=False)
+        api.authenticate()
         api.authenticate_browser()
         for uid in allowed:
             # The second request is a cache hit for market dashboards.

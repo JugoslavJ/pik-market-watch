@@ -26,10 +26,10 @@ The migrator verifies filenames and checksums and fails on edited applied files;
 
 **Retention.** The scraper applies raw-response retention after every cycle: it keeps the newest payload and the newest diagnostic for each request URL, so each listing keeps its latest detail response. Search pages are archived only when they are malformed. The maintenance job runs the same retention without contacting OLX, for example on a dashboard-only host. Listing and price history are never pruned.
 
-**Detail backfill** fetches details outside the normal per-cycle cap. By default it targets open listings with missing pins, floor area or missing/stale details; `--all` includes closed listings.
+**Detail catch-up.** Each cycle fetches details for at most `MAX_DETAIL_FETCHES` open listings per search with missing pins, floor area, or missing or stale details. Raise the cap for one run to catch up:
 
 ```bash
-docker compose --profile scrape run --rm scraper node src/backfill-details.js [--all] [--max=100]
+docker compose --profile scrape run --rm -e MAX_DETAIL_FETCHES=500 scraper node src/index.js --once
 ```
 
 **Replay** re-maps a retained response offline without changing listing data:
@@ -94,7 +94,7 @@ docker compose run --rm --no-deps --entrypoint python superset-access /app/check
 
 - **No current data, or the health endpoint fails:** check `docker compose logs scraper` and `lean.scrape_runs`. Health turns 503 only after `HEALTH_FAILURE_THRESHOLD` consecutive fully failed cycles. Probe the API with `docker compose --profile scrape run --rm scraper node scripts/check-api.js`. A blank first page, a failed page or incomplete pagination is never treated as a complete result.
 - **Listings were not closed:** only complete search results close listings, including verified empty searches; incomplete searches keep membership. The cycle-wide sweep skips zero-listing cycles unless every search succeeded.
-- **Stale details or sparse segments:** detail fetches are capped per cycle and attributes are optional. Check `details_fetched_at`, `last_enrichment_attempted_at` and the Health coverage panels, then run a bounded backfill.
+- **Stale details or sparse segments:** detail fetches are capped per cycle and attributes are optional. Check `details_fetched_at`, `last_enrichment_attempted_at` and the Health coverage panels, then run a one-off cycle with a higher `MAX_DETAIL_FETCHES`.
 - **Migration or ownership errors:** rerun the role bootstrap, inspect `public.schema_migrations`, and rerun the migrator.
 - **Dashboard unavailable:** check `docker compose logs --tail=100 superset`, `curl -f http://127.0.0.1:3000/health`, `systemctl status cloudflared`, and the reporting role's credentials and grants.
 - **Login fails:** verify `SUPERSET_ROOT_URL`, forwarded HTTPS headers, Secure cookies and an unchanged `SUPERSET_SECRET_KEY`.

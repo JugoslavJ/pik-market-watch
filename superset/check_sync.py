@@ -11,7 +11,6 @@ BOARDS = ("olx-home", "olx-overview")
 
 
 def check_sync(api):
-    api.authenticate(csrf=False)
     api.authenticate_browser()
     for uid in BOARDS:
         # Force a real query against the restored schema; a cached result cannot

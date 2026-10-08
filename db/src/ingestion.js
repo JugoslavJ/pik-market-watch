@@ -633,20 +633,6 @@ async function markDetailAttempts(ids) {
   );
 }
 
-async function getListingsNeedingDetails(onlyActive = true, options = {}) {
-  const result = await this.pool.query(
-    `SELECT article_id AS "articleId",url FROM lean.listings
-      WHERE ($1::boolean=false OR closed_at IS NULL)
-        AND (latitude IS NULL OR longitude IS NULL OR
-             (sqm IS NULL AND price IS NOT NULL AND deal='sale')
-             OR details_fetched_at IS NULL OR
-             details_fetched_at <= now()-make_interval(days => $2::int))
-      ORDER BY details_fetched_at ASC NULLS FIRST,article_id`,
-    [onlyActive, options.refreshDays ?? 7],
-  );
-  return result.rows;
-}
-
 module.exports = {
   registerSavedSearch,
   startRun,
@@ -658,6 +644,5 @@ module.exports = {
   enrichListings,
   enrichmentQueue,
   markDetailAttempts,
-  getListingsNeedingDetails,
   computeMedian,
 };

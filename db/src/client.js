@@ -1,7 +1,11 @@
 "use strict";
 
 const { Pool } = require("pg");
-const ingestionMethods = require("./ingestion");
+// computeMedian is exported for tests only; it is not a Db method.
+const {
+  computeMedian: _computeMedian,
+  ...ingestionMethods
+} = require("./ingestion");
 const rawResponseMethods = require("./raw-responses");
 
 // Serialize ingestion and closure sweeps to prevent sighting/closure races.

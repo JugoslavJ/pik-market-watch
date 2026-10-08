@@ -111,7 +111,6 @@ module.exports = {
     requestUrl,
     fetchedAt = new Date(),
     parserVersion = "search-v1",
-    payload,
     sourcePayload = null,
     requestMetadata = {},
     responseMetadata = {},
@@ -120,14 +119,10 @@ module.exports = {
   }) {
     const isDiagnostic = diagnostic != null;
     const archiveFormat = isDiagnostic ? "diagnostic-v2" : "canonical-v2";
-    const storedPayload =
-      !isDiagnostic && requestKind === "detail"
-        ? (sourcePayload ?? payload ?? null)
-        : null;
-    const storedSourcePayload =
-      !isDiagnostic && requestKind === "search"
-        ? (sourcePayload ?? payload ?? null)
-        : null;
+    // Detail bodies go in payload and search bodies in source_payload; diagnostics keep neither.
+    const body = isDiagnostic ? null : sourcePayload;
+    const storedPayload = requestKind === "detail" ? body : null;
+    const storedSourcePayload = requestKind === "search" ? body : null;
     await this.pool.query(
       `INSERT INTO lean.raw_api_responses
          (run_id, article_id, request_kind, request_url, fetched_at,
@@ -181,7 +176,7 @@ module.exports = {
           rows.map((row) => ({
             article_id: row.articleId,
             fetched_at: row.fetchedAt || new Date(),
-            payload: row.sourcePayload ?? row.payload ?? null,
+            payload: row.sourcePayload ?? null,
             request_metadata: row.requestMetadata ?? {},
             response_metadata: row.responseMetadata ?? {},
             build_version: String(row.buildVersion || "unknown").slice(0, 128),
@@ -217,7 +212,6 @@ module.exports = {
           : `https://olx.ba/api/listings/${articleId}`),
       fetchedAt,
       parserVersion,
-      payload: {},
       sourcePayload: error?.sourcePayload ?? null,
       requestMetadata: error?.requestMetadata ?? {},
       responseMetadata: error?.responseMetadata ?? {},

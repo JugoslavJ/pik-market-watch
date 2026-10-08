@@ -72,7 +72,7 @@ def compare(expected, actual, title, elapsed):
 
 
 def main():
-    api = SupersetAPI(); api.authenticate(); api.authenticate_browser()
+    api = SupersetAPI(); api.authenticate_browser()
     connection = psycopg2.connect(host='db', dbname=os.environ['POSTGRES_DB'],
         user=os.environ['POSTGRES_REPORTING_USER'], password=os.environ['POSTGRES_REPORTING_PASSWORD'])
     connection.set_session(readonly=True, isolation_level='REPEATABLE READ')

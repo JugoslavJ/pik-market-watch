@@ -329,7 +329,6 @@ async function fetchJson(url, timeoutMs, policy = {}) {
     }
     return {
       body,
-      sourcePayload: body,
       requestMetadata: request,
       responseMetadata: response,
       remaining: numericHeader(res.headers, "x-ratelimit-remaining"),
@@ -370,7 +369,7 @@ async function fetchSearchPage(apiUrl, timeoutMs, policy) {
       result.responseMetadata,
       { kind: "schema", message: "search response lacks data[]/meta.total" },
     );
-    error.sourcePayload = result.sourcePayload;
+    error.sourcePayload = body;
     throw error;
   }
   return {
@@ -378,7 +377,7 @@ async function fetchSearchPage(apiUrl, timeoutMs, policy) {
     meta: body.meta,
     remaining,
     limit,
-    sourcePayload: result.sourcePayload,
+    sourcePayload: body,
     requestMetadata: result.requestMetadata,
     responseMetadata: result.responseMetadata,
   };
@@ -403,7 +402,7 @@ async function fetchListing(
       result.responseMetadata,
       { kind: "schema", message: "listing response id did not match request" },
     );
-    error.sourcePayload = result.sourcePayload;
+    error.sourcePayload = body;
     throw error;
   }
   return includeMetadata ? result : body;

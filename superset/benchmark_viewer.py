@@ -27,7 +27,6 @@ def benchmark_result(name, fresh, cached, cache_expected):
 
 def main():
     api = SupersetAPI()
-    api.authenticate()
     api.authenticate_browser()
     results = []
     for uid in ("olx-home", "olx-overview", "olx-exits", "olx-health"):

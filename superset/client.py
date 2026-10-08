@@ -1,4 +1,4 @@
-"""Authenticated Superset API client shared by the validation jobs."""
+"""Authenticated Superset client shared by the validation jobs."""
 
 import json
 import os
@@ -24,7 +24,7 @@ class LoginCSRFParser(HTMLParser):
 class InternalServiceCookiePolicy(DefaultCookiePolicy):
     def return_ok_secure(self, cookie, request):
         # The browser still receives Secure cookies on the public HTTPS origin.
-        # Seed/validation jobs talk directly to this fixed private HTTP service.
+        # Validation jobs talk directly to this fixed private HTTP service.
         if request.type == "http" and request.host == "superset:8088":
             return True
         return super().return_ok_secure(cookie, request)
@@ -32,22 +32,20 @@ class InternalServiceCookiePolicy(DefaultCookiePolicy):
 
 class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, request, response, code, message, headers, new_url):
-        # A successful browser login redirects to `/`, which the viewer sends
-        # to a dashboard that may not exist yet during the initial seed.
+        # A successful login redirects to `/`, which sends the account to a
+        # dashboard it may not be allowed to open; the redirect itself is the result.
         return None
 
 
 class SupersetAPI:
     def __init__(self, username="admin", password=None):
         self.username = username
-        self.password = password
+        self.password = password if password is not None else os.environ["SUPERSET_ADMIN_PASSWORD"]
         self.cookies = CookieJar(policy=InternalServiceCookiePolicy())
         self.opener = urllib.request.build_opener(
             urllib.request.HTTPCookieProcessor(self.cookies)
         )
         self.token = None
-        self.csrf = None
-        self.browser_authenticated = False
 
     def call(self, method, path, payload=None):
         body = json.dumps(payload).encode("utf-8") if payload is not None else None
@@ -56,8 +54,6 @@ class SupersetAPI:
             headers["Content-Type"] = "application/json"
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
-        if self.csrf and method in ("POST", "PUT", "DELETE"):
-            headers["X-CSRFToken"] = self.csrf
         request = urllib.request.Request(
             BASE + path, data=body, headers=headers, method=method
         )
@@ -67,45 +63,30 @@ class SupersetAPI:
                 return json.loads(data) if data else {}
         except urllib.error.HTTPError as error:
             message = error.read(1200).decode("utf-8", errors="replace")
-            # API validation can echo the SQLAlchemy URI; never print its secret.
-            for secret in (os.environ.get("POSTGRES_REPORTING_PASSWORD"),
-                           self.password, os.environ.get("SUPERSET_ADMIN_PASSWORD")):
-                if secret:
-                    message = message.replace(secret, "[redacted]")
-                    message = message.replace(urllib.parse.quote(secret, safe=""), "[redacted]")
             raise RuntimeError(f"Superset {method} {path}: HTTP {error.code}: {message}") from None
 
-    def authenticate(self, csrf=True):
+    def authenticate(self):
+        """A bearer token, used only to prove Superset's own APIs stay closed."""
         login = self.call(
             "POST",
             "/api/v1/security/login",
-            {
-                "username": self.username,
-                "password": self.password if self.password is not None else os.environ["SUPERSET_ADMIN_PASSWORD"],
-                "provider": "db",
-                "refresh": False,
-            },
+            {"username": self.username, "password": self.password, "provider": "db", "refresh": False},
         )
         self.token = login["access_token"]
-        self.csrf = self.call("GET", "/api/v1/security/csrf_token/")["result"] if csrf else None
 
     def authenticate_browser(self):
         """The viewer endpoints require a Flask login session."""
-        if self.browser_authenticated:
-            return
-        if self.csrf is None:
-            parser = LoginCSRFParser()
-            with self.opener.open(BASE + "/login/", timeout=30) as response:
-                parser.feed(response.read().decode("utf-8"))
-            if not parser.token:
-                raise RuntimeError("Superset login form did not provide a CSRF token")
-            self.csrf = parser.token
+        parser = LoginCSRFParser()
+        with self.opener.open(BASE + "/login/", timeout=30) as response:
+            parser.feed(response.read().decode("utf-8"))
+        if not parser.token:
+            raise RuntimeError("Superset login form did not provide a CSRF token")
         request = urllib.request.Request(
             BASE + "/login/",
             data=urllib.parse.urlencode({
                 "username": self.username,
-                "password": self.password if self.password is not None else os.environ["SUPERSET_ADMIN_PASSWORD"],
-                "csrf_token": self.csrf,
+                "password": self.password,
+                "csrf_token": parser.token,
             }).encode("utf-8"),
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
@@ -127,4 +108,3 @@ class SupersetAPI:
         )
         if not 300 <= status < 400 or destination.path.rstrip("/") == "/login":
             raise RuntimeError("Superset browser session login failed")
-        self.browser_authenticated = True

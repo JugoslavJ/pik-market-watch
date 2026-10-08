@@ -22,7 +22,6 @@ test("raw archive writes canonical search payloads and bodyless diagnostics to l
     runId: 81,
     articleId: 82,
     requestUrl: "https://olx.ba/api/search?page=1",
-    payload: { items: [{ id: 1 }] },
     sourcePayload: { data: [{ id: 1 }], meta: { total: 1 } },
   });
   await db.archiveResponseDiagnostic({
@@ -65,8 +64,8 @@ test("batched detail archives store source bodies", async () => {
   db.pool = leanPool(calls, { rowCount: 2 });
 
   const count = await db.archiveDetailResponses([
-    { articleId: 1, payload: { adapted: true }, sourcePayload: { id: 1 } },
-    { articleId: 2, payload: { id: 2 } },
+    { articleId: 1, sourcePayload: { id: 1 } },
+    { articleId: 2, sourcePayload: { id: 2 } },
   ]);
   const rows = JSON.parse(calls[0][1][0]);
   assert.equal(count, 2);

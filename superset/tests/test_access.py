@@ -36,11 +36,10 @@ class LoginTests(unittest.TestCase):
     def test_token_authentication_does_not_require_security_api_permissions(self):
         api = SupersetAPI(username="guest", password="example")
         with patch.object(api, "call", return_value={"access_token": "token"}) as request:
-            api.authenticate(csrf=False)
+            api.authenticate()
         self.assertEqual(request.call_count, 1)
         self.assertEqual(request.call_args.args[1], "/api/v1/security/login")
         self.assertEqual(api.token, "token")
-        self.assertIsNone(api.csrf)
 
     def test_login_form_token_parsing_handles_attribute_order_and_html_entities(self):
         parser = LoginCSRFParser()

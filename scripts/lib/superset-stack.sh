@@ -15,14 +15,10 @@ read_env_value() {
 }
 
 configure_superset_stack() {
+  # Pinning the file also keeps a stray docker-compose.override.yml out.
   COMPOSE_FILE=docker-compose.yml
-  COMPOSE_PATH_SEPARATOR=:
   COMPOSE_PROFILES=superset
-  export COMPOSE_PROFILES COMPOSE_FILE COMPOSE_PATH_SEPARATOR
-}
-
-stack_services() {
-  printf 'db db-backup superset superset-alert-check\n'
+  export COMPOSE_PROFILES COMPOSE_FILE
 }
 
 health_status() {
