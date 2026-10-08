@@ -14,13 +14,25 @@ from psycopg2.extras import RealDictCursor
 from jinja2 import Environment
 
 from client import SupersetAPI
-from parity import panels, push_cross_filters, dataset_name
-from validate_parity import reference_sql, quote
+from definitions import dataset_name, expand_filters, expand_time, filters, panels, push_cross_filters, source_sql
 from viewer_queries import BOARDS
 from viewer_queries import compile_dashboard
 from listing_filters import PREFIX, viewer_variables
 from sqlalchemy import text
 from sqlalchemy.dialects import postgresql
+
+
+def quote(value):
+    return "'" + str(value).replace("'", "''") + "'"
+
+
+def reference_sql(board, panel, selection, since, until):
+    """The panel's own definition SQL with literal values, independent of the batching compiler."""
+    values = {variable["name"]: [variable.get("default", "All")] for variable in filters(board)}
+    values.update(selection)
+    sql = expand_filters(source_sql(board, panel), lambda name: ",".join(quote(v) for v in values[name]))
+    start, end = quote(since.isoformat()) + "::timestamptz", quote(until.isoformat()) + "::timestamptz"
+    return expand_time(sql, start, end).strip().rstrip(";")
 
 
 def normalize(value):

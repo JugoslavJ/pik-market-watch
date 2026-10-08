@@ -9,7 +9,6 @@ cp .env.example .env
 cp config/searches.example.json config/searches.json
 docker volume create olx-price-ext_pgdata_pg18
 docker compose up -d --build
-docker compose run --rm superset-seed
 docker compose run --rm superset-access
 ```
 
@@ -65,7 +64,7 @@ Sync tests mock Docker and SSH and require PowerShell 7. CI requires it; local r
 | `collector/` | OLX API requests, payload mapping, normalization, pagination, enrichment and scheduling |
 | `db/` | PostgreSQL client, persistence, migrations, archive maintenance, schema, backups and database tests |
 | `config/` | Shared environment validators and search configuration examples |
-| `superset/` | Dashboard backend, SQL definitions, provisioning and dashboard tests |
+| `superset/` | Dashboard backend, SQL definitions, viewer access and dashboard tests |
 | `dashboard-viewer/` | React UI, charts, maps and viewer browser checks |
 | `scripts/` | Deployment, synchronization, documentation checks and repository tooling |
 | `tests/contracts/` | Deployment, backup and security checks spanning components |

@@ -10,7 +10,7 @@ const inline = (value) =>
     .replaceAll("\n", "<br>");
 const queryCell = (value) =>
   String(value).replaceAll("|", "&#124;").replaceAll("\n", "<br>");
-// Mirrors parity.dataset_name: the four exit cards share one aggregate.
+// Mirrors definitions.dataset_name: the four exit cards share one aggregate.
 function dataset(dashboard, panel) {
   const sourceId =
     dashboard.uid === "olx-exits" && [1, 2, 3, 4].includes(panel.id)
@@ -18,29 +18,14 @@ function dataset(dashboard, panel) {
       : (panel.source_panel ?? panel.id);
   return "source_" + dashboard.uid.replaceAll("-", "_") + "_" + sourceId;
 }
-function nativeViz(panel) {
-  const types = {
-    big_number: "big_number_total",
-    table: "table",
-    map: "deck_scatter (CARTO vector)",
-    scatter: "bubble_v2",
-    bar: "echarts_timeseries_bar",
-    timeseries: panel.bars
-      ? "echarts_timeseries_bar"
-      : "echarts_timeseries_line",
-  };
-  if (!types[panel.type])
-    throw new Error("No Superset counterpart for " + panel.type);
-  return types[panel.type];
-}
 const lines = [
   "# Superset dashboard catalog",
   "",
   "Generated from `superset/dashboards/*.json` and the Superset alert checker by `superset/scripts/generate-dashboard-catalog.js`.",
   "",
-  "Each native chart is named Dashboard / panel and reads the listed dataset. `superset/parity.py` compiles the definition SQL, filters and time macros into those datasets and preserves the layout, with chart heights adjusted for readable labels. Deployment readiness compares the viewer with the same SQL.",
+  "Each panel reads the listed result group. `superset/viewer_queries.py` compiles the definition SQL, filters and time macros into one statement per dashboard, and panels that share a group share its rows. Deployment readiness compares the viewer with the same SQL.",
   "",
-  "| Dashboard / panel | Filters and time range | Unit | Superset dataset / chart | Definition SQL |",
+  "| Dashboard / panel | Filters and time range | Unit | Result group / panel type | Definition SQL |",
   "|---|---|---|---|---|",
 ];
 let count = 0;
@@ -66,7 +51,7 @@ for (const file of fs
       .filter(Boolean)
       .join(", ");
     lines.push(
-      `| \`${inline(dashboard.title)} / ${inline(panel.title)}\` | ${inline(`filters: ${filters}; time range: ${dashboard.time_range}`)} | ${inline(unit)} | \`${dataset(dashboard, panel)} / ${nativeViz(panel)}\` | <details><summary>SQL</summary><code>${queryCell(query)}</code></details> |`,
+      `| \`${inline(dashboard.title)} / ${inline(panel.title)}\` | ${inline(`filters: ${filters}; time range: ${dashboard.time_range}`)} | ${inline(unit)} | \`${dataset(dashboard, panel)} / ${panel.type}\` | <details><summary>SQL</summary><code>${queryCell(query)}</code></details> |`,
     );
     count += 1;
   }
@@ -100,7 +85,7 @@ lines.push(
   "",
   `**Inventory:** ${count} panels and ${alerts.length} alert rules.`,
   "",
-  "Closure semantics: observed listing exit, not confirmed sale; snapshot price is the last recorded asking price. All monetary datasets return BAM values only and label rent values as monthly rent. Operational datasets bypass chart caching (-1 second timeout); market datasets use a 10-minute cache.",
+  "Closure semantics: observed listing exit, not confirmed sale; snapshot price is the last recorded asking price. All monetary panels return BAM values only and label rent values as monthly rent. Operational dashboards (Home, Health) are uncached; market dashboards use a 10-minute cache.",
   "",
 );
 const rendered = lines.join("\n");

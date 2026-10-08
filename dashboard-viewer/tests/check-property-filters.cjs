@@ -141,55 +141,9 @@ async function main() {
         ),
     );
     assert.equal(invalid.status(), 400);
-    const boards = await (
-      await page.request.get(origin + "/api/v1/dashboard/?q=(page_size:100)")
-    ).json();
-    let native = 0;
-    for (const board of boards.result) {
-      const saved = await (
-        await page.request.get(origin + "/api/v1/dashboard/" + board.id)
-      ).json();
-      const metadata = JSON.parse(saved.result.json_metadata);
-      assert.equal(metadata.filter_bar_orientation, "VERTICAL");
-      const columns = metadata.native_filter_configuration.flatMap((f) =>
-        f.targets.map((t) => t.column?.name),
-      );
-      for (const column of [
-        "__property_elevator",
-        "__property_heating",
-        "__property_condition",
-      ])
-        assert.ok(columns.includes(column));
-      assert.ok(
-        columns.some(
-          (column) =>
-            column === "price_bam" || column === "__property_price_bam",
-        ),
-      );
-      native++;
-    }
-    assert.equal(native, 10);
-    await page.setViewportSize({ width: 1440, height: 1000 });
-    await page.goto(
-      origin + "/superset/dashboard/" + boards.result[0].id + "/",
-      { waitUntil: "domcontentloaded" },
-    );
-    const panel = page.locator(".collapse-icon").locator("..");
-    await panel.waitFor();
-    await page.waitForTimeout(500);
-    assert.equal(
-      await page.evaluate(
-        () => window.featureFlags.FILTERBAR_CLOSED_BY_DEFAULT,
-      ),
-      true,
-    );
-    assert.ok(
-      (await panel.boundingBox()).width < 100,
-      "Native Superset filters must start collapsed",
-    );
     assert.deepEqual(errors, []);
     console.log(
-      "All ten native dashboard filter definitions, native collapsed default, phone drawer and range rejection passed",
+      "Property filters on all four dashboards, phone drawer and range rejection passed",
     );
   } finally {
     await browser.close();

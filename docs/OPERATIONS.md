@@ -40,7 +40,7 @@ docker compose --profile scrape run --rm scraper node src/replay-response.js --i
 
 **Alerts.** The alert checker runs every 15 minutes as `olx_reporting`, keeps its state in Superset home, and posts firing/recovery transitions to `ALERT_WEBHOOK_URL` when set. Inspect it with `docker compose logs -f superset-alert-check`; the Health dashboard shows the same predicates.
 
-**Dashboard access.** Assign `OLX Viewer` or `OLX Guest` through Superset's `/users/list/`; see [access and storage](../superset/README.md#access-and-storage).
+**Dashboard access.** Assign `OLX Viewer` or `OLX Guest` through Superset's `/users/list/`; see [accounts and access](../superset/README.md#accounts-and-access).
 
 ## Database care
 
@@ -77,22 +77,18 @@ pwsh -File scripts\sync-to-instance.ps1
 pwsh -File scripts\register-sync-task.ps1
 ```
 
-The instance validates the archive, snapshots the current data, pauses the scraper, replaces `olx` in one transaction, repairs grants and resumes collection. It rolls back on failure and never touches `superset_meta`. Superset is then recreated to clear caches, and three fresh chart queries check active listings, inventory flow and scraper runs.
+The instance validates the archive, snapshots the current data, pauses the scraper, replaces `olx` in one transaction, repairs grants and resumes collection. It rolls back on failure and never touches `superset_meta`. Reporting sessions are then reset, and fresh Home and Overview viewer queries check active listings, inventory flow and scraper runs.
 
 - Input is capped by `OLX_SYNC_MAX_BYTES` (default 512 MiB); temporary files are always removed.
 - `RESTORE_OK` / `RESTORE_ERROR` lines form the client protocol; `RESTORE_STAGE` lines report phase durations.
-- `OLX_SYNC_PROVISION_DASHBOARDS=1` in the instance's `.env` reruns dashboard provisioning after each sync (default `0`; deployment already provisions).
 - The restore key cannot open a shell, but its holder can replace all application data. Protect it accordingly.
 
-If sync restored the data but chart or permission refresh failed, repair Superset from an administrative shell on the instance without repeating the restore:
+If sync restored the data but the query check failed, repair the reporting grants and rerun the check from an administrative shell on the instance without repeating the restore:
 
 ```bash
-docker compose run --rm --no-deps superset-seed
-docker compose run --rm --no-deps superset-access
-docker compose run --rm --no-deps --entrypoint python superset-seed /app/check_sync.py
+docker compose exec -T db bash /docker-entrypoint-initdb.d/zz-database-roles.sh
+docker compose run --rm --no-deps --entrypoint python superset-access /app/check_sync.py
 ```
-
-These jobs use the checkout's files without rebuilding the image or changing publication.
 
 ## Diagnosis
 
@@ -102,5 +98,5 @@ These jobs use the checkout's files without rebuilding the image or changing pub
 - **Migration or ownership errors:** rerun the role bootstrap, inspect `public.schema_migrations`, and rerun the migrator.
 - **Dashboard unavailable:** check `docker compose logs --tail=100 superset`, `curl -f http://127.0.0.1:3000/health`, `systemctl status cloudflared`, and the reporting role's credentials and grants.
 - **Login fails:** verify `SUPERSET_ROOT_URL`, forwarded HTTPS headers, Secure cookies and an unchanged `SUPERSET_SECRET_KEY`.
-- **"Dashboard definition changed":** a Superset dataset no longer matches the repository definitions, so the viewer refuses to run it. Rebuild the image and rerun `superset-seed`.
+- **An account sees no dashboards:** assign `OLX Viewer` or `OLX Guest`; built-in roles such as Gamma open nothing in the viewer. Rerun `superset-access` if either role is missing.
 - **Port 3000 occupied:** identify the listener and its Compose project before stopping it.

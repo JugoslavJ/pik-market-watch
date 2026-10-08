@@ -31,21 +31,31 @@ test("backup reads private application state from read-only volume mounts", () =
   assert.match(backup, /read_only: true/);
 });
 
-test("access jobs mount their local Python import dependencies", () => {
-  // These jobs bind current helpers over the image's copies. Follow their
-  // imports so a previously built image cannot hide a missing helper mount.
-  const accessService = compose
-    .split("  superset-access:")[1]
-    .split("\n  #")[0];
-  const pending = ["access", "validate_access"];
+test("the Superset image ships every local Python module its jobs import", () => {
+  // Follow imports from each entry point so a missing COPY cannot hide
+  // behind a module that happens to exist in the base image.
+  const dockerfile = fs.readFileSync(
+    path.join(ROOT, "superset/Dockerfile"),
+    "utf8",
+  );
+  const pending = [
+    "superset_config",
+    "viewer",
+    "access",
+    "validate_access",
+    "validate_viewer",
+    "benchmark_viewer",
+    "check_sync",
+  ];
   const visited = new Set();
   while (pending.length) {
     const name = pending.pop();
     if (visited.has(name)) continue;
     visited.add(name);
-    assert.ok(
-      accessService.includes(`./superset/${name}.py:/app/${name}.py:ro`),
-      `superset-access must mount ${name}.py from the current checkout`,
+    assert.match(
+      dockerfile,
+      new RegExp(`^COPY .*superset/${name}\\.py[ \\n]`, "m"),
+      `superset/Dockerfile must copy ${name}.py`,
     );
     const source = fs.readFileSync(
       path.join(ROOT, "superset", `${name}.py`),

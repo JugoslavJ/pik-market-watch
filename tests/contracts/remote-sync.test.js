@@ -28,7 +28,7 @@ function run(command, args, { input, ...options }) {
   });
 }
 
-async function restore({ provision = "0", fail = "" } = {}) {
+async function restore({ fail = "" } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "olx-remote-sync-test-"));
   try {
     for (const directory of ["scripts/lib", "backups", "bin"])
@@ -41,10 +41,7 @@ async function restore({ provision = "0", fail = "" } = {}) {
       .readFileSync(path.join(ROOT, "db/remote-restore.sh"), "utf8")
       .replace("LOCK=/tmp/olx-restore.lock", 'LOCK="$REPO_DIR/fixture-lock"');
     fs.writeFileSync(path.join(root, "restore.sh"), source);
-    fs.writeFileSync(
-      path.join(root, ".env"),
-      `OLX_SYNC_PROVISION_DASHBOARDS=${provision}\n`,
-    );
+    fs.writeFileSync(path.join(root, ".env"), "");
     fs.writeFileSync(
       path.join(root, "bin/docker"),
       `#!/bin/sh
@@ -53,8 +50,6 @@ case "$*" in
   *'pg_terminate_backend'*) [ "$MOCK_FAIL" != refresh ] ;;
   *'exec -T db pg_restore -U'*) [ "$MOCK_FAIL" != restore ] ;;
   *'/app/check_sync.py'*) [ "$MOCK_FAIL" != check ] ;;
-  *'run --rm --no-deps superset-seed') [ "$MOCK_FAIL" != seed ] ;;
-  *'run --rm --no-deps superset-access') [ "$MOCK_FAIL" != access ] ;;
   *) exit 0 ;;
 esac
 `,
@@ -71,7 +66,6 @@ esac
       OLX_SYNC_MAX_BYTES: "536870912",
       MOCK_FAIL: fail,
     };
-    delete env.OLX_SYNC_PROVISION_DASHBOARDS;
     const result = await run(shell, ["restore.sh"], {
       cwd: root,
       input: Buffer.alloc(30000),
@@ -97,72 +91,37 @@ esac
 
 test.describe("remote sync", { concurrency: true }, () => {
   test(
-    "remote sync checks restored charts and provisions only when requested",
+    "remote sync checks restored data without changing Superset metadata",
     { skip: !shellAvailable ? "POSIX shell unavailable" : false },
     async () => {
-      const results = await Promise.all(
-        ["0", "1"].map(async (provision) => ({
-          provision,
-          result: await restore({ provision }),
-        })),
+      const result = await restore();
+      assert.equal(result.status, 0, result.error?.message || result.stderr);
+      assert.match(result.stdout, /RESTORE_OK/);
+      assert.match(result.stdout, /RESTORE_STAGE restore-and-grants \d+s/);
+      assert.match(result.stdout, /RESTORE_STAGE dashboard-query-check \d+s/);
+      const commands = result.commands;
+      const repair = commands.indexOf("zz-database-roles.sh");
+      const audit = commands.indexOf("awk");
+      const reset = commands.indexOf("DROP SCHEMA IF EXISTS lean");
+      const refresh = commands.indexOf("pg_terminate_backend");
+      const check = commands.indexOf("/app/check_sync.py");
+      const finalRepair = commands.lastIndexOf("zz-database-roles.sh");
+      assert.ok(repair >= 0 && repair < audit && audit < reset);
+      assert.ok(
+        finalRepair > reset && refresh > finalRepair && check > refresh,
       );
-      for (const { provision, result } of results) {
-        assert.equal(result.status, 0, result.error?.message || result.stderr);
-        assert.match(result.stdout, /RESTORE_OK/);
-        assert.match(result.stdout, /RESTORE_STAGE restore-and-grants \d+s/);
-        assert.match(result.stdout, /RESTORE_STAGE dashboard-query-check \d+s/);
-        const commands = result.commands;
-        const repair = commands.indexOf("zz-database-roles.sh");
-        const audit = commands.indexOf("awk");
-        const reset = commands.indexOf("DROP SCHEMA IF EXISTS lean");
-        const refresh = commands.indexOf("pg_terminate_backend");
-        const check = commands.indexOf("/app/check_sync.py");
-        const finalRepair = commands.lastIndexOf("zz-database-roles.sh");
-        assert.ok(repair >= 0 && repair < audit && audit < reset);
-        assert.ok(
-          finalRepair > reset && refresh > finalRepair && check > refresh,
-        );
-        assert.equal(
-          commands.includes("run --rm --no-deps superset-seed"),
-          provision === "1",
-        );
-        assert.equal(
-          commands.includes("run --rm --no-deps superset-access"),
-          provision === "1",
-        );
-        if (provision === "1") {
-          assert.ok(
-            commands.indexOf("--no-deps superset-seed") <
-              commands.indexOf("--no-deps superset-access"),
-          );
-          assert.ok(commands.indexOf("--no-deps superset-access") < check);
-        }
-        assert.ok(result.incomingRemoved && result.lockRemoved);
-      }
+      assert.ok(!/run --rm --no-deps superset-access\n/.test(commands));
+      assert.ok(result.incomingRemoved && result.lockRemoved);
     },
   );
 
   test(
-    "invalid provisioning configuration fails before database operations",
+    "remote sync withholds success on restore, refresh or query failure",
     { skip: !shellAvailable ? "POSIX shell unavailable" : false },
     async () => {
-      const result = await restore({ provision: "invalid" });
-      assert.notEqual(result.status, 0);
-      assert.match(
-        result.stderr,
-        /OLX_SYNC_PROVISION_DASHBOARDS must be 0 or 1/,
-      );
-      assert.equal(result.commands, "");
-    },
-  );
-
-  test(
-    "remote sync withholds success on restore, refresh, provisioning or query failure",
-    { skip: !shellAvailable ? "POSIX shell unavailable" : false },
-    async () => {
-      const failures = ["restore", "refresh", "seed", "access", "check"];
+      const failures = ["restore", "refresh", "check"];
       const results = await Promise.all(
-        failures.map((fail) => restore({ provision: "1", fail })),
+        failures.map((fail) => restore({ fail })),
       );
       for (const [index, result] of results.entries()) {
         const fail = failures[index];

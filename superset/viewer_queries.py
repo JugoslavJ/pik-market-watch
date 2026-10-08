@@ -8,15 +8,12 @@ from functools import lru_cache
 
 from jinja2 import Environment, pass_context
 from listing_filters import options_sql, viewer_variables
-from parity import (TABLE_DIMENSIONS, TABLE_SCAN, compile_sql, cross_filter_columns, dataset_name,
-                    default_days, expand_filters, expand_time, filters, panels, push_cross_filters,
-                    shared_source_sql, SOURCE_DIR)
+from definitions import (TABLE_DIMENSIONS, TABLE_SCAN, cross_filter_columns, dataset_name,
+                         default_days, expand_filters, expand_time, filters, panels, push_cross_filters,
+                         shared_source_sql, SOURCE_DIR)
 
 BOARDS = {board["uid"]: board for path in sorted(SOURCE_DIR.glob("*.json"))
           if (board := json.loads(path.read_text(encoding="utf-8-sig")))}
-CANONICAL = {board["uid"]: {dataset_name(board, panel): {
-    compile_sql(board, panel), compile_sql(board, panel, add_links=True)}
-    for panel in panels(board)} for board in BOARDS.values()}
 ALLOWED_CROSS_COLUMNS = frozenset(column for columns in TABLE_DIMENSIONS.values() for column in columns)
 environment = Environment(autoescape=False)
 
@@ -141,7 +138,7 @@ def compile_dashboard(board, supplied=None, cross=None, days=None, until=None, i
         sql = filtered(sql, applicable)
         groups[key] = sql
 
-    # Native filter option lists share this same database round trip.
+    # Filter option lists share this same database round trip.
     options = {}
     # Callers that already hold the option lists skip them; they never depend on the selection.
     for variable in filters(board) if include_options else ():

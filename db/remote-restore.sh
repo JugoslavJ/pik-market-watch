@@ -57,15 +57,6 @@ restore_ok=0
 cd "$REPO_DIR"
 . scripts/lib/superset-stack.sh
 configure_superset_stack
-
-# This is instance-controlled configuration, never an argument from the sender.
-# Routine data restores do not change Superset metadata or viewer permissions.
-provision_dashboards=$(read_env_value OLX_SYNC_PROVISION_DASHBOARDS)
-provision_dashboards=${provision_dashboards:-0}
-case "$provision_dashboards" in
-  0|1) ;;
-  *) echo "RESTORE_ERROR: OLX_SYNC_PROVISION_DASHBOARDS must be 0 or 1" >&2; exit 1 ;;
-esac
 phase_started=$(date +%s)
 finish_phase() {
   phase_finished=$(date +%s)
@@ -245,20 +236,9 @@ if ! docker compose exec -T db psql -v ON_ERROR_STOP=1 -U "$boot_user" -d "$db_n
   exit 1
 fi
 finish_phase superset-reconnect
-if [ "$provision_dashboards" = "1" ]; then
-  if ! docker compose run --rm --no-deps superset-seed; then
-    echo "RESTORE_ERROR: database restored, but dashboard provisioning failed; rerun docker compose run --rm --no-deps superset-seed (no need to repeat the scrape/restore)" >&2
-    exit 1
-  fi
-  finish_phase dashboard-provisioning
-  if ! docker compose run --rm --no-deps superset-access; then
-    echo "RESTORE_ERROR: data and charts restored, but viewer permissions could not be refreshed; rerun superset-access" >&2
-    exit 1
-  fi
-  finish_phase viewer-permissions
-fi
-if ! docker compose run --rm --no-deps --entrypoint python superset-seed /app/check_sync.py; then
-  echo "RESTORE_ERROR: database restored, but fresh dashboard queries failed; repair or provision dashboards and rerun /app/check_sync.py (no need to repeat the scrape/restore)" >&2
+# Restores never change Superset metadata or viewer permissions.
+if ! docker compose run --rm --no-deps --entrypoint python superset-access /app/check_sync.py; then
+  echo "RESTORE_ERROR: database restored, but fresh dashboard queries failed; check reporting grants and rerun /app/check_sync.py (no need to repeat the scrape/restore)" >&2
   exit 1
 fi
 finish_phase dashboard-query-check

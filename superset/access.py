@@ -1,103 +1,72 @@
-"""Assign scoped viewer access; publication follows deployment readiness checks."""
-
-import argparse
-import json
-import uuid
+"""Prepare the custom-viewer roles; membership alone opens their dashboards."""
 
 from superset import create_app, db, security_manager
 
-from provisioning import stable_uuid
-from guest_access import GUEST_BOARDS, GUEST_PERMISSION, GUEST_ROLE
+from board_access import ROLES
 
-TITLES = [
-    "OLX.ba Home", "OLX.ba Market Overview", "OLX.ba Exits & Price Endings",
-    "OLX Scraper Health", "Market explorer", "Home", "Price history",
-    "Segments & rankings", "Observed exits", "Scraper health",
-]
-
-
-def prepare_guest_access(publish=None):
-    """Replace guest grants exactly; never inherit Gamma or grant datasets."""
-    from superset.models.dashboard import Dashboard
-
-    boards = db.session.query(Dashboard).all()
-    allowed = {uuid.UUID(stable_uuid("dashboard", title)) for title in GUEST_BOARDS.values()}
-    if ({board.uuid for board in boards} & allowed) != allowed:
-        raise RuntimeError("Seed Home, Market Overview and Exits before preparing guest access")
-    guest = security_manager.add_role(GUEST_ROLE)
-    permission = security_manager.add_permission_view_menu(*GUEST_PERMISSION)
-    if permission is None:
-        raise RuntimeError("Could not register the custom dashboard permission")
-    guest.permissions = [permission]
-    for board in boards:
-        if board.uuid in allowed:
-            if guest not in board.roles:
-                board.roles.append(guest)
-            if publish is not None:
-                board.published = publish
-        elif guest in board.roles:
-            board.roles.remove(guest)
-    print("Prepared OLX Guest: Home, Market Overview and Exits; one custom-viewer permission")
+# Retired native Superset dashboards and the connection their datasets used.
+NATIVE_SLUGS = (
+    "olx-home-superset", "olx-overview-superset", "olx-exits-superset", "olx-health-superset",
+    "market-explorer", "home", "price-history", "segments-rankings", "observed-exits", "scraper-health",
+)
+NATIVE_DATABASE = "OLX market reporting"
+# Former custom-viewer permissions; `superset init` had also granted them to Alpha and Gamma.
+LEGACY_VIEW_MENU = "OLXDashboard"
 
 
-def prepare_access(publish=None):
-    # Model encryption fields require the initialized application configuration.
-    from superset.connectors.sqla.models import SqlaTable
-    from superset.models.dashboard import Dashboard
-
-    boards = db.session.query(Dashboard).filter(Dashboard.uuid.in_(
-        [uuid.UUID(stable_uuid("dashboard", title)) for title in TITLES]
-    )).all()
-    if len(boards) != len(TITLES):
-        raise RuntimeError("Seed all ten managed dashboards before preparing access")
-    dataset_ids = {chart.datasource_id for board in boards for chart in board.slices}
-    for board in boards:
-        metadata = json.loads(board.json_metadata or "{}")
-        dataset_ids.update(target["datasetId"]
-                           for config in metadata.get("native_filter_configuration", [])
-                           for target in config.get("targets", []) if "datasetId" in target)
-    datasets = db.session.query(SqlaTable).filter(SqlaTable.id.in_(dataset_ids)).all()
-    if len(datasets) != len(dataset_ids):
-        raise RuntimeError("A managed chart or native filter references a missing dataset")
-    gamma = security_manager.find_role("Gamma")
-    if gamma is None:
-        raise RuntimeError("Run superset-init to synchronize built-in permissions first")
-    viewer = security_manager.add_role("OLX Viewer")
-    # Start from the standard viewer permissions and add only managed datasets.
-    excluded = {"all_datasource_access", "all_database_access", "database_access",
-                "datasource_access", "can_sqllab", "can_write", "can_delete"}
-    viewer.permissions = [p for p in gamma.permissions if p.permission.name not in excluded]
-    for dataset in datasets:
-        permission = security_manager.add_permission_view_menu("datasource_access", dataset.get_perm())
-        if permission not in viewer.permissions:
-            viewer.permissions.append(permission)
-    for board in boards:
-        # Preserve any explicitly assigned editor roles.
-        if viewer not in board.roles:
-            board.roles.append(viewer)
-        if publish is not None:
-            board.published = publish
-    prepare_guest_access()
+def prepare_access():
+    """Ensure each role exists with no grants: no Gamma, datasets or native dashboards."""
+    for name, uids in ROLES.items():
+        security_manager.add_role(name).permissions = []
+        print(f"Prepared {name}: {', '.join(uids)}")
     db.session.commit()
-    print(f"Prepared OLX Viewer: {len(boards)} dashboards, {len(datasets)} scoped datasets")
-    if publish is not None:
-        print("Managed dashboards published" if publish else "Managed dashboards returned to drafts")
+
+
+def remove_legacy_permissions():
+    model = security_manager.permissionview_model
+    legacy = [pv for pv in db.session.query(model).all()
+              if pv.view_menu.name.split(":")[0] == LEGACY_VIEW_MENU]
+    for role in security_manager.get_all_roles():
+        role.permissions = [pv for pv in role.permissions if pv not in legacy]
+    db.session.commit()
+    for pv in legacy:
+        security_manager.del_permission_view_menu(pv.permission.name, pv.view_menu.name)
+    return len(legacy)
+
+
+def remove_native_dashboards():
+    """Delete the retired native dashboards, then charts, datasets and the
+    connection that nothing else uses. Idempotent; a no-op once they are gone."""
+    from superset.connectors.sqla.models import SqlaTable
+    from superset.models.core import Database
+    from superset.models.dashboard import Dashboard
+
+    boards = db.session.query(Dashboard).filter(Dashboard.slug.in_(NATIVE_SLUGS)).all()
+    charts = {chart for board in boards for chart in board.slices
+              if all(owner in boards for owner in chart.dashboards)}
+    for item in [*boards, *charts]:
+        db.session.delete(item)
+    db.session.flush()
+    database = db.session.query(Database).filter_by(database_name=NATIVE_DATABASE).one_or_none()
+    datasets = (db.session.query(SqlaTable).filter_by(database_id=database.id).all()
+                if database is not None else [])
+    unused = [dataset for dataset in datasets if not dataset.slices]
+    for dataset in unused:
+        db.session.delete(dataset)
+    if database is not None and len(unused) == len(datasets):
+        db.session.delete(database)
+    db.session.commit()
+    if boards or unused:
+        print(f"Removed retired native dashboards: {len(boards)} dashboards, "
+              f"{len(charts)} charts, {len(unused)} datasets")
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--guest-only", action="store_true", help="Prepare only OLX Guest and its three dashboards")
-    publication = parser.add_mutually_exclusive_group()
-    publication.add_argument("--publish", action="store_true")
-    publication.add_argument("--unpublish", action="store_true")
-    args = parser.parse_args()
     with create_app().app_context():
-        publish = True if args.publish else False if args.unpublish else None
-        if args.guest_only:
-            prepare_guest_access(publish)
-            db.session.commit()
-        else:
-            prepare_access(publish)
+        prepare_access()
+        remove_native_dashboards()
+        if removed := remove_legacy_permissions():
+            print(f"Removed {removed} legacy dashboard permissions from every role")
 
 
 if __name__ == "__main__":

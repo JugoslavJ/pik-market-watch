@@ -128,13 +128,12 @@ while :; do
   sleep 10
 done
 
-# The readiness gate below prepares viewer access before validating it.
-docker compose run --rm --no-deps superset-seed
-
 echo "▶ Taking and verifying a fresh database and application-state backup"
 docker compose run --rm --no-deps db-backup --once
 
+# Grant viewer roles exactly their dashboards and remove retired native
+# dashboards; the readiness gate then checks every role.
+docker compose run --rm --no-deps superset-access
 bash scripts/superset-readiness.sh
-docker compose run --rm --no-deps superset-access --publish
 echo "✓ Stack healthy — deployed ${GIT_SHA:-unknown} (Superset)."
 echo "  React dashboards use the Cloudflare Tunnel origin at 127.0.0.1:3000."

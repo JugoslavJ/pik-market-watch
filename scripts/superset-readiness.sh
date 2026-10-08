@@ -5,8 +5,8 @@ cd "${DEPLOY_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
 . scripts/lib/superset-stack.sh
 configure_superset_stack
 case "${1:-}" in ''|--snapshot) ;; *) echo "Usage: superset-readiness.sh [--snapshot]" >&2; exit 2 ;; esac
-docker compose run --rm --no-deps --entrypoint python superset-seed /app/validate_viewer.py
-docker compose run --rm --no-deps --entrypoint python superset-seed /app/benchmark_viewer.py
+docker compose run --rm --no-deps --entrypoint python superset-access /app/validate_viewer.py
+docker compose run --rm --no-deps --entrypoint python superset-access /app/benchmark_viewer.py
 # validate_access.py prepares viewer and guest access before checking it.
 docker compose run --rm --no-deps --entrypoint python superset-access /app/validate_access.py
 if [ "${1:-}" = --snapshot ]; then
