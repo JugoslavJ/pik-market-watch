@@ -2,7 +2,15 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { commitSearchIngestion } = require("../../src/ingestion");
+const { commitSearchIngestion, computeMedian } = require("../../src/ingestion");
+
+test("computeMedian sorts input, rounds even-sized medians and returns null without priced data", () => {
+  assert.equal(computeMedian([]), null);
+  assert.equal(computeMedian([3000, 1000, 2000]), 2000);
+  assert.equal(computeMedian([1800, 2000]), 1900);
+  assert.equal(computeMedian([1000, 1001]), 1001);
+  assert.equal(computeMedian([5000, 1000, 3000, 2000]), 2500);
+});
 
 test("ingestion deduplicates numeric IDs with the last card winning and rejects invalid IDs", async () => {
   const calls = [];

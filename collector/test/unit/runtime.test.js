@@ -1,5 +1,6 @@
 "use strict";
 const test = require("node:test");
+const { mock } = test;
 const assert = require("node:assert/strict");
 const http = require("node:http");
 const { EventEmitter, once } = require("node:events");
@@ -21,6 +22,8 @@ const config = {
   abandonedRunAfterMinutes: 60,
 };
 const flush = () => new Promise((resolve) => setImmediate(resolve));
+test.beforeEach(() => mock.timers.enable({ apis: ["setInterval"] }));
+test.afterEach(() => mock.timers.reset());
 function fixture({
   cfg = {},
   outcomes = {},
@@ -30,7 +33,7 @@ function fixture({
 } = {}) {
   const calls = [],
     process = new EventEmitter();
-  let tick, server;
+  let server;
   const db = {
     waitUntilReady: async () => {},
     recoverAbandonedRuns: async () => 0,
@@ -64,13 +67,6 @@ function fixture({
           return server;
         },
       },
-      setInterval(callback) {
-        tick = callback;
-        return 1;
-      },
-      clearInterval() {
-        calls.push("timer-clear");
-      },
       collectSearch: async (_db, search, _cfg, _log, deps) => {
         calls.push(["collect", search.searchKey, deps.rateBudget]);
         const result = outcomes[search.searchKey];
@@ -84,7 +80,7 @@ function fixture({
     db,
     calls,
     process,
-    tick: () => tick(),
+    tick: () => mock.timers.tick(config.intervalMinutes * 60000),
     server: () => server,
   };
 }
@@ -202,10 +198,10 @@ test("shutdown during the initial cycle never starts the scheduler", async () =>
   await flush();
   f.process.emit("SIGTERM");
   resolve({ cards: 1 });
-  await started;
+  // main() only returns a controller once the interval is scheduled.
+  assert.equal(await started, undefined);
   await flush();
   assert.ok(f.calls.includes("db-close"));
-  assert.equal(f.calls.includes("timer-clear"), false);
   assert.equal(f.server().listening, false);
 });
 

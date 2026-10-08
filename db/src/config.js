@@ -1,7 +1,7 @@
 "use strict";
 const fs = require("node:fs");
 const path = require("node:path");
-const { boolean } = require("@pik-market-watch/config");
+const { boolean } = require("./env");
 
 module.exports = {
   get databaseUrl() {

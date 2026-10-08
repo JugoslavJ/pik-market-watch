@@ -7,25 +7,24 @@ Run from the repository root after `npm ci`:
 ```sh
 npm test --workspace @pik-market-watch/db
 npm run test:integration
-npm run benchmark:ingestion
 npm run migrate --workspace @pik-market-watch/db
 npm run maintenance --workspace @pik-market-watch/db
 ```
 
-Integration tests and benchmarks use disposable databases. Migration and maintenance jobs require `DATABASE_URL` with the appropriate role. Settings live in `src/config.js`.
+Integration tests use disposable databases. Migration and maintenance jobs require `DATABASE_URL` with the appropriate role. Settings live in `src/config.js`.
 
 `init-lean/` supplies both first-boot initialization and later migrations. Listing data lives in `lean`; extensions and the migration ledger live in `public`. Create the external `POSTGRES_VOLUME_NAME` volume before startup (default `olx-price-ext_pgdata_pg18`, kept from the project's earlier name so existing data stays attached).
 
 The numbered SQL files run in lexical order:
 
-| File | Responsibility |
-| --- | --- |
-| `00-extensions.sql` | Required PostGIS and statistics extensions |
-| `01-lean-schema.sql` | Complete schema, including daily prices and lifecycle events, raw archives, page manifests, and dashboard indexes |
-| `02-lean-neighborhoods.sql` | Generated neighborhood boundaries |
-| `03-price-evidence.sql` | Allows explicit `unknown` deal and currency values |
-| `04-drop-unused-indexes.sql` | Drops coordinate, search-key and archive-article indexes that no query uses |
-| `zz-database-roles.sh` | Runtime, migration, reporting, Superset metadata and backup roles |
+| File                         | Responsibility                                                                                                    |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `00-extensions.sql`          | Required PostGIS and statistics extensions                                                                        |
+| `01-lean-schema.sql`         | Complete schema, including daily prices and lifecycle events, raw archives, page manifests, and dashboard indexes |
+| `02-lean-neighborhoods.sql`  | Generated neighborhood boundaries                                                                                 |
+| `03-price-evidence.sql`      | Allows explicit `unknown` deal and currency values                                                                |
+| `04-drop-unused-indexes.sql` | Drops coordinate, search-key and archive-article indexes that no query uses                                       |
+| `zz-database-roles.sh`       | Runtime, migration, reporting, Superset metadata and backup roles                                                 |
 
 The migrator records checksums in `public.schema_migrations` and rejects changed files. When Docker has already initialized a database from the `00`–`02` baseline, the migrator records those files without replaying them; later files run normally. Keep applied SQL files immutable and append new ordered migrations under `init-lean/`.
 
