@@ -492,6 +492,7 @@ async function enrichListings(rows) {
       await client.query(
         `UPDATE lean.listings SET deal=$2,price=$3,
            property_type=COALESCE($19,property_type),
+           rooms=COALESCE(rooms,$20),
            currency=COALESCE($4,currency),
            price_text=COALESCE($5,price_text),
            sqm=COALESCE(sqm,$6),
@@ -534,6 +535,7 @@ async function enrichListings(rows) {
           row.apiStatus ?? null,
           JSON.stringify(extra),
           row.propertyType ?? null,
+          row.rooms ?? null,
         ],
       );
       const apiHistory = (row.apiPriceHistory || []).map((event, ordinal) => ({

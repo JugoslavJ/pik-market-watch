@@ -25,7 +25,7 @@ const PRICE_POLICY = Object.freeze({
   // A holiday home asking less than this is let by the night.
   nightlyMaximum: 300,
   sqmMinimum: 5,
-  sqmMaximum: 1000000, // 100 ha
+  sqmMaximum: 999999, // about 100 ha; lean.listings.sqm is numeric(8,2)
 });
 
 // Garages and prefab units do sell for a few thousand KM.

@@ -30,13 +30,13 @@
       "name": "min_sqm",
       "label": "Min m²",
       "type": "number",
-      "default": "0"
+      "default": ""
     },
     {
       "name": "max_sqm",
       "label": "Max m²",
       "type": "number",
-      "default": "99999"
+      "default": ""
     },
     {
       "name": "subject",

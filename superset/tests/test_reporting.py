@@ -176,6 +176,17 @@ class ReportingRules(unittest.TestCase):
             self.assertEqual((rent["active"], rent["median_rent"]), (1, 600))
         daily = self.panel("olx-daily", self.query("olx-daily"), 10)[0]
         self.assertEqual((daily["active"], daily["median_night"]), (1, 40))
+        # Without an area bound, listings of unknown area still count.
+        with self.seed, self.seed.cursor() as cursor:
+            cursor.execute("UPDATE lean.listings SET sqm = NULL WHERE article_id = 7")
+        try:
+            daily = self.panel("olx-daily", self.query("olx-daily"), 10)[0]
+            self.assertEqual(daily["active"], 1)
+            bounded = self.panel("olx-daily", self.query("olx-daily", {"min_sqm": ["20"]}), 10)[0]
+            self.assertEqual(bounded["active"], 0)
+        finally:
+            with self.seed, self.seed.cursor() as cursor:
+                cursor.execute("UPDATE lean.listings SET sqm = 35 WHERE article_id = 7")
 
     def test_area_outlines_need_no_public_schema_access(self):
         # Some databases drop PostgreSQL's default USAGE on public for PUBLIC;
