@@ -10,7 +10,6 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY collector/package.json ./collector/
 COPY db/package.json ./db/
-COPY config/package.json ./config/
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --omit=dev --ignore-scripts
 
@@ -21,8 +20,6 @@ USER scraper
 COPY --chown=scraper:scraper collector/src ./collector/src
 COPY --chown=scraper:scraper collector/scripts ./collector/scripts
 COPY --chown=scraper:scraper db/src ./db/src
-COPY --chown=scraper:scraper db/scripts/benchmark-ingestion.js ./db/scripts/
-COPY --chown=scraper:scraper config/env.js ./config/
 
 WORKDIR /app/collector
 

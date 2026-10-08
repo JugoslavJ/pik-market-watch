@@ -5,7 +5,7 @@ const fs = require("fs");
 
 const SEARCHES_FILE = process.env.SEARCHES_FILE || "/config/searches.json";
 
-const { integer } = require("@pik-market-watch/config");
+const { integer } = require("@pik-market-watch/db").env;
 
 function normalizeSearchKey(href) {
   const u = new URL(href);

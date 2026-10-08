@@ -8,7 +8,7 @@ Compose runs the one-shot migrator before collection or maintenance. Standalone 
 
 Detail requests enrich listings and record source price changes. Archive maintenance enforces response retention; `replay-response.js` reads retained payloads without changing listing data.
 
-The [collector](../collector/README.md) owns requests, normalization and scheduling; the [database package](../db/README.md) owns storage and schema jobs. Both use `config/env.js` for environment validation. Database jobs load settings independently of searches.
+The [collector](../collector/README.md) owns requests, normalization and scheduling; the [database package](../db/README.md) owns storage and schema jobs. Both use `db/src/env.js` for environment validation. Database jobs load settings independently of searches.
 
 Tests live with their packages. Cross-component deployment and security checks live in `tests/contracts/`.
 

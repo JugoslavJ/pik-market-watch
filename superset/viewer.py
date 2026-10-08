@@ -2,7 +2,6 @@
 import hashlib
 import json
 import os
-import threading
 from datetime import datetime, timezone
 from functools import cache as once, wraps
 from pathlib import Path
@@ -22,10 +21,7 @@ from board_access import role_allows
 
 ROOT = Path(__file__).parent / "viewer_dist"
 cache = SimpleCache(threshold=100, default_timeout=600)
-page_cache = SimpleCache(threshold=100, default_timeout=600)
 option_cache = SimpleCache(threshold=100, default_timeout=600)
-generations = SimpleCache(threshold=1000, default_timeout=3600)
-generation_lock = threading.Lock()
 blueprint = Blueprint("olx_viewer", __name__, url_prefix="/olx")
 
 
@@ -91,17 +87,10 @@ def payload(uid):
                 "roles": sorted(r.id for r in security_manager.get_user_roles()),
                 "selected": selected, "cross": cross, "days": days}
     forced = request.args.get("force") == "true"
-    generation_key = f"{g.user.get_id()}:{uid}"
-    with generation_lock:
-        generation = generations.get(generation_key) or 0
-        if forced:
-            generation += 1
-            generations.set(generation_key, generation)
-    identity["generation"] = generation
     key = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
     # Option lists cover all listings, not the selection, so even the uncached
     # operational dashboards reuse them between loads.
-    option_identity = {name: identity[name] for name in ("uid", "user", "roles", "generation")}
+    option_identity = {name: identity[name] for name in ("uid", "user", "roles")}
     option_key = hashlib.sha256(json.dumps(option_identity, sort_keys=True).encode()).hexdigest()
     options = option_cache.get(option_key) if not forced else None
     cached = cache.get(key) if not forced else None
@@ -160,18 +149,9 @@ def dashboard_page(uid):
     manifest = json.loads((ROOT / ".vite" / "manifest.json").read_text())
     entry = manifest["src/main.jsx"]
     css = entry.get("css", []) + [css for name in entry.get("imports", []) for css in manifest[name].get("css", [])]
-    boards = visible_boards()
-    navigation = ",".join(board["uid"] for board in boards)
-    html_key = f"{g.user.get_id()}:{uid}:{data['asOf']}:{data['cached']}:{entry['file']}:{navigation}"
-    html = page_cache.get(html_key) if data["ttl"] else None
-    if html is None:
-        html = render_template_string(PAGE, data=data, entry=entry,
-            css=css, imports=[manifest[name]["file"] for name in entry.get("imports", [])],
-            boards=boards)
-        if data["ttl"]:
-            page_cache.set(html_key, html, timeout=data["ttl"])
-    # Add a fresh CSP nonce after retrieving principal-scoped, authorized cached HTML.
-    response = make_response(html.replace('nonce="__OLX_NONCE__"', f'nonce="{request.csp_nonce}"'))
+    response = make_response(render_template_string(PAGE, data=data, entry=entry,
+        css=css, imports=[manifest[name]["file"] for name in entry.get("imports", [])],
+        boards=visible_boards(), nonce=request.csp_nonce))
     response.headers["Cache-Control"] = "no-store"
     response.headers["Server-Timing"] = f"viewer;dur={(perf_counter()-started)*1000:.2f}, auth;dur={g.viewer_auth_ms:.2f}"
     return response
@@ -193,8 +173,8 @@ PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 </header><main class="initial"><div class="heading"><h1>{{data.title}}</h1></div><div class="grid">
 {% for panel in data.panels if panel.type == 'big_number' %}<article class="panel stat" style="grid-column:span {{panel.grid.w}}">
 <h3>{{panel.title}}</h3><p class="figure"><span class="value">{{data.rows[panel.key][0][panel.field] if data.rows[panel.key] else '—'}}</span></p></article>{% endfor %}
-</div></main></div><script id="viewer-bootstrap" type="application/json" nonce="__OLX_NONCE__">{{{'data':data,'boards':boards}|tojson}}</script>
-<script type="module" src="/olx/assets/{{entry.file}}" nonce="__OLX_NONCE__"></script></body></html>"""
+</div></main></div><script id="viewer-bootstrap" type="application/json" nonce="{{nonce}}">{{{'data':data,'boards':boards}|tojson}}</script>
+<script type="module" src="/olx/assets/{{entry.file}}" nonce="{{nonce}}"></script></body></html>"""
 
 
 def init_viewer(app):

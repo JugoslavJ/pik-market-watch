@@ -99,8 +99,7 @@ class CacheIsolationTests(unittest.TestCase):
                 patch.object(viewer, "compile_dashboard", return_value=("SELECT 1", {}, [])),
                 patch.object(viewer, "presentation", return_value={}),
                 patch.object(viewer, "cache", SimpleCache()),
-                patch.object(viewer, "option_cache", SimpleCache()),
-                patch.object(viewer, "generations", SimpleCache())):
+                patch.object(viewer, "option_cache", SimpleCache())):
             replacement.start()
             self.addCleanup(replacement.stop)
 

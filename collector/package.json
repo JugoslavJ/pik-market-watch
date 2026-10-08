@@ -15,7 +15,6 @@
     "node": ">=26"
   },
   "dependencies": {
-    "@pik-market-watch/db": "1.0.0",
-    "@pik-market-watch/config": "1.0.0"
+    "@pik-market-watch/db": "1.0.0"
   }
 }

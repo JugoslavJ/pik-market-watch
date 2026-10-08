@@ -21,10 +21,6 @@ function createRuntime(
     log = makeLogger("scraper"),
     sleep = defaultSleep,
     process = global.process,
-    setInterval = global.setInterval,
-    clearInterval = global.clearInterval,
-    setTimeout = global.setTimeout,
-    clearTimeout = global.clearTimeout,
   } = {},
 ) {
   const state = {
