@@ -24,6 +24,8 @@ The numbered SQL files run in lexical order:
 | `02-lean-neighborhoods.sql`  | Generated neighborhood boundaries                                                                                 |
 | `03-price-evidence.sql`      | Allows explicit `unknown` deal and currency values                                                                |
 | `04-drop-unused-indexes.sql` | Drops coordinate, search-key and archive-article indexes that no query uses                                       |
+| `05-declared-deal-type.sql`  | Reclassifies deals by the ad's declared kind                                                                      |
+| `06-olx-categories.sql`      | Adds the `daily_rent` deal, drops the saved-search category label and retires unconfigured searches               |
 | `zz-database-roles.sh`       | Runtime, migration, reporting, Superset metadata and backup roles                                                 |
 
 The migrator records checksums in `public.schema_migrations` and rejects changed files. When Docker has already initialized a database from the `00`–`02` baseline, the migrator records those files without replaying them; later files run normally. Keep applied SQL files immutable and append new ordered migrations under `init-lean/`.

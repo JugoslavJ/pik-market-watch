@@ -26,6 +26,7 @@ const FILTER_KEYS = [
   "options_sql",
   "options",
   "default",
+  "section",
 ];
 const PANEL_KEYS = [
   "id",
@@ -59,8 +60,8 @@ const keysWithin = (object, allowed, where) =>
     assert.ok(allowed.includes(key), `${where}: unknown key ${key}`),
   );
 
-test("dashboard definitions keep four identities and a strict format", () => {
-  assert.equal(files.length, 4);
+test("dashboard definitions keep eight identities and a strict format", () => {
+  assert.equal(files.length, 8);
   for (const file of files) {
     const dashboard = load(file);
     keysWithin(dashboard, DASHBOARD_KEYS, file);
@@ -69,7 +70,7 @@ test("dashboard definitions keep four identities and a strict format", () => {
     for (const filter of dashboard.filters) {
       keysWithin(filter, FILTER_KEYS, `${file}:${filter.name}`);
       assert.ok(
-        ["select", "number"].includes(filter.type),
+        ["select", "number", "text"].includes(filter.type),
         `${file}:${filter.name}`,
       );
       if (filter.type === "select")
@@ -83,6 +84,13 @@ test("dashboard definitions keep four identities and a strict format", () => {
           `${file}:${filter.name}: default`,
         );
     }
+    // Section inputs render above their section, so it must exist.
+    const sections = new Set(dashboard.panels.map((panel) => panel.section));
+    for (const filter of dashboard.filters.filter((item) => item.section))
+      assert.ok(
+        sections.has(filter.section),
+        `${file}:${filter.name}: section ${filter.section}`,
+      );
     const ids = new Set();
     for (const panel of dashboard.panels) {
       const where = `${file}:${panel.id}`;
@@ -92,6 +100,11 @@ test("dashboard definitions keep four identities and a strict format", () => {
       assert.ok(REQUIRED[panel.type], `${where}: type ${panel.type}`);
       for (const key of REQUIRED[panel.type])
         assert.ok(panel[key] !== undefined, `${where}: ${key}`);
+      if (panel.view?.layer !== undefined) {
+        assert.equal(panel.view.layer, "areas", `${where}: map layer`);
+        assert.ok(panel.value, `${where}: area maps color by a value`);
+        assert.match(panel.sql, /\bneighborhood\b/, `${where}: joined by name`);
+      }
       for (const key of ["x", "y", "w", "h"])
         assert.ok(Number.isInteger(panel.layout[key]), `${where}: layout`);
       assert.notEqual(
@@ -110,6 +123,55 @@ test("dashboard definitions keep four identities and a strict format", () => {
           `${where}: source lacks field`,
         );
       }
+    }
+  }
+});
+
+// Viewer languages besides English must cover every visible definition string.
+const i18nDir = path.join(dir, "i18n");
+const languages = fs
+  .readdirSync(i18nDir)
+  .filter((file) => file.endsWith(".json"));
+const propertyNames = [
+  ...fs
+    .readFileSync(path.resolve(__dirname, "../listing_filters.py"), "utf8")
+    .matchAll(/^\s*\("([a-z_]+)", "[^"]+", (?:"(?:select|range)"|\[)/gm),
+].map((match) => match[1]);
+
+test("every viewer language translates every board string", () => {
+  assert.ok(languages.length >= 1);
+  assert.ok(propertyNames.length >= 40, "property filter list parsed");
+  for (const language of languages) {
+    const texts = JSON.parse(
+      fs.readFileSync(path.join(i18nDir, language), "utf8"),
+    );
+    const common = texts.__common;
+    for (const name of propertyNames)
+      assert.ok(common.properties[name], `${language}: property ${name}`);
+    for (const file of files) {
+      const dashboard = load(file);
+      const own = texts[dashboard.uid];
+      const where = `${language}:${dashboard.uid}`;
+      assert.ok(own?.title, `${where}: title`);
+      assert.ok(common.boards[dashboard.uid], `${where}: navigation`);
+      for (const panel of dashboard.panels) {
+        if (panel.section)
+          assert.ok(
+            own.sections?.[panel.section],
+            `${where}: section ${panel.section}`,
+          );
+        assert.ok(own.panels?.[panel.id]?.title, `${where}:${panel.id} title`);
+        if (panel.description)
+          assert.ok(
+            own.panels[panel.id].description,
+            `${where}:${panel.id} description`,
+          );
+      }
+      for (const filter of dashboard.filters)
+        assert.ok(
+          own.filters?.[filter.name] || common.filters[filter.name],
+          `${where}: filter ${filter.name}`,
+        );
     }
   }
 });

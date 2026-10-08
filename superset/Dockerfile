@@ -10,7 +10,7 @@ FROM apache/superset:6.0.0
 
 USER root
 RUN uv pip install --python /app/.venv/bin/python psycopg2-binary==2.9.10
-COPY --chown=superset:superset superset/viewer.py superset/viewer_queries.py superset/definitions.py superset/listing_filters.py superset/board_access.py /app/
+COPY --chown=superset:superset superset/viewer.py superset/viewer_queries.py superset/definitions.py superset/listing_filters.py superset/board_access.py superset/outlines.py /app/
 COPY --chown=superset:superset superset/access.py superset/client.py superset/validate_access.py superset/validate_viewer.py superset/benchmark_viewer.py superset/check_sync.py /app/
 COPY --chown=superset:superset superset/dashboards /app/dashboards
 COPY --from=viewer-build --chown=superset:superset /viewer/dist /app/viewer_dist

@@ -1,0 +1,447 @@
+{
+  "uid": "olx-buyer",
+  "title": "OLX.ba Buy",
+  "description": "For people buying a home: what a fair asking price is, how much room sellers leave to negotiate, and where listings are priced below their neighborhood.",
+  "time_range": "180d",
+  "filters": [
+    {
+      "name": "category",
+      "label": "Category",
+      "type": "select",
+      "multi": false,
+      "options_sql": "SELECT DISTINCT property_type AS __value FROM lean.listings WHERE property_type IS NOT NULL AND property_type <> 'daily_rent' ORDER BY 1",
+      "default": "apartments"
+    },
+    {
+      "name": "rooms",
+      "label": "Rooms",
+      "type": "select",
+      "multi": false,
+      "options_sql": "SELECT DISTINCT coalesce(rooms,'unknown') AS __value FROM lean.listings WHERE closed_at IS NULL ORDER BY 1"
+    },
+    {
+      "name": "neighborhood",
+      "label": "Neighborhood",
+      "type": "select",
+      "multi": true,
+      "options_sql": "SELECT DISTINCT coalesce(neighborhood,'unknown') AS __value FROM lean.listings WHERE closed_at IS NULL ORDER BY 1"
+    },
+    {
+      "name": "min_sqm",
+      "label": "Min m²",
+      "type": "number",
+      "default": "0"
+    },
+    {
+      "name": "max_sqm",
+      "label": "Max m²",
+      "type": "number",
+      "default": "99999"
+    },
+    {
+      "name": "subject",
+      "label": "OLX.ba listing link or id",
+      "type": "text",
+      "multi": false,
+      "default": "",
+      "section": "Price check"
+    },
+    {
+      "name": "subject_neighborhood",
+      "label": "Neighborhood (overrides the link)",
+      "type": "select",
+      "multi": false,
+      "options_sql": "SELECT name AS __value FROM lean.neighborhoods ORDER BY 1",
+      "section": "Price check"
+    },
+    {
+      "name": "subject_sqm",
+      "label": "Area m² (overrides the link)",
+      "type": "number",
+      "multi": false,
+      "default": "",
+      "section": "Price check"
+    },
+    {
+      "name": "subject_rooms",
+      "label": "Rooms (overrides the link)",
+      "type": "select",
+      "multi": false,
+      "options_sql": "SELECT DISTINCT coalesce(rooms,'unknown') AS __value FROM lean.listings WHERE closed_at IS NULL ORDER BY 1",
+      "section": "Price check"
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "title": "Fair asking price",
+      "section": "Price check",
+      "type": "big_number",
+      "layout": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "sql": "WITH linked AS (SELECT article_id, deal, property_type, neighborhood, sqm, rooms, price, latitude, longitude FROM lean.listings /* unfiltered */ WHERE article_id = NULLIF(${subject}, '')::bigint), subject AS (SELECT (SELECT article_id FROM linked) AS article_id, coalesce((SELECT deal FROM linked), 'sale') AS deal, coalesce((SELECT property_type FROM linked), NULLIF(${category}, 'All')) AS property_type, coalesce(NULLIF(${subject_neighborhood}, 'All'), (SELECT neighborhood FROM linked)) AS neighborhood, coalesce(NULLIF(${subject_sqm}, '')::numeric, (SELECT sqm FROM linked)) AS sqm, coalesce(NULLIF(${subject_rooms}, 'All'), (SELECT rooms FROM linked)) AS rooms, (SELECT price FROM linked) AS price, (SELECT latitude FROM linked WHERE NULLIF(${subject_neighborhood}, 'All') IS NULL) AS latitude, (SELECT longitude FROM linked WHERE NULLIF(${subject_neighborhood}, 'All') IS NULL) AS longitude), pool AS (SELECT DISTINCT ON (article_id) * FROM (SELECT l.article_id, 'active' AS status, l.title, l.url, l.deal, l.property_type, l.neighborhood, l.rooms, l.sqm, l.price, l.latitude, l.longitude, (now() AT TIME ZONE 'Europe/Sarajevo')::date - l.first_seen AS days_listed FROM lean.listings /* unfiltered */ l WHERE l.closed_at IS NULL UNION ALL SELECT e.article_id, 'exited', e.title, e.url, e.deal, e.property_type, e.neighborhood, e.rooms, e.sqm, e.price, e.latitude, e.longitude, e.occurred_at - e.opened_at FROM lean.listing_lifecycle_events /* unfiltered */ e WHERE e.event_type = 'closed' AND e.occurred_at > (now() AT TIME ZONE 'Europe/Sarajevo')::date - 180) candidates ORDER BY article_id, status), comps AS (SELECT p.*, round((p.price / p.sqm)::numeric, CASE WHEN p.deal = 'sale' THEN 0 ELSE 1 END) AS ppm2, d.distance_km, d.distance_km IS NULL AS unplaced, coalesce(d.distance_km, CASE WHEN s.neighborhood IS NULL THEN 2 WHEN p.neighborhood = s.neighborhood THEN 1 ELSE 5 END) + CASE WHEN s.rooms IS NULL OR p.rooms = s.rooms THEN 0 ELSE 1 END + 4 * abs(p.sqm - s.sqm) / s.sqm AS score FROM pool p CROSS JOIN subject s CROSS JOIN LATERAL (SELECT round((111.32 * sqrt(power(p.latitude - s.latitude, 2) + power((p.longitude - s.longitude) * cos(radians(s.latitude)), 2)))::numeric, 2) AS distance_km) d WHERE s.sqm > 0 AND p.deal = s.deal AND p.sqm BETWEEN greatest(5, s.sqm * 0.75) AND s.sqm * 1.25 AND p.price >= CASE WHEN p.deal = 'sale' THEN 3000 ELSE 50 END AND (s.property_type IS NULL OR p.property_type = s.property_type) AND p.article_id IS DISTINCT FROM s.article_id ORDER BY score, p.article_id LIMIT 20) SELECT count(c.article_id) AS comps, round((percentile_cont(0.25) WITHIN GROUP (ORDER BY c.ppm2) * s.sqm)::numeric, CASE WHEN s.deal = 'sale' THEN -3 ELSE -1 END) AS fair_low, round((percentile_cont(0.5) WITHIN GROUP (ORDER BY c.ppm2) * s.sqm)::numeric, CASE WHEN s.deal = 'sale' THEN -3 ELSE -1 END) AS fair_price, round((percentile_cont(0.75) WITHIN GROUP (ORDER BY c.ppm2) * s.sqm)::numeric, CASE WHEN s.deal = 'sale' THEN -3 ELSE -1 END) AS fair_high, round((100.0 * (s.price / NULLIF(percentile_cont(0.5) WITHIN GROUP (ORDER BY c.ppm2) * s.sqm, 0) - 1))::numeric, 1) AS ask_vs_fair_change_pct, round((percentile_cont(0.5) WITHIN GROUP (ORDER BY c.days_listed) FILTER (WHERE c.status = 'exited'))::numeric, 0) AS exit_days FROM subject s LEFT JOIN comps c ON TRUE GROUP BY s.sqm, s.deal, s.price",
+      "field": "fair_price",
+      "description": "Median KM/m² of the comparables × the subject's area. Comparables are up to 20 listings of the same deal and property type within ±25% of the area, active or exited in the last 180 days, nearest first. Page filters do not apply here.",
+      "suffix": "KM"
+    },
+    {
+      "id": 2,
+      "title": "Fair range · low",
+      "section": "Price check",
+      "type": "big_number",
+      "layout": {
+        "x": 4,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "source_panel": 1,
+      "field": "fair_low",
+      "description": "25th percentile of comparable KM/m² × the subject's area.",
+      "suffix": "KM"
+    },
+    {
+      "id": 3,
+      "title": "Fair range · high",
+      "section": "Price check",
+      "type": "big_number",
+      "layout": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "source_panel": 1,
+      "field": "fair_high",
+      "description": "75th percentile of comparable KM/m² × the subject's area.",
+      "suffix": "KM"
+    },
+    {
+      "id": 4,
+      "title": "Comparables used",
+      "section": "Price check",
+      "type": "big_number",
+      "layout": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "source_panel": 1,
+      "field": "comps",
+      "description": "Fewer than 8 comparables makes the range unreliable; widen the area or drop the room count."
+    },
+    {
+      "id": 5,
+      "title": "Linked listing vs fair price",
+      "section": "Price check",
+      "type": "big_number",
+      "layout": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "source_panel": 1,
+      "field": "ask_vs_fair_change_pct",
+      "description": "How far the linked listing's current ask sits above (+) or below (−) the fair price. Empty without a link.",
+      "suffix": "%",
+      "decimals": 1
+    },
+    {
+      "id": 6,
+      "title": "Median days to exit · comparables",
+      "section": "Price check",
+      "type": "big_number",
+      "layout": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "source_panel": 1,
+      "field": "exit_days",
+      "description": "How long the comparables that left OLX were listed. An exit is not a confirmed sale.",
+      "suffix": "days"
+    },
+    {
+      "id": 7,
+      "title": "Comparable listings",
+      "description": "Nearest first. Exited listings show their last asking price. Distance needs map pins on both listings.",
+      "section": "Price check",
+      "type": "table",
+      "layout": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 10
+      },
+      "sql": "WITH linked AS (SELECT article_id, deal, property_type, neighborhood, sqm, rooms, price, latitude, longitude FROM lean.listings /* unfiltered */ WHERE article_id = NULLIF(${subject}, '')::bigint), subject AS (SELECT (SELECT article_id FROM linked) AS article_id, coalesce((SELECT deal FROM linked), 'sale') AS deal, coalesce((SELECT property_type FROM linked), NULLIF(${category}, 'All')) AS property_type, coalesce(NULLIF(${subject_neighborhood}, 'All'), (SELECT neighborhood FROM linked)) AS neighborhood, coalesce(NULLIF(${subject_sqm}, '')::numeric, (SELECT sqm FROM linked)) AS sqm, coalesce(NULLIF(${subject_rooms}, 'All'), (SELECT rooms FROM linked)) AS rooms, (SELECT price FROM linked) AS price, (SELECT latitude FROM linked WHERE NULLIF(${subject_neighborhood}, 'All') IS NULL) AS latitude, (SELECT longitude FROM linked WHERE NULLIF(${subject_neighborhood}, 'All') IS NULL) AS longitude), pool AS (SELECT DISTINCT ON (article_id) * FROM (SELECT l.article_id, 'active' AS status, l.title, l.url, l.deal, l.property_type, l.neighborhood, l.rooms, l.sqm, l.price, l.latitude, l.longitude, (now() AT TIME ZONE 'Europe/Sarajevo')::date - l.first_seen AS days_listed FROM lean.listings /* unfiltered */ l WHERE l.closed_at IS NULL UNION ALL SELECT e.article_id, 'exited', e.title, e.url, e.deal, e.property_type, e.neighborhood, e.rooms, e.sqm, e.price, e.latitude, e.longitude, e.occurred_at - e.opened_at FROM lean.listing_lifecycle_events /* unfiltered */ e WHERE e.event_type = 'closed' AND e.occurred_at > (now() AT TIME ZONE 'Europe/Sarajevo')::date - 180) candidates ORDER BY article_id, status), comps AS (SELECT p.*, round((p.price / p.sqm)::numeric, CASE WHEN p.deal = 'sale' THEN 0 ELSE 1 END) AS ppm2, d.distance_km, d.distance_km IS NULL AS unplaced, coalesce(d.distance_km, CASE WHEN s.neighborhood IS NULL THEN 2 WHEN p.neighborhood = s.neighborhood THEN 1 ELSE 5 END) + CASE WHEN s.rooms IS NULL OR p.rooms = s.rooms THEN 0 ELSE 1 END + 4 * abs(p.sqm - s.sqm) / s.sqm AS score FROM pool p CROSS JOIN subject s CROSS JOIN LATERAL (SELECT round((111.32 * sqrt(power(p.latitude - s.latitude, 2) + power((p.longitude - s.longitude) * cos(radians(s.latitude)), 2)))::numeric, 2) AS distance_km) d WHERE s.sqm > 0 AND p.deal = s.deal AND p.sqm BETWEEN greatest(5, s.sqm * 0.75) AND s.sqm * 1.25 AND p.price >= CASE WHEN p.deal = 'sale' THEN 3000 ELSE 50 END AND (s.property_type IS NULL OR p.property_type = s.property_type) AND p.article_id IS DISTINCT FROM s.article_id ORDER BY score, p.article_id LIMIT 20) SELECT title, url, status, neighborhood, rooms, sqm, price, ppm2, days_listed, distance_km FROM comps ORDER BY score, article_id"
+    },
+    {
+      "id": 10,
+      "title": "Matching sale listings",
+      "section": "My search",
+      "type": "big_number",
+      "layout": {
+        "x": 0,
+        "y": 14,
+        "w": 5,
+        "h": 4
+      },
+      "sql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND l.deal = 'sale' AND (${category} = 'All' OR l.property_type = ${category}) AND (${rooms} = 'All' OR coalesce(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY(ARRAY[${neighborhood}]::text[]) OR coalesce(l.neighborhood,'unknown') = ANY(ARRAY[${neighborhood}]::text[])) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)), marked AS (SELECT b.*, h.peak_price, h.cuts FROM base b LEFT JOIN LATERAL (SELECT max(price) AS peak_price, count(*) FILTER (WHERE price < previous) AS cuts FROM (SELECT ph.price, lag(ph.price) OVER (ORDER BY ph.price_date, ph.id) AS previous FROM lean.price_history ph WHERE ph.article_id = b.article_id AND ph.source = 'api_price_history' AND ph.price > 0) history) h ON TRUE) SELECT count(*) AS active, round(percentile_cont(0.5) WITHIN GROUP (ORDER BY price) FILTER (WHERE price > 0)::numeric, -2) AS median_price, round(percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE ppm2 > 0)::numeric, 0) AS median_ppm2, count(*) FILTER (WHERE first_seen >= (now() AT TIME ZONE 'Europe/Sarajevo')::date - 7) AS new_7d, round(100.0 * count(*) FILTER (WHERE price < peak_price) / NULLIF(count(*), 0), 1) AS cut_share_pct, round(percentile_cont(0.5) WITHIN GROUP (ORDER BY 100 * (1 - price / peak_price)) FILTER (WHERE price < peak_price)::numeric, 1) AS median_cut_pct FROM marked",
+      "field": "active"
+    },
+    {
+      "id": 11,
+      "title": "Median asking price",
+      "section": "My search",
+      "type": "big_number",
+      "layout": {
+        "x": 5,
+        "y": 14,
+        "w": 5,
+        "h": 4
+      },
+      "source_panel": 10,
+      "field": "median_price",
+      "suffix": "KM"
+    },
+    {
+      "id": 12,
+      "title": "Median KM/m²",
+      "section": "My search",
+      "type": "big_number",
+      "layout": {
+        "x": 10,
+        "y": 14,
+        "w": 5,
+        "h": 4
+      },
+      "source_panel": 10,
+      "field": "median_ppm2",
+      "suffix": "KM/m²"
+    },
+    {
+      "id": 13,
+      "title": "New · 7 d",
+      "section": "My search",
+      "type": "big_number",
+      "layout": {
+        "x": 15,
+        "y": 14,
+        "w": 4,
+        "h": 4
+      },
+      "source_panel": 10,
+      "field": "new_7d"
+    },
+    {
+      "id": 14,
+      "title": "Priced below their peak",
+      "description": "Share of matching listings whose current ask is below the highest ask OLX recorded for them.",
+      "section": "My search",
+      "type": "big_number",
+      "layout": {
+        "x": 19,
+        "y": 14,
+        "w": 5,
+        "h": 4
+      },
+      "source_panel": 10,
+      "field": "cut_share_pct",
+      "suffix": "%",
+      "decimals": 1
+    },
+    {
+      "id": 20,
+      "title": "Median KM/m² · new listings vs final asks · weekly",
+      "description": "New listings by the week OLX first showed them; final asks by the week the listing exited. An exit is not a confirmed sale.",
+      "section": "Price trend",
+      "type": "timeseries",
+      "layout": {
+        "x": 0,
+        "y": 18,
+        "w": 24,
+        "h": 9
+      },
+      "sql": "WITH fresh AS (SELECT date_trunc('week', l.first_seen) AS week, percentile_cont(0.5) WITHIN GROUP (ORDER BY l.ppm2) AS value FROM lean.listings l WHERE l.ppm2 > 0 AND l.deal = 'sale' AND (${category} = 'All' OR l.property_type = ${category}) AND (${rooms} = 'All' OR coalesce(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY(ARRAY[${neighborhood}]::text[]) OR coalesce(l.neighborhood,'unknown') = ANY(ARRAY[${neighborhood}]::text[])) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric) AND ${time_filter:l.first_seen} GROUP BY 1), finals AS (SELECT date_trunc('week', e.occurred_at) AS week, percentile_cont(0.5) WITHIN GROUP (ORDER BY e.price / e.sqm) AS value FROM lean.listing_lifecycle_events e WHERE e.event_type = 'closed' AND e.sqm >= 5 AND e.price >= 3000 AND e.deal = 'sale' AND (${category} = 'All' OR e.property_type = ${category}) AND (${rooms} = 'All' OR coalesce(e.rooms,'unknown') = ${rooms}) AND ('All' = ANY(ARRAY[${neighborhood}]::text[]) OR coalesce(e.neighborhood,'unknown') = ANY(ARRAY[${neighborhood}]::text[])) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR e.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR e.sqm <= NULLIF(${max_sqm}, '')::numeric) AND ${time_filter:e.occurred_at} GROUP BY 1) SELECT week::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time, round(fresh.value::numeric, 0) AS new_listings, round(finals.value::numeric, 0) AS final_asks FROM fresh FULL JOIN finals USING (week) ORDER BY 1",
+      "suffix": "KM/m²"
+    },
+    {
+      "id": 21,
+      "title": "New vs exited sale listings · weekly",
+      "section": "Price trend",
+      "type": "timeseries",
+      "layout": {
+        "x": 0,
+        "y": 27,
+        "w": 24,
+        "h": 8
+      },
+      "sql": "WITH fresh AS (SELECT date_trunc('week', l.first_seen) AS week, count(*) AS n FROM lean.listings l WHERE l.deal = 'sale' AND (${category} = 'All' OR l.property_type = ${category}) AND (${rooms} = 'All' OR coalesce(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY(ARRAY[${neighborhood}]::text[]) OR coalesce(l.neighborhood,'unknown') = ANY(ARRAY[${neighborhood}]::text[])) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric) AND ${time_filter:l.first_seen} GROUP BY 1), gone AS (SELECT date_trunc('week', e.occurred_at) AS week, count(*) AS n FROM lean.listing_lifecycle_events e WHERE e.event_type = 'closed' AND e.deal = 'sale' AND (${category} = 'All' OR e.property_type = ${category}) AND (${rooms} = 'All' OR coalesce(e.rooms,'unknown') = ${rooms}) AND ('All' = ANY(ARRAY[${neighborhood}]::text[]) OR coalesce(e.neighborhood,'unknown') = ANY(ARRAY[${neighborhood}]::text[])) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR e.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR e.sqm <= NULLIF(${max_sqm}, '')::numeric) AND ${time_filter:e.occurred_at} GROUP BY 1) SELECT week::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time, coalesce(fresh.n, 0) AS new_n, coalesce(gone.n, 0) AS exits FROM fresh FULL JOIN gone USING (week) ORDER BY 1",
+      "bars": true
+    },
+    {
+      "id": 30,
+      "title": "Median cut · listings below their peak",
+      "description": "How far below their peak ask the cut listings in your search now sit.",
+      "section": "Negotiation room",
+      "type": "big_number",
+      "layout": {
+        "x": 0,
+        "y": 35,
+        "w": 8,
+        "h": 4
+      },
+      "source_panel": 10,
+      "field": "median_cut_pct",
+      "suffix": "%",
+      "decimals": 1
+    },
+    {
+      "id": 31,
+      "title": "Exits that ended below the first ask · 180 d",
+      "description": "Share of exited listings whose last ask was lower than the first ask of that listing cycle.",
+      "section": "Negotiation room",
+      "type": "big_number",
+      "layout": {
+        "x": 8,
+        "y": 35,
+        "w": 8,
+        "h": 4
+      },
+      "sql": "WITH exits AS (SELECT e.id AS event_id, e.article_id, e.deal, e.title, e.url, e.neighborhood, e.rooms, e.sqm, e.price AS final_price, e.occurred_at AS closed_at, e.opened_at AS cycle_opened_at, (e.occurred_at - e.opened_at) AS days_listed FROM lean.listing_lifecycle_events e WHERE e.event_type = 'closed' AND e.deal = 'sale' AND (${category} = 'All' OR e.property_type = ${category}) AND (${rooms} = 'All' OR coalesce(e.rooms,'unknown') = ${rooms}) AND ('All' = ANY(ARRAY[${neighborhood}]::text[]) OR coalesce(e.neighborhood,'unknown') = ANY(ARRAY[${neighborhood}]::text[])) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR e.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR e.sqm <= NULLIF(${max_sqm}, '')::numeric) AND e.occurred_at > (now() AT TIME ZONE 'Europe/Sarajevo')::date - 180), paired AS (SELECT x.*, opening.opening_price, 100.0 * (x.final_price / opening.opening_price - 1) AS change_pct FROM exits x JOIN LATERAL (SELECT price AS opening_price FROM lean.price_history WHERE article_id = x.article_id AND source = 'api_price_history' AND price > 0 AND price_date <= x.closed_at ORDER BY CASE WHEN price_date >= x.cycle_opened_at THEN 0 ELSE 1 END, CASE WHEN price_date >= x.cycle_opened_at THEN price_date END ASC NULLS LAST, CASE WHEN price_date < x.cycle_opened_at THEN price_date END DESC NULLS LAST, id LIMIT 1) opening ON TRUE WHERE x.final_price BETWEEN 0.5 * opening.opening_price AND 2 * opening.opening_price) SELECT count(*) AS exits_paired, round(100.0 * count(*) FILTER (WHERE change_pct < 0) / NULLIF(count(*), 0), 1) AS below_first_pct, round(percentile_cont(0.5) WITHIN GROUP (ORDER BY change_pct)::numeric, 1) AS median_final_change_pct FROM paired",
+      "field": "below_first_pct",
+      "suffix": "%",
+      "decimals": 1
+    },
+    {
+      "id": 32,
+      "title": "Median final vs first ask · 180 d",
+      "section": "Negotiation room",
+      "type": "big_number",
+      "layout": {
+        "x": 16,
+        "y": 35,
+        "w": 8,
+        "h": 4
+      },
+      "source_panel": 31,
+      "field": "median_final_change_pct",
+      "suffix": "%",
+      "decimals": 1
+    },
+    {
+      "id": 33,
+      "title": "Final ask vs first ask · 180 d",
+      "description": "Exited sale listings by how much the ask moved before they left OLX.",
+      "section": "Negotiation room",
+      "type": "bar",
+      "layout": {
+        "x": 0,
+        "y": 39,
+        "w": 12,
+        "h": 9
+      },
+      "sql": "WITH exits AS (SELECT e.id AS event_id, e.article_id, e.deal, e.title, e.url, e.neighborhood, e.rooms, e.sqm, e.price AS final_price, e.occurred_at AS closed_at, e.opened_at AS cycle_opened_at, (e.occurred_at - e.opened_at) AS days_listed FROM lean.listing_lifecycle_events e WHERE e.event_type = 'closed' AND e.deal = 'sale' AND (${category} = 'All' OR e.property_type = ${category}) AND (${rooms} = 'All' OR coalesce(e.rooms,'unknown') = ${rooms}) AND ('All' = ANY(ARRAY[${neighborhood}]::text[]) OR coalesce(e.neighborhood,'unknown') = ANY(ARRAY[${neighborhood}]::text[])) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR e.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR e.sqm <= NULLIF(${max_sqm}, '')::numeric) AND e.occurred_at > (now() AT TIME ZONE 'Europe/Sarajevo')::date - 180), paired AS (SELECT x.*, opening.opening_price, 100.0 * (x.final_price / opening.opening_price - 1) AS change_pct FROM exits x JOIN LATERAL (SELECT price AS opening_price FROM lean.price_history WHERE article_id = x.article_id AND source = 'api_price_history' AND price > 0 AND price_date <= x.closed_at ORDER BY CASE WHEN price_date >= x.cycle_opened_at THEN 0 ELSE 1 END, CASE WHEN price_date >= x.cycle_opened_at THEN price_date END ASC NULLS LAST, CASE WHEN price_date < x.cycle_opened_at THEN price_date END DESC NULLS LAST, id LIMIT 1) opening ON TRUE WHERE x.final_price BETWEEN 0.5 * opening.opening_price AND 2 * opening.opening_price) SELECT CASE WHEN change_pct <= -15 THEN 'cut 15% or more' WHEN change_pct <= -5 THEN 'cut 5–15%' WHEN change_pct < 0 THEN 'cut under 5%' WHEN change_pct = 0 THEN 'unchanged' ELSE 'raised' END AS change_band, count(*) AS exits FROM paired GROUP BY 1 ORDER BY min(change_pct)",
+      "category": "change_band",
+      "value": "exits"
+    },
+    {
+      "id": 34,
+      "title": "Days on market before exit · 180 d",
+      "section": "Negotiation room",
+      "type": "bar",
+      "layout": {
+        "x": 12,
+        "y": 39,
+        "w": 12,
+        "h": 9
+      },
+      "sql": "WITH exits AS (SELECT e.id AS event_id, e.article_id, e.deal, e.title, e.url, e.neighborhood, e.rooms, e.sqm, e.price AS final_price, e.occurred_at AS closed_at, e.opened_at AS cycle_opened_at, (e.occurred_at - e.opened_at) AS days_listed FROM lean.listing_lifecycle_events e WHERE e.event_type = 'closed' AND e.deal = 'sale' AND (${category} = 'All' OR e.property_type = ${category}) AND (${rooms} = 'All' OR coalesce(e.rooms,'unknown') = ${rooms}) AND ('All' = ANY(ARRAY[${neighborhood}]::text[]) OR coalesce(e.neighborhood,'unknown') = ANY(ARRAY[${neighborhood}]::text[])) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR e.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR e.sqm <= NULLIF(${max_sqm}, '')::numeric) AND e.occurred_at > (now() AT TIME ZONE 'Europe/Sarajevo')::date - 180) SELECT CASE WHEN days_listed >= 180 THEN '180+ d' ELSE (days_listed / 20 * 20) || '–' || (days_listed / 20 * 20 + 19) || ' d' END AS days_bracket, count(*) AS listings FROM exits WHERE days_listed >= 0 GROUP BY 1 ORDER BY min(days_listed)",
+      "category": "days_bracket",
+      "value": "listings"
+    },
+    {
+      "id": 40,
+      "title": "Median asking KM/m² by neighborhood",
+      "description": "Click an area to filter the page.",
+      "section": "Where to buy",
+      "type": "map",
+      "layout": {
+        "x": 0,
+        "y": 48,
+        "w": 24,
+        "h": 14
+      },
+      "sql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND l.deal = 'sale' AND (${category} = 'All' OR l.property_type = ${category}) AND (${rooms} = 'All' OR coalesce(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY(ARRAY[${neighborhood}]::text[]) OR coalesce(l.neighborhood,'unknown') = ANY(ARRAY[${neighborhood}]::text[])) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)) SELECT neighborhood, round(percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)::numeric, 0) AS median_ppm2, count(*) AS listings FROM base WHERE ppm2 > 0 AND neighborhood IS NOT NULL GROUP BY 1",
+      "view": {
+        "lat": 44.77,
+        "lon": 17.2,
+        "zoom": 12,
+        "layer": "areas"
+      },
+      "value": "median_ppm2"
+    },
+    {
+      "id": 41,
+      "title": "Neighborhoods compared",
+      "description": "Gross yield is median monthly rent × 12 ÷ median sale price in the same neighborhood and filters, from asking prices.",
+      "section": "Where to buy",
+      "type": "table",
+      "layout": {
+        "x": 0,
+        "y": 62,
+        "w": 24,
+        "h": 10
+      },
+      "sql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND l.deal IN ('sale','rent') AND (${category} = 'All' OR l.property_type = ${category}) AND (${rooms} = 'All' OR coalesce(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY(ARRAY[${neighborhood}]::text[]) OR coalesce(l.neighborhood,'unknown') = ANY(ARRAY[${neighborhood}]::text[])) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)), marked AS (SELECT b.*, h.peak_price, h.cuts FROM base b LEFT JOIN LATERAL (SELECT max(price) AS peak_price, count(*) FILTER (WHERE price < previous) AS cuts FROM (SELECT ph.price, lag(ph.price) OVER (ORDER BY ph.price_date, ph.id) AS previous FROM lean.price_history ph WHERE ph.article_id = b.article_id AND ph.source = 'api_price_history' AND ph.price > 0) history) h ON TRUE) SELECT coalesce(neighborhood, 'unknown') AS neighborhood, count(*) FILTER (WHERE deal = 'sale') AS listings, round(percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE deal = 'sale' AND ppm2 > 0)::numeric, 0) AS median_ppm2, round(percentile_cont(0.5) WITHIN GROUP (ORDER BY price) FILTER (WHERE deal = 'sale' AND price > 0)::numeric, -2) AS median_price, round(percentile_cont(0.5) WITHIN GROUP (ORDER BY (now() AT TIME ZONE 'Europe/Sarajevo')::date - first_seen) FILTER (WHERE deal = 'sale')::numeric, 0) AS median_days_listed, round(100.0 * count(*) FILTER (WHERE deal = 'sale' AND price < peak_price) / NULLIF(count(*) FILTER (WHERE deal = 'sale'), 0), 1) AS cut_share_pct, round((1200 * percentile_cont(0.5) WITHIN GROUP (ORDER BY price) FILTER (WHERE deal = 'rent' AND price > 0) / NULLIF(percentile_cont(0.5) WITHIN GROUP (ORDER BY price) FILTER (WHERE deal = 'sale' AND price > 0), 0))::numeric, 1) AS gross_yield_pct FROM marked GROUP BY 1 HAVING count(*) FILTER (WHERE deal = 'sale') > 0 ORDER BY listings DESC, neighborhood"
+    },
+    {
+      "id": 50,
+      "title": "Priced below their neighborhood",
+      "description": "Matching listings at least 15% under the median KM/m² of all active listings with the same neighborhood, rooms and property type (5 or more).",
+      "section": "Listings to watch",
+      "type": "table",
+      "layout": {
+        "x": 0,
+        "y": 72,
+        "w": 24,
+        "h": 10
+      },
+      "sql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND l.deal = 'sale' AND (${category} = 'All' OR l.property_type = ${category}) AND (${rooms} = 'All' OR coalesce(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY(ARRAY[${neighborhood}]::text[]) OR coalesce(l.neighborhood,'unknown') = ANY(ARRAY[${neighborhood}]::text[])) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)), medians AS (SELECT neighborhood, rooms, property_type, percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) AS median_ppm2, count(*) AS n FROM lean.listings /* unfiltered */ WHERE closed_at IS NULL AND deal = 'sale' AND ppm2 > 0 GROUP BY 1, 2, 3) SELECT b.title, b.url, b.neighborhood, b.rooms, b.sqm, b.price, b.ppm2, round((100.0 * (b.ppm2 / m.median_ppm2 - 1))::numeric, 1) AS vs_median_pct, b.first_seen FROM base b JOIN medians m ON m.neighborhood = b.neighborhood AND m.rooms IS NOT DISTINCT FROM b.rooms AND m.property_type IS NOT DISTINCT FROM b.property_type WHERE m.n >= 5 AND b.ppm2 > 0 AND b.ppm2 <= 0.85 * m.median_ppm2 ORDER BY vs_median_pct, b.article_id LIMIT 25"
+    },
+    {
+      "id": 51,
+      "title": "Recent price cuts",
+      "section": "Listings to watch",
+      "type": "table",
+      "layout": {
+        "x": 0,
+        "y": 82,
+        "w": 24,
+        "h": 10
+      },
+      "sql": "WITH prices AS (SELECT article_id, price_date, price, lag(price) OVER (PARTITION BY article_id ORDER BY price_date, id) AS previous_price FROM lean.price_history WHERE price IS NOT NULL AND source = 'api_price_history'), cuts AS (SELECT article_id, price_date, previous_price, price FROM prices WHERE previous_price > price) SELECT l.title, l.url, l.neighborhood, l.rooms, c.previous_price AS was, c.price AS now, round(100.0 * (1 - c.price / c.previous_price), 1) AS cut_pct, c.price_date FROM cuts c JOIN lean.listings l USING (article_id) WHERE l.closed_at IS NULL AND l.deal = 'sale' AND (${category} = 'All' OR l.property_type = ${category}) AND (${rooms} = 'All' OR coalesce(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY(ARRAY[${neighborhood}]::text[]) OR coalesce(l.neighborhood,'unknown') = ANY(ARRAY[${neighborhood}]::text[])) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric) ORDER BY c.price_date DESC, cut_pct DESC, l.article_id LIMIT 25"
+    },
+    {
+      "id": 52,
+      "title": "Motivated sellers",
+      "description": "Listed for 90 days or more and now priced below their peak ask.",
+      "section": "Listings to watch",
+      "type": "table",
+      "layout": {
+        "x": 0,
+        "y": 92,
+        "w": 24,
+        "h": 10
+      },
+      "sql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND l.deal = 'sale' AND (${category} = 'All' OR l.property_type = ${category}) AND (${rooms} = 'All' OR coalesce(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY(ARRAY[${neighborhood}]::text[]) OR coalesce(l.neighborhood,'unknown') = ANY(ARRAY[${neighborhood}]::text[])) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)), marked AS (SELECT b.*, h.peak_price, h.cuts FROM base b LEFT JOIN LATERAL (SELECT max(price) AS peak_price, count(*) FILTER (WHERE price < previous) AS cuts FROM (SELECT ph.price, lag(ph.price) OVER (ORDER BY ph.price_date, ph.id) AS previous FROM lean.price_history ph WHERE ph.article_id = b.article_id AND ph.source = 'api_price_history' AND ph.price > 0) history) h ON TRUE) SELECT title, url, neighborhood, rooms, sqm, price, ppm2, (now() AT TIME ZONE 'Europe/Sarajevo')::date - first_seen AS days_listed, cuts, round(100 * (1 - price / peak_price), 1) AS cut_pct FROM marked WHERE (now() AT TIME ZONE 'Europe/Sarajevo')::date - first_seen >= 90 AND price < peak_price ORDER BY days_listed DESC, article_id LIMIT 25"
+    }
+  ]
+}

@@ -40,7 +40,7 @@ docker compose --profile scrape run --rm scraper node src/replay-response.js --i
 
 **Alerts.** The alert checker runs every 15 minutes as `olx_reporting`, keeps its state in Superset home, and posts firing/recovery transitions to `ALERT_WEBHOOK_URL` when set. Inspect it with `docker compose logs -f superset-alert-check`; the Health dashboard shows the same predicates.
 
-**Dashboard access.** Assign `OLX Viewer` or `OLX Guest` through Superset's `/users/list/`; see [accounts and access](../superset/README.md#accounts-and-access).
+**Dashboard access.** Assign `OLX Viewer`, `OLX Guest`, `OLX Buyer`, `OLX Renter`, `OLX Host` or `OLX Pro` through Superset's `/users/list/`; see [accounts and access](../superset/README.md#accounts-and-access).
 
 ## Database care
 
@@ -98,5 +98,5 @@ docker compose run --rm --no-deps --entrypoint python superset-access /app/check
 - **Migration or ownership errors:** rerun the role bootstrap, inspect `public.schema_migrations`, and rerun the migrator.
 - **Dashboard unavailable:** check `docker compose logs --tail=100 superset`, `curl -f http://127.0.0.1:3000/health`, `systemctl status cloudflared`, and the reporting role's credentials and grants.
 - **Login fails:** verify `SUPERSET_ROOT_URL`, forwarded HTTPS headers, Secure cookies and an unchanged `SUPERSET_SECRET_KEY`.
-- **An account sees no dashboards:** assign `OLX Viewer` or `OLX Guest`; built-in roles such as Gamma open nothing in the viewer. Rerun `superset-access` if either role is missing.
+- **An account sees no dashboards:** assign one of the `OLX` viewer roles; built-in roles such as Gamma open nothing in the viewer. Rerun `superset-access` if a role is missing.
 - **Port 3000 occupied:** identify the listener and its Compose project before stopping it.

@@ -33,7 +33,8 @@ class DefinitionContracts(unittest.TestCase):
         return next(b for b in self.boards if b["uid"] == uid)
 
     def test_every_dashboard_keeps_its_panels(self):
-        expected = {"olx-home": 10, "olx-overview": 20, "olx-exits": 13, "olx-health": 20}
+        expected = {"olx-home": 8, "olx-overview": 20, "olx-exits": 13, "olx-health": 20,
+                    "olx-buyer": 24, "olx-renter": 21, "olx-daily": 12, "olx-pro": 24}
         self.assertEqual({b["uid"]: len(definitions.panels(b)) for b in self.boards}, expected)
 
     def test_reused_panels_share_their_source_query(self):
@@ -83,13 +84,12 @@ class DefinitionContracts(unittest.TestCase):
         self.assertIn("cf.floor_num IN ('2')", sql)
         self.assertLess(sql.index("IN ('2')"), sql.index("WHERE closed_at"))
 
-    def test_category_selection_uses_membership_without_multiplying_listing_counts(self):
-        sql = render(definitions.push_cross_filters("SELECT count(*) FROM lean.listings"), {
-            "category": [{"op": "IN", "val": ["O'Brien"]}]})
-        self.assertIn("AND EXISTS (SELECT 1 FROM lean.saved_searches cf_search", sql)
-        self.assertIn("cf_search.search_key = ANY(cf.search_keys)", sql)
-        self.assertIn("IN ('O''Brien')", sql)
-        self.assertNotIn("JOIN lean.saved_searches", sql)
+    def test_segment_selection_filters_listings_and_exits_by_property_type(self):
+        sql = render(definitions.push_cross_filters(
+            "SELECT count(*) FROM lean.listings l JOIN lean.listing_lifecycle_events e USING (article_id)"),
+            {"segment": [{"op": "IN", "val": ["vacation_homes"]}]})
+        self.assertEqual(sql.count("cf.property_type::text IN ('vacation_homes')"), 2)
+        self.assertNotIn("saved_searches", sql)
 
     def test_range_and_scalar_filters_survive_pushdown(self):
         sql = render(definitions.push_cross_filters("SELECT count(*) FROM lean.listings"), {
@@ -98,6 +98,24 @@ class DefinitionContracts(unittest.TestCase):
         self.assertIn("cf.sqm >= ('40')", sql)
         self.assertIn("cf.sqm <= ('100')", sql)
         self.assertIn("cf.deal::text = ('sale')", sql)
+
+    def test_unfiltered_scans_keep_every_row(self):
+        sql = ("SELECT * FROM lean.listings /* unfiltered */ s "
+               "JOIN lean.listings l ON l.article_id = s.article_id")
+        self.assertEqual(definitions.cross_filter_columns(sql), set(definitions.TABLE_DIMENSIONS["listings"]))
+        rendered = render(definitions.push_cross_filters(sql), {"rooms": [{"op": "IN", "val": ["2"]}]})
+        self.assertIn("FROM lean.listings /* unfiltered */ s", rendered)
+        self.assertEqual(rendered.count("coalesce(cf.rooms::text, 'unknown') IN ('2')"), 1)
+
+    def test_price_checks_ignore_page_filters(self):
+        # A budget or amenity filter would bias the comparables, so every scan is unfiltered.
+        for uid, ids in (("olx-buyer", (1, 7)), ("olx-renter", (1, 7)), ("olx-pro", (60, 66))):
+            board = self.board(uid)
+            for panel in definitions.panels(board):
+                if panel["id"] in ids:
+                    sql = definitions.source_sql(board, panel)
+                    self.assertIn("/* unfiltered */", sql)
+                    self.assertIsNone(definitions.TABLE_SCAN.search(sql), f"{uid}:{panel['id']}")
 
     def test_default_windows_follow_the_definition(self):
         self.assertEqual(definitions.default_days(self.board("olx-overview")), 90)

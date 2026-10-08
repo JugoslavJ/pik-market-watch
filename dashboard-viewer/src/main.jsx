@@ -23,7 +23,28 @@ import {
   selectionFor,
   unit,
 } from "./charts";
-import { PIN_MISSING, cell, compact, isDate, label, pinScale } from "./format";
+import {
+  PIN_MISSING,
+  cell,
+  compact,
+  isDate,
+  label,
+  pinScale,
+  quantileScale,
+} from "./format";
+import {
+  LANGUAGES,
+  boardTitle,
+  filterLabel,
+  initialLanguage,
+  locale,
+  navTitle,
+  panelText,
+  sectionName,
+  setLanguage,
+  t,
+  valueLabel,
+} from "./i18n";
 import { validAd, openAd } from "./links";
 import { tableRows } from "./table";
 import "./style.css";
@@ -31,6 +52,9 @@ import "./style.css";
 const boot = JSON.parse(
   document.getElementById("viewer-bootstrap").textContent,
 );
+setLanguage(initialLanguage(), boot.data.translations);
+const REPORT = new URLSearchParams(location.search).get("report") === "1";
+const REPORT_ROWS = 25;
 const client = new QueryClient({
   defaultOptions: {
     queries: {
@@ -47,7 +71,16 @@ const DEFAULT_DAYS = boot.data.defaultDays;
 const FILTER_COLUMNS = new Set([...FILTER_DIMENSIONS, "article_id"]);
 const HIDDEN_COLUMNS = new Set(["url", "latitude", "longitude"]);
 const STATUS_COLUMNS = new Set(["status", "phase"]);
-const BOARD_ORDER = ["olx-home", "olx-overview", "olx-exits", "olx-health"];
+const BOARD_ORDER = [
+  "olx-home",
+  "olx-buyer",
+  "olx-renter",
+  "olx-daily",
+  "olx-pro",
+  "olx-overview",
+  "olx-exits",
+  "olx-health",
+];
 const boards = [...boot.boards].sort(
   (a, b) => BOARD_ORDER.indexOf(a.uid) - BOARD_ORDER.indexOf(b.uid),
 );
@@ -66,20 +99,38 @@ const filterParams = (selection, cross, days) =>
     c: JSON.stringify(cross),
     days: String(days),
   });
+// Language and report mode ride along so a copied link opens the same view.
+const pageParams = (selection, cross, days, lang, report) => {
+  const params = filterParams(selection, cross, days);
+  if (lang !== "en") params.set("lang", lang);
+  if (report) params.set("report", "1");
+  return params;
+};
+const LISTING_REFERENCE =
+  /^(\d{1,12}|https?:\/\/(www\.)?olx\.ba\/artikal\/\d{1,12}([/?#]\S*)?)$/i;
 
-function AreaInput({ value, label, min = 0, onCommit }) {
+// Commits on blur or Enter, so typing does not refetch on every keystroke.
+function DraftInput({ value, label, onCommit, type = "number", min = 0 }) {
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
+  const text = String(draft ?? "").trim();
+  const invalid =
+    type === "text" && text !== "" && !LISTING_REFERENCE.test(text);
   return (
     <input
       aria-label={label}
-      type="number"
-      min={min}
-      step="any"
+      aria-invalid={invalid || undefined}
+      title={invalid ? t("Use an OLX.ba listing link or number.") : undefined}
+      placeholder={
+        type === "text" ? t("Paste an OLX.ba link or listing id") : undefined
+      }
+      type={type}
+      min={type === "number" ? min : undefined}
+      step={type === "number" ? "any" : undefined}
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={() => {
-        if (draft !== value) onCommit(draft);
+        if (text !== String(value ?? "") && !invalid) onCommit(text);
       }}
       onKeyDown={(e) => {
         if (e.key === "Enter") e.currentTarget.blur();
@@ -88,9 +139,11 @@ function AreaInput({ value, label, min = 0, onCommit }) {
   );
 }
 
+// Reports draw every panel up front so the whole page prints.
 function useVisible(ref) {
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(REPORT);
   useLayoutEffect(() => {
+    if (REPORT) return;
     if (ref.current) {
       const bounds = ref.current.getBoundingClientRect();
       if (bounds.top < innerHeight && bounds.bottom > 0) {
@@ -110,7 +163,7 @@ function useVisible(ref) {
   return visible;
 }
 
-const Plot = memo(function Plot({ panel, rows, selected, onSelect }) {
+const Plot = memo(function Plot({ panel, rows, selected, onSelect, lang }) {
   const ref = useRef(null),
     instance = useRef(null),
     current = useRef({ rows, onSelect });
@@ -150,16 +203,18 @@ const Plot = memo(function Plot({ panel, rows, selected, onSelect }) {
       instance.current.resize();
       ref.current.dataset.ready = "true";
     }
-  }, [panel, rows, selected, visible]);
+  }, [panel, rows, selected, visible, lang]);
   return (
     <div className="plot-wrap">
       <div
         className="plot"
         ref={ref}
-        aria-label={panel.title}
+        aria-label={panelText(panel, "title")}
         style={{ height: chartHeight(panel, rows) }}
       />
-      {!rows.length && <p className="empty">No data for these filters</p>}
+      {!rows.length && (
+        <p className="empty">{t("No data for these filters")}</p>
+      )}
     </div>
   );
 });
@@ -199,14 +254,15 @@ function Cell({ column, row, onSelect }) {
   if (FILTER_COLUMNS.has(column))
     return (
       <button className="cell-filter" onClick={() => onSelect(column, value)}>
-        {String(value ?? "unknown")}
+        {valueLabel(value ?? "unknown")}
       </button>
     );
   if (STATUS_COLUMNS.has(column) && value != null)
     return (
-      <span className={"pill pill-" + String(value)}>{String(value)}</span>
+      <span className={"pill pill-" + String(value)}>{valueLabel(value)}</span>
     );
-  const text = cell(value);
+  const text =
+    typeof value === "string" ? cell(valueLabel(value)) : cell(value);
   return typeof value === "string" && value.length > 60 ? (
     <span className="long" title={value}>
       {text}
@@ -216,6 +272,7 @@ function Cell({ column, row, onSelect }) {
   );
 }
 
+// Panels also receive `lang` so memoized output re-renders on a language switch.
 const ListingTable = memo(function ListingTable({ panel, rows, onSelect }) {
   const ref = useRef(null),
     visible = useVisible(ref);
@@ -259,16 +316,20 @@ const ListingTable = memo(function ListingTable({ panel, rows, onSelect }) {
     <div ref={ref} className="table-wrap">
       {visible && (
         <>
-          <div className="table-tools">
-            <input
-              aria-label="Search table"
-              placeholder="Search this table"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            <span>{filtered.length.toLocaleString()} rows</span>
-            <button onClick={exportCsv}>CSV</button>
-          </div>
+          {!REPORT && (
+            <div className="table-tools">
+              <input
+                aria-label={t("Search table")}
+                placeholder={t("Search this table")}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              <span>
+                {filtered.length.toLocaleString()} {t("rows")}
+              </span>
+              <button onClick={exportCsv}>CSV</button>
+            </div>
+          )}
           <div className="table-scroll">
             <table>
               <thead>
@@ -306,38 +367,41 @@ const ListingTable = memo(function ListingTable({ panel, rows, onSelect }) {
                 </tr>
               </thead>
               <tbody>
-                {filtered
-                  .slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
-                  .map((row, index) => (
-                    <tr key={index}>
-                      {columns.map((column) => (
-                        <td
-                          key={column}
-                          className={numeric.has(column) ? "num" : undefined}
-                        >
-                          <Cell column={column} row={row} onSelect={onSelect} />
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
+                {(REPORT
+                  ? filtered.slice(0, REPORT_ROWS)
+                  : filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+                ).map((row, index) => (
+                  <tr key={index}>
+                    {columns.map((column) => (
+                      <td
+                        key={column}
+                        className={numeric.has(column) ? "num" : undefined}
+                      >
+                        <Cell column={column} row={row} onSelect={onSelect} />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
-          {!rows.length && <p className="empty">No rows for these filters</p>}
-          {filtered.length > PAGE_SIZE && (
+          {!rows.length && (
+            <p className="empty">{t("No rows for these filters")}</p>
+          )}
+          {!REPORT && filtered.length > PAGE_SIZE && (
             <div className="pagination">
               <button disabled={!page} onClick={() => setPage((p) => p - 1)}>
-                Previous
+                {t("Previous")}
               </button>
               <span>
-                Page {page + 1} /{" "}
+                {t("Page")} {page + 1} /{" "}
                 {Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))}
               </span>
               <button
                 disabled={(page + 1) * PAGE_SIZE >= filtered.length}
                 onClick={() => setPage((p) => p + 1)}
               >
-                Next
+                {t("Next")}
               </button>
             </div>
           )}
@@ -347,25 +411,39 @@ const ListingTable = memo(function ListingTable({ panel, rows, onSelect }) {
   );
 });
 
-const Pins = memo(function Pins({ panel, rows }) {
+// Listing pins, or neighborhood areas when the panel's view asks for them.
+const MapPanel = memo(function MapPanel({ panel, rows, onSelect }) {
   const ref = useRef(null),
     mapRef = useRef(null),
-    latest = useRef(rows),
+    latest = useRef(null),
     [failed, setFailed] = useState(false);
   const visible = useVisible(ref);
-  const scale = useMemo(() => pinScale(rows), [rows]);
-  latest.current = { rows, scale };
+  const areas = panel.view?.layer === "areas";
+  const scale = useMemo(
+    () => (areas ? quantileScale(rows, panel.value) : pinScale(rows)),
+    [rows, areas, panel.value],
+  );
+  latest.current = { rows, scale, onSelect };
   useEffect(() => {
     if (!visible) return;
     let closed = false,
       map;
     import("./maps")
-      .then(({ createMap, updatePins }) => {
+      .then(async (maps) => {
+        const shapes = areas ? await maps.loadAreas() : null;
         if (closed) return;
-        map = createMap(ref.current);
-        mapRef.current = { map, updatePins };
+        map = maps.createMap(ref.current, { print: REPORT });
+        const draw = (fit) => {
+          const { rows, scale, onSelect } = latest.current;
+          if (areas)
+            maps.updateAreas(map, shapes, rows, scale, fit, (name) =>
+              onSelect("neighborhood", name),
+            );
+          else maps.updatePins(map, rows, fit, scale);
+        };
+        mapRef.current = { map, draw };
         map.on("load", () => {
-          updatePins(map, latest.current.rows, true, latest.current.scale);
+          draw(true);
           ref.current.dataset.ready = "true";
         });
       })
@@ -375,18 +453,20 @@ const Pins = memo(function Pins({ panel, rows }) {
       map?.remove();
       mapRef.current = null;
     };
-  }, [visible]);
+  }, [visible, areas]);
   useEffect(() => {
-    if (mapRef.current?.map.isStyleLoaded())
-      mapRef.current.updatePins(mapRef.current.map, rows, true, scale);
-  }, [rows, scale]);
+    if (mapRef.current?.map.isStyleLoaded()) mapRef.current.draw(!areas);
+  }, [rows, scale, onSelect, areas]);
   return (
     <div className="map-wrap">
-      <div className="map" ref={ref} aria-label={panel.title}>
-        {failed && <p className="empty">Map unavailable.</p>}
+      <div className="map" ref={ref} aria-label={panelText(panel, "title")}>
+        {failed && <p className="empty">{t("Map unavailable.")}</p>}
       </div>
       {scale && (
-        <div className="map-legend" aria-label="Pin colors">
+        <div
+          className="map-legend"
+          aria-label={t(areas ? "Area colors" : "Pin colors")}
+        >
           <span>{label(scale.field)}</span>
           {scale.colors.map((color, index) => (
             <span key={color} className="legend-step">
@@ -400,49 +480,56 @@ const Pins = memo(function Pins({ panel, rows }) {
                     compact(scale.breaks[index])}
             </span>
           ))}
-          {scale.missing > 0 && (
+          {(areas || scale.missing > 0) && (
             <span className="legend-step">
               <i style={{ background: PIN_MISSING }} />
-              Rent or unknown
+              {t(areas ? "No data" : "Rent or unknown")}
             </span>
           )}
-          <span className="legend-count">
-            {rows.length.toLocaleString()} pins
-          </span>
+          {!areas && (
+            <span className="legend-count">
+              {rows.length.toLocaleString()} {t("pins")}
+            </span>
+          )}
         </div>
       )}
     </div>
   );
 });
 
-const Panel = memo(function Panel({ panel, rows, selected, onSelect }) {
+const Panel = memo(function Panel({ panel, rows, selected, onSelect, lang }) {
   const stat = panel.type === "big_number";
+  const description = panelText(panel, "description");
   return (
     <article
       className={"panel " + (stat ? "stat" : "panel-" + panel.type)}
       data-panel={panel.id}
       style={{ gridColumn: `span ${panel.grid.w}` }}
-      title={stat ? panel.description : undefined}
+      title={stat ? description : undefined}
     >
-      <h3>{panel.title}</h3>
-      {!stat && panel.description && (
-        <p className="description">{panel.description}</p>
-      )}
+      <h3>{panelText(panel, "title")}</h3>
+      {!stat && description && <p className="description">{description}</p>}
       {stat ? (
         <p className="figure">
           <span className="value">{number(rows[0]?.[panel.field], panel)}</span>
-          {unit(panel) && <span className="unit">{unit(panel)}</span>}
+          {unit(panel) && <span className="unit">{t(unit(panel))}</span>}
         </p>
       ) : panel.type === "table" ? (
-        <ListingTable panel={panel} rows={rows} onSelect={onSelect} />
+        <ListingTable
+          panel={panel}
+          rows={rows}
+          onSelect={onSelect}
+          lang={lang}
+        />
       ) : panel.type === "map" ? (
-        <Pins panel={panel} rows={rows} />
+        <MapPanel panel={panel} rows={rows} onSelect={onSelect} lang={lang} />
       ) : (
         <Plot
           panel={panel}
           rows={rows}
           selected={selected}
           onSelect={onSelect}
+          lang={lang}
         />
       )}
     </article>
@@ -460,10 +547,198 @@ function sectionsOf(panels) {
   return groups;
 }
 
+// One control per filter; text filters take an OLX link or id.
+function FilterControl({ variable, selection, options, onChange }) {
+  const name = filterLabel(variable);
+  if (variable.type === "number" || variable.type === "text")
+    return (
+      <DraftInput
+        label={name}
+        type={variable.type}
+        min={variable.min ?? 0}
+        value={selection[variable.name]?.[0] ?? variable.default}
+        onCommit={(value) => onChange([value])}
+      />
+    );
+  return (
+    <select
+      aria-label={name}
+      multiple={variable.multi}
+      value={
+        variable.multi
+          ? selection[variable.name]
+          : selection[variable.name]?.[0]
+      }
+      onChange={(e) => {
+        const values = [...e.target.selectedOptions].map(
+          (option) => option.value,
+        );
+        onChange(
+          values.length > 1
+            ? values.filter((value) => value !== "All")
+            : values.length
+              ? values
+              : ["All"],
+        );
+      }}
+    >
+      <option value="All">{t("All")}</option>
+      {(options[variable.name] || variable.choices)
+        .filter((v) => v !== "All")
+        .map((value) => (
+          <option key={String(value)} value={String(value)}>
+            {valueLabel(value)}
+          </option>
+        ))}
+    </select>
+  );
+}
+
+const changed = (variable, selection) =>
+  JSON.stringify(selection[variable.name] || [variable.default]) !==
+  JSON.stringify(asArray(variable.default));
+
+// Reports state their scope in words, since the controls are not shown.
+function selectionSummary(variables, selection, cross, days) {
+  const parts = [
+    ...variables
+      .filter((variable) => changed(variable, selection))
+      .map(
+        (variable) =>
+          filterLabel(variable) +
+          ": " +
+          selection[variable.name].map(valueLabel).join(", "),
+      ),
+    ...Object.entries(cross).map(
+      ([dimension, values]) =>
+        label(dimension) + ": " + values.map(valueLabel).join(", "),
+    ),
+  ];
+  const window =
+    t("Time window:") +
+    " " +
+    (WINDOWS.find(([value]) => value === days)?.[1] || days + " d");
+  return parts.length
+    ? t("Selection") + " — " + parts.join(" · ") + " · " + window
+    : t("Selection: whole market") + " · " + window;
+}
+
+const PREPARER_KEY = "olx-report-preparer";
+function readPreparer() {
+  try {
+    return JSON.parse(localStorage.getItem(PREPARER_KEY)) || {};
+  } catch {
+    return {};
+  }
+}
+
+// The "Prepared by" block lives only in this browser and prints on the cover.
+function ReportTools({ preparer, onChange, backHref }) {
+  const [error, setError] = useState("");
+  const update = (patch) => {
+    const next = { ...preparer, ...patch };
+    onChange(next);
+    try {
+      localStorage.setItem(PREPARER_KEY, JSON.stringify(next));
+    } catch {
+      // A private window keeps the block for this page only.
+    }
+  };
+  return (
+    <div className="report-tools">
+      <a href={backHref}>← {t("Back to dashboard")}</a>
+      <fieldset>
+        <legend>{t("Prepared by")}</legend>
+        {[
+          ["name", t("Name")],
+          ["company", t("Company")],
+          ["contact", t("Contact")],
+        ].map(([field, text]) => (
+          <label key={field}>
+            {text}
+            <input
+              value={preparer[field] || ""}
+              maxLength={120}
+              onChange={(e) => update({ [field]: e.target.value })}
+            />
+          </label>
+        ))}
+        <label>
+          {t("Logo")}
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              if (!file.type.startsWith("image/") || file.size > 200000) {
+                setError(t("Logo must be an image under 200 KB."));
+                return;
+              }
+              setError("");
+              const reader = new FileReader();
+              reader.onload = () => update({ logo: reader.result });
+              reader.readAsDataURL(file);
+            }}
+          />
+        </label>
+        {preparer.logo && (
+          <button onClick={() => update({ logo: undefined })}>
+            {t("Remove logo")}
+          </button>
+        )}
+        <small>
+          {error || t("Stored only in this browser; never sent to the server.")}
+        </small>
+      </fieldset>
+      <button className="primary" onClick={() => window.print()}>
+        {t("Print or save as PDF")}
+      </button>
+    </div>
+  );
+}
+
+function ReportCover({ data, summary, preparer }) {
+  const prepared = preparer.name || preparer.company || preparer.contact;
+  return (
+    <div className="report-cover">
+      <div>
+        <p className="eyebrow">OLX Market Watch · {t("Market report")}</p>
+        <h1>{boardTitle(data.title)}</h1>
+        <p>{summary}</p>
+        <p>
+          {t("Data as of")}{" "}
+          {new Date(data.asOf).toLocaleString(locale(), {
+            dateStyle: "long",
+            timeStyle: "short",
+          })}
+        </p>
+        <p className="caveat">
+          {t("Observed OLX.ba asking prices. Exits are not confirmed sales.")}
+        </p>
+      </div>
+      {(prepared || preparer.logo) && (
+        <div className="preparer">
+          {preparer.logo && <img src={preparer.logo} alt="" />}
+          <p className="eyebrow">{t("Prepared by")}</p>
+          {preparer.name && <strong>{preparer.name}</strong>}
+          {preparer.company && <span>{preparer.company}</span>}
+          {preparer.contact && <span>{preparer.contact}</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const FOOTER =
+  "Data collected from OLX.ba listings. Prices are asking prices in KM; an exit means a listing left the site, not that it sold.";
+
 function App() {
   const [selection, setSelection] = useState(boot.data.selection),
     [cross, setCross] = useState(boot.data.cross),
-    [days, setDays] = useState(boot.data.days);
+    [days, setDays] = useState(boot.data.days),
+    [lang, setLang] = useState(initialLanguage),
+    [preparer, setPreparer] = useState(readPreparer);
   const [force, setForce] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false),
     [filterSearch, setFilterSearch] = useState("");
@@ -497,18 +772,18 @@ function App() {
       );
       if (response.status === 401) {
         const error = await response.json();
-        throw Object.assign(new Error(error.message), {
+        throw Object.assign(new Error(t(error.message)), {
           loginUrl: error.loginUrl,
         });
       }
       if (!response.ok)
         throw new Error(
           response.status === 403
-            ? "Dashboard access is unavailable."
-            : "Could not update the dashboard. Retry refresh.",
+            ? t("Dashboard access is unavailable.")
+            : t("Could not update the dashboard. Retry refresh."),
         );
       if (!response.headers.get("content-type")?.includes("application/json"))
-        throw new Error("Please sign in again to update the dashboard.");
+        throw new Error(t("Please sign in again to update the dashboard."));
       return response.json();
     },
   });
@@ -519,13 +794,11 @@ function App() {
   // Preserve panel objects as filters change so chart instances stay mounted.
   const panels = boot.data.panels;
   const sections = useMemo(() => sectionsOf(panels), [panels]);
+  // Filters that belong to a section (the price check) render above it.
+  const sidebarVariables = data.variables.filter((v) => !v.section);
   const activeFilters =
-    data.variables.filter((variable) => {
-      const value = selection[variable.name] || [variable.default];
-      return (
-        JSON.stringify(value) !== JSON.stringify(asArray(variable.default))
-      );
-    }).length + Object.keys(cross).length;
+    sidebarVariables.filter((variable) => changed(variable, selection)).length +
+    Object.keys(cross).length;
   const onSelect = useCallback(
     (dimension, value) =>
       setCross((previous) => {
@@ -537,9 +810,15 @@ function App() {
       }),
     [],
   );
+  const setVariable = (name) => (values) =>
+    setSelection((s) => ({ ...s, [name]: values }));
   useEffect(() => {
-    history.replaceState(null, "", "?" + filterParams(selection, cross, days));
-  }, [selection, cross, days]);
+    history.replaceState(
+      null,
+      "",
+      "?" + pageParams(selection, cross, days, lang, REPORT),
+    );
+  }, [selection, cross, days, lang]);
   useEffect(() => {
     window.__olxViewer = {
       fetching: query.isFetching,
@@ -552,10 +831,16 @@ function App() {
       selection,
       cross,
       asOf: data.asOf,
+      lang,
+      report: REPORT,
     };
     document.documentElement.dataset.viewerReady = "true";
     performance.mark("olx-viewer-render");
-  }, [data, query.isFetching, query.isPlaceholderData, selection, cross]);
+  }, [data, query.isFetching, query.isPlaceholderData, selection, cross, lang]);
+  useEffect(() => {
+    document.title = boardTitle(data.title);
+    document.documentElement.classList.toggle("report", REPORT);
+  }, [data.title, lang]);
   async function refresh() {
     setForce(true);
     // Invalidate every filter state so revisiting a selection uses fresh data.
@@ -567,10 +852,85 @@ function App() {
   useEffect(() => {
     if (force) query.refetch().finally(() => setForce(false));
   }, [force]);
+  function changeLanguage(next) {
+    setLanguage(next, boot.data.translations);
+    setLang(next);
+  }
+  const sectionList = (
+    <div className={query.isFetching ? "sections busy" : "sections"}>
+      {sections.map((section) => {
+        const inline = REPORT
+          ? []
+          : data.variables.filter((v) => v.section === section.name);
+        return (
+          <section
+            className="dash-section"
+            key={section.name + section.panels[0].id}
+            aria-label={sectionName(section.name) || undefined}
+          >
+            {section.name && <h2>{sectionName(section.name)}</h2>}
+            {!!inline.length && (
+              <div className="section-filters">
+                {inline.map((variable) => (
+                  <label key={variable.name}>
+                    {filterLabel(variable)}
+                    <FilterControl
+                      variable={variable}
+                      selection={selection}
+                      options={data.options}
+                      onChange={setVariable(variable.name)}
+                    />
+                  </label>
+                ))}
+              </div>
+            )}
+            <div className="grid">
+              {section.panels.map((panel) => (
+                <Panel
+                  key={panel.id}
+                  panel={panel}
+                  rows={data.rows[panel.key] || EMPTY}
+                  selected={
+                    panel.type === "bar" ? cross[panel.category] : undefined
+                  }
+                  onSelect={onSelect}
+                  lang={lang}
+                />
+              ))}
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+  if (REPORT)
+    return (
+      <>
+        <ReportTools
+          preparer={preparer}
+          onChange={setPreparer}
+          backHref={"?" + pageParams(selection, cross, days, lang, false)}
+        />
+        <main className="report-page">
+          <ReportCover
+            data={data}
+            preparer={preparer}
+            summary={selectionSummary(data.variables, selection, cross, days)}
+          />
+          {query.error && (
+            <p role="alert" className="error">
+              {query.error.message}
+            </p>
+          )}
+          {sectionList}
+        </main>
+        <footer>{t(FOOTER)}</footer>
+      </>
+    );
   return (
     <>
       <header>
-        <a className="brand" href="/olx/dashboard/olx-overview/">
+        <a className="brand" href="/olx/dashboard/olx-home/">
           <span className="brand-mark" aria-hidden="true" />
           OLX Market Watch
         </a>
@@ -579,32 +939,68 @@ function App() {
             <a
               key={board.uid}
               className={board.uid === data.uid ? "active" : ""}
-              href={`/olx/dashboard/${encodeURIComponent(board.uid)}/`}
+              href={
+                `/olx/dashboard/${encodeURIComponent(board.uid)}/` +
+                (lang === "en" ? "" : "?lang=" + lang)
+              }
             >
-              {board.title.replace("OLX.ba ", "").replace("OLX ", "")}
+              {navTitle(board)}
             </a>
           ))}
         </nav>
+        <div className="segmented" role="group" aria-label={t("Language")}>
+          {Object.entries(LANGUAGES).map(([code, text]) => (
+            <button
+              key={code}
+              aria-pressed={lang === code}
+              onClick={() => changeLanguage(code)}
+            >
+              {text}
+            </button>
+          ))}
+        </div>
+        <div className="account">
+          {/* Superset's own pages manage accounts and roles. */}
+          {boot.admin && (
+            <a className="button" href="/users/">
+              {t("Users")}
+            </a>
+          )}
+          <a className="button" href="/logout/">
+            {t("Sign out")}
+          </a>
+        </div>
       </header>
       <main>
         <div className="heading">
           <div>
-            <h1>{data.title.replace("OLX.ba ", "").replace("OLX ", "")}</h1>
+            <h1>
+              {boardTitle(data.title)
+                .replace("OLX.ba ", "")
+                .replace("OLX ", "")}
+            </h1>
             <p className="eyebrow">
-              Observed OLX.ba asking prices. Exits are not confirmed sales.
+              {t(
+                "Observed OLX.ba asking prices. Exits are not confirmed sales.",
+              )}
             </p>
           </div>
           <div className="freshness">
             <span role="status" className={query.isFetching ? "busy" : ""}>
               {query.isFetching
-                ? "Updating…"
-                : "Updated " +
-                  new Date(data.asOf).toLocaleTimeString([], {
+                ? t("Updating…")
+                : t("Updated") +
+                  " " +
+                  new Date(data.asOf).toLocaleTimeString(locale(), {
                     hour: "2-digit",
                     minute: "2-digit",
                   })}
             </span>
-            <div className="segmented" role="group" aria-label="Time window">
+            <div
+              className="segmented"
+              role="group"
+              aria-label={t("Time window")}
+            >
               {WINDOWS.map(([value, text]) => (
                 <button
                   key={value}
@@ -622,13 +1018,21 @@ function App() {
               aria-controls="dashboard-filters"
               onClick={() => setFiltersOpen((open) => !open)}
             >
-              Filters{activeFilters ? ` (${activeFilters})` : ""}
+              {t("Filters")}
+              {activeFilters ? ` (${activeFilters})` : ""}
             </button>
+            <a
+              className="button"
+              href={"?" + pageParams(selection, cross, days, lang, true)}
+              title={t("Open a printable report")}
+            >
+              {t("Report")}
+            </a>
             <button
               onClick={refresh}
               disabled={query.isFetching}
-              aria-label="Refresh"
-              title="Refresh data"
+              aria-label={t("Refresh")}
+              title={t("Refresh data")}
             >
               ↻
             </button>
@@ -640,87 +1044,45 @@ function App() {
           {filtersOpen && (
             <button
               className="filter-backdrop"
-              aria-label="Close filter panel"
+              aria-label={t("Close filter panel")}
               onClick={closeFilters}
             />
           )}
           <aside
             id="dashboard-filters"
             className="filter-panel"
-            aria-label="Dashboard filters"
+            aria-label={t("Dashboard filters")}
             hidden={!filtersOpen}
           >
             <div className="filter-panel-heading">
-              <h2>Filters</h2>
-              <button aria-label="Collapse filters" onClick={closeFilters}>
+              <h2>{t("Filters")}</h2>
+              <button aria-label={t("Collapse filters")} onClick={closeFilters}>
                 ×
               </button>
             </div>
             <input
               className="filter-search"
-              aria-label="Find a filter"
-              placeholder="Find a filter…"
+              aria-label={t("Find a filter")}
+              placeholder={t("Find a filter…")}
               value={filterSearch}
               onChange={(e) => setFilterSearch(e.target.value)}
             />
             <div className="filters">
-              {data.variables
+              {sidebarVariables
                 .filter((variable) =>
-                  variable.label
+                  filterLabel(variable)
                     .toLowerCase()
                     .includes(filterSearch.toLowerCase()),
                 )
                 .map((variable) => (
                   <label key={variable.name}>
-                    {variable.label}
-                    {variable.type === "number" ? (
-                      <AreaInput
-                        label={variable.label}
-                        min={variable.min ?? 0}
-                        value={
-                          selection[variable.name]?.[0] ?? variable.default
-                        }
-                        onCommit={(value) =>
-                          setSelection((s) => ({
-                            ...s,
-                            [variable.name]: [value],
-                          }))
-                        }
-                      />
-                    ) : (
-                      <select
-                        aria-label={variable.label}
-                        multiple={variable.multi}
-                        value={
-                          variable.multi
-                            ? selection[variable.name]
-                            : selection[variable.name]?.[0]
-                        }
-                        onChange={(e) => {
-                          const values = [...e.target.selectedOptions].map(
-                            (option) => option.value,
-                          );
-                          setSelection((s) => ({
-                            ...s,
-                            [variable.name]:
-                              values.length > 1
-                                ? values.filter((value) => value !== "All")
-                                : values.length
-                                  ? values
-                                  : ["All"],
-                          }));
-                        }}
-                      >
-                        <option value="All">All</option>
-                        {(data.options[variable.name] || variable.choices)
-                          .filter((v) => v !== "All")
-                          .map((value) => (
-                            <option key={String(value)} value={String(value)}>
-                              {String(value)}
-                            </option>
-                          ))}
-                      </select>
-                    )}
+                    {filterLabel(variable)}
+                    <FilterControl
+                      variable={variable}
+                      selection={selection}
+                      options={data.options}
+                      onChange={setVariable(variable.name)}
+                    />
                   </label>
                 ))}
               <button
@@ -734,7 +1096,7 @@ function App() {
                   );
                 }}
               >
-                Reset filters
+                {t("Reset filters")}
               </button>
             </div>
           </aside>
@@ -752,7 +1114,7 @@ function App() {
                       })
                     }
                   >
-                    {label(dimension)}: {values.join(", ")}{" "}
+                    {label(dimension)}: {values.map(valueLabel).join(", ")}{" "}
                     <span aria-hidden="true">×</span>
                   </button>
                 ))}
@@ -764,44 +1126,16 @@ function App() {
                 {query.error.loginUrl && (
                   <>
                     {" "}
-                    <a href={query.error.loginUrl}>Sign in</a>
+                    <a href={query.error.loginUrl}>{t("Sign in")}</a>
                   </>
                 )}
               </p>
             )}
-            <div className={query.isFetching ? "sections busy" : "sections"}>
-              {sections.map((section) => (
-                <section
-                  className="dash-section"
-                  key={section.name + section.panels[0].id}
-                  aria-label={section.name || undefined}
-                >
-                  {section.name && <h2>{section.name}</h2>}
-                  <div className="grid">
-                    {section.panels.map((panel) => (
-                      <Panel
-                        key={panel.id}
-                        panel={panel}
-                        rows={data.rows[panel.key] || EMPTY}
-                        selected={
-                          panel.type === "bar"
-                            ? cross[panel.category]
-                            : undefined
-                        }
-                        onSelect={onSelect}
-                      />
-                    ))}
-                  </div>
-                </section>
-              ))}
-            </div>
+            {sectionList}
           </div>
         </div>
       </main>
-      <footer>
-        Data collected from OLX.ba listings. Prices are asking prices in KM; an
-        exit means a listing left the site, not that it sold.
-      </footer>
+      <footer>{t(FOOTER)}</footer>
     </>
   );
 }

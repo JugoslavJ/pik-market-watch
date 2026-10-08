@@ -33,7 +33,7 @@ WTF_CSRF_TIME_LIMIT = 60 * 60 * 24
 PUBLIC_ROLE_LIKE = None
 AUTH_USER_REGISTRATION = False
 AUTH_ROLES_SYNC_AT_LOGIN = True
-LOGO_TARGET_PATH = "/olx/dashboard/olx-overview/"
+LOGO_TARGET_PATH = "/olx/dashboard/olx-home/"
 
 # Viewer map style, glyph, sprite, and tile requests stay restricted to CARTO.
 TALISMAN_CONFIG = deepcopy(DEFAULT_TALISMAN_CONFIG)

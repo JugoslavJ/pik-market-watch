@@ -55,6 +55,7 @@ async function main() {
         ? {
             articleId: detail.articleId,
             dealType: detail.dealType,
+            propertyType: detail.propertyType,
             priceState: detail.priceState,
             price: detail.price,
             sqm: detail.sqm,

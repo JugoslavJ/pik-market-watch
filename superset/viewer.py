@@ -16,13 +16,16 @@ from sqlalchemy.engine import URL
 
 from superset import appbuilder, security_manager
 from definitions import default_days
-from viewer_queries import BOARDS, compile_dashboard, presentation, selections, validate_cross
+from viewer_queries import BOARDS, TRANSLATIONS, compile_dashboard, presentation, selections, validate_cross
 from board_access import role_allows
+import outlines
 
 ROOT = Path(__file__).parent / "viewer_dist"
 cache = SimpleCache(threshold=100, default_timeout=600)
 option_cache = SimpleCache(threshold=100, default_timeout=600)
 blueprint = Blueprint("olx_viewer", __name__, url_prefix="/olx")
+# Every viewer role includes Home, which routes each audience to its boards.
+LANDING = "olx-home"
 
 
 def viewer_login_required(view):
@@ -141,6 +144,32 @@ def dashboard_data(uid):
     return response
 
 
+AREAS_SQL = "SELECT name, to_jsonb(boundary) FROM lean.neighborhoods ORDER BY name"
+
+
+@blueprint.route("/api/areas")
+@viewer_login_required
+def areas():
+    """Neighborhood outlines for area maps: static, so fetched once and joined by name."""
+    if not visible_boards():
+        abort(403)
+    shapes = option_cache.get("areas")
+    if shapes is None:
+        with reporting_engine().connect() as connection, connection.begin():
+            connection.execute(text("SET TRANSACTION READ ONLY"))
+            shapes = outlines.collection(connection.execute(text(AREAS_SQL)).all())
+        option_cache.set("areas", shapes, timeout=86400)
+    response = jsonify(shapes)
+    response.headers["Cache-Control"] = "private, max-age=86400"
+    return response
+
+
+def page_language():
+    """The viewer switches language client-side; the document follows ?lang= when known."""
+    language = request.args.get("lang", "en")
+    return language if language in TRANSLATIONS else "en"
+
+
 @blueprint.route("/dashboard/<uid>/")
 @viewer_login_required
 def dashboard_page(uid):
@@ -151,7 +180,7 @@ def dashboard_page(uid):
     css = entry.get("css", []) + [css for name in entry.get("imports", []) for css in manifest[name].get("css", [])]
     response = make_response(render_template_string(PAGE, data=data, entry=entry,
         css=css, imports=[manifest[name]["file"] for name in entry.get("imports", [])],
-        boards=visible_boards(), nonce=request.csp_nonce))
+        boards=visible_boards(), admin=security_manager.is_admin(), nonce=request.csp_nonce, lang=page_language()))
     response.headers["Cache-Control"] = "no-store"
     response.headers["Server-Timing"] = f"viewer;dur={(perf_counter()-started)*1000:.2f}, auth;dur={g.viewer_auth_ms:.2f}"
     return response
@@ -165,15 +194,15 @@ def assets(filename):
     return response
 
 
-PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
+PAGE = """<!doctype html><html lang="{{lang}}"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>{{data.title}}</title>
 {% for path in css %}<link rel="stylesheet" href="/olx/assets/{{path}}">{% endfor %}
 {% for path in imports %}<link rel="modulepreload" href="/olx/assets/{{path}}">{% endfor %}
-</head><body><div id="root"><header><a class="brand" href="/olx/dashboard/olx-overview/">OLX Market Watch</a>
+</head><body><div id="root"><header><a class="brand" href="/olx/dashboard/olx-home/">OLX Market Watch</a>
 </header><main class="initial"><div class="heading"><h1>{{data.title}}</h1></div><div class="grid">
 {% for panel in data.panels if panel.type == 'big_number' %}<article class="panel stat" style="grid-column:span {{panel.grid.w}}">
 <h3>{{panel.title}}</h3><p class="figure"><span class="value">{{data.rows[panel.key][0][panel.field] if data.rows[panel.key] else '—'}}</span></p></article>{% endfor %}
-</div></main></div><script id="viewer-bootstrap" type="application/json" nonce="{{nonce}}">{{{'data':data,'boards':boards}|tojson}}</script>
+</div></main></div><script id="viewer-bootstrap" type="application/json" nonce="{{nonce}}">{{{'data':data,'boards':boards,'admin':admin}|tojson}}</script>
 <script type="module" src="/olx/assets/{{entry.file}}" nonce="{{nonce}}"></script></body></html>"""
 
 
@@ -183,6 +212,6 @@ def init_viewer(app):
     @app.before_request
     def viewer_home():
         if request.path in ("/", "/superset/welcome/", "/superset/welcome"):
-            response = redirect(url_for("olx_viewer.dashboard_page", uid="olx-overview"))
+            response = redirect(url_for("olx_viewer.dashboard_page", uid=LANDING))
             response.headers["Cache-Control"] = "no-store"
             return response

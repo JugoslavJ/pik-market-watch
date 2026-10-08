@@ -14,7 +14,10 @@ from definitions import (TABLE_DIMENSIONS, TABLE_SCAN, cross_filter_columns, dat
 
 BOARDS = {board["uid"]: board for path in sorted(SOURCE_DIR.glob("*.json"))
           if (board := json.loads(path.read_text(encoding="utf-8-sig")))}
-ALLOWED_CROSS_COLUMNS = frozenset(column for columns in TABLE_DIMENSIONS.values() for column in columns)
+# English lives in the definitions; each i18n file adds one more language.
+TRANSLATIONS = {path.stem: json.loads(path.read_text(encoding="utf-8-sig"))
+                for path in sorted((SOURCE_DIR / "i18n").glob("*.json"))}
+ALLOWED_CROSS_COLUMNS =frozenset(column for columns in TABLE_DIMENSIONS.values() for column in columns)
 environment = Environment(autoescape=False)
 
 
@@ -31,6 +34,20 @@ def filter_template(source):
     return environment.from_string(source)
 
 
+LISTING_ID = re.compile(r"\d{1,12}")
+LISTING_LINK = re.compile(r"https?://(?:www\.)?olx\.ba/artikal/(\d{1,12})(?:[/?#]\S*)?", re.I)
+
+
+def listing_reference(value):
+    """Reduce a pasted OLX link or bare id to its digits; anything else is rejected."""
+    text = str(value).strip()
+    if not text or LISTING_ID.fullmatch(text):
+        return text
+    if match := LISTING_LINK.fullmatch(text):
+        return match[1]
+    raise ValueError("Expected an OLX.ba listing link or id")
+
+
 def selections(board, supplied):
     if not isinstance(supplied, dict):
         raise ValueError("Expected filter selections")
@@ -45,7 +62,9 @@ def selections(board, supplied):
             raise ValueError("Invalid filter values")
         if any(len(str(v)) > 500 for v in value):
             raise ValueError("Filter value is too long")
-        if (name in ("min_sqm", "max_sqm") or variable.get("op") in (">=", "<=")) and value[0] != "":
+        if variable["type"] == "text":
+            value = [listing_reference(value[0])]
+        if (variable["type"] == "number" or variable.get("op") in (">=", "<=")) and value[0] != "":
             number = float(value[0])
             if not math.isfinite(number) or not variable.get("min", 0) <= number <= 1000000000:
                 raise ValueError("Invalid numeric range")
@@ -113,7 +132,7 @@ def compile_dashboard(board, supplied=None, cross=None, days=None, until=None, i
         end = "CAST(" + bind(until.isoformat()) + " AS timestamptz)"
         sql = expand_time(sql, start, end)
         permitted = cross_filter_columns(sql)
-        applicable = {name: [{"op": "IN", "val": values}] for name, values in cross.items() if name in permitted or name == "category"}
+        applicable = {name: [{"op": "IN", "val": values}] for name, values in cross.items() if name in permitted}
         for name, predicates in property_filters.items():
             if name in permitted:
                 applicable.setdefault(name, []).extend(predicates)
@@ -164,7 +183,7 @@ def compile_dashboard(board, supplied=None, cross=None, days=None, until=None, i
     return statement, {key: value for key, value in params.items() if key in used}, len(groups)
 
 
-PRESENTED_FIELDS = ("description", "section", "field", "category", "value", "x", "y", "bars", "suffix",
+PRESENTED_FIELDS = ("description", "section", "field", "category", "value", "x", "y", "bars", "suffix", "view",
                     "decimals")
 
 
@@ -175,7 +194,11 @@ def presentation(board):
               for panel in panels(board)]
     return {"uid": board["uid"], "title": board["title"], "panels": result,
             "defaultDays": default_days(board),
+            "translations": {language: {"board": entries.get(board["uid"], {}),
+                                        "common": entries.get("__common", {})}
+                             for language, entries in TRANSLATIONS.items()},
             "variables": [{"name": v["name"], "label": v.get("label", v["name"]),
                            "type": v["type"], "multi": v.get("multi", False),
-                           "default": v.get("default", "All"), "choices": v.get("options", [])}
+                           "default": v.get("default", "All"), "choices": v.get("options", []),
+                           **({"section": v["section"]} if "section" in v else {})}
                           for v in filters(board)] + viewer_variables(board)}

@@ -37,7 +37,6 @@ async function collectSearch(
       searchKey: search.searchKey,
       name: search.name,
       url: base.href,
-      category: search.category,
     });
     runId = await db.startRun(search.searchKey);
     log(`▶ "${search.name}" started (run #${runId})`);
@@ -61,7 +60,6 @@ async function collectSearch(
         searchKey: search.searchKey,
         name: search.name,
         url: base.href,
-        category: search.category ?? null,
       },
       cards: allCards,
       run: {

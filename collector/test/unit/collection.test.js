@@ -27,7 +27,6 @@ const meta = (total, lastPage, current) => ({
 
 const SEARCH = {
   name: "T",
-  category: "apartments",
   url: "https://olx.ba/pretraga?category_id=23",
   searchKey: "/pretraga?category_id=23",
 };

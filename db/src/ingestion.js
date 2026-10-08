@@ -21,14 +21,14 @@ function uniqueCards(cards) {
   return [...byId.values()];
 }
 
+// Prices arrive validated against their property type's sale minimum.
 function rate(price, sqm, deal) {
   if (
     deal !== "sale" ||
     price == null ||
     sqm == null ||
-    Number(price) < 3000 ||
-    Number(sqm) < 5 ||
-    Number(sqm) > 500
+    Number(price) <= 0 ||
+    Number(sqm) < 5
   )
     return null;
   const result = Math.round(Number(price) / Number(sqm));
@@ -46,20 +46,12 @@ function hasValidPrice(item) {
 
 // Containing boundaries are an indexed lookup; only points outside every
 // neighborhood pay for geodesic distances, prefiltered to at least 5 km.
-async function classify(client, ids) {
+async function assignNeighborhoods(client, ids) {
   if (!ids.length) return;
   await client.query(
-    `UPDATE lean.listings l SET
-       property_type=c.property_type,neighborhood=c.neighborhood
+    `UPDATE lean.listings l SET neighborhood=c.neighborhood
      FROM (
        SELECT s.article_id,
-         CASE WHEN cardinality(s.search_keys)=0 THEN s.property_type ELSE (
-           SELECT CASE WHEN count(DISTINCT ss.category) = 1
-                         AND bool_and(ss.category IN ('apartments','houses','vacation_homes'))
-                       THEN min(ss.category) ELSE NULL END
-             FROM unnest(s.search_keys) k
-             JOIN lean.saved_searches ss ON ss.search_key = k
-         ) END AS property_type,
          COALESCE(
            (SELECT n.name FROM lean.neighborhoods n
              WHERE n.name = NULLIF(BTRIM(s.extra->>'location'), '')
@@ -79,8 +71,7 @@ async function classify(client, ids) {
        WHERE s.article_id = ANY($1::bigint[])
      ) c
      WHERE l.article_id = c.article_id
-       AND (l.property_type,l.neighborhood)
-           IS DISTINCT FROM (c.property_type,c.neighborhood)`,
+       AND l.neighborhood IS DISTINCT FROM c.neighborhood`,
     [ids],
   );
 }
@@ -108,12 +99,13 @@ async function recordLifecycleEvents(client, ids, eventType) {
   );
 }
 
-async function registerSavedSearch({ searchKey, name, url, category }) {
+async function registerSavedSearch({ searchKey, name, url }) {
   await this.pool.query(
-    `INSERT INTO lean.saved_searches (search_key,name,url,category)
-     VALUES ($1,$2,$3,$4)
-     ON CONFLICT (search_key) DO UPDATE SET name=EXCLUDED.name,url=EXCLUDED.url,category=EXCLUDED.category`,
-    [searchKey, name, url, category ?? null],
+    `INSERT INTO lean.saved_searches (search_key,name,url)
+     VALUES ($1,$2,$3)
+     ON CONFLICT (search_key) DO UPDATE SET name=EXCLUDED.name,url=EXCLUDED.url,
+       retired_at=NULL`,
+    [searchKey, name, url],
   );
 }
 
@@ -175,15 +167,11 @@ async function commitSearchIngestion(payload) {
       LIFECYCLE_LOCK,
     ]);
     await client.query(
-      `INSERT INTO lean.saved_searches (search_key,name,url,category)
-       VALUES ($1,$2,$3,$4)
-       ON CONFLICT (search_key) DO UPDATE SET name=EXCLUDED.name,url=EXCLUDED.url,category=EXCLUDED.category`,
-      [
-        searchKey,
-        payload.search.name,
-        payload.search.url,
-        payload.search.category ?? null,
-      ],
+      `INSERT INTO lean.saved_searches (search_key,name,url)
+       VALUES ($1,$2,$3)
+       ON CONFLICT (search_key) DO UPDATE SET name=EXCLUDED.name,url=EXCLUDED.url,
+         retired_at=NULL`,
+      [searchKey, payload.search.name, payload.search.url],
     );
     const previous = await client.query(
       `SELECT article_id,price,ppm2,deal,closed_at,
@@ -199,14 +187,18 @@ async function commitSearchIngestion(payload) {
       const prior = byId.get(Number(card.articleId));
       // Search cards only carry listing_type; keep a deal that details
       // derived from the ad's declared kind until the next detail fetch.
-      const deal = prior?.deal_declared
-        ? prior.deal
-        : card.dealType === "rent" || card.isRent === true
-          ? "rent"
-          : card.dealType === "sale" ||
-              (!Object.hasOwn(card, "dealType") && card.isRent === false)
-            ? "sale"
-            : "unknown";
+      // The daily-rent category overrides both.
+      const deal =
+        card.dealType === "daily_rent"
+          ? "daily_rent"
+          : prior?.deal_declared && prior.deal !== "daily_rent"
+            ? prior.deal
+            : card.dealType === "rent" || card.isRent === true
+              ? "rent"
+              : card.dealType === "sale" ||
+                  (!Object.hasOwn(card, "dealType") && card.isRent === false)
+                ? "sale"
+                : "unknown";
       const validPrice = hasValidPrice(card);
       const price = validPrice
         ? card.price
@@ -219,6 +211,7 @@ async function commitSearchIngestion(payload) {
         url: card.url,
         title: card.title,
         deal,
+        property_type: card.propertyType ?? null,
         sqm,
         rooms: card.rooms ?? null,
         price,
@@ -233,6 +226,8 @@ async function commitSearchIngestion(payload) {
         extra: {
           latest_price_state:
             card.priceState ?? (validPrice ? "valid" : "unpriced"),
+          ...(card.priceBasis && { price_basis: card.priceBasis }),
+          ...(card.categoryId != null && { olx_category_id: card.categoryId }),
         },
         valid_price: validPrice,
       };
@@ -240,26 +235,28 @@ async function commitSearchIngestion(payload) {
     if (observations.length) {
       await client.query(
         `INSERT INTO lean.listings
-           (article_id,url,title,deal,sqm,rooms,price,price_text,currency,ppm2,
+           (article_id,url,title,deal,property_type,sqm,rooms,price,price_text,currency,ppm2,
             latitude,longitude,seller_type,renewed_at,api_status,extra,search_keys)
-         SELECT article_id,url,title,deal,sqm,rooms,price,price_text,currency,ppm2,
+         SELECT article_id,url,title,deal,property_type,sqm,rooms,price,price_text,currency,ppm2,
                 latitude,longitude,seller_type,
                 (renewed_at AT TIME ZONE 'Europe/Sarajevo')::date,
                 api_status,extra,ARRAY[$2::text]
            FROM jsonb_to_recordset($1::jsonb) AS i(
-             article_id bigint,url text,title text,deal text,sqm numeric,rooms text,
+             article_id bigint,url text,title text,deal text,property_type text,
+             sqm numeric,rooms text,
              price numeric,price_text text,currency text,ppm2 integer,
              latitude float8,longitude float8,seller_type text,
              renewed_at timestamptz,api_status text,extra jsonb,valid_price boolean)
          ON CONFLICT (article_id) DO UPDATE SET
            url=EXCLUDED.url,title=EXCLUDED.title,deal=EXCLUDED.deal,
+           property_type=COALESCE(EXCLUDED.property_type,lean.listings.property_type),
            sqm=COALESCE(EXCLUDED.sqm,lean.listings.sqm),
            rooms=COALESCE(EXCLUDED.rooms,lean.listings.rooms),
            price=EXCLUDED.price,
            price_text=COALESCE(EXCLUDED.price_text,lean.listings.price_text),
            currency=EXCLUDED.currency,
-           ppm2=CASE WHEN EXCLUDED.deal='sale' AND EXCLUDED.price>=3000
-                       AND COALESCE(EXCLUDED.sqm,lean.listings.sqm) BETWEEN 5 AND 500
+           ppm2=CASE WHEN EXCLUDED.deal='sale' AND EXCLUDED.price>0
+                       AND COALESCE(EXCLUDED.sqm,lean.listings.sqm)>=5
                        AND round(EXCLUDED.price/NULLIF(COALESCE(EXCLUDED.sqm,lean.listings.sqm),0)) BETWEEN 1 AND 15000
                      THEN round(EXCLUDED.price/NULLIF(COALESCE(EXCLUDED.sqm,lean.listings.sqm),0))::int
                      ELSE NULL END,
@@ -275,7 +272,7 @@ async function commitSearchIngestion(payload) {
            last_seen=now(),closed_at=NULL,closing_price=NULL`,
         [JSON.stringify(observations), searchKey],
       );
-      await classify(client, ids);
+      await assignNeighborhoods(client, ids);
       await recordLifecycleEvents(
         client,
         previous.rows
@@ -313,7 +310,6 @@ async function commitSearchIngestion(payload) {
     const removedIds = removed.rows.map((row) => Number(row.article_id));
     let closedCount = 0;
     if (removedIds.length) {
-      await classify(client, removedIds);
       const closed = await client.query(
         `UPDATE lean.listings
             SET closed_at=(now() AT TIME ZONE 'Europe/Sarajevo')::date,
@@ -396,19 +392,19 @@ async function closeUnseenListings(activeKeys) {
     await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [
       LIFECYCLE_LOCK,
     ]);
-    const removed = await client.query(
+    // Searches dropped from the configuration keep their run history only.
+    await client.query(
+      `UPDATE lean.saved_searches SET retired_at=now()
+        WHERE retired_at IS NULL AND NOT search_key=ANY($1::text[])`,
+      [activeKeys],
+    );
+    await client.query(
       `UPDATE lean.listings l SET search_keys=(
          SELECT COALESCE(array_agg(k ORDER BY k),'{}'::text[])
            FROM unnest(l.search_keys) k WHERE k=ANY($1::text[]))
-       WHERE EXISTS (SELECT 1 FROM unnest(l.search_keys) k WHERE NOT k=ANY($1::text[]))
-       RETURNING article_id`,
+       WHERE EXISTS (SELECT 1 FROM unnest(l.search_keys) k WHERE NOT k=ANY($1::text[]))`,
       [activeKeys],
     );
-    if (removed.rowCount)
-      await classify(
-        client,
-        removed.rows.map((row) => Number(row.article_id)),
-      );
     const closed = await client.query(
       `UPDATE lean.listings
           SET closed_at=(now() AT TIME ZONE 'Europe/Sarajevo')::date,
@@ -454,13 +450,15 @@ async function enrichListings(rows) {
       if (!old.rowCount) continue;
       const prior = old.rows[0];
       const deal =
-        row.dealType === "rent" || row.isRent === true
-          ? "rent"
-          : row.dealType === "sale" || row.isRent === false
-            ? "sale"
-            : Object.hasOwn(row, "dealType")
-              ? "unknown"
-              : prior.deal;
+        row.dealType === "daily_rent"
+          ? "daily_rent"
+          : row.dealType === "rent" || row.isRent === true
+            ? "rent"
+            : row.dealType === "sale" || row.isRent === false
+              ? "sale"
+              : Object.hasOwn(row, "dealType")
+                ? "unknown"
+                : prior.deal;
       const validPrice = hasValidPrice(row);
       const price = validPrice
         ? row.price
@@ -487,15 +485,18 @@ async function enrichListings(rows) {
           extra[key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)] =
             row[key];
       }
+      if (row.categoryId != null) extra.olx_category_id = row.categoryId;
+      if (row.priceBasis) extra.price_basis = row.priceBasis;
       extra.latest_price_state =
         row.priceState ?? (validPrice ? "valid" : "unpriced");
       await client.query(
         `UPDATE lean.listings SET deal=$2,price=$3,
+           property_type=COALESCE($19,property_type),
            currency=COALESCE($4,currency),
            price_text=COALESCE($5,price_text),
            sqm=COALESCE(sqm,$6),
-           ppm2=CASE WHEN $2='sale' AND $3::numeric>=3000
-                      AND COALESCE(sqm,$6) BETWEEN 5 AND 500
+           ppm2=CASE WHEN $2='sale' AND $3::numeric>0
+                      AND COALESCE(sqm,$6)>=5
                       AND round($3::numeric/NULLIF(COALESCE(sqm,$6),0)) BETWEEN 1 AND 15000
                      THEN round($3::numeric/NULLIF(COALESCE(sqm,$6),0))::int
                      ELSE NULL END,
@@ -532,6 +533,7 @@ async function enrichListings(rows) {
           row.renewedAt ?? null,
           row.apiStatus ?? null,
           JSON.stringify(extra),
+          row.propertyType ?? null,
         ],
       );
       const apiHistory = (row.apiPriceHistory || []).map((event, ordinal) => ({
@@ -568,7 +570,7 @@ async function enrichListings(rows) {
       }
     }
     const ids = rows.map((row) => Number(row.articleId));
-    await classify(client, ids);
+    await assignNeighborhoods(client, ids);
     await client.query(
       "DELETE FROM lean.price_history WHERE article_id=ANY($1::bigint[]) AND source='search'",
       [ids],

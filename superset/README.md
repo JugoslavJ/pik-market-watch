@@ -4,7 +4,7 @@ Apache Superset 6.0.0 provides authentication and administration for the [React 
 
 ## Terms
 
-- **Dashboard definition**: one JSON file per dashboard in [`dashboards/`](dashboards/README.md) (`olx-home`, `olx-overview`, `olx-exits`, `olx-health`). It holds the panels, filter variables, time windows, units and layout, and is the single source of panel SQL.
+- **Dashboard definition**: one JSON file per dashboard in [`dashboards/`](dashboards/README.md) (`olx-home`, `olx-buyer`, `olx-renter`, `olx-daily`, `olx-pro`, `olx-overview`, `olx-exits`, `olx-health`). It holds the panels, filter variables, time windows, units and layout, and is the single source of panel SQL.
 - **Panel**: one big number, chart, table or map in a definition. A panel either has its own SQL or reuses another panel's query (`source_panel`).
 - **Definition SQL**: a panel's query, using the filter and time [macros](dashboards/README.md) that the compiler expands.
 - **Viewer**: the React app at `/olx/dashboard/<uid>/`. `viewer_queries.py` compiles each dashboard into one batched, parameterized statement that `viewer.py` runs as the read-only `olx_reporting` role.
@@ -12,16 +12,20 @@ Apache Superset 6.0.0 provides authentication and administration for the [React 
 
 ## Accounts and access
 
-Start the stack as described in the [README](../README.md#start-locally), then sign in as `admin`. Public signup is disabled. Assign one of two roles through `/users/list/`:
+Start the stack as described in the [README](../README.md#start-locally), then sign in as `admin`. Public signup is disabled. Admins open Superset's user management from the **Users** button in the viewer header, and every account has a **Sign out** button there. Assign a role through `/users/list/`:
 
 | Role | Dashboards |
 | --- | --- |
-| `OLX Viewer` | Home, Market Overview, Exits, Health |
+| `OLX Viewer` | Every dashboard |
 | `OLX Guest` | Home, Market Overview, Exits |
+| `OLX Buyer` | Home, Buy |
+| `OLX Renter` | Home, Rent |
+| `OLX Host` | Home, Daily Rent |
+| `OLX Pro` | Home, Buy, Rent, Daily Rent, Market Intelligence, Market Overview, Exits |
 
-Admins see every dashboard. Role membership, not permissions, opens a dashboard: `superset init` grants Alpha and Gamma every custom permission, so Gamma, Alpha and other roles open nothing in the viewer. The two roles hold no Superset permissions, so they have no access to Superset's own dashboards, charts, datasets or SQL Lab. Navigation lists only the dashboards a role opens, and the viewer rechecks roles on every response, including cached ones. Embedded guest tokens are denied.
+Admins see every dashboard. Role membership, not permissions, opens a dashboard: `superset init` grants Alpha and Gamma every custom permission, so Gamma, Alpha and other roles open nothing in the viewer. The viewer roles hold no Superset permissions, so they have no access to Superset's own dashboards, charts, datasets or SQL Lab. Navigation lists only the dashboards a role opens, and the viewer rechecks roles on every response, including cached ones. Embedded guest tokens are denied.
 
-`superset-access` creates both roles and strips any permissions they hold:
+`superset-access` creates the roles and strips any permissions they hold:
 
 ```sh
 docker compose --profile superset --profile superset-ops run --rm --no-deps superset-access
@@ -29,9 +33,11 @@ docker compose --profile superset --profile superset-ops run --rm --no-deps supe
 
 ## Definitions
 
-The four JSON files in `dashboards/` define 63 panels, scoped filter variables, SQL, time windows, units and layouts. `definitions.py` reads them and pushes chart selections and property filters into source table scans. `viewer_queries.py` binds viewer selections as SQL parameters and batches shared facts into one dashboard data statement.
+The eight JSON files in `dashboards/` define 142 panels, scoped filter variables, SQL, time windows, units and layouts. `definitions.py` reads them and pushes chart selections and property filters into source table scans. `viewer_queries.py` binds viewer selections as SQL parameters and batches shared facts into one dashboard data statement.
 
 A closure is an observed listing exit, not a confirmed sale. Its price is the last observed asking price. `listing_filters.py` defines property controls, including price bounds, amenities and explicit Unknown values. Listing filters apply before aggregation; operational run statistics keep their own scope. Exit prices use event snapshots, while amenities use the latest listing details. Market and exit results cache for ten minutes; Home and Health are uncached.
+
+The price checks on Buy, Rent and Market Intelligence take an OLX link or a manual neighborhood, area and rooms, and compare up to 20 nearby listings (active, or exited in the last 180 days). Their scans are marked `/* unfiltered */` so page filters cannot bias the comparables. Area maps join panel rows by neighborhood to outlines from `/olx/api/areas`; the reporting role cannot call PostGIS functions, so `outlines.py` simplifies the boundaries in Python and the result is cached for a day. `dashboards/i18n/<lang>.json` holds the non-English board text.
 
 After changing definitions, run `node superset/scripts/generate-dashboard-catalog.js` from the repository root and rebuild the Superset image. The generated [catalog](DASHBOARD_CATALOG.md) records the panel SQL, filters and result groups. CI verifies it matches the definitions.
 

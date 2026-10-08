@@ -18,7 +18,7 @@ Set the required PostgreSQL and Superset secrets in `.env` before starting. Use 
 docker compose --profile scrape run --rm scraper node src/index.js --once
 ```
 
-Open `http://127.0.0.1:3000/` and sign in with your Superset account. The [viewer](dashboard-viewer/README.md) has Home, Overview, Exits and Health dashboards. Scraper health is at `http://127.0.0.1:9100` during collection.
+Open `http://127.0.0.1:3000/` and sign in with your Superset account. The [viewer](dashboard-viewer/README.md) has Home, Buy, Rent, Daily Rent, Market Intelligence, Overview, Exits and Health dashboards. Scraper health is at `http://127.0.0.1:9100` during collection.
 
 Compose runs migrations before starting the scraper. Dashboard-only hosts apply schema changes with `docker compose --profile migrate run --build --rm migrator`. Run archive retention with `docker compose --profile maintenance run --build --rm maintenance`.
 
@@ -26,12 +26,12 @@ Collection can run on a separate machine using the [sync workflow](docs/OPERATIO
 
 ## Configure searches
 
-Add filtered OLX browser URLs to `config/searches.json`; `name` and `category` are optional. See [configuration](docs/CONFIGURATION.md#searches) for accepted filters and all settings.
+Add filtered OLX browser URLs to `config/searches.json`; `name` is optional. Property types come from each listing's OLX category. See [configuration](docs/CONFIGURATION.md#searches) for accepted filters and all settings.
 
 ```json
 {
   "searches": [
-    { "name": "Apartments", "category": "apartments", "url": "https://www.olx.ba/<filtered-search>" }
+    { "name": "Nekretnine (Banja Luka)", "url": "https://olx.ba/pretraga?category_id=2&canton=11&cities=79" }
   ]
 }
 ```

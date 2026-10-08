@@ -67,7 +67,7 @@ const alerts = [
     "Saved search stale or failing",
     "15m",
     "count(stale searches) >= 1",
-    "SELECT ss.search_key, ss.name, success.finished_at AS last_success_at FROM lean.saved_searches ss LEFT JOIN LATERAL (SELECT r.finished_at FROM lean.scrape_runs r WHERE r.search_key = ss.search_key AND r.status = 'ok' AND r.is_complete = TRUE AND r.finished_at IS NOT NULL ORDER BY r.finished_at DESC LIMIT 1) success ON TRUE WHERE success.finished_at IS NULL OR success.finished_at < now() - interval '26 hours';",
+    "SELECT ss.search_key, ss.name, success.finished_at AS last_success_at FROM lean.saved_searches ss LEFT JOIN LATERAL (SELECT r.finished_at FROM lean.scrape_runs r WHERE r.search_key = ss.search_key AND r.status = 'ok' AND r.is_complete = TRUE AND r.finished_at IS NOT NULL ORDER BY r.finished_at DESC LIMIT 1) success ON TRUE WHERE ss.retired_at IS NULL AND (success.finished_at IS NULL OR success.finished_at < now() - interval '26 hours');",
   ],
 ];
 lines.push(

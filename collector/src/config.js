@@ -118,7 +118,7 @@ module.exports = {
   maxDetailFetches: integer(
     "MAX_DETAIL_FETCHES",
     process.env.MAX_DETAIL_FETCHES,
-    25,
+    75,
   ),
   detailRefreshDays: integer(
     "DETAIL_REFRESH_DAYS",
@@ -174,7 +174,6 @@ module.exports = {
       return {
         url: s.url,
         name: name || s.url,
-        category: (s.category || "").trim() || null,
         searchKey: normalizeSearchKey(s.url),
       };
     }),

@@ -1,14 +1,14 @@
 {
   "uid": "olx-home",
   "title": "OLX.ba Home",
-  "description": "Direct views of current listings, recorded price changes, scrape runs, and observed closures in the lean schema. Historical charts use retained event timestamps rather than reconstructed daily inventory.",
+  "description": "The market at a glance and the way into each audience board: Buy for home buyers, Rent for tenants, and Market Intelligence for agents and agencies.",
   "time_range": "90d",
   "filters": [],
   "panels": [
     {
       "id": 2,
       "title": "Active listings",
-      "description": "Open listings across every watched search.",
+      "description": "Open listings in every OLX real-estate category.",
       "section": "Market",
       "type": "big_number",
       "layout": {
@@ -17,12 +17,12 @@
         "w": 8,
         "h": 4
       },
-      "sql": "WITH a AS (\n  SELECT count(*) FILTER (WHERE closed_at IS NULL) AS active,\n    percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE closed_at IS NULL AND deal='sale' AND ppm2>0) AS sale_ppm2,\n    percentile_cont(0.5) WITHIN GROUP (ORDER BY price) FILTER (WHERE closed_at IS NULL AND deal='rent' AND price>0) AS rent_price,\n    percentile_cont(0.5) WITHIN GROUP (ORDER BY price) FILTER (WHERE closed_at IS NULL AND deal='sale' AND price>0) AS sale_price,\n    count(*) FILTER (WHERE closed_at > (now() AT TIME ZONE 'Europe/Sarajevo')::date - 30) AS recent_exits,\n    count(*) FILTER (WHERE closed_at IS NULL OR closed_at > (now() AT TIME ZONE 'Europe/Sarajevo')::date - 30) AS recent_population,\n    percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE deal='sale' AND ppm2>0 AND first_seen >= date_trunc('week', now())) AS current_week,\n    percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE deal='sale' AND ppm2>0 AND first_seen >= date_trunc('week', now()) - INTERVAL '7 days' AND first_seen < date_trunc('week', now())) AS prior_week\n  FROM lean.listings\n)\nSELECT active,\n  round(sale_ppm2::numeric,0) AS median_sale_ppm2,\n  round(rent_price::numeric,0) AS median_rent,\n  round((1200 * rent_price / NULLIF(sale_price,0))::numeric,1) AS gross_yield_pct,\n  round(100.0 * recent_exits / NULLIF(recent_population,0),1) AS exit_ratio,\n  round((100 * (current_week / NULLIF(prior_week,0) - 1))::numeric,1) AS change_pct\nFROM a",
+      "sql": "WITH a AS (\n  SELECT count(*) FILTER (WHERE closed_at IS NULL) AS active,\n    percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE closed_at IS NULL AND property_type='apartments' AND deal='sale' AND ppm2>0) AS sale_ppm2,\n    percentile_cont(0.5) WITHIN GROUP (ORDER BY price) FILTER (WHERE closed_at IS NULL AND property_type='apartments' AND deal='rent' AND price>0) AS rent_price,\n    percentile_cont(0.5) WITHIN GROUP (ORDER BY price) FILTER (WHERE closed_at IS NULL AND property_type='apartments' AND deal='sale' AND price>0) AS sale_price,\n    count(*) FILTER (WHERE closed_at > (now() AT TIME ZONE 'Europe/Sarajevo')::date - 30) AS recent_exits,\n    count(*) FILTER (WHERE closed_at IS NULL OR closed_at > (now() AT TIME ZONE 'Europe/Sarajevo')::date - 30) AS recent_population,\n    percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE property_type='apartments' AND deal='sale' AND ppm2>0 AND first_seen >= date_trunc('week', now())) AS current_week,\n    percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE property_type='apartments' AND deal='sale' AND ppm2>0 AND first_seen >= date_trunc('week', now()) - INTERVAL '7 days' AND first_seen < date_trunc('week', now())) AS prior_week\n  FROM lean.listings\n)\nSELECT active,\n  round(sale_ppm2::numeric,0) AS median_sale_ppm2,\n  round(rent_price::numeric,0) AS median_rent,\n  round((1200 * rent_price / NULLIF(sale_price,0))::numeric,1) AS gross_yield_pct,\n  round(100.0 * recent_exits / NULLIF(recent_population,0),1) AS exit_ratio,\n  round((100 * (current_week / NULLIF(prior_week,0) - 1))::numeric,1) AS change_pct\nFROM a",
       "field": "active"
     },
     {
       "id": 3,
-      "title": "Median KM/m² · sales",
+      "title": "Median KM/m² · apartments for sale",
       "section": "Market",
       "type": "big_number",
       "layout": {
@@ -37,7 +37,7 @@
     },
     {
       "id": 4,
-      "title": "Median rent · KM/mo",
+      "title": "Median rent · apartments",
       "section": "Market",
       "type": "big_number",
       "layout": {
@@ -53,7 +53,7 @@
     {
       "id": 5,
       "title": "Gross rental yield · asking",
-      "description": "Median monthly rent × 12 ÷ median sale price, both from active asking prices.",
+      "description": "Median monthly apartment rent × 12 ÷ median apartment sale price, both from active asking prices.",
       "section": "Market",
       "type": "big_number",
       "layout": {
@@ -86,8 +86,8 @@
     },
     {
       "id": 7,
-      "title": "New sales KM/m² · week over week",
-      "description": "Median KM/m² of sale listings first seen this week, compared with last week.",
+      "title": "New apartment KM/m² · week over week",
+      "description": "Median KM/m² of apartments for sale first seen this week, compared with last week.",
       "section": "Market",
       "type": "big_number",
       "layout": {
@@ -118,8 +118,8 @@
     },
     {
       "id": 9,
-      "title": "Last successful scrape",
-      "section": "Collection",
+      "title": "Data updated",
+      "section": "Data",
       "type": "big_number",
       "layout": {
         "x": 0,
@@ -127,37 +127,10 @@
         "w": 8,
         "h": 4
       },
-      "sql": "SELECT round(EXTRACT(EPOCH FROM (now() - max(finished_at) FILTER (WHERE status='ok' AND is_complete AND finished_at IS NOT NULL))) / 60)::int AS minutes_since_success,\n  count(*) FILTER (WHERE status='error' AND started_at>now()-INTERVAL '24 hours') AS failed_24h,\n  coalesce(sum(cards) FILTER (WHERE status='ok' AND started_at>now()-INTERVAL '24 hours'),0) AS cards_24h\nFROM lean.scrape_runs",
+      "sql": "SELECT round(EXTRACT(EPOCH FROM (now() - max(finished_at) FILTER (WHERE status='ok' AND is_complete AND finished_at IS NOT NULL))) / 60)::int AS minutes_since_success\nFROM lean.scrape_runs",
       "field": "minutes_since_success",
-      "suffix": "minutes"
-    },
-    {
-      "id": 10,
-      "title": "Failed runs · 24 h",
-      "section": "Collection",
-      "type": "big_number",
-      "layout": {
-        "x": 8,
-        "y": 18,
-        "w": 8,
-        "h": 4
-      },
-      "source_panel": 9,
-      "field": "failed_24h"
-    },
-    {
-      "id": 11,
-      "title": "Cards scraped · 24 h",
-      "section": "Collection",
-      "type": "big_number",
-      "layout": {
-        "x": 16,
-        "y": 18,
-        "w": 8,
-        "h": 4
-      },
-      "source_panel": 9,
-      "field": "cards_24h"
+      "suffix": "minutes",
+      "description": "Time since the last complete OLX.ba collection run. Run details live on the Health board."
     }
   ]
 }

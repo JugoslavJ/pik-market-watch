@@ -29,8 +29,9 @@ def main():
     api = SupersetAPI()
     api.authenticate_browser()
     results = []
-    for uid in ("olx-home", "olx-overview", "olx-exits", "olx-health"):
-        cache_expected = uid in ("olx-overview", "olx-exits")
+    for uid in ("olx-home", "olx-buyer", "olx-renter", "olx-daily", "olx-pro", "olx-overview", "olx-exits",
+                "olx-health"):
+        cache_expected = uid not in ("olx-home", "olx-health")
         states = ({}, {"s": json.dumps({"rooms": ["2"]})}) if cache_expected else ({},)
         for state in states:
             fresh, cached = [], []

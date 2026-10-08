@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import access
-from board_access import GUEST_ROLE, ROLES, VIEWER_ROLE, role_allows
+from board_access import BUYER_ROLE, GUEST_ROLE, PRO_ROLE, ROLES, VIEWER_ROLE, role_allows
 from client import LoginCSRFParser, SupersetAPI
 
 
@@ -23,13 +23,24 @@ class RoleProvisioningTests(unittest.TestCase):
             access.prepare_access()
             access.prepare_access()
         self.assertEqual({name: role.permissions for name, role in roles.items()},
-                         {VIEWER_ROLE: [], GUEST_ROLE: []})
+                         {name: [] for name in ROLES})
 
     def test_role_membership_alone_selects_dashboards(self):
         self.assertTrue(role_allows([GUEST_ROLE], "olx-overview"))
         self.assertFalse(role_allows([GUEST_ROLE], "olx-health"))
         self.assertTrue(role_allows(["Gamma", VIEWER_ROLE], "olx-health"))
         self.assertFalse(role_allows(["Gamma", "Alpha"], "olx-home"))
+        self.assertTrue(role_allows([BUYER_ROLE], "olx-buyer"))
+        self.assertFalse(role_allows([BUYER_ROLE], "olx-pro"))
+        self.assertFalse(role_allows([PRO_ROLE], "olx-health"))
+
+    def test_every_role_starts_at_home_and_lists_existing_boards(self):
+        boards = {path.stem for path in (Path(__file__).resolve().parents[1] / "dashboards").glob("*.json")}
+        for name, uids in ROLES.items():
+            self.assertEqual(uids[0], "olx-home", name)
+            self.assertLessEqual(set(uids), boards, name)
+            # validate_access revokes and rechecks a second board.
+            self.assertGreaterEqual(len(uids), 2, name)
 
 
 class LoginTests(unittest.TestCase):
