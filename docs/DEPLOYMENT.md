@@ -3,7 +3,7 @@
 Production runs the Compose stack on an OCI instance behind Cloudflare Tunnel. GitHub Actions deploys every tested push to `main`.
 
 - Superset listens on container port `8088`, published on host `127.0.0.1:3000`.
-- `/` opens Market Overview; navigation contains Home, Overview, Exits and Health.
+- `/` opens Home; navigation lists the dashboards the account's role opens.
 - Cloudflare Tunnel forwards the public hostname to `http://127.0.0.1:3000`. No public 80, 443 or 3000 ingress is needed.
 
 ## Prepare the instance
@@ -58,6 +58,7 @@ Then, through the public hostname:
 - `/` opens the viewer after login, and navigation lists only authorized dashboards.
 - An `OLX Viewer` account opens every dashboard, with Secure session cookies.
 - An `OLX Guest`-only account opens Home, Market Overview and Exits; Health and Superset's own data APIs are denied.
+- `OLX Buyer`, `OLX Renter`, `OLX Host` and `OLX Pro` accounts open only their [audience dashboards](../superset/README.md#accounts-and-access).
 - Sidebar filters and chart clicks combine, and clearing restores the previous data.
 - Charts keep their values while updating, and expired sessions offer sign-in.
 - Maps load, listing links open, and tables sort and export CSV.

@@ -21,7 +21,6 @@ const search = {
   name: "Fresh search",
   searchKey: "collection-audit",
   url: "https://olx.ba/pretraga?category_id=23",
-  category: "apartments",
 };
 const cfg = {
   maxPages: 10,

@@ -12,6 +12,10 @@ const {
 const chromium = loadChromium();
 const slugs = process.env.SUPERSET_BENCH_DASHBOARDS?.split(",") || [
   "olx-home",
+  "olx-buyer",
+  "olx-renter",
+  "olx-daily",
+  "olx-pro",
   "olx-overview",
   "olx-exits",
   "olx-health",

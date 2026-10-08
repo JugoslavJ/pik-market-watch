@@ -1,6 +1,6 @@
 # OLX dashboard viewer
 
-React, ECharts, TanStack Query and MapLibre GL render four dashboards with 63 panels. Superset supplies authentication and reporting; `superset/dashboards/` holds the definitions.
+React, ECharts, TanStack Query and MapLibre GL render eight dashboards with 142 panels. Superset supplies authentication and reporting; `superset/dashboards/` holds the definitions.
 
 The viewer is built into the Superset image. Rebuild and restart that service:
 
@@ -9,12 +9,13 @@ docker compose --profile superset --profile superset-ops build superset
 docker compose --profile superset --profile superset-ops up -d --no-deps superset
 ```
 
-Open `http://127.0.0.1:3000/` (Market Overview) and sign in with a
-Superset account. Other routes end in `olx-home/`, `olx-exits/`, and `olx-health/`.
+Open `http://127.0.0.1:3000/` (Home) and sign in with a Superset account.
+Other routes end in `olx-buyer/`, `olx-renter/`, `olx-daily/`, `olx-pro/`, `olx-overview/`,
+`olx-exits/` and `olx-health/`.
 Unauthenticated visits redirect to Superset login. Expired data requests retain charts and show a sign-in link. Docker builds hashed local assets; runtime needs no Node service or CDN JavaScript.
 
-`OLX Viewer` opens all four dashboards and `OLX Guest` opens Home, Market
-Overview and Exits; other dashboards are omitted from navigation and denied on
+Each role opens a fixed set of dashboards (see
+[accounts and access](../superset/README.md#accounts-and-access)); other dashboards are omitted from navigation and denied on
 direct page/API requests. Assign roles through Superset's `/users/list/`
 administration page; see [accounts and access](../superset/README.md#accounts-and-access).
 
@@ -33,6 +34,10 @@ Refresh invalidates older filter snapshots for that account and dashboard.
 Filters are reflected in the URL. Area edits apply on blur or Enter. Tables have
 search, sorting, pagination, CSV export and OLX links. Maps load when visible,
 use CARTO vector tiles, and update pins without recreating the map.
+
+Filters with a `section` (the price-check inputs) render above that section instead of in the Filters panel. A `text` filter accepts an OLX.ba link or listing id. Area maps (`view.layer: "areas"`) color neighborhoods by the panel `value` and filter the page on click.
+
+The header switches between English and Serbian; the choice is kept in the URL (`lang`) and the browser. **Report** opens `?report=1`: a fixed-width page with a cover (scope in words, data date, the exits caveat), every panel drawn, tables capped at 25 rows, and a print/PDF button. An optional "Prepared by" block (name, company, contact, logo) stays in browser storage and is never sent to the server.
 
 The Filters panel starts collapsed, supports search/reset/Escape and becomes a phone drawer. Controls cover BAM price, area, building details and amenities; missing values appear as Unknown. Home/Health listing charts use property filters; run statistics retain their operational scope. Exit prices use event snapshots, while amenities use current listing details.
 

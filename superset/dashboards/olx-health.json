@@ -3,15 +3,7 @@
   "title": "OLX Scraper Health",
   "description": "Direct views of current listings, recorded price changes, scrape runs, and observed closures in the lean schema. Historical charts use retained event timestamps rather than reconstructed daily inventory.",
   "time_range": "48h",
-  "filters": [
-    {
-      "name": "category",
-      "label": "Category (search tables)",
-      "type": "select",
-      "multi": false,
-      "options_sql": "SELECT DISTINCT category AS __value FROM lean.saved_searches WHERE category IS NOT NULL ORDER BY 1"
-    }
-  ],
+  "filters": [],
   "panels": [
     {
       "id": 4,
@@ -96,7 +88,7 @@
         "w": 6,
         "h": 4
       },
-      "sql": "SELECT count(*) AS searches FROM lean.saved_searches",
+      "sql": "SELECT count(*) AS searches FROM lean.saved_searches WHERE retired_at IS NULL",
       "field": "searches"
     },
     {
@@ -256,7 +248,7 @@
         "w": 24,
         "h": 12
       },
-      "sql": "SELECT s.name,s.category,s.search_key,CASE WHEN r.status='error' THEN 'failed' WHEN r.status='running' THEN 'running' WHEN r.finished_at<now()-INTERVAL '26 hours' THEN 'stale' ELSE coalesce(r.status,'never') END AS phase,round(EXTRACT(EPOCH FROM (now()-r.finished_at))/60)::int AS age_min,r.started_at,r.finished_at,r.error,s.url FROM lean.saved_searches s LEFT JOIN LATERAL (SELECT * FROM lean.scrape_runs WHERE search_key=s.search_key ORDER BY id DESC LIMIT 1) r ON TRUE WHERE ${category}='All' OR s.category=${category} ORDER BY r.finished_at NULLS FIRST"
+      "sql": "SELECT s.name,s.search_key,CASE WHEN r.status='error' THEN 'failed' WHEN r.status='running' THEN 'running' WHEN r.finished_at<now()-INTERVAL '26 hours' THEN 'stale' ELSE coalesce(r.status,'never') END AS phase,round(EXTRACT(EPOCH FROM (now()-r.finished_at))/60)::int AS age_min,r.started_at,r.finished_at,r.error,s.url FROM lean.saved_searches s LEFT JOIN LATERAL (SELECT * FROM lean.scrape_runs WHERE search_key=s.search_key ORDER BY id DESC LIMIT 1) r ON TRUE WHERE s.retired_at IS NULL ORDER BY r.finished_at NULLS FIRST"
     },
     {
       "id": 19,
@@ -269,7 +261,7 @@
         "w": 24,
         "h": 8
       },
-      "sql": "SELECT s.name,coalesce(s.category,'(none)') AS category,count(r.id) AS runs,round(avg(EXTRACT(EPOCH FROM (r.finished_at-r.started_at))))::int AS avg_s,max(EXTRACT(EPOCH FROM (r.finished_at-r.started_at)))::int AS max_s FROM lean.scrape_runs r JOIN lean.saved_searches s USING(search_key) WHERE r.finished_at IS NOT NULL AND ${time_filter:r.started_at} GROUP BY 1,2 ORDER BY 4 DESC"
+      "sql": "SELECT s.name,count(r.id) AS runs,round(avg(EXTRACT(EPOCH FROM (r.finished_at-r.started_at))))::int AS avg_s,max(EXTRACT(EPOCH FROM (r.finished_at-r.started_at)))::int AS max_s FROM lean.scrape_runs r JOIN lean.saved_searches s USING(search_key) WHERE r.finished_at IS NOT NULL AND ${time_filter:r.started_at} GROUP BY 1 ORDER BY 3 DESC"
     },
     {
       "id": 21,
@@ -295,7 +287,7 @@
         "w": 24,
         "h": 11
       },
-      "sql": "SELECT r.id,coalesce(s.category,'(none)') AS category,r.search_key,r.status,r.pages,r.cards,r.started_at AS started,r.finished_at AS finished,r.error FROM lean.scrape_runs r LEFT JOIN lean.saved_searches s USING(search_key) ORDER BY r.id DESC LIMIT 50"
+      "sql": "SELECT r.id,r.search_key,r.status,r.pages,r.cards,r.started_at AS started,r.finished_at AS finished,r.error FROM lean.scrape_runs r ORDER BY r.id DESC LIMIT 50"
     }
   ]
 }

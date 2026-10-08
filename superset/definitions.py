@@ -27,11 +27,13 @@ TABLE_DIMENSIONS = {
                  "floor_num": "cf.floor_num", **EXPRESSIONS},
     "listing_lifecycle_events": {**LISTING_DIMENSIONS, **EVENT_EXPRESSIONS},
     "scrape_runs": {"status": "cf.status::text", "search_key": "cf.search_key::text"},
-    "saved_searches": {"category": "coalesce(cf.category::text, '(none)')",
-                       "search_key": "cf.search_key::text"},
+    "saved_searches": {"search_key": "cf.search_key::text"},
 }
+# A scan marked `/* unfiltered */` (e.g. the price-check subject lookup) keeps
+# every row: chart selections and property filters never reach it.
 TABLE_SCAN = re.compile(
     r"\b(FROM|JOIN)\s+lean\.(listings|listing_lifecycle_events|scrape_runs|saved_searches)"
+    r"(?!\s*/\*\s*unfiltered\s*\*/)"
     r"(?:\s+(?:AS\s+)?(?!(?:WHERE|JOIN|LEFT|RIGHT|INNER|FULL|CROSS|GROUP|ORDER|LIMIT|"
     r"UNION|ON|USING|HAVING|OFFSET|WINDOW)\b)([A-Za-z_]\w*))?", re.I)
 
@@ -70,20 +72,6 @@ def push_cross_filters(sql, columns=None):
                            "{{ [f.val | string] | where_in }}"
                            "{% elif f.op == 'IS NULL' %} AND " + expression + " IS NULL"
                            "{% elif f.op == 'IS NOT NULL' %} AND " + expression + " IS NOT NULL"
-                           "{% endif %}{% endfor %}")
-        if table in {"listings", "listing_lifecycle_events", "scrape_runs"} and (columns is None or "category" in columns):
-            membership = ("cf_search.search_key = cf.search_key" if table == "scrape_runs" else
-                          "cf_search.search_key = ANY(cf.search_keys)" if table == "listings" else
-                          "EXISTS (SELECT 1 FROM lean.listings cf_listing WHERE "
-                          "cf_listing.article_id = cf.article_id AND "
-                          "cf_search.search_key = ANY(cf_listing.search_keys))")
-            # A listing can belong to several saved-search categories. Filter
-            # by membership without joining the bridge and multiplying counts.
-            clauses.append("{% for f in get_filters('category', remove_filter=True) %}"
-                           "{% if f.op == 'IN' and f.val %} AND EXISTS ("
-                           "SELECT 1 FROM lean.saved_searches cf_search WHERE " + membership
-                           + " AND coalesce(cf_search.category, '(none)') IN "
-                           "{{ f.val | map('string') | list | where_in }})"
                            "{% endif %}{% endfor %}")
         if not clauses:
             return match[0]
@@ -128,8 +116,14 @@ def dataset_name(dashboard, panel):
 def shared_source_sql(dashboard, panel):
     """Fold the four exit cards into one aggregate over their identical base."""
     source_id = panel.get("source_panel", panel["id"])
-    if ((dashboard["uid"] == "olx-home" and source_id == 9)
-            or (dashboard["uid"] == "olx-health" and source_id == 2)):
+    if dashboard["uid"] == "olx-home" and source_id == 9:
+        # The newest complete run via its index, not an aggregate over every run.
+        return """SELECT round(EXTRACT(EPOCH FROM (now() - max(finished_at))) / 60)::int
+          AS minutes_since_success FROM (
+          SELECT finished_at FROM lean.scrape_runs
+          WHERE status = 'ok' AND is_complete AND finished_at IS NOT NULL
+          ORDER BY finished_at DESC LIMIT 1) last_success"""
+    if dashboard["uid"] == "olx-health" and source_id == 2:
         summary = """WITH recent AS (
           SELECT count(*) FILTER (WHERE status = 'error') AS failed_24h,
             count(*) FILTER (WHERE status = 'ok') AS ok_24h,
@@ -142,12 +136,7 @@ def shared_source_sql(dashboard, panel):
           SELECT finished_at FROM lean.scrape_runs
           WHERE status = 'ok' AND is_complete AND finished_at IS NOT NULL
           ORDER BY finished_at DESC LIMIT 1
-        ) SELECT """
-        if dashboard["uid"] == "olx-home":
-            summary += """round(EXTRACT(EPOCH FROM (now() - finished_at)) / 60)::int
-              AS minutes_since_success, failed_24h, cards_24h"""
-        else:
-            summary += """failed_24h, round(100.0 * ok_24h / NULLIF(finished_24h, 0), 0)
+        ) SELECT failed_24h, round(100.0 * ok_24h / NULLIF(finished_24h, 0), 0)
               AS success_rate, round(EXTRACT(EPOCH FROM (now() - finished_at)))::bigint
               AS seconds_since_success, cards_24h, incomplete"""
         return summary + " FROM recent LEFT JOIN last_success ON true"

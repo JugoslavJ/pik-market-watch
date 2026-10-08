@@ -11,12 +11,14 @@ const MAPPER_BUILD_VERSION = String(
 const {
   dateFromUnixSeconds,
   finiteNumber,
+  dealTypeFor,
   normalizeArea,
   normalizeDealType,
   normalizeHistoryWithRejections,
   normalizeId,
-  normalizePrice,
   priceCurrencyOf,
+  propertyTypeOf,
+  readPrice,
 } = require("./normalization");
 
 function inBiH(lat, lon) {
@@ -149,18 +151,26 @@ function mapSearchItem(item) {
 
   const displayPrice =
     typeof item.display_price === "string" ? item.display_price.trim() : "";
-  const dealType = normalizeDealType(item.listing_type);
+  const categoryId = normalizeId(item.category_id);
+  const propertyType = propertyTypeOf(categoryId);
+  const sqm = normalizeArea(specialLabelValue(item, "Kvadrata"));
+  const priceQuality = readPrice(
+    item.price,
+    {
+      dealType: dealTypeFor(categoryId, normalizeDealType(item.listing_type)),
+      propertyType,
+      sqm,
+      title,
+    },
+    { displayPrice },
+  );
+  const { dealType } = priceQuality;
   const isRent = dealType === "rent";
-  const priceQuality = normalizePrice(item.price, dealType, {
-    displayPrice,
-  });
   const price = priceQuality.price;
   const priceText =
     displayPrice ||
     (priceQuality.state === "unpriced" ? "Na upit" : String(item.price ?? ""));
   const isStudio = /garsonjera/i.test(title);
-
-  const sqm = normalizeArea(specialLabelValue(item, "Kvadrata"));
 
   let rooms = isStudio ? "0" : null;
   if (!isStudio) {
@@ -184,8 +194,11 @@ function mapSearchItem(item) {
     priceCurrency: priceCurrencyOf(item),
     isRent,
     dealType,
+    categoryId,
+    propertyType,
     priceState: priceQuality.state,
     priceReason: priceQuality.reason,
+    priceBasis: priceQuality.basis,
     pricePresent: Object.prototype.hasOwnProperty.call(item, "price"),
     ...pinOf(item.location),
     // Search dates are renewal timestamps, not publication dates.
@@ -260,17 +273,41 @@ function mapListingDetail(json, fallbackId) {
   const declaredDeal = normalizeDealType(
     attributes.find((attr) => attr && attr.attr_code === "vrsta-oglasa")?.value,
   );
-  const dealType = declaredDeal ?? normalizeDealType(json.listing_type);
+  const categoryId = normalizeId(json.category_id);
+  const propertyType = propertyTypeOf(categoryId);
+  const sqm = normalizeArea(
+    attributes.find(
+      (attr) =>
+        attr?.attr_code === "kvadrata" && String(attr.value ?? "").trim(),
+    )?.value,
+  );
+  const priceQuality = readPrice(
+    json.price,
+    {
+      dealType: dealTypeFor(
+        categoryId,
+        declaredDeal ?? normalizeDealType(json.listing_type),
+      ),
+      declared: declaredDeal !== null,
+      propertyType,
+      sqm,
+      title: json.title,
+    },
+    { displayPrice },
+  );
+  const { dealType } = priceQuality;
   const isRent = dealType === "rent";
-  const priceQuality = normalizePrice(json.price, dealType, { displayPrice });
   const historyResult = normalizeHistoryWithRejections(json.price_history, {
     dealType,
+    propertyType,
+    basis: priceQuality.basis,
+    sqm,
   });
 
   const detail = {
     articleId,
     ...pinOf(json.location),
-    sqm: null,
+    sqm,
     publishedAt: dateFromUnixSeconds(json.created_at),
     renewedAt: dateFromUnixSeconds(json.date),
     price: priceQuality.price,
@@ -282,8 +319,11 @@ function mapListingDetail(json, fallbackId) {
         : String(json.price ?? "")),
     isRent,
     dealType,
+    categoryId,
+    propertyType,
     priceState: priceQuality.state,
     priceReason: priceQuality.reason,
+    priceBasis: priceQuality.basis,
     pricePresent: Object.prototype.hasOwnProperty.call(json, "price"),
     sellerType:
       json.user && SELLER_TYPES.has(json.user.type) ? json.user.type : null,
@@ -333,8 +373,6 @@ function mapListingDetail(json, fallbackId) {
   if (detail.characteristics.opremljenost != null) {
     detail.furnished = furnishedFromText(detail.characteristics.opremljenost);
   }
-
-  detail.sqm = normalizeArea(detail.characteristics.kvadrata);
 
   return detail;
 }

@@ -105,6 +105,75 @@ test("search item: listing_type rent wins", () => {
   assert.equal(card.ppm2, undefined);
 });
 
+test("search item: OLX category sets the property type", () => {
+  const card = mapSearchItem({
+    id: 11,
+    title: "Kuća na prodaju 140m2",
+    price: 250000,
+    listing_type: "sell",
+    category_id: 24,
+  });
+  assert.equal(card.categoryId, 24);
+  assert.equal(card.propertyType, "houses");
+  assert.equal(card.dealType, "sale");
+  assert.equal(
+    mapSearchItem({ id: 12, title: "bez kategorije" }).propertyType,
+    null,
+  );
+});
+
+test("search item: daily rentals posted as sales keep their nightly price", () => {
+  // A real live case: Stan na dan cards arrive as listing_type "sell".
+  const card = mapSearchItem({
+    id: 23111687,
+    title: "Stan na dan centar",
+    price: 40,
+    display_price: "40 KM",
+    listing_type: "sell",
+    category_id: 2668,
+  });
+  assert.equal(card.dealType, "daily_rent");
+  assert.equal(card.isRent, false);
+  assert.equal(card.propertyType, "daily_rent");
+  assert.equal(card.price, 40);
+  assert.equal(card.priceState, "valid");
+});
+
+test("search item: rents posted as sales become rentals", () => {
+  // Real live case: an office for rent, posted as a sale at 450 KM.
+  const card = mapSearchItem({
+    id: 13,
+    title: "Iznajmljujemo poslovni prostor 20m2 u centru grada",
+    price: 450,
+    display_price: "450 KM",
+    listing_type: "sell",
+    category_id: 25,
+    special_labels: [{ value: 20, label: "Kvadrata" }],
+  });
+  assert.equal(card.dealType, "rent");
+  assert.equal(card.isRent, true);
+  assert.equal(card.price, 450);
+  assert.equal(card.priceBasis, "total");
+});
+
+test("search item: land priced per m² keeps a total sale price", () => {
+  // Real live case: "ZEMLJIŠTE 7500 m2 ... 40 KM po m2".
+  const card = mapSearchItem({
+    id: 14,
+    title: "ZEMLJIŠTE 7500 m2, BUKVALEK, 40 KM po m2",
+    price: 40,
+    display_price: "40 KM",
+    listing_type: "sell",
+    category_id: 29,
+    special_labels: [{ value: "7.500", label: "Kvadrata" }],
+  });
+  assert.equal(card.sqm, 7500);
+  assert.equal(card.dealType, "sale");
+  assert.equal(card.price, 300000);
+  assert.equal(card.priceBasis, "per_sqm");
+  assert.equal(card.priceText, "40 KM");
+});
+
 test("search item: sale price boundary preserves deal and missing-area behavior", () => {
   for (const price of [250, "2.999"]) {
     const card = mapSearchItem({
@@ -270,6 +339,49 @@ test("detail: declared ad kind overrides a contradicting listing_type", () => {
     attributes: [{ attr_code: "vrsta-oglasa", value: "Zamjena" }],
   });
   assert.equal(fallback.dealType, "rent");
+  // The daily-rent category outranks the declared ad kind too.
+  const nightly = mapListingDetail({
+    id: "106",
+    price: 60,
+    listing_type: "sell",
+    category_id: 2668,
+    attributes: [{ attr_code: "vrsta-oglasa", value: "Iznajmljivanje" }],
+  });
+  assert.equal(nightly.dealType, "daily_rent");
+  assert.equal(nightly.propertyType, "daily_rent");
+  assert.equal(nightly.price, 60);
+});
+
+test("detail: a declared sale per m² reads its history per m² too", () => {
+  const now = Math.floor(Date.now() / 1000);
+  const detail = mapListingDetail({
+    id: "107",
+    title: "Stan 60 m2",
+    price: 1500,
+    listing_type: "sell",
+    category_id: 23,
+    attributes: [
+      { attr_code: "vrsta-oglasa", value: "Prodaja" },
+      { attr_code: "kvadrata", value: "60" },
+    ],
+    price_history: [{ price: 1600, created_at: now - 100 }],
+  });
+  assert.equal(detail.dealType, "sale");
+  assert.equal(detail.priceBasis, "per_sqm");
+  assert.equal(detail.price, 90000);
+  assert.deepEqual(
+    detail.apiPriceHistory.map((event) => event.price),
+    [96000],
+  );
+  // Declared sales are not reread as rentals.
+  const garage = mapListingDetail({
+    id: "108",
+    price: 150,
+    category_id: 30,
+    attributes: [{ attr_code: "vrsta-oglasa", value: "Prodaja" }],
+  });
+  assert.equal(garage.dealType, "sale");
+  assert.equal(garage.price, null);
 });
 
 test("detail: empty/garbage payload tolerated", () => {

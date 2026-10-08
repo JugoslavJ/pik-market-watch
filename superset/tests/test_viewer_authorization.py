@@ -14,7 +14,7 @@ from werkzeug.exceptions import HTTPException
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import viewer
-from board_access import GUEST_ROLE, ROLES
+from board_access import BUYER_ROLE, GUEST_ROLE, HOST_ROLE, PRO_ROLE, RENTER_ROLE, ROLES
 
 
 def status(callable_, *args):
@@ -47,6 +47,20 @@ class AuthorizationTests(unittest.TestCase):
             self.assertEqual(status(viewer.authorized, uid), 200)
         self.assertEqual(status(viewer.authorized, "olx-health"), 403)
 
+    def test_each_audience_role_opens_only_its_boards(self):
+        expected = {
+            BUYER_ROLE: {"olx-home", "olx-buyer"},
+            RENTER_ROLE: {"olx-home", "olx-renter"},
+            HOST_ROLE: {"olx-home", "olx-daily"},
+            PRO_ROLE: {"olx-home", "olx-buyer", "olx-renter", "olx-daily", "olx-pro", "olx-overview",
+                       "olx-exits"},
+        }
+        for role, boards in expected.items():
+            with self.subTest(role=role):
+                self.grant(role)
+                opened = {uid for uid in viewer.BOARDS if status(viewer.authorized, uid) == 200}
+                self.assertEqual(opened, boards)
+
     def test_built_in_roles_alone_open_nothing(self):
         self.roles = ["Gamma", "Alpha"]
         self.assertEqual(status(viewer.authorized, "olx-home"), 403)
@@ -70,6 +84,45 @@ class AuthorizationTests(unittest.TestCase):
         self.assertEqual({board["uid"] for board in viewer.visible_boards()}, set(ROLES[GUEST_ROLE]))
         self.roles = []
         self.assertEqual(viewer.visible_boards(), [])
+
+
+class AreaOutlineTests(unittest.TestCase):
+    def setUp(self):
+        self.app = Flask(__name__)
+        self.queries = 0
+        square = {"type": "MultiPolygon", "coordinates": [[[[17, 44], [17.1, 44], [17.1, 44.1], [17, 44]]]]}
+
+        @contextmanager
+        def connect():
+            connection = Mock()
+            connection.begin.return_value = MagicMock()
+
+            def execute(statement):
+                self.queries += 1
+                return SimpleNamespace(all=lambda: [("Centar 1", square)])
+
+            connection.execute.side_effect = execute
+            yield connection
+
+        for replacement in (
+                patch.object(viewer, "reporting_engine", return_value=SimpleNamespace(connect=connect)),
+                patch.object(viewer, "option_cache", SimpleCache())):
+            replacement.start()
+            self.addCleanup(replacement.stop)
+
+    def fetch(self, boards):
+        with self.app.test_request_context("/olx/api/areas"),                 patch.object(viewer, "visible_boards", return_value=boards):
+            return viewer.areas.__wrapped__()
+
+    def test_outlines_need_a_visible_board_and_are_read_once(self):
+        with self.assertRaises(HTTPException) as denied:
+            self.fetch([])
+        self.assertEqual(denied.exception.code, 403)
+        first = self.fetch([{"uid": "olx-home"}]).get_json()
+        self.fetch([{"uid": "olx-home"}])
+        self.assertEqual(first["features"][0]["properties"], {"name": "Centar 1"})
+        # One read-only marker and one outline query, then the cache serves.
+        self.assertEqual(self.queries, 2)
 
 
 class CacheIsolationTests(unittest.TestCase):

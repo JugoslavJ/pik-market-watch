@@ -8,6 +8,7 @@ import {
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { cell, label, PIN_COLORS, PIN_MISSING } from "./format";
+import { valueLabel } from "./i18n";
 import { openAd } from "./links";
 setWorkerUrl(workerUrl);
 
@@ -24,9 +25,11 @@ const POPUP_FIELDS = [
   "last_seen",
 ];
 
-export function createMap(container) {
+// Reports keep the drawn canvas so the browser can print it.
+export function createMap(container, { print = false } = {}) {
   const map = new Map({
     container,
+    canvasContextAttributes: { preserveDrawingBuffer: print },
     style: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
     center: [18.41, 43.86],
     zoom: 11,
@@ -134,5 +137,112 @@ export function updatePins(map, rows, fit, scale) {
     const bounds = new LngLatBounds();
     features.forEach((feature) => bounds.extend(feature.geometry.coordinates));
     map.fitBounds(bounds, { padding: 35, maxZoom: 14, duration: 0 });
+  }
+}
+
+let outlines;
+// Neighborhood outlines are static; one request serves every area map.
+export function loadAreas() {
+  outlines ||= fetch("/olx/api/areas").then((response) => {
+    if (!response.ok) throw new Error("Areas unavailable");
+    return response.json();
+  });
+  outlines.catch(() => {
+    outlines = null;
+  });
+  return outlines;
+}
+
+function areaColor(scale) {
+  if (!scale) return PIN_MISSING;
+  const value = ["to-number", ["get", scale.field], 0];
+  const steps = scale.breaks.flatMap((limit, index) => [
+    limit,
+    scale.colors[index + 1],
+  ]);
+  return [
+    "case",
+    [">", value, 0],
+    ["step", value, scale.colors[0], ...steps],
+    PIN_MISSING,
+  ];
+}
+
+// Joins panel rows to outlines by neighborhood; clicks select that area.
+export function updateAreas(map, shapes, rows, scale, fit, onSelect) {
+  const byName = new globalThis.Map(
+    rows.map((row) => [String(row.neighborhood), row]),
+  );
+  const data = {
+    type: "FeatureCollection",
+    features: shapes.features.map((feature) => ({
+      ...feature,
+      properties: {
+        ...(byName.get(feature.properties.name) || {}),
+        neighborhood: feature.properties.name,
+      },
+    })),
+  };
+  if (map.getSource("areas")) map.getSource("areas").setData(data);
+  else {
+    map.addSource("areas", { type: "geojson", data });
+    map.addLayer({
+      id: "areas",
+      type: "fill",
+      source: "areas",
+      paint: { "fill-opacity": 0.72 },
+    });
+    map.addLayer({
+      id: "area-lines",
+      type: "line",
+      source: "areas",
+      paint: { "line-color": "#0b1118", "line-width": 1 },
+    });
+    const popup = new Popup({ closeButton: false, closeOnClick: false });
+    map.on("mousemove", "areas", (event) => {
+      const properties = event.features?.[0]?.properties;
+      if (!properties) return;
+      map.getCanvas().style.cursor = "pointer";
+      const content = document.createElement("div");
+      const title = document.createElement("strong");
+      title.textContent = valueLabel(properties.neighborhood);
+      const list = document.createElement("dl");
+      for (const [name, value] of Object.entries(properties)) {
+        if (name === "neighborhood" || value == null || value === "null")
+          continue;
+        const term = document.createElement("dt");
+        const detail = document.createElement("dd");
+        term.textContent = label(name);
+        detail.textContent = cell(
+          /^-?d+(.d+)?$/.test(String(value)) ? Number(value) : value,
+        );
+        list.append(term, detail);
+      }
+      content.append(title, list);
+      popup.setLngLat(event.lngLat).setDOMContent(content).addTo(map);
+    });
+    map.on("mouseleave", "areas", () => {
+      map.getCanvas().style.cursor = "";
+      popup.remove();
+    });
+    map.on("click", "areas", (event) => {
+      const name = event.features?.[0]?.properties?.neighborhood;
+      if (name) map.__onAreaSelect?.(name);
+    });
+  }
+  map.__onAreaSelect = onSelect;
+  map.setPaintProperty("areas", "fill-color", areaColor(scale));
+  if (fit) {
+    const bounds = new LngLatBounds();
+    // Frame the areas that have data; rural outlines would shrink the city.
+    const priced = data.features.filter((feature) =>
+      byName.has(feature.properties.neighborhood),
+    );
+    for (const feature of priced.length ? priced : data.features)
+      for (const ring of feature.geometry.type === "Polygon"
+        ? feature.geometry.coordinates
+        : feature.geometry.coordinates.flat())
+        ring.forEach((point) => bounds.extend(point));
+    if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: 20, duration: 0 });
   }
 }

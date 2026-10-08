@@ -47,7 +47,16 @@ async function main() {
         window.__csp.push(e.violatedDirective),
       );
     });
-    for (const uid of ["olx-home", "olx-overview", "olx-exits", "olx-health"]) {
+    for (const uid of [
+      "olx-home",
+      "olx-buyer",
+      "olx-renter",
+      "olx-daily",
+      "olx-pro",
+      "olx-overview",
+      "olx-exits",
+      "olx-health",
+    ]) {
       const path = "/olx/dashboard/" + uid + "/?days=7";
       const anonymous = await context.request.get(origin + path, {
         maxRedirects: 0,
@@ -74,7 +83,7 @@ async function main() {
     assert.equal(new URL(page.url()).pathname, "/login/");
     assert.equal(
       new URL(page.url()).searchParams.get("next"),
-      "/olx/dashboard/olx-overview/",
+      "/olx/dashboard/olx-home/",
     );
     await page.locator("#username").fill("admin");
     await page.locator("#password").fill(password);
@@ -99,6 +108,16 @@ async function main() {
       await page.getByRole("link", { name: /Explore in Superset/ }).count(),
       0,
     );
+    for (const [name, href] of [
+      ["Users", "/users/"],
+      ["Sign out", "/logout/"],
+    ])
+      assert.equal(
+        await page
+          .getByRole("link", { name, exact: true })
+          .getAttribute("href"),
+        href,
+      );
     const initial = await page.locator('[data-panel="1"] .value').innerText();
     assert.equal(await page.locator("[data-panel]").count(), 20);
     console.log("Viewer loaded; checking chart click");

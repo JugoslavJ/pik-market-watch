@@ -25,20 +25,38 @@ Tests live with their packages. Cross-component deployment and security checks l
 | `lean.raw_api_responses` | Latest detail payload per listing, malformed search pages and request diagnostics |
 | `lean.scrape_run_pages` | Page-level response, parse, and completeness evidence |
 
+A listing's property type is its OLX subcategory under Nekretnine
+(apartments, houses, land, commercial space, garages and so on), so one
+search over all real estate feeds every board. Market boards default to
+apartments. Daily rentals ("Stan na dan") carry their own `daily_rent` deal:
+OLX posts them as sales with nightly prices, and only the Daily Rent board
+shows them. Holiday cottages asking under 300 KM are let by the night too.
+
+Advertisers also type monthly rents and prices per m² into OLX's sale field.
+A "sale" under the sale minimum is read by property type instead of dropped:
+land up to 500 KM is a price per m² (the total is that times the plot),
+commercial space, garages, rooms and warehouses are rentals, and apartments
+and houses are prices per m² from 1,000 KM (300 KM when the ad says it is a
+sale) and rentals below. An ad that declares itself a sale stays one.
+
 Dashboard trends derive their summaries from observed prices, lifecycle
 events, and scrape runs. A closure is an observed listing exit, not a confirmed
 sale; its price is the last observed asking price.
 
 ## Dashboards
 
-The React viewer serves four dashboards at host port 3000:
+The React viewer serves eight dashboards at host port 3000:
 
-- **Home** summarizes current market and scraper health.
+- **Home** summarizes the market and data freshness; every role lands here.
+- **Buy** helps buyers: price check against comparables, negotiation room, neighborhoods and listings priced below their area.
+- **Rent** helps tenants: rent check, rent by neighborhood and rooms, what amenities add, and how fast rentals go.
+- **Daily Rent** serves short-stay hosts: nightly prices by neighborhood and rooms, price bands, supply flow and new listings.
+- **Market Intelligence** serves agents and agencies: months of inventory, supply and demand by neighborhood, pricing accuracy, the agency/private split, private-seller leads, yields and comparative market analysis.
 - **Overview** reports active inventory, asking prices, trends, maps and listing attributes.
 - **Exits** analyzes observed listing closures using lifecycle events.
 - **Health** reports scrape outcomes, freshness and data quality.
 
-Superset supplies login, user roles and the viewer API; it holds no dashboards, charts or datasets. Container port 8088 is published at `127.0.0.1:3000`; the root and welcome page open Overview.
+Superset supplies login, user roles and the viewer API; it holds no dashboards, charts or datasets. Container port 8088 is published at `127.0.0.1:3000`; the root and welcome page open Home. Each audience has its own role ([accounts and access](../superset/README.md#accounts-and-access)); the viewer switches between English and Serbian and prints any board as a report.
 
 Each fresh viewer request executes one reporting data statement with shared facts and aggregates. Charts keep their previous values during filter updates. Market/exit snapshots expire after ten minutes; operational Home/Health results are uncached. Tables provide links and CSV; MapLibre uses CARTO vector basemaps.
 

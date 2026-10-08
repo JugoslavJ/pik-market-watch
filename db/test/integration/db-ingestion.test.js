@@ -29,13 +29,11 @@ const SEARCH_A = {
   searchKey: "/pretraga?category_id=23",
   name: "Apartments",
   url: "https://olx.ba/pretraga?category_id=23",
-  category: "apartments",
 };
 const SEARCH_B = {
   searchKey: "/pretraga?category_id=26",
   name: "Houses",
   url: "https://olx.ba/pretraga?category_id=26",
-  category: "houses",
 };
 
 function card(articleId, price = 100000) {
@@ -48,6 +46,8 @@ function card(articleId, price = 100000) {
     price,
     pricePresent: true,
     isRent: false,
+    categoryId: 23,
+    propertyType: "apartments",
   };
 }
 
@@ -92,6 +92,91 @@ needsDb(
     assert.deepEqual(closed.search_keys, []);
     assert.ok(closed.closed_at);
     assert.equal(closed.closing_price, "100000.00");
+  },
+);
+
+needsDb(
+  "daily rentals keep their own deal and nightly price through exit",
+  async () => {
+    const nightly = {
+      ...card(9110, 40),
+      dealType: "daily_rent",
+      categoryId: 2668,
+      propertyType: "daily_rent",
+    };
+    await commit(SEARCH_A, [nightly]);
+    const { rows } = await db.pool.query(
+      `SELECT deal, price, ppm2, property_type, extra->'olx_category_id' AS category
+         FROM lean.listings WHERE article_id = 9110`,
+    );
+    assert.deepEqual(rows[0], {
+      deal: "daily_rent",
+      price: "40.00",
+      ppm2: null,
+      property_type: "daily_rent",
+      category: 2668,
+    });
+
+    // A declared "Iznajmljivanje" from details must not turn it into monthly rent.
+    await db.enrichListings([
+      {
+        articleId: 9110,
+        dealType: "daily_rent",
+        price: 45,
+        propertyType: "daily_rent",
+      },
+    ]);
+    await commit(SEARCH_A, [{ ...nightly, price: 45 }]);
+    assert.equal((await listing(9110)).deal, "daily_rent");
+
+    await commit(SEARCH_A, []);
+    const exit = await db.pool.query(
+      `SELECT deal, property_type, price FROM lean.listing_lifecycle_events
+        WHERE article_id = 9110 AND event_type = 'closed'`,
+    );
+    assert.deepEqual(exit.rows, [
+      { deal: "daily_rent", property_type: "daily_rent", price: "45.00" },
+    ]);
+  },
+);
+
+needsDb("land priced per m² keeps its plot area and rate", async () => {
+  await commit(SEARCH_A, [
+    {
+      ...card(9112, 144280),
+      sqm: 3607,
+      categoryId: 29,
+      propertyType: "land",
+      priceBasis: "per_sqm",
+    },
+  ]);
+  const { rows } = await db.pool.query(
+    `SELECT sqm, price, ppm2, extra->>'price_basis' AS basis
+       FROM lean.listings WHERE article_id = 9112`,
+  );
+  assert.deepEqual(rows[0], {
+    sqm: "3607.00",
+    price: "144280.00",
+    ppm2: 40,
+    basis: "per_sqm",
+  });
+});
+
+needsDb(
+  "search cards refresh the property type when OLX moves a listing",
+  async () => {
+    await commit(SEARCH_A, [card(9111)]);
+    await commit(SEARCH_A, [
+      { ...card(9111), categoryId: 24, propertyType: "houses" },
+    ]);
+    // Cards without a category keep the type already known.
+    await commit(SEARCH_A, [
+      { ...card(9111), categoryId: undefined, propertyType: null },
+    ]);
+    const { rows } = await db.pool.query(
+      "SELECT property_type FROM lean.listings WHERE article_id = 9111",
+    );
+    assert.equal(rows[0].property_type, "houses");
   },
 );
 
@@ -261,6 +346,25 @@ needsDb("lean global closure records an exit only once", async () => {
   );
   assert.deepEqual(events.rows, [{ event_type: "closed" }]);
 });
+
+needsDb(
+  "searches dropped from the configuration retire until configured again",
+  async () => {
+    await commit(SEARCH_A, [card(9108)]);
+    await commit(SEARCH_B, [card(9109)]);
+    await db.closeUnseenListings([SEARCH_B.searchKey]);
+    const retired = async () =>
+      (
+        await db.pool.query(
+          `SELECT search_key FROM lean.saved_searches
+            WHERE retired_at IS NOT NULL ORDER BY search_key`,
+        )
+      ).rows.map((row) => row.search_key);
+    assert.deepEqual(await retired(), [SEARCH_A.searchKey]);
+    await commit(SEARCH_A, [card(9108)]);
+    assert.deepEqual(await retired(), []);
+  },
+);
 
 needsDb(
   "lean history keeps the latest reported price per Banja Luka day",

@@ -89,7 +89,7 @@ def main():
             states += [({PREFIX + 'elevator': ['Yes']}, {}),
                        ({PREFIX + 'heating': ['Unknown'], PREFIX + 'condition': ['Unknown']}, {}),
                        ({PREFIX + 'price_bam_min': ['100000'], PREFIX + 'price_bam_max': ['300000']}, {'rooms': ['2']})]
-            if uid in ('olx-overview', 'olx-exits'):
+            if uid in ('olx-overview', 'olx-exits', 'olx-pro'):
                 states += [({'deal':['sell']}, {}), ({'deal':['rent']}, {}),
                            ({'deal':['sell'], 'min_sqm':['40'], 'max_sqm':['100']}, {}),
                            ({}, {'rooms':['2']}), ({'deal':['sell']}, {'rooms':['2']})]

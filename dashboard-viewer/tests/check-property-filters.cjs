@@ -28,7 +28,16 @@ async function main() {
     });
     assert.equal(authenticated.status(), 302);
     assert.ok(!authenticated.headers().location.includes("/login"));
-    for (const uid of ["olx-home", "olx-overview", "olx-exits", "olx-health"]) {
+    for (const uid of [
+      "olx-home",
+      "olx-buyer",
+      "olx-renter",
+      "olx-daily",
+      "olx-pro",
+      "olx-overview",
+      "olx-exits",
+      "olx-health",
+    ]) {
       const response = await page.goto(origin + "/olx/dashboard/" + uid + "/");
       assert.equal(response.status(), 200);
       assert.equal(new URL(page.url()).pathname, "/olx/dashboard/" + uid + "/");

@@ -1,19 +1,8 @@
 {
   "searches": [
     {
-      "name": "Stanovi (Banja Luka)",
-      "category": "apartments",
-      "url": "https://olx.ba/pretraga?category_id=23&canton=11&cities=79"
-    },
-    {
-      "name": "Kuce (Banja Luka)",
-      "category": "houses",
-      "url": "https://olx.ba/pretraga?category_id=24&canton=11&cities=79"
-    },
-    {
-      "name": "Vikendice (Banja Luka)",
-      "category": "vacation_homes",
-      "url": "https://olx.ba/pretraga?category_id=26&canton=11&cities=79"
+      "name": "Nekretnine (Banja Luka)",
+      "url": "https://olx.ba/pretraga?category_id=2&canton=11&cities=79"
     }
   ]
 }

@@ -80,7 +80,7 @@ function runConfigFailure(envOverrides, fixture) {
   }
 }
 
-test("loadSearches: name kept, category trimmed, page stripped from key", () => {
+test("loadSearches: name kept, legacy category ignored, page stripped from key", () => {
   const [s] = runWith(
     {},
     {
@@ -95,7 +95,6 @@ test("loadSearches: name kept, category trimmed, page stripped from key", () => 
   );
   assert.deepEqual(s, {
     name: "Stanovi BL",
-    category: "apartments",
     url: "https://olx.ba/pretraga?category_id=23&page=4",
     searchKey: "/pretraga?category_id=23",
   });
@@ -119,7 +118,7 @@ test("loadSearches: duplicate URLs collapse to one search (first wins)", () => {
   assert.equal(searches[0].searchKey, "/pretraga?category_id=23");
 });
 
-test("loadSearches: missing name/category → derived name, null category", () => {
+test("loadSearches: missing name → derived name", () => {
   const [s] = runWith(
     {},
     {
@@ -127,15 +126,6 @@ test("loadSearches: missing name/category → derived name, null category", () =
     },
   );
   assert.equal(s.name, "pretraga");
-  assert.equal(s.category, null);
-});
-
-test("loadSearches: empty category string becomes null", () => {
-  const [s] = runWith(
-    {},
-    { searches: [{ name: "X", category: "   ", url: "https://olx.ba/a" }] },
-  );
-  assert.equal(s.category, null);
 });
 
 test("loadSearches: SEARCH_URLS env overrides the file entirely", () => {
@@ -146,7 +136,6 @@ test("loadSearches: SEARCH_URLS env overrides the file entirely", () => {
     },
   );
   assert.equal(s.name, "pretraga");
-  assert.equal(s.category, null);
   assert.equal(s.searchKey, "/pretraga?kat=17");
 });
 

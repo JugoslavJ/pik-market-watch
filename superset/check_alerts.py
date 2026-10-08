@@ -46,8 +46,9 @@ def evaluate():
                       AND r.finished_at IS NOT NULL
                     ORDER BY r.finished_at DESC LIMIT 1
                 ) success ON TRUE
-                WHERE success.finished_at IS NULL
-                   OR success.finished_at < now() - (%s * interval '1 hour')
+                WHERE ss.retired_at IS NULL
+                  AND (success.finished_at IS NULL
+                       OR success.finished_at < now() - (%s * interval '1 hour'))
                 ORDER BY ss.name
             """, (STALE_HOURS,))
             stale_searches = [

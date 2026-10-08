@@ -4,12 +4,12 @@ Settings come from the ignored `.env` (start from `.env.example`) and the ignore
 
 ## Searches
 
-`config/searches.json` lists filtered OLX browser URLs. `name` and `category` are optional; `category` is a dashboard label. The collector rejects URLs without an API-recognized filter (`category_id`, `cities`, `canton`, `attr`, `query` or `keyword`), because the API ignores unknown parameters and would return the whole site.
+`config/searches.json` lists filtered OLX browser URLs; `name` is optional. Property types come from each listing's OLX category, so one search over all real estate (`category_id=2`) covers every board. The collector rejects URLs without an API-recognized filter (`category_id`, `cities`, `canton`, `attr`, `query` or `keyword`), because the API ignores unknown parameters and would return the whole site.
 
 ```json
 {
   "searches": [
-    { "name": "Apartments", "category": "apartments", "url": "https://www.olx.ba/<filtered-search>" }
+    { "name": "Nekretnine (Banja Luka)", "url": "https://olx.ba/pretraga?category_id=2&canton=11&cities=79" }
   ]
 }
 ```
@@ -67,7 +67,7 @@ Compose passes the settings marked `.env` to the scraper. Pass the others with `
 | Setting | Default | From | Purpose |
 | --- | ---: | --- | --- |
 | `SCRAPE_INTERVAL_MINUTES` | `720` | `.env` | Minutes between cycles. |
-| `MAX_DETAIL_FETCHES` | `25` | `.env` | Detail requests per search per cycle; `0` disables enrichment. |
+| `MAX_DETAIL_FETCHES` | `75` | `.env` | Detail requests per search per cycle; `0` disables enrichment. |
 | `DETAIL_REFRESH_DAYS` | `7` | `.env` | Age before successful details are refreshed. |
 | `DETAIL_CONCURRENCY`, `DETAIL_DELAY_MS` | `2`, `1200` | `.env` | Detail request batch size and gap. |
 | `ABANDONED_RUN_AFTER_MINUTES` | `180` | `.env` | Age at which unfinished runs are marked failed at startup. |

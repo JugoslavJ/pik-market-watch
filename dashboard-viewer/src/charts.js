@@ -8,6 +8,7 @@ import {
 } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
 import { compact, duration, label, plain } from "./format";
+import { locale, t, valueLabel } from "./i18n";
 echarts.use([
   BarChart,
   LineChart,
@@ -27,7 +28,6 @@ export const FILTER_DIMENSIONS = new Set([
   "seller_type",
   "segment",
   "deal",
-  "category",
   "search_key",
   "status",
 ]);
@@ -49,7 +49,7 @@ export function number(value, panel = {}) {
   if (panel.type === "big_number" && /^(seconds|minutes)$/.test(panel.suffix))
     return duration(value, panel.suffix);
   if (value == null || !Number.isFinite(Number(value))) return "—";
-  const text = Number(value).toLocaleString("en-GB", {
+  const text = Number(value).toLocaleString(locale(), {
     maximumFractionDigits: panel.decimals ?? 0,
     minimumFractionDigits: panel.decimals ?? 0,
   });
@@ -173,9 +173,10 @@ function barOption(panel, rows, base, selected) {
     type: "category",
     data: names,
     axisLabel: vertical
-      ? { ...axisLabel, interval: 0, hideOverlap: true }
+      ? { ...axisLabel, interval: 0, hideOverlap: true, formatter: valueLabel }
       : {
           ...axisLabel,
+          formatter: valueLabel,
           color: INK.secondary,
           width: 120,
           overflow: "truncate",
@@ -194,7 +195,7 @@ function barOption(panel, rows, base, selected) {
       formatter: (params) => {
         const row = rows[params.dataIndex] || {};
         return [
-          names[params.dataIndex],
+          valueLabel(names[params.dataIndex]),
           `${label(measure)}: ${withUnit(row[measure], panel)}`,
           ...extras.map((key) => `${label(key)}: ${plain(row[key])}`),
         ].join("\n");
@@ -244,7 +245,7 @@ function timeOption(panel, rows, columns, base) {
   const formatTooltip = (params) => {
     const row = rows[params[0]?.dataIndex];
     if (!row) return "";
-    const day = new Date(at(row)).toLocaleString("en-GB", {
+    const day = new Date(at(row)).toLocaleString(locale(), {
       day: "numeric",
       month: "short",
       ...(hourly
@@ -291,7 +292,7 @@ function timeOption(panel, rows, columns, base) {
         data: rows.map((row) => [at(row), row.p25]),
       },
       {
-        name: "Interquartile range",
+        name: t("Interquartile range"),
         type: "line",
         stack: "band",
         silent: true,
@@ -317,7 +318,9 @@ function timeOption(panel, rows, columns, base) {
           itemWidth: 12,
           itemHeight: 4,
           textStyle: { color: INK.secondary, fontSize: 12 },
-          data: band ? ["Median", "Interquartile range"] : plotted.map(label),
+          data: band
+            ? [label("median"), t("Interquartile range")]
+            : plotted.map(label),
         }
       : { show: false },
     tooltip: {
