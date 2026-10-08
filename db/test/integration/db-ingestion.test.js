@@ -162,6 +162,24 @@ needsDb("land priced per m² keeps its plot area and rate", async () => {
   });
 });
 
+needsDb("details supply rooms that search cards leave out", async () => {
+  await commit(SEARCH_A, [
+    { ...card(9113), rooms: null },
+    { ...card(9114), rooms: "3" },
+  ]);
+  await db.enrichListings([
+    { articleId: 9113, dealType: "sale", price: 100000, rooms: "2" },
+    { articleId: 9114, dealType: "sale", price: 100000, rooms: "2" },
+  ]);
+  const { rows } = await db.pool.query(
+    "SELECT article_id::int AS id, rooms FROM lean.listings WHERE article_id IN (9113, 9114) ORDER BY 1",
+  );
+  assert.deepEqual(rows, [
+    { id: 9113, rooms: "2" },
+    { id: 9114, rooms: "3" },
+  ]);
+});
+
 needsDb(
   "search cards refresh the property type when OLX moves a listing",
   async () => {

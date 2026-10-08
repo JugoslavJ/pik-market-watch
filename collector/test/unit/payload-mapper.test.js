@@ -384,6 +384,58 @@ test("detail: a declared sale per m² reads its history per m² too", () => {
   assert.equal(garage.price, null);
 });
 
+test("detail: every category's area, rooms and attribute names map", () => {
+  // Real live shape: a Stan na dan detail names its area "kvadratura".
+  const nightly = mapListingDetail({
+    id: "109",
+    price: 40,
+    category_id: 2668,
+    attributes: [
+      { attr_code: "kvadratura", value: "36" },
+      { attr_code: "broj-soba", value: "Jednosoban (1)" },
+      { attr_code: "vrsta-grijanja", value: "Centralno" },
+    ],
+  });
+  assert.equal(nightly.sqm, 36);
+  assert.equal(nightly.rooms, "1");
+  assert.equal(nightly.heating, "Centralno");
+  const studio = mapListingDetail({
+    id: "110",
+    category_id: 2668,
+    attributes: [{ attr_code: "broj-soba", value: "Garsonjera" }],
+  });
+  assert.equal(studio.rooms, "0");
+  // Vacation homes give a bare count; houses use their own attribute names.
+  const house = mapListingDetail({
+    id: "111",
+    category_id: 24,
+    attributes: [
+      { attr_code: "broj-soba", value: "3" },
+      { attr_code: "namjestena", value: "Da" },
+      { attr_code: "gara-a", value: "Da" },
+      { attr_code: "broj-kupatil", value: "2" },
+      { attr_code: "broj-spratova", value: "2" },
+    ],
+  });
+  assert.deepEqual(
+    [
+      house.rooms,
+      house.furnished,
+      house.garage,
+      house.bathrooms,
+      house.floorsTotal,
+    ],
+    ["3", true, true, 2, 2],
+  );
+  // A room's bed count ("do 3") is not a room count.
+  const room = mapListingDetail({
+    id: "112",
+    category_id: 28,
+    attributes: [{ attr_code: "broj-kreveta", value: "do 3" }],
+  });
+  assert.equal(room.rooms, null);
+});
+
 test("detail: empty/garbage payload tolerated", () => {
   assert.equal(mapListingDetail(null), null);
   const d = mapListingDetail({ id: 42 });

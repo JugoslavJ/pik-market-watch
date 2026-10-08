@@ -11,7 +11,7 @@ Each JSON file defines one dashboard. `viewer_queries.py` compiles them for the 
   "filters": [
     { "name": "category", "label": "Category", "type": "select", "multi": false, "options_sql": "SELECT DISTINCT property_type AS __value FROM lean.listings WHERE property_type IS NOT NULL ORDER BY 1", "default": "apartments" },
     { "name": "deal", "label": "Deal", "type": "select", "multi": false, "options": ["sell", "rent"] },
-    { "name": "min_sqm", "label": "Min m²", "type": "number", "default": "0" }
+    { "name": "min_sqm", "label": "Min m²", "type": "number", "default": "" }
   ],
   "panels": [
     { "id": 1, "title": "Closed listings · 30 d", "type": "big_number", "layout": { "x": 0, "y": 0, "w": 12, "h": 4 }, "sql": "SELECT ...", "field": "closed_30d" },

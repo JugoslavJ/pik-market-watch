@@ -117,6 +117,24 @@ const CHAR_CODE_HANDLERS = {
     o.orientation = textOrNull(v, 40);
   },
 };
+// OLX names the same attribute differently in some categories.
+for (const [alias, code] of [
+  ["vrsta-grijanja", "grijanje"],
+  ["namjestena", "namjesten"],
+  ["gara-a", "garaza"],
+  ["broj-kupatil", "broj-kupatila"],
+  ["broj-spratova", "ukupno-spratova"],
+])
+  CHAR_CODE_HANDLERS[alias] = CHAR_CODE_HANDLERS[code];
+
+// "trosoban (3)", "3" and "4+" are counts; a studio (garsonjera) has none.
+function roomsFrom(value) {
+  const text = String(value ?? "").trim();
+  if (/garsonjera/i.test(text)) return "0";
+  const counted = text.match(/\((\d+)\)/);
+  if (counted) return counted[1];
+  return /^\d+\+?$/.test(text) ? text : null;
+}
 
 const SELLER_TYPES = new Set(["shop", "private"]);
 
@@ -170,18 +188,9 @@ function mapSearchItem(item) {
   const priceText =
     displayPrice ||
     (priceQuality.state === "unpriced" ? "Na upit" : String(item.price ?? ""));
-  const isStudio = /garsonjera/i.test(title);
-
-  let rooms = isStudio ? "0" : null;
-  if (!isStudio) {
-    const roomsRaw = specialLabelValue(item, "Broj Soba");
-    if (roomsRaw != null) {
-      const s = String(roomsRaw);
-      const pm = s.match(/\((\d+)\)/); // "trosoban (3)"
-      if (pm) rooms = pm[1];
-      else if (/^\d+\+?$/.test(s.trim())) rooms = s.trim();
-    }
-  }
+  const rooms = /garsonjera/i.test(title)
+    ? "0"
+    : roomsFrom(specialLabelValue(item, "Broj Soba"));
 
   return {
     articleId: id,
@@ -275,12 +284,13 @@ function mapListingDetail(json, fallbackId) {
   );
   const categoryId = normalizeId(json.category_id);
   const propertyType = propertyTypeOf(categoryId);
-  const sqm = normalizeArea(
+  const attributeValue = (...codes) =>
     attributes.find(
       (attr) =>
-        attr?.attr_code === "kvadrata" && String(attr.value ?? "").trim(),
-    )?.value,
-  );
+        codes.includes(attr?.attr_code) && String(attr.value ?? "").trim(),
+    )?.value;
+  // Daily rentals and "other" listings call their area "kvadratura".
+  const sqm = normalizeArea(attributeValue("kvadrata", "kvadratura"));
   const priceQuality = readPrice(
     json.price,
     {
@@ -327,6 +337,8 @@ function mapListingDetail(json, fallbackId) {
     pricePresent: Object.prototype.hasOwnProperty.call(json, "price"),
     sellerType:
       json.user && SELLER_TYPES.has(json.user.type) ? json.user.type : null,
+    // Search cards of most categories carry no room count; details do.
+    rooms: roomsFrom(attributeValue("broj-soba")),
     roomsDetail: null,
     bathrooms: null,
     floorNum: null,
