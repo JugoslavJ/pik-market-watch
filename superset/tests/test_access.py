@@ -41,6 +41,24 @@ class LoginTests(unittest.TestCase):
         self.assertEqual(request.call_args.args[1], "/api/v1/security/login")
         self.assertEqual(api.token, "token")
 
+    def test_writes_carry_the_browser_session_csrf_token(self):
+        api = SupersetAPI(username="guest", password="example")
+        api.csrf = "session-token"
+        sent = []
+
+        def capture(request, timeout):
+            sent.append(request)
+            response = Mock(read=Mock(return_value=b"{}"))
+            response.__enter__ = Mock(return_value=response)
+            response.__exit__ = Mock(return_value=False)
+            return response
+
+        with patch.object(api.opener, "open", side_effect=capture):
+            api.call("POST", "/api/v1/sqllab/execute/", {})
+            api.call("GET", "/olx/api/dashboard/olx-home")
+        self.assertEqual(sent[0].get_header("X-csrftoken"), "session-token")
+        self.assertIsNone(sent[1].get_header("X-csrftoken"))
+
     def test_login_form_token_parsing_handles_attribute_order_and_html_entities(self):
         parser = LoginCSRFParser()
         parser.feed('<input value="ignore" name="username">'
