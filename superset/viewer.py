@@ -1,9 +1,10 @@
 """Authenticated lightweight dashboard viewer on the existing Superset origin."""
 import hashlib
 import json
+import os
 import threading
 from datetime import datetime, timezone
-from functools import wraps
+from functools import cache as once, wraps
 from pathlib import Path
 from time import perf_counter
 from urllib.parse import urlencode
@@ -11,21 +12,20 @@ from urllib.parse import urlencode
 from cachelib import SimpleCache
 from flask import Blueprint, abort, g, jsonify, make_response, redirect, render_template_string, request, send_from_directory, url_for
 from flask_login import current_user, login_url
-from sqlalchemy import create_engine, text, and_
-from sqlalchemy.orm import joinedload
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import URL
 
-from superset import appbuilder, db, security_manager
-from parity import default_days
-from viewer_queries import BOARDS, CANONICAL, compile_dashboard, presentation, selections, validate_cross
-from guest_access import GUEST_BOARDS, GUEST_PERMISSION
+from superset import appbuilder, security_manager
+from definitions import default_days
+from viewer_queries import BOARDS, compile_dashboard, presentation, selections, validate_cross
+from board_access import role_allows
 
 ROOT = Path(__file__).parent / "viewer_dist"
 cache = SimpleCache(threshold=100, default_timeout=600)
 page_cache = SimpleCache(threshold=100, default_timeout=600)
 option_cache = SimpleCache(threshold=100, default_timeout=600)
 generations = SimpleCache(threshold=1000, default_timeout=3600)
-engines = {}
-engine_lock = threading.Lock()
+generation_lock = threading.Lock()
 blueprint = Blueprint("olx_viewer", __name__, url_prefix="/olx")
 
 
@@ -51,91 +51,36 @@ def viewer_login_required(view):
     return protected
 
 
-def can_view_board(uid, board):
-    """Guest access requires a published, explicitly assigned allowed dashboard."""
+def can_view(uid):
+    """Admins read every dashboard; other accounts need a viewer role that lists it."""
     if security_manager.is_guest_user():
         return False
-    if security_manager.can_access("can_read", "Dashboard"):
-        return security_manager.can_access_dashboard(board)
-    return (uid in GUEST_BOARDS and security_manager.can_access(*GUEST_PERMISSION)
-            and board.published and bool(
-                {role.id for role in board.roles}
-                & {role.id for role in security_manager.get_user_roles()}))
+    return security_manager.is_admin() or role_allows(
+        [role.name for role in security_manager.get_user_roles()], uid)
 
 
 def visible_boards():
-    from superset.models.dashboard import Dashboard
-
-    boards = db.session.query(Dashboard).filter(Dashboard.slug.in_(
-        [uid + "-superset" for uid in BOARDS])).options(
-            joinedload(Dashboard.roles), joinedload(Dashboard.owners)).all()
-    allowed = {board.slug for board in boards
-               if can_view_board(board.slug.removesuffix("-superset"), board)}
-    return [{"uid": uid, "title": board["title"]} for uid, board in BOARDS.items()
-            if uid + "-superset" in allowed]
+    return [{"uid": uid, "title": board["title"]} for uid, board in BOARDS.items() if can_view(uid)]
 
 
 def authorized(uid):
-    from superset.connectors.sqla.models import RowLevelSecurityFilter, SqlaTable
-    from superset.models.dashboard import Dashboard, dashboard_slices
-    from superset.models.slice import Slice
-    from superset.models.core import Database
     if uid not in BOARDS:
         abort(404)
-    if security_manager.is_guest_user() or not (
-            security_manager.can_access("can_read", "Dashboard")
-            or (uid in GUEST_BOARDS and security_manager.can_access(*GUEST_PERMISSION))):
+    if not can_view(uid):
         abort(403)
-    board = db.session.query(Dashboard).filter_by(slug=uid + "-superset").options(
-        joinedload(Dashboard.roles), joinedload(Dashboard.owners),
-    ).one_or_none()
-    if board is None:
-        abort(404)
-    sources = db.session.query(SqlaTable).join(Slice, and_(
-        Slice.datasource_id == SqlaTable.id, Slice.datasource_type == "table"))\
-        .join(dashboard_slices, dashboard_slices.c.slice_id == Slice.id)\
-        .filter(dashboard_slices.c.dashboard_id == board.id).options(
-            joinedload(SqlaTable.database).load_only(Database.id, Database.database_name,
-                Database.changed_on, Database.impersonate_user)).all()
-    if not sources or not can_view_board(uid, board):
-        abort(403)
-    expected = CANONICAL[uid]
-    if (set(source.table_name for source in sources) != set(expected)
-            or any(source.sql not in expected[source.table_name] for source in sources)):
-        # Changed datasets must not authorize older repository SQL.
-        abort(409, description="Dashboard definition changed. Open it in Superset.")
-    dashboard_role_access = board.published and bool(
-        {r.id for r in board.roles} & {r.id for r in security_manager.get_user_roles()})
-    # All-datasource access answers every per-dataset check; ask the database once.
-    if not dashboard_role_access and not (
-            security_manager.can_access_all_datasources()
-            or all(security_manager.can_access_datasource(source) for source in sources)):
-        abort(403)
-    # Deny viewer access until any Superset RLS policies are supported by the compiler.
-    if db.session.query(RowLevelSecurityFilter.id).first() is not None:
-        abort(403, description="This dashboard is unavailable for this account.")
-    database_ids = {source.database_id for source in sources}
-    if len(database_ids) != 1:
-        abort(409, description="Dashboard sources must use the reporting database.")
-    revision = [(source.id, str(source.changed_on), source.sql) for source in sources]
-    return sources[0].database, revision
 
 
-def reporting_engine(database):
-    if database.impersonate_user:
-        abort(409, description="This dashboard connection is unavailable.")
-    key = (database.id, database.changed_on)
-    with engine_lock:
-        if key not in engines:
-            if len(engines) >= 2:
-                _, old = engines.popitem()
-                old.dispose()
-            engines[key] = create_engine(database.sqlalchemy_uri_decrypted, pool_size=2, max_overflow=0,
-                                         pool_timeout=5, pool_pre_ping=True)
-    return engines[key]
+@once
+def reporting_engine():
+    url = URL.create("postgresql+psycopg2", username=os.environ["POSTGRES_REPORTING_USER"],
+                     password=os.environ["POSTGRES_REPORTING_PASSWORD"],
+                     host=os.environ.get("POSTGRES_HOST", "db"),
+                     port=int(os.environ.get("POSTGRES_PORT", "5432")),
+                     database=os.environ["POSTGRES_DB"])
+    return create_engine(url, pool_size=2, max_overflow=0, pool_timeout=5, pool_pre_ping=True)
 
 
-def payload(uid, database, revision):
+def payload(uid):
     source = BOARDS[uid]
     selected = selections(source, json.loads(request.args.get("s", "{}")))
     cross = validate_cross(json.loads(request.args.get("c", "{}")))
@@ -144,10 +89,10 @@ def payload(uid, database, revision):
         raise ValueError("Invalid time range")
     identity = {"uid": uid, "user": g.user.get_id(),
                 "roles": sorted(r.id for r in security_manager.get_user_roles()),
-                "revision": revision, "selected": selected, "cross": cross, "days": days}
+                "selected": selected, "cross": cross, "days": days}
     forced = request.args.get("force") == "true"
     generation_key = f"{g.user.get_id()}:{uid}"
-    with engine_lock:
+    with generation_lock:
         generation = generations.get(generation_key) or 0
         if forced:
             generation += 1
@@ -156,7 +101,7 @@ def payload(uid, database, revision):
     key = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
     # Option lists cover all listings, not the selection, so even the uncached
     # operational dashboards reuse them between loads.
-    option_identity = {name: identity[name] for name in ("uid", "user", "roles", "revision", "generation")}
+    option_identity = {name: identity[name] for name in ("uid", "user", "roles", "generation")}
     option_key = hashlib.sha256(json.dumps(option_identity, sort_keys=True).encode()).hexdigest()
     options = option_cache.get(option_key) if not forced else None
     cached = cache.get(key) if not forced else None
@@ -167,7 +112,7 @@ def payload(uid, database, revision):
     until = datetime.now(timezone.utc)
     sql, params, groups = compile_dashboard(source, selected, cross, days, until,
                                             include_options=options is None)
-    engine = reporting_engine(database)
+    engine = reporting_engine()
     started = perf_counter()
     with engine.connect() as connection, connection.begin():
         # Disable JIT startup overhead; settings and data share one driver round trip.
@@ -188,10 +133,10 @@ def payload(uid, database, revision):
 
 def result(uid):
     started = perf_counter()
-    database, revision = authorized(uid)
+    authorized(uid)
     g.viewer_auth_ms = (perf_counter() - started) * 1000
     try:
-        return payload(uid, database, revision)
+        return payload(uid)
     except (ValueError, TypeError, json.JSONDecodeError):
         abort(400, description="Invalid dashboard filters.")
 

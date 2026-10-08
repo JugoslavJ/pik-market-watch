@@ -1,4 +1,4 @@
-"""Authenticated Superset API client shared by provisioning and validation."""
+"""Authenticated Superset API client shared by the validation jobs."""
 
 import json
 import os
@@ -47,7 +47,6 @@ class SupersetAPI:
         )
         self.token = None
         self.csrf = None
-        self.resource_rows = {}
         self.browser_authenticated = False
 
     def call(self, method, path, payload=None):
@@ -91,7 +90,7 @@ class SupersetAPI:
         self.csrf = self.call("GET", "/api/v1/security/csrf_token/")["result"] if csrf else None
 
     def authenticate_browser(self):
-        """Deck.gl's legacy endpoint requires a Flask login session."""
+        """The viewer endpoints require a Flask login session."""
         if self.browser_authenticated:
             return
         if self.csrf is None:
@@ -129,36 +128,3 @@ class SupersetAPI:
         if not 300 <= status < 400 or destination.path.rstrip("/") == "/login":
             raise RuntimeError("Superset browser session login failed")
         self.browser_authenticated = True
-
-    def find(self, resource, name_field, name):
-        if resource not in self.resource_rows:
-            page, all_rows = 0, []
-            while True:
-                query = urllib.parse.quote(f"(page:{page},page_size:100)")
-                response = self.call("GET", f"/api/v1/{resource}/?q={query}")
-                rows = response.get("result", [])
-                all_rows.extend(rows)
-                if len(rows) < 100:
-                    break
-                page += 1
-            self.resource_rows[resource] = all_rows
-        return next((row for row in self.resource_rows[resource]
-                     if row.get(name_field) == name), None)
-
-    def ensure(self, resource, name_field, name, payload):
-        existing = self.find(resource, name_field, name)
-        if existing:
-            if resource not in ("database", "dataset"):
-                return existing
-            update_payload = payload
-            if resource == "dataset" and "database" in payload:
-                update_payload = {**payload, "database_id": payload["database"]}
-                update_payload.pop("database")
-            updated = self.call("PUT", f"/api/v1/{resource}/{existing['id']}", update_payload)
-            return {**existing, **updated.get("result", {}), "id": existing["id"]}
-        result = self.call("POST", f"/api/v1/{resource}/", payload)
-        # Superset's create responses keep the numeric id beside `result`;
-        # list responses put it inside each result row.
-        created = {**result.get("result", {}), "id": result["id"], name_field: name}
-        self.resource_rows[resource].append(created)
-        return created

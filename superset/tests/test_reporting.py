@@ -10,7 +10,7 @@ from sqlalchemy.dialects import postgresql
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from viewer_queries import BOARDS, compile_dashboard
-from parity import dataset_name, panels
+from definitions import dataset_name, panels
 
 
 @unittest.skipUnless(os.environ.get("TEST_REPORTING_DATABASE_URL"), "Run npm run test:reporting for the disposable database")

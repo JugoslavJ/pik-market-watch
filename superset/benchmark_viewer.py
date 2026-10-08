@@ -5,7 +5,24 @@ import time
 from urllib.parse import urlencode
 
 from client import SupersetAPI
-from benchmark import benchmark_result
+
+
+def percentile95(values):
+    ordered = sorted(values)
+    return ordered[max(0, int(len(ordered) * 0.95 + 0.999999) - 1)]
+
+
+def benchmark_result(name, fresh, cached, cache_expected):
+    fresh_p95 = percentile95(fresh)
+    cached_p95 = percentile95(cached) if cached else None
+    return {
+        "chart": name, "fresh_samples": len(fresh), "cached_samples": len(cached),
+        "fresh_p95_seconds": round(fresh_p95, 3),
+        "cached_p95_seconds": round(cached_p95, 3) if cached_p95 is not None else None,
+        "fresh_gate_seconds": 2.0, "cached_gate_seconds": 1.0,
+        "passed": fresh_p95 <= 2 and (not cache_expected or
+                                      (cached_p95 is not None and cached_p95 <= 1)),
+    }
 
 
 def main():

@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from benchmark import benchmark_result
+from benchmark_viewer import benchmark_result
 
 
 class BenchmarkContracts(unittest.TestCase):

@@ -41,7 +41,6 @@ module.exports = [
       "dashboard-viewer/src/*.js",
       "dashboard-viewer/tests/*.cjs",
       "superset/tests/*.cjs",
-      "superset/dashboard_requests.js",
     ],
     languageOptions: { globals: globals.browser },
   },

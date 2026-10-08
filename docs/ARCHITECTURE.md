@@ -38,11 +38,11 @@ The React viewer serves four dashboards at host port 3000:
 - **Exits** analyzes observed listing closures using lifecycle events.
 - **Health** reports scrape outcomes, freshness and data quality.
 
-Superset supplies login, permissions, datasets and the viewer API. Container port 8088 is published at `127.0.0.1:3000`; the root and welcome page open Overview.
+Superset supplies login, user roles and the viewer API; it holds no dashboards, charts or datasets. Container port 8088 is published at `127.0.0.1:3000`; the root and welcome page open Overview.
 
 Each fresh viewer request executes one reporting data statement with shared facts and aggregates. Charts keep their previous values during filter updates. Market/exit snapshots expire after ten minutes; operational Home/Health results are uncached. Tables provide links and CSV; MapLibre uses CARTO vector basemaps.
 
-[Dashboard definitions](../superset/README.md#terms) in `superset/dashboards/` supply the panel SQL for both the viewer and the native Superset dashboards. Migration, writer, reporting and backup roles have separate privileges.
+[Dashboard definitions](../superset/README.md#terms) in `superset/dashboards/` supply the panel SQL, which the viewer runs as the read-only reporting role. Migration, writer, reporting and backup roles have separate privileges.
 
 See [viewer details](../dashboard-viewer/README.md) and [deployment](DEPLOYMENT.md).
 

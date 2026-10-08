@@ -13,18 +13,17 @@ Open `http://127.0.0.1:3000/` (Market Overview) and sign in with a
 Superset account. Other routes end in `olx-home/`, `olx-exits/`, and `olx-health/`.
 Unauthenticated visits redirect to Superset login. Expired data requests retain charts and show a sign-in link. Docker builds hashed local assets; runtime needs no Node service or CDN JavaScript.
 
-Accounts with only `OLX Guest` can view Home, Market Overview and Exits, with
-filters, tables and maps. Health is omitted from navigation and denied on direct
-page/API requests. This role has one custom-viewer permission, no dataset grants
-and no native Superset dashboard/chart/dataset access. `superset-access` provisions its exact scope;
-assign it to the account through Superset's `/users/list/` administration page.
+`OLX Viewer` opens all four dashboards and `OLX Guest` opens Home, Market
+Overview and Exits; other dashboards are omitted from navigation and denied on
+direct page/API requests. Assign roles through Superset's `/users/list/`
+administration page; see [accounts and access](../superset/README.md#accounts-and-access).
 
 ## Data and interactions
 
 The authenticated `/olx/api/dashboard/<uid>` endpoint executes one read-only
 data statement per dashboard. Summary cards share source aggregates. Repeated
 listing aggregates share materialized facts; lifecycle lookups and limited
-detail tables retain their physical indexes. Native filter scopes, time
+detail tables retain their physical indexes. Filter scopes, time
 windows, event populations and percentile calculations follow source SQL.
 Chart selections filter facts before aggregation and intersect sidebar filters.
 
@@ -37,12 +36,10 @@ use CARTO vector tiles, and update pins without recreating the map.
 
 The Filters panel starts collapsed, supports search/reset/Escape and becomes a phone drawer. Controls cover BAM price, area, building details and amenities; missing values appear as Unknown. Home/Health listing charts use property filters; run statistics retain their operational scope. Exit prices use event snapshots, while amenities use current listing details.
 
-Authorization is rechecked before every data or cached page response. Dataset
-definitions must match the provisioned source SQL. If an author changes those
-definitions, reseed/rebuild or use Superset. Embedded guest tokens and impersonated
-connections are unsupported. If Superset RLS rules are added, this viewer denies
-access until their policies are supported; the native Superset path remains
-available. Browser data is never stored in persistent local storage.
+Authorization is rechecked before every data or cached page response. Data is
+read as the read-only `olx_reporting` role; Superset row-level security rules
+do not apply to the viewer. Embedded guest tokens are unsupported. Browser data
+is never stored in persistent local storage.
 
 ## Validation
 
@@ -52,8 +49,7 @@ npm run build
 npm run test:browser
 node tests/benchmark-viewer.cjs
 docker compose --profile superset --profile superset-ops run --rm --no-deps \
-  --entrypoint python -v ./superset/validate_viewer.py:/app/validate_viewer.py:ro \
-  superset-seed /app/validate_viewer.py
+  --entrypoint python superset-access /app/validate_viewer.py
 ```
 
 Run the Docker command from the repository root. Browser scripts use installed Edge, falling back to Playwright Chromium. Set `SUPERSET_TEST_BROWSER` to choose an executable. Install Playwright with

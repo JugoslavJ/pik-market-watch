@@ -24,7 +24,7 @@ Restart a running scraper after editing the file: `docker compose restart scrape
 | --- | --- |
 | `superset` | Superset with the React viewer, its init job and the alert checker |
 | `scrape` | Scheduled scraper, gated on the migrator |
-| `superset-ops` | `superset-seed` and `superset-access` provisioning jobs |
+| `superset-ops` | `superset-access` viewer-role job; readiness and sync checks run from it |
 | `migrate` | One-off `migrator` |
 | `maintenance` | One-off archive retention, gated on the migrator |
 
@@ -36,7 +36,7 @@ Set these in `.env`; Compose refuses to start without them, and production prefl
 
 `POSTGRES_PASSWORD`, `POSTGRES_MIGRATOR_PASSWORD`, `POSTGRES_APP_PASSWORD`, `POSTGRES_REPORTING_PASSWORD`, `POSTGRES_BACKUP_PASSWORD`, `SUPERSET_META_PASSWORD`, `SUPERSET_ADMIN_PASSWORD`, `SUPERSET_SECRET_KEY`.
 
-Keep `SUPERSET_SECRET_KEY` stable: it encrypts stored connection credentials, and backups are unusable without it.
+Keep `SUPERSET_SECRET_KEY` stable: it signs sessions and encrypts Superset metadata secrets, and metadata backups are unusable without it.
 
 ## Settings
 
@@ -55,7 +55,6 @@ Keep `SUPERSET_SECRET_KEY` stable: it encrypts stored connection credentials, an
 | `SUPERSET_ROOT_URL` | `http://localhost:3000/` | Public URL; production requires HTTPS. |
 | `SUPERSET_DOMAIN` | `localhost` | Public hostname; production preflight checks it matches `SUPERSET_ROOT_URL`. |
 | `SUPERSET_COOKIE_SECURE` | `false` | Must be `true` in production. |
-| `MAPBOX_API_KEY` | unset | Only for custom Mapbox styles; the bundled CARTO maps need no key. |
 | `ALERT_WEBHOOK_URL` | unset | Optional webhook for alert firing and recovery. |
 | `SCRAPE_STALE_AFTER_HOURS` | `26` | Alert threshold for scrape freshness; allow for the interval. |
 | `BACKUP_RETENTION_DAYS` | `14` | Days of backups to keep; `0` disables pruning. |

@@ -1,6 +1,6 @@
 # Dashboard definitions
 
-Each JSON file defines one dashboard. The same definitions drive the React viewer (`viewer_queries.py`) and the native Superset charts (`parity.py`); `superset/tests/test_dashboard_contract.cjs` enforces the format.
+Each JSON file defines one dashboard. `viewer_queries.py` compiles them for the React viewer; `superset/tests/test_dashboard_contract.cjs` enforces the format.
 
 ```json
 {
@@ -27,12 +27,12 @@ Each JSON file defines one dashboard. The same definitions drive the React viewe
 - A panel has either its own `sql` or a `source_panel` whose query it reuses.
 - Panel types and their extra fields: `big_number` (`field`), `timeseries` (`bars: true` for bars; the `time` column is the x axis), `bar` (`category`, `value`), `table`, `map` (`view`: `lat`, `lon`, `zoom`), `scatter` (`x`, `y`). `suffix` and `decimals` format values.
 
-SQL can use these macros, which both compilers expand:
+SQL can use these macros, which the compiler expands:
 
 | Macro | Expands to |
 | --- | --- |
-| `${name}` | The selected values of filter `name`, quoted or bound as parameters; `'All'` when nothing is selected |
+| `${name}` | The selected values of filter `name`, bound as parameters; `'All'` when nothing is selected |
 | `${time_filter:column}` | `column` within the selected time window |
 | `${time_from}`, `${time_to}` | The window's start and end timestamps |
 
-After changing definitions, regenerate the catalog with `node superset/scripts/generate-dashboard-catalog.js`, rebuild the Superset image and rerun the seed and access jobs. Native chart names and dataset names derive from panel titles and IDs. The seed job deletes native charts on each dashboard whose panel was removed or renamed, because the viewer refuses to serve a dashboard whose datasets differ from the definitions.
+After changing definitions, regenerate the catalog with `node superset/scripts/generate-dashboard-catalog.js` and rebuild the Superset image.

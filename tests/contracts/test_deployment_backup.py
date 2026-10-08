@@ -90,16 +90,17 @@ esac
                 self.assertNotEqual(self.run_deploy("--check").returncode, 0)
                 self.assertFalse((self.root / "commands").exists())
 
-    def test_failed_viewer_parity_gate_prevents_publication(self):
+    def test_failed_viewer_parity_gate_fails_the_deployment(self):
         self.configure()
         self.env["MOCK_FAIL_PARITY"] = "1"
         result = self.run_deploy()
         self.assertNotEqual(result.returncode, 0)
         commands = (self.root / "commands").read_text()
         self.assertIn("validate_viewer.py", commands)
-        self.assertNotIn("superset-access --publish", commands)
+        self.assertNotIn("benchmark_viewer.py", commands)
+        self.assertNotIn("Stack healthy", result.stdout)
 
-    def test_deploy_builds_before_starting_and_checks_before_publication(self):
+    def test_deploy_builds_before_starting_and_grants_access_before_checks(self):
         self.configure()
         result = self.run_deploy()
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -125,10 +126,11 @@ esac
         self.assertTrue(later)
         for line in later:
             self.assertIn("--no-deps", line)
-        seed = commands.index("--no-deps superset-seed")
-        self.assertLess(commands.index("inspect "), seed)
-        self.assertLess(seed, commands.index("db-backup --once"))
-        self.assertLess(commands.index("benchmark_viewer.py"), commands.index("superset-access --publish"))
+        access = commands.index("run --rm --no-deps superset-access\n")
+        self.assertLess(commands.index("inspect "), commands.index("db-backup --once"))
+        self.assertLess(commands.index("db-backup --once"), access)
+        self.assertLess(access, commands.index("validate_viewer.py"))
+        self.assertLess(commands.index("validate_viewer.py"), commands.index("benchmark_viewer.py"))
 
     def test_superset_profile_and_services_are_selected(self):
         self.configure()
