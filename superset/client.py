@@ -46,6 +46,7 @@ class SupersetAPI:
             urllib.request.HTTPCookieProcessor(self.cookies)
         )
         self.token = None
+        self.csrf = None
 
     def call(self, method, path, payload=None):
         body = json.dumps(payload).encode("utf-8") if payload is not None else None
@@ -54,6 +55,9 @@ class SupersetAPI:
             headers["Content-Type"] = "application/json"
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
+        if self.csrf and method != "GET":
+            # Without the session's token Superset answers 400 before its access checks run.
+            headers["X-CSRFToken"] = self.csrf
         request = urllib.request.Request(
             BASE + path, data=body, headers=headers, method=method
         )
@@ -81,12 +85,13 @@ class SupersetAPI:
             parser.feed(response.read().decode("utf-8"))
         if not parser.token:
             raise RuntimeError("Superset login form did not provide a CSRF token")
+        self.csrf = parser.token
         request = urllib.request.Request(
             BASE + "/login/",
             data=urllib.parse.urlencode({
                 "username": self.username,
                 "password": self.password,
-                "csrf_token": parser.token,
+                "csrf_token": self.csrf,
             }).encode("utf-8"),
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
