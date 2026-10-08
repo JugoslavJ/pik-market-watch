@@ -21,7 +21,7 @@ Start the stack as described in the [README](../README.md#start-locally), then s
 
 Admins see every dashboard. Role membership, not permissions, opens a dashboard: `superset init` grants Alpha and Gamma every custom permission, so Gamma, Alpha and other roles open nothing in the viewer. The two roles hold no Superset permissions, so they have no access to Superset's own dashboards, charts, datasets or SQL Lab. Navigation lists only the dashboards a role opens, and the viewer rechecks roles on every response, including cached ones. Embedded guest tokens are denied.
 
-`superset-access` creates both roles and strips any permissions they hold. It also removes the retired native Superset dashboards, with their charts, datasets and reporting connection where nothing else uses them, and the former `OLXDashboard` permissions:
+`superset-access` creates both roles and strips any permissions they hold:
 
 ```sh
 docker compose --profile superset --profile superset-ops run --rm --no-deps superset-access
