@@ -1,8 +1,10 @@
 """Neighborhood outlines for area maps, simplified for the browser.
 
-The reporting role cannot call PostGIS functions, but PostGIS's json cast
-returns each boundary as GeoJSON; simplification happens here instead.
+The reporting role cannot reach PostGIS, so each boundary is read as the
+GeoJSON stored beside it on write; simplification happens here instead.
 """
+
+SQL = "SELECT name, outline FROM lean.neighborhoods ORDER BY name"
 
 TOLERANCE = 0.0005  # degrees, about 50 m at Banja Luka
 DIGITS = 4  # about 10 m

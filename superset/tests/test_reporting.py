@@ -9,6 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.dialects import postgresql
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import outlines
 from viewer_queries import BOARDS, compile_dashboard
 from definitions import dataset_name, panels
 
@@ -175,6 +176,21 @@ class ReportingRules(unittest.TestCase):
             self.assertEqual((rent["active"], rent["median_rent"]), (1, 600))
         daily = self.panel("olx-daily", self.query("olx-daily"), 10)[0]
         self.assertEqual((daily["active"], daily["median_night"]), (1, 40))
+
+    def test_area_outlines_need_no_public_schema_access(self):
+        # Some databases drop PostgreSQL's default USAGE on public for PUBLIC;
+        # the reporting role must still read every outline.
+        with self.seed, self.seed.cursor() as cursor:
+            cursor.execute("REVOKE USAGE ON SCHEMA public FROM PUBLIC")
+        try:
+            with self.reporting.cursor() as cursor:
+                cursor.execute(outlines.SQL)
+                shapes = outlines.collection(cursor.fetchall())
+        finally:
+            with self.seed, self.seed.cursor() as cursor:
+                cursor.execute("GRANT USAGE ON SCHEMA public TO PUBLIC")
+        self.assertEqual(len(shapes["features"]), 56)
+        self.assertEqual(shapes["features"][0]["geometry"]["type"], "MultiPolygon")
 
     def test_operational_counts_distinguish_success_and_incomplete_failures(self):
         health = self.query("olx-health")

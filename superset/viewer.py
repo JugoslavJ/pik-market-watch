@@ -144,9 +144,6 @@ def dashboard_data(uid):
     return response
 
 
-AREAS_SQL = "SELECT name, to_jsonb(boundary) FROM lean.neighborhoods ORDER BY name"
-
-
 @blueprint.route("/api/areas")
 @viewer_login_required
 def areas():
@@ -157,7 +154,7 @@ def areas():
     if shapes is None:
         with reporting_engine().connect() as connection, connection.begin():
             connection.execute(text("SET TRANSACTION READ ONLY"))
-            shapes = outlines.collection(connection.execute(text(AREAS_SQL)).all())
+            shapes = outlines.collection(connection.execute(text(outlines.SQL)).all())
         option_cache.set("areas", shapes, timeout=86400)
     response = jsonify(shapes)
     response.headers["Cache-Control"] = "private, max-age=86400"
