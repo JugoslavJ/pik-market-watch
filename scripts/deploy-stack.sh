@@ -131,8 +131,7 @@ done
 echo "▶ Taking and verifying a fresh database and application-state backup"
 docker compose run --rm --no-deps db-backup --once
 
-# Grant viewer roles exactly their dashboards and remove retired native
-# dashboards; the readiness gate then checks every role.
+# Prepare the viewer roles; the readiness gate then checks every role.
 docker compose run --rm --no-deps superset-access
 bash scripts/superset-readiness.sh
 echo "✓ Stack healthy — deployed ${GIT_SHA:-unknown} (Superset)."
