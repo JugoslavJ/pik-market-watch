@@ -198,7 +198,7 @@ PAGE = """<!doctype html><html lang="{{lang}}"><head><meta charset="utf-8">
 {% for path in imports %}<link rel="modulepreload" href="/olx/assets/{{path}}">{% endfor %}
 </head><body><div id="root"><header><a class="brand" href="/olx/dashboard/olx-home/">OLX Market Watch</a>
 </header><main class="initial"><div class="heading"><h1>{{data.title}}</h1></div><div class="grid">
-{% for panel in data.panels if panel.type == 'big_number' %}<article class="panel stat" style="grid-column:span {{panel.grid.w}}">
+{% for panel in data.panels if panel.type == 'big_number' and panel.key in data.rows %}<article class="panel stat" style="grid-column:span {{panel.grid.w}}">
 <h3>{{panel.title}}</h3><p class="figure"><span class="value">{{data.rows[panel.key][0][panel.field] if data.rows[panel.key] else '—'}}</span></p></article>{% endfor %}
 </div></main></div><script id="viewer-bootstrap" type="application/json" nonce="{{nonce}}">{{{'data':data,'boards':boards,'admin':admin}|tojson}}</script>
 <script type="module" src="/olx/assets/{{entry.file}}" nonce="{{nonce}}"></script></body></html>"""

@@ -17,7 +17,7 @@
         "w": 8,
         "h": 4
       },
-      "sql": "WITH a AS (\n  SELECT count(*) FILTER (WHERE closed_at IS NULL) AS active,\n    percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE closed_at IS NULL AND property_type='apartments' AND deal='sale' AND ppm2>0) AS sale_ppm2,\n    percentile_cont(0.5) WITHIN GROUP (ORDER BY price) FILTER (WHERE closed_at IS NULL AND property_type='apartments' AND deal='rent' AND price>0) AS rent_price,\n    percentile_cont(0.5) WITHIN GROUP (ORDER BY price) FILTER (WHERE closed_at IS NULL AND property_type='apartments' AND deal='sale' AND price>0) AS sale_price,\n    count(*) FILTER (WHERE closed_at > (now() AT TIME ZONE 'Europe/Sarajevo')::date - 30) AS recent_exits,\n    count(*) FILTER (WHERE closed_at IS NULL OR closed_at > (now() AT TIME ZONE 'Europe/Sarajevo')::date - 30) AS recent_population,\n    percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE property_type='apartments' AND deal='sale' AND ppm2>0 AND first_seen >= date_trunc('week', now())) AS current_week,\n    percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE property_type='apartments' AND deal='sale' AND ppm2>0 AND first_seen >= date_trunc('week', now()) - INTERVAL '7 days' AND first_seen < date_trunc('week', now())) AS prior_week\n  FROM lean.listings\n)\nSELECT active,\n  round(sale_ppm2::numeric,0) AS median_sale_ppm2,\n  round(rent_price::numeric,0) AS median_rent,\n  round((1200 * rent_price / NULLIF(sale_price,0))::numeric,1) AS gross_yield_pct,\n  round(100.0 * recent_exits / NULLIF(recent_population,0),1) AS exit_ratio,\n  round((100 * (current_week / NULLIF(prior_week,0) - 1))::numeric,1) AS change_pct\nFROM a",
+      "sql": "WITH coverage AS (SELECT (min(started_at) AT TIME ZONE 'Europe/Sarajevo')::date AS start FROM lean.scrape_runs), a AS (\n  SELECT count(*) FILTER (WHERE closed_at IS NULL) AS active,\n    percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE closed_at IS NULL AND property_type='apartments' AND deal='sale' AND ppm2>0) AS sale_ppm2,\n    percentile_cont(0.5) WITHIN GROUP (ORDER BY price) FILTER (WHERE closed_at IS NULL AND property_type='apartments' AND deal='rent' AND price>0) AS rent_price,\n    percentile_cont(0.5) WITHIN GROUP (ORDER BY price) FILTER (WHERE closed_at IS NULL AND property_type='apartments' AND deal='sale' AND price>0) AS sale_price,\n    count(*) FILTER (WHERE (closed_at > (${time_from} AT TIME ZONE 'Europe/Sarajevo')::date AND closed_at <= (${time_to} AT TIME ZONE 'Europe/Sarajevo')::date)) AS exits,\n    percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE property_type='apartments' AND deal='sale' AND ppm2>0 AND (first_seen > (${time_from} AT TIME ZONE 'Europe/Sarajevo')::date AND first_seen <= (${time_to} AT TIME ZONE 'Europe/Sarajevo')::date)) AS new_window,\n    percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE property_type='apartments' AND deal='sale' AND ppm2>0 AND (first_seen > (${time_from} AT TIME ZONE 'Europe/Sarajevo')::date - ((${time_to} AT TIME ZONE 'Europe/Sarajevo')::date - (${time_from} AT TIME ZONE 'Europe/Sarajevo')::date) AND first_seen <= (${time_from} AT TIME ZONE 'Europe/Sarajevo')::date)) AS new_previous\n  FROM lean.listings\n)\nSELECT active,\n  round(sale_ppm2::numeric,0) AS median_sale_ppm2,\n  round(rent_price::numeric,0) AS median_rent,\n  round((1200 * rent_price / NULLIF(sale_price,0))::numeric,1) AS gross_yield_pct,\n  round(active::numeric / NULLIF(exits * 30.0 / NULLIF(((${time_to} AT TIME ZONE 'Europe/Sarajevo')::date - GREATEST((${time_from} AT TIME ZONE 'Europe/Sarajevo')::date, (SELECT start FROM coverage))), 0), 0), 1) AS months_of_inventory,\n  round(new_window::numeric,0) AS new_sale_ppm2,\n  CASE WHEN (${time_from} AT TIME ZONE 'Europe/Sarajevo')::date - ((${time_to} AT TIME ZONE 'Europe/Sarajevo')::date - (${time_from} AT TIME ZONE 'Europe/Sarajevo')::date) >= (SELECT start FROM coverage) THEN round(new_previous::numeric,0) END AS new_sale_ppm2_prev\nFROM a",
       "field": "active"
     },
     {
@@ -69,8 +69,8 @@
     },
     {
       "id": 6,
-      "title": "Exit share · 30 d",
-      "description": "Listings that left OLX in the last 30 days as a share of those plus current actives. Exits are not confirmed sales.",
+      "title": "Months of inventory",
+      "description": "Active listings ÷ listings that left OLX per 30 days in the selected time window: how long supply would last at that pace. Exits are not confirmed sales.",
       "section": "Market",
       "type": "big_number",
       "layout": {
@@ -80,14 +80,14 @@
         "h": 4
       },
       "source_panel": 2,
-      "field": "exit_ratio",
-      "suffix": "%",
+      "field": "months_of_inventory",
+      "suffix": "months",
       "decimals": 1
     },
     {
       "id": 7,
-      "title": "New apartment KM/m² · week over week",
-      "description": "Median KM/m² of apartments for sale first seen this week, compared with last week.",
+      "title": "Median KM/m² · new apartments for sale",
+      "description": "Apartments for sale first seen in the selected time window, compared with the window before it.",
       "section": "Market",
       "type": "big_number",
       "layout": {
@@ -97,9 +97,9 @@
         "h": 4
       },
       "source_panel": 2,
-      "field": "change_pct",
-      "suffix": "%",
-      "decimals": 1
+      "field": "new_sale_ppm2",
+      "suffix": "KM/m²",
+      "compare": "new_sale_ppm2_prev"
     },
     {
       "id": 13,

@@ -23,7 +23,7 @@ class ViewerQueryTests(unittest.TestCase):
         self.assertEqual(filter_template.cache_info().currsize, 256)
         self.assertIsNot(filter_template(source), template)
 
-    def test_all_142_panels_have_shared_sources_and_no_unexpanded_macros(self):
+    def test_all_146_panels_have_shared_sources_and_no_unexpanded_macros(self):
         count = 0
         for board in BOARDS.values():
             sql, params, groups = compile_dashboard(board)
@@ -32,7 +32,17 @@ class ViewerQueryTests(unittest.TestCase):
             self.assertIn('jsonb_build_object', sql)
             self.assertTrue(params)
             count += len(board['panels'])
-        self.assertEqual(count, 142)
+        self.assertEqual(count, 146)
+
+    def test_panels_hidden_by_the_selection_are_not_computed(self):
+        board = BOARDS['olx-overview']
+        sale_chart = "'source_olx_overview_21'"
+        self.assertIn(sale_chart, compile_dashboard(board)[0])
+        rent, _, groups = compile_dashboard(board, {'deal': ['rent']})
+        self.assertNotIn(sale_chart, rent)
+        # The summary row still serves the visible rent tile.
+        self.assertIn("'source_olx_overview_1'", rent)
+        self.assertLess(groups, compile_dashboard(board)[2])
 
     def test_cached_option_lists_are_left_out_of_the_statement(self):
         for uid, board in BOARDS.items():

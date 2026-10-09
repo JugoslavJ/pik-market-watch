@@ -119,7 +119,7 @@ async function main() {
         href,
       );
     const initial = await page.locator('[data-panel="1"] .value').innerText();
-    assert.equal(await page.locator("[data-panel]").count(), 20);
+    assert.equal(await page.locator("[data-panel]").count(), 22);
     console.log("Viewer loaded; checking chart click");
     await page.locator('[data-panel="8"]').scrollIntoViewIfNeeded();
     await page.waitForFunction(() => window.__olxChartInstances?.has(8));

@@ -17,7 +17,10 @@
       "label": "Deal",
       "type": "select",
       "multi": false,
-      "options": ["sell", "rent"]
+      "options": [
+        "sell",
+        "rent"
+      ]
     },
     {
       "name": "rooms",
@@ -50,6 +53,7 @@
     {
       "id": 1,
       "title": "Active listings",
+      "description": "Listings on OLX now.",
       "section": "Snapshot",
       "type": "big_number",
       "layout": {
@@ -58,12 +62,13 @@
         "w": 6,
         "h": 4
       },
-      "sql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND ((${deal} = 'All' AND l.deal <> 'daily_rent') OR l.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${rooms} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY (ARRAY[${neighborhood}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood}]::text[])) AND (${category} = 'All' OR l.property_type = ${category}) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)) SELECT count(*) AS active,\n  count(*) FILTER (WHERE first_seen >= (now() AT TIME ZONE 'Europe/Sarajevo')::date - 7) AS new_7d,\n  round(percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE deal='sale' AND ppm2>0)::numeric,0) AS median_sale_ppm2,\n  round(percentile_cont(0.5) WITHIN GROUP (ORDER BY price) FILTER (WHERE deal='rent' AND price>0)::numeric,0) AS median_rent\nFROM base",
-      "field": "active"
+      "field": "active",
+      "sql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND ((${deal} = 'All' AND l.deal <> 'daily_rent') OR l.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${rooms} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY (ARRAY[${neighborhood}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood}]::text[])) AND (${category} = 'All' OR l.property_type = ${category}) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)), coverage AS (SELECT (min(started_at) AT TIME ZONE 'Europe/Sarajevo')::date AS start FROM lean.scrape_runs), fresh AS (SELECT count(*) FILTER (WHERE (l.first_seen > (${time_from} AT TIME ZONE 'Europe/Sarajevo')::date AND l.first_seen <= (${time_to} AT TIME ZONE 'Europe/Sarajevo')::date)) AS new_n, count(*) FILTER (WHERE (l.first_seen > (${time_from} AT TIME ZONE 'Europe/Sarajevo')::date - ((${time_to} AT TIME ZONE 'Europe/Sarajevo')::date - (${time_from} AT TIME ZONE 'Europe/Sarajevo')::date) AND l.first_seen <= (${time_from} AT TIME ZONE 'Europe/Sarajevo')::date)) AS new_prev FROM lean.listings l WHERE ((${deal} = 'All' AND l.deal <> 'daily_rent') OR l.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${category} = 'All' OR l.property_type = ${category}) AND (${rooms} = 'All' OR coalesce(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY(ARRAY[${neighborhood}]::text[]) OR coalesce(l.neighborhood,'unknown') = ANY(ARRAY[${neighborhood}]::text[])) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)), exits AS (SELECT count(*) AS n FROM lean.listing_lifecycle_events e WHERE e.event_type='closed' AND ((${deal} = 'All' AND e.deal <> 'daily_rent') OR e.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${category} = 'All' OR e.property_type = ${category}) AND (${rooms} = 'All' OR coalesce(e.rooms,'unknown') = ${rooms}) AND ('All' = ANY(ARRAY[${neighborhood}]::text[]) OR coalesce(e.neighborhood,'unknown') = ANY(ARRAY[${neighborhood}]::text[])) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR e.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR e.sqm <= NULLIF(${max_sqm}, '')::numeric) AND (e.occurred_at > (${time_from} AT TIME ZONE 'Europe/Sarajevo')::date AND e.occurred_at <= (${time_to} AT TIME ZONE 'Europe/Sarajevo')::date)) SELECT count(*) AS active, (SELECT new_n FROM fresh) AS new_n, CASE WHEN (${time_from} AT TIME ZONE 'Europe/Sarajevo')::date - ((${time_to} AT TIME ZONE 'Europe/Sarajevo')::date - (${time_from} AT TIME ZONE 'Europe/Sarajevo')::date) >= (SELECT start FROM coverage) THEN (SELECT new_prev FROM fresh) END AS new_prev,\n  round(percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE deal='sale' AND ppm2>0)::numeric,0) AS median_sale_ppm2,\n  round(percentile_cont(0.5) WITHIN GROUP (ORDER BY price) FILTER (WHERE deal='rent' AND price>0)::numeric,0) AS median_rent,\n  round(count(*)::numeric / NULLIF((SELECT n FROM exits) * 30.0 / NULLIF(((${time_to} AT TIME ZONE 'Europe/Sarajevo')::date - GREATEST((${time_from} AT TIME ZONE 'Europe/Sarajevo')::date, (SELECT start FROM coverage))), 0), 0), 1) AS months_of_inventory\nFROM base"
     },
     {
       "id": 2,
-      "title": "New · 7 d",
+      "title": "New listings",
+      "description": "First seen in the selected time window, compared with the window before it.",
       "section": "Snapshot",
       "type": "big_number",
       "layout": {
@@ -73,12 +78,13 @@
         "h": 4
       },
       "source_panel": 1,
-      "field": "new_7d"
+      "field": "new_n",
+      "compare": "new_prev"
     },
     {
       "id": 3,
-      "title": "Price cuts · 7 d",
-      "description": "Active listings with a recorded price cut in the last 7 days.",
+      "title": "Price cuts",
+      "description": "Active listings with a recorded price cut in the selected time window, compared with the window before it.",
       "section": "Snapshot",
       "type": "big_number",
       "layout": {
@@ -87,13 +93,14 @@
         "w": 6,
         "h": 4
       },
-      "sql": "WITH prices AS (SELECT article_id, price_date, price, lag(price) OVER (PARTITION BY article_id ORDER BY price_date, id) AS previous_price FROM lean.price_history WHERE price IS NOT NULL AND source='api_price_history'), cuts AS (SELECT article_id, price_date, previous_price, price, previous_price - price AS reduction FROM prices WHERE previous_price > price) SELECT count(DISTINCT c.article_id) AS drops FROM cuts c JOIN lean.listings l USING(article_id) WHERE l.closed_at IS NULL AND ((${deal} = 'All' AND l.deal <> 'daily_rent') OR l.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${rooms} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY (ARRAY[${neighborhood}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood}]::text[])) AND (${category} = 'All' OR l.property_type = ${category}) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric) AND c.price_date >= (now() AT TIME ZONE 'Europe/Sarajevo')::date - 7",
-      "field": "drops"
+      "field": "drops",
+      "compare": "drops_prev",
+      "sql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND ((${deal} = 'All' AND l.deal <> 'daily_rent') OR l.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${rooms} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY (ARRAY[${neighborhood}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood}]::text[])) AND (${category} = 'All' OR l.property_type = ${category}) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)), coverage AS (SELECT (min(started_at) AT TIME ZONE 'Europe/Sarajevo')::date AS start FROM lean.scrape_runs), prices AS (SELECT ph.article_id, ph.price_date, ph.price, lag(ph.price) OVER (PARTITION BY ph.article_id ORDER BY ph.price_date, ph.id) AS previous_price FROM lean.price_history ph JOIN base USING (article_id) WHERE ph.price IS NOT NULL AND ph.source='api_price_history'), cuts AS (SELECT article_id, price_date, previous_price, price, 100.0*(previous_price-price)/previous_price AS cut_pct FROM prices WHERE previous_price > price) SELECT count(DISTINCT article_id) FILTER (WHERE (price_date > (${time_from} AT TIME ZONE 'Europe/Sarajevo')::date AND price_date <= (${time_to} AT TIME ZONE 'Europe/Sarajevo')::date)) AS drops, CASE WHEN (${time_from} AT TIME ZONE 'Europe/Sarajevo')::date - ((${time_to} AT TIME ZONE 'Europe/Sarajevo')::date - (${time_from} AT TIME ZONE 'Europe/Sarajevo')::date) >= (SELECT start FROM coverage) THEN count(DISTINCT article_id) FILTER (WHERE (price_date > (${time_from} AT TIME ZONE 'Europe/Sarajevo')::date - ((${time_to} AT TIME ZONE 'Europe/Sarajevo')::date - (${time_from} AT TIME ZONE 'Europe/Sarajevo')::date) AND price_date <= (${time_from} AT TIME ZONE 'Europe/Sarajevo')::date)) END AS drops_prev, round(100.0*count(DISTINCT article_id)/NULLIF((SELECT count(*) FROM base),0),0) AS cut_share_pct, round(percentile_cont(0.5) WITHIN GROUP (ORDER BY cut_pct) FILTER (WHERE (price_date > (${time_from} AT TIME ZONE 'Europe/Sarajevo')::date AND price_date <= (${time_to} AT TIME ZONE 'Europe/Sarajevo')::date))::numeric,1) AS median_cut_pct FROM cuts"
     },
     {
       "id": 19,
       "title": "Actives with a price cut",
-      "description": "Active listings with at least one recorded price cut.",
+      "description": "Share of active listings with at least one recorded price cut.",
       "section": "Snapshot",
       "type": "big_number",
       "layout": {
@@ -102,8 +109,9 @@
         "w": 6,
         "h": 4
       },
-      "sql": "WITH prices AS (SELECT article_id, price_date, price, lag(price) OVER (PARTITION BY article_id ORDER BY price_date, id) AS previous_price FROM lean.price_history WHERE price IS NOT NULL AND source='api_price_history'), cuts AS (SELECT article_id, price_date, previous_price, price, previous_price - price AS reduction FROM prices WHERE previous_price > price) SELECT count(DISTINCT c.article_id) AS actives FROM cuts c JOIN lean.listings l USING(article_id) WHERE l.closed_at IS NULL AND ((${deal} = 'All' AND l.deal <> 'daily_rent') OR l.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${rooms} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY (ARRAY[${neighborhood}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood}]::text[])) AND (${category} = 'All' OR l.property_type = ${category}) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)",
-      "field": "actives"
+      "source_panel": 3,
+      "field": "cut_share_pct",
+      "suffix": "%"
     },
     {
       "id": 4,
@@ -113,12 +121,18 @@
       "layout": {
         "x": 0,
         "y": 4,
-        "w": 8,
+        "w": 6,
         "h": 4
       },
       "source_panel": 1,
       "field": "median_sale_ppm2",
-      "suffix": "KM/m²"
+      "suffix": "KM/m²",
+      "when": {
+        "deal": [
+          "All",
+          "sell"
+        ]
+      }
     },
     {
       "id": 5,
@@ -126,35 +140,59 @@
       "section": "Snapshot",
       "type": "big_number",
       "layout": {
-        "x": 8,
+        "x": 6,
         "y": 4,
-        "w": 8,
+        "w": 6,
         "h": 4
       },
       "source_panel": 1,
       "field": "median_rent",
-      "suffix": "KM"
+      "suffix": "KM",
+      "when": {
+        "deal": [
+          "All",
+          "rent"
+        ]
+      }
     },
     {
       "id": 20,
       "title": "Median price cut",
-      "description": "Across every recorded cut, active or closed, regardless of filters. Daily rentals are left out.",
+      "description": "Median size of the price cuts recorded in the selected time window on active listings that match the filters.",
       "section": "Snapshot",
       "type": "big_number",
       "layout": {
-        "x": 16,
+        "x": 12,
         "y": 4,
-        "w": 8,
+        "w": 6,
         "h": 4
       },
-      "sql": "WITH prices AS (SELECT article_id, price_date, price, lag(price) OVER (PARTITION BY article_id ORDER BY price_date, id) AS previous_price FROM lean.price_history ph WHERE price IS NOT NULL AND source='api_price_history' AND NOT EXISTS (SELECT 1 FROM lean.listings /* unfiltered */ d WHERE d.article_id = ph.article_id AND d.deal = 'daily_rent')), cuts AS (SELECT article_id, price_date, previous_price, price, previous_price - price AS reduction FROM prices WHERE previous_price > price) SELECT round(percentile_cont(0.5) WITHIN GROUP (ORDER BY reduction)::numeric,0) AS median_cut FROM cuts WHERE reduction>0",
-      "field": "median_cut",
-      "suffix": "KM"
+      "source_panel": 3,
+      "field": "median_cut_pct",
+      "suffix": "%",
+      "decimals": 1
+    },
+    {
+      "id": 34,
+      "title": "Months of inventory",
+      "description": "Active listings ÷ exits per 30 days in the selected time window: how many months supply would last at that pace. Under 3 is a fast market.",
+      "section": "Snapshot",
+      "type": "big_number",
+      "layout": {
+        "x": 18,
+        "y": 4,
+        "w": 6,
+        "h": 4
+      },
+      "source_panel": 1,
+      "field": "months_of_inventory",
+      "suffix": "months",
+      "decimals": 1
     },
     {
       "id": 7,
       "title": "Sale asking price per m² · daily",
-      "description": "Median and interquartile range across sale listings of the selected category active at each day's end. Each listing carries its latest reported price; historical KM/m² uses current area.",
+      "description": "Median and interquartile range across sale listings that match the filters and were active at each day's end. Each listing carries its latest reported price; historical KM/m² uses current area. Days before collection began only include listings still active when it did. Listings without a reported price history carry their current ask from the day they were first seen.",
       "section": "Prices",
       "type": "timeseries",
       "layout": {
@@ -163,47 +201,65 @@
         "w": 24,
         "h": 9
       },
-      "sql": "WITH bounds AS (\n  SELECT GREATEST(date(${time_from} AT TIME ZONE 'Europe/Sarajevo'), (now() AT TIME ZONE 'Europe/Sarajevo')::date - 89) AS start_day,\n         LEAST(date(${time_to} AT TIME ZONE 'Europe/Sarajevo'), (now() AT TIME ZONE 'Europe/Sarajevo')::date) AS end_day\n), sale_listings AS MATERIALIZED (\n  SELECT article_id, sqm, first_seen\n  FROM lean.listings\n  WHERE deal = 'sale' AND sqm > 0\n    AND (${category} = 'All' OR property_type = ${category})\n), openings AS (\n  SELECT article_id, first_seen AS opened_at FROM sale_listings\n  UNION ALL\n  SELECT e.article_id, e.occurred_at AS opened_at\n  FROM lean.listing_lifecycle_events e\n  JOIN sale_listings s USING (article_id)\n  WHERE e.event_type = 'reopened'\n), cycles AS (\n  SELECT o.article_id, o.opened_at, c.closed_at\n  FROM openings o\n  LEFT JOIN LATERAL (\n    SELECT min(e.occurred_at) AS closed_at\n    FROM lean.listing_lifecycle_events e\n    WHERE e.article_id = o.article_id\n      AND e.event_type = 'closed'\n      AND e.occurred_at > o.opened_at\n  ) c ON TRUE\n), prior_prices AS (\n  SELECT s.article_id, price.price, price.price_date\n  FROM sale_listings s\n  CROSS JOIN bounds\n  CROSS JOIN LATERAL (\n    SELECT ph.price, ph.price_date\n    FROM lean.price_history ph\n    WHERE ph.article_id = s.article_id\n      AND ph.source = 'api_price_history'\n      AND ph.price > 0\n      AND ph.price_date < bounds.start_day\n    ORDER BY ph.price_date DESC\n    LIMIT 1\n  ) price\n), window_prices AS (\n  SELECT s.article_id, price.price, price.price_date\n  FROM sale_listings s\n  CROSS JOIN bounds\n  CROSS JOIN LATERAL (\n    SELECT ph.price, ph.price_date\n    FROM lean.price_history ph\n    WHERE ph.article_id = s.article_id\n      AND ph.source = 'api_price_history'\n      AND ph.price > 0\n      AND ph.price_date BETWEEN bounds.start_day AND bounds.end_day\n  ) price\n), price_spans AS (\n  SELECT relevant.article_id, relevant.price, relevant.price_date,\n         lead(relevant.price_date) OVER (\n           PARTITION BY relevant.article_id ORDER BY relevant.price_date\n         ) AS next_date\n  FROM (\n    SELECT * FROM prior_prices\n    UNION ALL\n    SELECT * FROM window_prices\n  ) relevant\n), daily AS (\n  SELECT d.day::date AS day, p.price / NULLIF(l.sqm, 0) AS ppm2\n  FROM price_spans p\n  CROSS JOIN bounds b\n  JOIN LATERAL generate_series(\n    GREATEST(p.price_date, b.start_day),\n    LEAST(COALESCE(p.next_date - 1, b.end_day), b.end_day),\n    INTERVAL '1 day'\n  ) AS d(day) ON TRUE\n  JOIN cycles c\n    ON c.article_id = p.article_id\n   AND c.opened_at < d.day::date + 1\n   AND (c.closed_at IS NULL OR c.closed_at >= d.day::date + 1)\n  JOIN sale_listings l ON l.article_id = c.article_id\n)\nSELECT day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time,\n       percentile_cont(0.25) WITHIN GROUP (ORDER BY ppm2) AS p25,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) AS median,\n       percentile_cont(0.75) WITHIN GROUP (ORDER BY ppm2) AS p75,\n       count(*) AS listings\nFROM daily GROUP BY day ORDER BY day",
-      "suffix": "KM/m²"
+      "suffix": "KM/m²",
+      "sql": "WITH bounds AS (\n  SELECT date(${time_from} AT TIME ZONE 'Europe/Sarajevo') AS start_day,\n         LEAST(date(${time_to} AT TIME ZONE 'Europe/Sarajevo'), (now() AT TIME ZONE 'Europe/Sarajevo')::date) AS end_day\n), sale_listings AS MATERIALIZED (\n  SELECT l.article_id, l.sqm, l.price, l.first_seen\n  FROM lean.listings l\n  WHERE l.deal = 'sale' AND l.sqm > 0\n    AND (${category} = 'All' OR l.property_type = ${category}) AND (${rooms} = 'All' OR coalesce(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY(ARRAY[${neighborhood}]::text[]) OR coalesce(l.neighborhood,'unknown') = ANY(ARRAY[${neighborhood}]::text[])) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)\n), openings AS (\n  SELECT article_id, first_seen AS opened_at FROM sale_listings\n  UNION ALL\n  SELECT e.article_id, e.occurred_at AS opened_at\n  FROM lean.listing_lifecycle_events e\n  JOIN sale_listings s USING (article_id)\n  WHERE e.event_type = 'reopened'\n), cycles AS (\n  SELECT o.article_id, o.opened_at, c.closed_at\n  FROM openings o\n  LEFT JOIN LATERAL (\n    SELECT min(e.occurred_at) AS closed_at\n    FROM lean.listing_lifecycle_events e\n    WHERE e.article_id = o.article_id\n      AND e.event_type = 'closed'\n      AND e.occurred_at > o.opened_at\n  ) c ON TRUE\n), prior_prices AS (\n  SELECT s.article_id, price.price, price.price_date\n  FROM sale_listings s\n  CROSS JOIN bounds\n  CROSS JOIN LATERAL (\n    SELECT ph.price, ph.price_date\n    FROM lean.price_history ph\n    WHERE ph.article_id = s.article_id\n      AND ph.source = 'api_price_history'\n      AND ph.price > 0\n      AND ph.price_date < bounds.start_day\n    ORDER BY ph.price_date DESC\n    LIMIT 1\n  ) price\n), window_prices AS (\n  SELECT s.article_id, price.price, price.price_date\n  FROM sale_listings s\n  CROSS JOIN bounds\n  CROSS JOIN LATERAL (\n    SELECT ph.price, ph.price_date\n    FROM lean.price_history ph\n    WHERE ph.article_id = s.article_id\n      AND ph.source = 'api_price_history'\n      AND ph.price > 0\n      AND ph.price_date BETWEEN bounds.start_day AND bounds.end_day\n  ) price\n), price_spans AS (\n  SELECT relevant.article_id, relevant.price, relevant.price_date,\n         lead(relevant.price_date) OVER (\n           PARTITION BY relevant.article_id ORDER BY relevant.price_date\n         ) AS next_date\n  FROM (\n    SELECT * FROM prior_prices\n    UNION ALL\n    SELECT * FROM window_prices\n    UNION ALL\n    SELECT s.article_id, s.price, s.first_seen\n    FROM sale_listings s\n    WHERE s.price > 0 AND NOT EXISTS (\n      SELECT 1 FROM lean.price_history ph\n      WHERE ph.article_id = s.article_id AND ph.source = 'api_price_history' AND ph.price > 0\n    )\n  ) relevant\n), daily AS (\n  SELECT d.day::date AS day, p.price / NULLIF(l.sqm, 0) AS ppm2\n  FROM price_spans p\n  CROSS JOIN bounds b\n  JOIN LATERAL generate_series(\n    GREATEST(p.price_date, b.start_day),\n    LEAST(COALESCE(p.next_date - 1, b.end_day), b.end_day),\n    INTERVAL '1 day'\n  ) AS d(day) ON TRUE\n  JOIN cycles c\n    ON c.article_id = p.article_id\n   AND c.opened_at < d.day::date + 1\n   AND (c.closed_at IS NULL OR c.closed_at >= d.day::date + 1)\n  JOIN sale_listings l ON l.article_id = c.article_id\n)\nSELECT day::timestamp AT TIME ZONE 'Europe/Sarajevo' AS time,\n       percentile_cont(0.25) WITHIN GROUP (ORDER BY ppm2) AS p25,\n       percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) AS median,\n       percentile_cont(0.75) WITHIN GROUP (ORDER BY ppm2) AS p75,\n       count(*) AS listings\nFROM daily GROUP BY day ORDER BY day",
+      "when": {
+        "deal": [
+          "All",
+          "sell"
+        ]
+      }
     },
     {
       "id": 21,
       "title": "Median KM/m² by rooms · sales",
-      "description": "Click a bar to filter the page.",
+      "description": "The box spans the middle half, the whiskers the 10th–90th percentile. Click a box to filter the page.",
       "section": "Prices",
-      "type": "bar",
+      "type": "box",
       "layout": {
         "x": 0,
         "y": 17,
         "w": 12,
         "h": 9
       },
-      "sql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND ((${deal} = 'All' AND l.deal <> 'daily_rent') OR l.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${rooms} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY (ARRAY[${neighborhood}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood}]::text[])) AND (${category} = 'All' OR l.property_type = ${category}) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)) SELECT coalesce(rooms,'unknown') AS rooms,round(percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)::numeric,0) AS median_ppm2 FROM base WHERE deal='sale' AND ppm2>0 GROUP BY 1 ORDER BY 1",
       "category": "rooms",
       "value": "median_ppm2",
-      "suffix": "KM/m²"
+      "suffix": "KM/m²",
+      "sql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND ((${deal} = 'All' AND l.deal <> 'daily_rent') OR l.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${rooms} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY (ARRAY[${neighborhood}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood}]::text[])) AND (${category} = 'All' OR l.property_type = ${category}) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)) SELECT coalesce(rooms,'unknown') AS rooms,count(*) AS listings,round(percentile_cont(0.1) WITHIN GROUP (ORDER BY ppm2)::numeric,0) AS p10,round(percentile_cont(0.25) WITHIN GROUP (ORDER BY ppm2)::numeric,0) AS p25,round(percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)::numeric,0) AS median_ppm2,round(percentile_cont(0.75) WITHIN GROUP (ORDER BY ppm2)::numeric,0) AS p75,round(percentile_cont(0.9) WITHIN GROUP (ORDER BY ppm2)::numeric,0) AS p90 FROM base WHERE deal='sale' AND ppm2>0 GROUP BY 1 ORDER BY 1",
+      "when": {
+        "deal": [
+          "All",
+          "sell"
+        ]
+      }
     },
     {
       "id": 29,
-      "title": "Median KM/m² by floor position · sales",
-      "description": "Click a bar to filter the page.",
+      "title": "Median KM/m² by floor · sales",
+      "description": "The box spans the middle half, the whiskers the 10th–90th percentile.",
       "section": "Prices",
-      "type": "bar",
+      "type": "box",
       "layout": {
         "x": 12,
         "y": 17,
         "w": 12,
         "h": 9
       },
-      "sql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND ((${deal} = 'All' AND l.deal <> 'daily_rent') OR l.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${rooms} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY (ARRAY[${neighborhood}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood}]::text[])) AND (${category} = 'All' OR l.property_type = ${category}) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)) SELECT coalesce(floor_num::text,'unknown') AS floor,round(percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)::numeric,0) AS median_ppm2 FROM base WHERE deal='sale' AND ppm2>0 GROUP BY 1 ORDER BY min(floor_num) NULLS LAST",
-      "category": "floor",
+      "category": "floor_band",
       "value": "median_ppm2",
-      "suffix": "KM/m²"
+      "suffix": "KM/m²",
+      "sql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND ((${deal} = 'All' AND l.deal <> 'daily_rent') OR l.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${rooms} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY (ARRAY[${neighborhood}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood}]::text[])) AND (${category} = 'All' OR l.property_type = ${category}) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)) SELECT CASE WHEN floor_num IS NULL THEN 'unknown' WHEN floor_num < 0 THEN 'basement' WHEN floor_num = 0 THEN 'ground' WHEN floor_num <= 2 THEN '1–2' WHEN floor_num <= 5 THEN '3–5' ELSE '6+' END AS floor_band,count(*) AS listings,round(percentile_cont(0.1) WITHIN GROUP (ORDER BY ppm2)::numeric,0) AS p10,round(percentile_cont(0.25) WITHIN GROUP (ORDER BY ppm2)::numeric,0) AS p25,round(percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)::numeric,0) AS median_ppm2,round(percentile_cont(0.75) WITHIN GROUP (ORDER BY ppm2)::numeric,0) AS p75,round(percentile_cont(0.9) WITHIN GROUP (ORDER BY ppm2)::numeric,0) AS p90 FROM base WHERE deal='sale' AND ppm2>0 GROUP BY 1 ORDER BY min(floor_num) NULLS LAST",
+      "when": {
+        "deal": [
+          "All",
+          "sell"
+        ]
+      }
     },
     {
       "id": 26,
-      "title": "Asking price vs area · sales",
-      "description": "Each dot is an active sale listing. Click a dot to open the ad.",
+      "title": "Asking KM/m² vs area · sales",
+      "description": "Each dot is an active sale listing. Larger homes usually ask less per m², so low dots stand out as cheap for their size. Click a dot to open the ad.",
       "section": "Prices",
       "type": "scatter",
       "layout": {
@@ -212,9 +268,54 @@
         "w": 24,
         "h": 11
       },
-      "sql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND ((${deal} = 'All' AND l.deal <> 'daily_rent') OR l.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${rooms} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY (ARRAY[${neighborhood}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood}]::text[])) AND (${category} = 'All' OR l.property_type = ${category}) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)) SELECT sqm::float8 AS area,price::float8 AS price,neighborhood,title,url FROM base WHERE deal='sale' AND sqm>0 AND price>0",
       "x": "area",
-      "y": "price"
+      "y": "ppm2",
+      "sql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND ((${deal} = 'All' AND l.deal <> 'daily_rent') OR l.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${rooms} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY (ARRAY[${neighborhood}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood}]::text[])) AND (${category} = 'All' OR l.property_type = ${category}) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)) SELECT sqm::float8 AS area,ppm2::float8 AS ppm2,neighborhood,title,url FROM base WHERE deal='sale' AND sqm>0 AND ppm2>0",
+      "when": {
+        "deal": [
+          "All",
+          "sell"
+        ]
+      }
+    },
+    {
+      "id": 33,
+      "title": "Median KM/m² by neighborhood and rooms · sales",
+      "description": "The 10 neighborhoods with the most sale listings. Cells with fewer than 3 listings stay blank. Click a cell to filter by its neighborhood.",
+      "section": "Prices",
+      "type": "heatmap",
+      "layout": {
+        "x": 0,
+        "y": 37,
+        "w": 24,
+        "h": 12
+      },
+      "value": "median_ppm2",
+      "x": "rooms",
+      "y": "neighborhood",
+      "suffix": "KM/m²",
+      "sql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND ((${deal} = 'All' AND l.deal <> 'daily_rent') OR l.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${rooms} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY (ARRAY[${neighborhood}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood}]::text[])) AND (${category} = 'All' OR l.property_type = ${category}) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)), ranked AS (SELECT neighborhood,row_number() OVER (ORDER BY count(*) DESC, neighborhood) AS rank FROM base WHERE deal='sale' AND ppm2>0 AND neighborhood IS NOT NULL GROUP BY 1 ORDER BY 2 LIMIT 10) SELECT b.neighborhood,coalesce(b.rooms,'unknown') AS rooms,count(*) AS listings,round(percentile_cont(0.5) WITHIN GROUP (ORDER BY b.ppm2)::numeric,0) AS median_ppm2 FROM base b JOIN ranked r USING (neighborhood) WHERE b.deal='sale' AND b.ppm2>0 GROUP BY 1,2,r.rank HAVING count(*) >= 3 ORDER BY r.rank, 2",
+      "when": {
+        "deal": [
+          "All",
+          "sell"
+        ]
+      }
+    },
+    {
+      "id": 35,
+      "title": "New and exited listings · weekly",
+      "description": "Listings first seen and listings that left OLX each week of the selected time window. An exit is not a confirmed sale.",
+      "section": "Supply",
+      "type": "timeseries",
+      "layout": {
+        "x": 0,
+        "y": 49,
+        "w": 24,
+        "h": 9
+      },
+      "bars": true,
+      "sql": "WITH fresh AS (SELECT date_trunc('week', l.first_seen::timestamp) AS week, count(*) AS n FROM lean.listings l WHERE ((${deal} = 'All' AND l.deal <> 'daily_rent') OR l.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${category} = 'All' OR l.property_type = ${category}) AND (${rooms} = 'All' OR coalesce(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY(ARRAY[${neighborhood}]::text[]) OR coalesce(l.neighborhood,'unknown') = ANY(ARRAY[${neighborhood}]::text[])) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric) AND (l.first_seen > (${time_from} AT TIME ZONE 'Europe/Sarajevo')::date AND l.first_seen <= (${time_to} AT TIME ZONE 'Europe/Sarajevo')::date) GROUP BY 1), gone AS (SELECT date_trunc('week', e.occurred_at::timestamp) AS week, count(*) AS n FROM lean.listing_lifecycle_events e WHERE e.event_type='closed' AND ((${deal} = 'All' AND e.deal <> 'daily_rent') OR e.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${category} = 'All' OR e.property_type = ${category}) AND (${rooms} = 'All' OR coalesce(e.rooms,'unknown') = ${rooms}) AND ('All' = ANY(ARRAY[${neighborhood}]::text[]) OR coalesce(e.neighborhood,'unknown') = ANY(ARRAY[${neighborhood}]::text[])) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR e.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR e.sqm <= NULLIF(${max_sqm}, '')::numeric) AND (e.occurred_at > (${time_from} AT TIME ZONE 'Europe/Sarajevo')::date AND e.occurred_at <= (${time_to} AT TIME ZONE 'Europe/Sarajevo')::date) GROUP BY 1) SELECT week AT TIME ZONE 'Europe/Sarajevo' AS time, coalesce(f.n,0) AS new_n, coalesce(g.n,0) AS closed_n FROM fresh f FULL JOIN gone g USING (week) ORDER BY 1"
     },
     {
       "id": 8,
@@ -224,56 +325,88 @@
       "type": "bar",
       "layout": {
         "x": 0,
-        "y": 37,
+        "y": 58,
         "w": 12,
         "h": 11
       },
-      "sql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND ((${deal} = 'All' AND l.deal <> 'daily_rent') OR l.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${rooms} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY (ARRAY[${neighborhood}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood}]::text[])) AND (${category} = 'All' OR l.property_type = ${category}) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)) SELECT coalesce(rooms,'unknown') AS rooms,count(*) AS listings FROM base WHERE deal='sale' GROUP BY 1 ORDER BY 2 DESC",
       "category": "rooms",
-      "value": "listings"
+      "value": "listings",
+      "sql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND ((${deal} = 'All' AND l.deal <> 'daily_rent') OR l.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${rooms} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY (ARRAY[${neighborhood}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood}]::text[])) AND (${category} = 'All' OR l.property_type = ${category}) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)) SELECT coalesce(rooms,'unknown') AS rooms,count(*) AS listings FROM base WHERE deal='sale' GROUP BY 1 ORDER BY 1",
+      "when": {
+        "deal": [
+          "All",
+          "sell"
+        ]
+      }
     },
     {
       "id": 32,
       "title": "Median KM/m² by neighborhood · sales",
-      "description": "The 15 neighborhoods with the most sale listings. Click a bar to filter the page.",
+      "description": "The 15 neighborhoods with the most sale listings. The box spans the middle half, the whiskers the 10th–90th percentile. Click a box to filter the page.",
       "section": "Supply",
-      "type": "bar",
+      "type": "box",
       "layout": {
         "x": 12,
-        "y": 37,
+        "y": 58,
         "w": 12,
         "h": 11
       },
-      "sql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND ((${deal} = 'All' AND l.deal <> 'daily_rent') OR l.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${rooms} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY (ARRAY[${neighborhood}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood}]::text[])) AND (${category} = 'All' OR l.property_type = ${category}) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)) SELECT neighborhood,listings,median_ppm2 FROM (SELECT coalesce(neighborhood,'unknown') AS neighborhood,count(*) AS listings,round(percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)::numeric,0) AS median_ppm2 FROM base WHERE deal='sale' AND ppm2>0 GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 15) top ORDER BY median_ppm2 DESC",
       "category": "neighborhood",
       "value": "median_ppm2",
-      "suffix": "KM/m²"
+      "suffix": "KM/m²",
+      "sql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND ((${deal} = 'All' AND l.deal <> 'daily_rent') OR l.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${rooms} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY (ARRAY[${neighborhood}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood}]::text[])) AND (${category} = 'All' OR l.property_type = ${category}) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)) SELECT * FROM (SELECT coalesce(neighborhood,'unknown') AS neighborhood,count(*) AS listings,round(percentile_cont(0.1) WITHIN GROUP (ORDER BY ppm2)::numeric,0) AS p10,round(percentile_cont(0.25) WITHIN GROUP (ORDER BY ppm2)::numeric,0) AS p25,round(percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)::numeric,0) AS median_ppm2,round(percentile_cont(0.75) WITHIN GROUP (ORDER BY ppm2)::numeric,0) AS p75,round(percentile_cont(0.9) WITHIN GROUP (ORDER BY ppm2)::numeric,0) AS p90 FROM base WHERE deal='sale' AND ppm2>0 GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 15) top ORDER BY median_ppm2 DESC",
+      "when": {
+        "deal": [
+          "All",
+          "sell"
+        ]
+      }
     },
     {
       "id": 22,
-      "title": "Sales by segment",
+      "title": "Sale listings by property type",
+      "description": "Shown while Category is All.",
       "section": "Supply",
-      "type": "table",
+      "type": "pie",
       "layout": {
         "x": 0,
-        "y": 48,
+        "y": 69,
         "w": 12,
         "h": 8
       },
-      "sql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND ((${deal} = 'All' AND l.deal <> 'daily_rent') OR l.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${rooms} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY (ARRAY[${neighborhood}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood}]::text[])) AND (${category} = 'All' OR l.property_type = ${category}) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)) SELECT property_type AS segment,count(*) AS listings,round(percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)::numeric,0) AS median_ppm2 FROM base WHERE deal='sale' AND ppm2>0 GROUP BY 1 ORDER BY 2 DESC"
+      "category": "segment",
+      "value": "listings",
+      "sql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND ((${deal} = 'All' AND l.deal <> 'daily_rent') OR l.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${rooms} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY (ARRAY[${neighborhood}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood}]::text[])) AND (${category} = 'All' OR l.property_type = ${category}) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)) SELECT property_type AS segment,count(*) AS listings,round(percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE ppm2>0)::numeric,0) AS median_ppm2 FROM base WHERE deal='sale' AND property_type IS NOT NULL GROUP BY 1 ORDER BY 1",
+      "when": {
+        "category": [
+          "All"
+        ],
+        "deal": [
+          "All",
+          "sell"
+        ]
+      }
     },
     {
       "id": 30,
-      "title": "Sales by seller type",
+      "title": "Sale listings by seller",
       "section": "Supply",
-      "type": "table",
+      "type": "pie",
       "layout": {
         "x": 12,
-        "y": 48,
+        "y": 69,
         "w": 12,
         "h": 8
       },
-      "sql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND ((${deal} = 'All' AND l.deal <> 'daily_rent') OR l.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${rooms} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY (ARRAY[${neighborhood}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood}]::text[])) AND (${category} = 'All' OR l.property_type = ${category}) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)) SELECT coalesce(seller_type,'unknown') AS seller_type,count(*) AS listings,round(percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2)::numeric,0) AS median_ppm2 FROM base WHERE deal='sale' AND ppm2>0 GROUP BY 1 ORDER BY 2 DESC"
+      "category": "seller_type",
+      "value": "listings",
+      "sql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND ((${deal} = 'All' AND l.deal <> 'daily_rent') OR l.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${rooms} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY (ARRAY[${neighborhood}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood}]::text[])) AND (${category} = 'All' OR l.property_type = ${category}) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)) SELECT coalesce(seller_type,'unknown') AS seller_type,count(*) AS listings,round(percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) FILTER (WHERE ppm2>0)::numeric,0) AS median_ppm2 FROM base WHERE deal='sale' GROUP BY 1 ORDER BY 1",
+      "when": {
+        "deal": [
+          "All",
+          "sell"
+        ]
+      }
     },
     {
       "id": 13,
@@ -283,42 +416,50 @@
       "type": "map",
       "layout": {
         "x": 0,
-        "y": 56,
+        "y": 77,
         "w": 24,
         "h": 14
       },
-      "sql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND ((${deal} = 'All' AND l.deal <> 'daily_rent') OR l.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${rooms} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY (ARRAY[${neighborhood}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood}]::text[])) AND (${category} = 'All' OR l.property_type = ${category}) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)) SELECT latitude,longitude,title,url,price,sqm,rooms,CASE WHEN deal='sale' THEN ppm2 END AS ppm2,neighborhood AS location,last_seen FROM base WHERE latitude IS NOT NULL AND longitude IS NOT NULL",
       "view": {
         "lat": 44.77,
         "lon": 17.2,
         "zoom": 14
-      }
+      },
+      "sql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND ((${deal} = 'All' AND l.deal <> 'daily_rent') OR l.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${rooms} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY (ARRAY[${neighborhood}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood}]::text[])) AND (${category} = 'All' OR l.property_type = ${category}) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)) SELECT latitude,longitude,title,url,price,sqm,rooms,CASE WHEN deal='sale' THEN ppm2 END AS ppm2,neighborhood AS location,last_seen FROM base WHERE latitude IS NOT NULL AND longitude IS NOT NULL"
     },
     {
       "id": 16,
-      "title": "Best value · lowest KM/m² sales",
+      "title": "Best value · furthest below the neighborhood median",
+      "description": "Sale listings of at least 20 m² ranked by asking KM/m² against the median of their neighborhood (5 or more listings). Very low values can be data errors.",
       "section": "Listings to watch",
       "type": "table",
       "layout": {
         "x": 0,
-        "y": 70,
+        "y": 91,
         "w": 24,
         "h": 10
       },
-      "sql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND ((${deal} = 'All' AND l.deal <> 'daily_rent') OR l.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${rooms} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY (ARRAY[${neighborhood}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood}]::text[])) AND (${category} = 'All' OR l.property_type = ${category}) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)) SELECT title,url,neighborhood,rooms,sqm,price,ppm2 FROM base WHERE deal='sale' AND ppm2>0 ORDER BY ppm2 LIMIT 25"
+      "sql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND ((${deal} = 'All' AND l.deal <> 'daily_rent') OR l.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${rooms} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY (ARRAY[${neighborhood}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood}]::text[])) AND (${category} = 'All' OR l.property_type = ${category}) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)), medians AS (SELECT neighborhood, percentile_cont(0.5) WITHIN GROUP (ORDER BY ppm2) AS median FROM base WHERE deal='sale' AND ppm2>0 AND neighborhood IS NOT NULL GROUP BY 1 HAVING count(*) >= 5) SELECT b.title,b.url,b.neighborhood,b.rooms,b.sqm,b.price,b.ppm2,round((100*(b.ppm2/m.median-1))::numeric,0) AS vs_median_pct FROM base b JOIN medians m USING (neighborhood) WHERE b.deal='sale' AND b.ppm2>0 AND b.sqm>=20 ORDER BY b.ppm2/m.median, b.article_id LIMIT 25",
+      "when": {
+        "deal": [
+          "All",
+          "sell"
+        ]
+      }
     },
     {
       "id": 17,
       "title": "Recent price cuts",
+      "description": "Price cuts in the selected time window on active listings, newest first.",
       "section": "Listings to watch",
       "type": "table",
       "layout": {
         "x": 0,
-        "y": 80,
+        "y": 101,
         "w": 24,
         "h": 10
       },
-      "sql": "WITH prices AS (SELECT article_id, price_date, price, lag(price) OVER (PARTITION BY article_id ORDER BY price_date, id) AS previous_price FROM lean.price_history WHERE price IS NOT NULL AND source='api_price_history'), cuts AS (SELECT article_id, price_date, previous_price, price, previous_price - price AS reduction FROM prices WHERE previous_price > price) SELECT l.title,l.url,c.previous_price AS was,c.price AS now,c.reduction,c.price_date FROM cuts c JOIN lean.listings l USING(article_id) WHERE l.closed_at IS NULL AND ((${deal} = 'All' AND l.deal <> 'daily_rent') OR l.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${rooms} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY (ARRAY[${neighborhood}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood}]::text[])) AND (${category} = 'All' OR l.property_type = ${category}) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric) ORDER BY c.price_date DESC LIMIT 25"
+      "sql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND ((${deal} = 'All' AND l.deal <> 'daily_rent') OR l.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${rooms} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY (ARRAY[${neighborhood}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood}]::text[])) AND (${category} = 'All' OR l.property_type = ${category}) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)), prices AS (SELECT ph.article_id, ph.price_date, ph.price, lag(ph.price) OVER (PARTITION BY ph.article_id ORDER BY ph.price_date, ph.id) AS previous_price FROM lean.price_history ph JOIN base USING (article_id) WHERE ph.price IS NOT NULL AND ph.source='api_price_history'), cuts AS (SELECT article_id, price_date, previous_price, price, 100.0*(previous_price-price)/previous_price AS cut_pct FROM prices WHERE previous_price > price) SELECT b.title,b.url,c.previous_price AS was,c.price AS now,round(c.cut_pct,1) AS cut_pct,c.price_date,(now() AT TIME ZONE 'Europe/Sarajevo')::date - b.first_seen AS days_listed FROM cuts c JOIN base b USING (article_id) WHERE (c.price_date > (${time_from} AT TIME ZONE 'Europe/Sarajevo')::date AND c.price_date <= (${time_to} AT TIME ZONE 'Europe/Sarajevo')::date) ORDER BY c.price_date DESC, c.cut_pct DESC LIMIT 25"
     },
     {
       "id": 11,
@@ -328,24 +469,25 @@
       "type": "table",
       "layout": {
         "x": 0,
-        "y": 90,
+        "y": 111,
         "w": 24,
         "h": 10
       },
-      "sql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND ((${deal} = 'All' AND l.deal <> 'daily_rent') OR l.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${rooms} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY (ARRAY[${neighborhood}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood}]::text[])) AND (${category} = 'All' OR l.property_type = ${category}) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)) SELECT title,url,price,ppm2,neighborhood,rooms,first_seen,last_seen FROM base ORDER BY first_seen LIMIT 25"
+      "sql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND ((${deal} = 'All' AND l.deal <> 'daily_rent') OR l.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${rooms} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY (ARRAY[${neighborhood}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood}]::text[])) AND (${category} = 'All' OR l.property_type = ${category}) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)) SELECT title,url,price,ppm2,neighborhood,rooms,(now() AT TIME ZONE 'Europe/Sarajevo')::date - first_seen AS days_listed,last_seen FROM base ORDER BY first_seen, article_id LIMIT 25"
     },
     {
       "id": 23,
-      "title": "Most viewed active listings",
+      "title": "Most viewed active listings · per day",
+      "description": "OLX view count divided by days since the listing was first seen, so new listings are not outranked by old ones.",
       "section": "Listings to watch",
       "type": "table",
       "layout": {
         "x": 0,
-        "y": 100,
+        "y": 121,
         "w": 24,
         "h": 10
       },
-      "sql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND ((${deal} = 'All' AND l.deal <> 'daily_rent') OR l.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${rooms} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY (ARRAY[${neighborhood}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood}]::text[])) AND (${category} = 'All' OR l.property_type = ${category}) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)) SELECT title,url,(extra->>'views')::numeric AS views,sqm,rooms,price FROM base WHERE extra->>'views' ~ '^[0-9]+$' ORDER BY views DESC LIMIT 25"
+      "sql": "WITH base AS (SELECT l.* FROM lean.listings l WHERE l.closed_at IS NULL AND ((${deal} = 'All' AND l.deal <> 'daily_rent') OR l.deal = CASE WHEN ${deal} = 'sell' THEN 'sale' ELSE ${deal} END) AND (${rooms} = 'All' OR COALESCE(l.rooms,'unknown') = ${rooms}) AND ('All' = ANY (ARRAY[${neighborhood}]::text[]) OR COALESCE(l.neighborhood,'unknown') = ANY (ARRAY[${neighborhood}]::text[])) AND (${category} = 'All' OR l.property_type = ${category}) AND (NULLIF(${min_sqm}, '')::numeric IS NULL OR l.sqm >= NULLIF(${min_sqm}, '')::numeric) AND (NULLIF(${max_sqm}, '')::numeric IS NULL OR l.sqm <= NULLIF(${max_sqm}, '')::numeric)) SELECT title,url,(extra->>'views')::numeric AS views,round((extra->>'views')::numeric / GREATEST((now() AT TIME ZONE 'Europe/Sarajevo')::date - first_seen, 1), 1) AS views_per_day,sqm,rooms,price FROM base WHERE extra->>'views' ~ '^[0-9]+$' ORDER BY views_per_day DESC, views DESC LIMIT 25"
     }
   ]
 }

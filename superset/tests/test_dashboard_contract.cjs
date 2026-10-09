@@ -33,11 +33,13 @@ const PANEL_KEYS = [
   "title",
   "description",
   "section",
+  "when",
   "type",
   "layout",
   "sql",
   "source_panel",
   "field",
+  "compare",
   "bars",
   "category",
   "value",
@@ -54,6 +56,9 @@ const REQUIRED = {
   table: [],
   map: ["view"],
   scatter: ["x", "y"],
+  pie: ["category", "value"],
+  box: ["category", "value"],
+  heatmap: ["x", "y", "value"],
 };
 const keysWithin = (object, allowed, where) =>
   Object.keys(object).forEach((key) =>
@@ -100,6 +105,14 @@ test("dashboard definitions keep eight identities and a strict format", () => {
       assert.ok(REQUIRED[panel.type], `${where}: type ${panel.type}`);
       for (const key of REQUIRED[panel.type])
         assert.ok(panel[key] !== undefined, `${where}: ${key}`);
+      // Box charts draw the middle half around the median.
+      if (panel.type === "box")
+        for (const column of ["p25", "p75", panel.value])
+          assert.match(
+            panel.sql,
+            new RegExp(`\\bAS ${column}\\b`),
+            `${where}: ${column}`,
+          );
       if (panel.view?.layer !== undefined) {
         assert.equal(panel.view.layer, "areas", `${where}: map layer`);
         assert.ok(panel.value, `${where}: area maps color by a value`);
@@ -123,6 +136,31 @@ test("dashboard definitions keep eight identities and a strict format", () => {
           `${where}: source lacks field`,
         );
       }
+      // Visibility rules name the board's filters and the values that show the panel.
+      for (const [name, allowed] of Object.entries(panel.when ?? {})) {
+        const filter = dashboard.filters.find((item) => item.name === name);
+        assert.ok(filter, `${where}: when names unknown filter ${name}`);
+        // All always shows the panel, so the default page and the reporting checks see it.
+        assert.ok(
+          allowed.includes("All"),
+          `${where}: when ${name} must allow All`,
+        );
+        for (const value of allowed)
+          assert.ok(
+            value === "All" ||
+              !filter.options ||
+              filter.options.includes(value),
+            `${where}: when ${name} allows unknown value ${value}`,
+          );
+      }
+      // A tile's comparison comes from the same row as its figure.
+      if (panel.compare !== undefined)
+        assert.match(
+          panel.sql ??
+            dashboard.panels.find((p) => p.id === panel.source_panel).sql,
+          new RegExp(`\\bAS\\s+${panel.compare}\\b`, "i"),
+          `${where}: source lacks compare`,
+        );
     }
   }
 });
@@ -220,6 +258,6 @@ test("every Exits data panel reads persisted close events across reopenings", ()
     );
   }
   const sql = (id) => exits.panels.find((panel) => panel.id === id).sql;
-  assert.match(sql(4), /e\.occurred_at-e\.opened_at/);
+  assert.match(sql(1), /e\.occurred_at-e\.opened_at/);
   assert.match(sql(9), /ORDER BY closed_at DESC,event_id DESC/);
 });

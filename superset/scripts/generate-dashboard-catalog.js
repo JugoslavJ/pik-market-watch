@@ -10,12 +10,9 @@ const inline = (value) =>
     .replaceAll("\n", "<br>");
 const queryCell = (value) =>
   String(value).replaceAll("|", "&#124;").replaceAll("\n", "<br>");
-// Mirrors definitions.dataset_name: the four exit cards share one aggregate.
+// Mirrors definitions.dataset_name: reused panels share their source's rows.
 function dataset(dashboard, panel) {
-  const sourceId =
-    dashboard.uid === "olx-exits" && [1, 2, 3, 4].includes(panel.id)
-      ? 1
-      : (panel.source_panel ?? panel.id);
+  const sourceId = panel.source_panel ?? panel.id;
   return "source_" + dashboard.uid.replaceAll("-", "_") + "_" + sourceId;
 }
 const lines = [

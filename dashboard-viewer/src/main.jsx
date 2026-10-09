@@ -21,6 +21,7 @@ import {
   echarts,
   number,
   selectionFor,
+  selectsBy,
   unit,
 } from "./charts";
 import {
@@ -29,6 +30,7 @@ import {
   compact,
   isDate,
   label,
+  plain,
   pinScale,
   quantileScale,
 } from "./format";
@@ -176,7 +178,7 @@ const Plot = memo(function Plot({ panel, rows, selected, onSelect, lang }) {
     instance.current = chart;
     chart.on("click", (event) => {
       const { rows, onSelect } = current.current;
-      const selection = selectionFor(panel, rows, event.dataIndex);
+      const selection = selectionFor(panel, rows, event);
       if (selection) onSelect(selection.dimension, selection.value);
       else if (panel.type === "scatter" && rows[event.dataIndex]?.url)
         openAd(rows[event.dataIndex].url);
@@ -421,7 +423,8 @@ const MapPanel = memo(function MapPanel({ panel, rows, onSelect }) {
   const visible = useVisible(ref);
   const areas = panel.view?.layer === "areas";
   const scale = useMemo(
-    () => (areas ? quantileScale(rows, panel.value) : pinScale(rows)),
+    () =>
+      areas || panel.value ? quantileScale(rows, panel.value) : pinScale(rows),
     [rows, areas, panel.value],
   );
   latest.current = { rows, scale, onSelect };
@@ -484,7 +487,7 @@ const MapPanel = memo(function MapPanel({ panel, rows, onSelect }) {
           {(areas || scale.missing > 0) && (
             <span className="legend-step">
               <i style={{ background: PIN_MISSING }} />
-              {t(areas ? "No data" : "Rent or unknown")}
+              {t(areas || panel.value ? "No data" : "Rent or unknown")}
             </span>
           )}
           {!areas && (
@@ -497,6 +500,23 @@ const MapPanel = memo(function MapPanel({ panel, rows, onSelect }) {
     </div>
   );
 });
+
+// A tile's change against the previous window of the same length. The arrow
+// and words carry the direction; whether up is good depends on the figure.
+function Change({ panel, row }) {
+  const now = Number(row?.[panel.field]),
+    before = Number(row?.[panel.compare]);
+  if (!panel.compare || row?.[panel.compare] == null) return null;
+  if (!Number.isFinite(now) || !Number.isFinite(before) || before === 0)
+    return null;
+  const change = (100 * (now - before)) / before;
+  const arrow = change > 0.5 ? "▲" : change < -0.5 ? "▼" : "=";
+  return (
+    <p className="change">
+      {arrow} {plain(Math.abs(change), 0)}% {t("vs previous period")}
+    </p>
+  );
+}
 
 const Panel = memo(function Panel({ panel, rows, selected, onSelect, lang }) {
   const stat = panel.type === "big_number";
@@ -511,10 +531,15 @@ const Panel = memo(function Panel({ panel, rows, selected, onSelect, lang }) {
       <h3>{panelText(panel, "title")}</h3>
       {!stat && description && <p className="description">{description}</p>}
       {stat ? (
-        <p className="figure">
-          <span className="value">{number(rows[0]?.[panel.field], panel)}</span>
-          {unit(panel) && <span className="unit">{t(unit(panel))}</span>}
-        </p>
+        <>
+          <p className="figure">
+            <span className="value">
+              {number(rows[0]?.[panel.field], panel)}
+            </span>
+            {unit(panel) && <span className="unit">{t(unit(panel))}</span>}
+          </p>
+          <Change panel={panel} row={rows[0]} />
+        </>
       ) : panel.type === "table" ? (
         <ListingTable
           panel={panel}
@@ -536,6 +561,15 @@ const Panel = memo(function Panel({ panel, rows, selected, onSelect, lang }) {
     </article>
   );
 });
+
+// Panels that fit only some filter values, such as a sales chart under
+// Deal: rent, are left out for the others. Mirrors definitions.fits.
+const fits = (panel, selection) =>
+  Object.entries(panel.when || {}).every(([name, allowed]) =>
+    (selection[name] ?? ["All"]).every((value) =>
+      allowed.includes(String(value)),
+    ),
+  );
 
 // Consecutive panels that share a section render under one heading.
 function sectionsOf(panels) {
@@ -798,7 +832,10 @@ function App() {
   }, [query.error, closeFilters]);
   // Preserve panel objects as filters change so chart instances stay mounted.
   const panels = boot.data.panels;
-  const sections = useMemo(() => sectionsOf(panels), [panels]);
+  const sections = useMemo(
+    () => sectionsOf(panels.filter((panel) => fits(panel, selection))),
+    [panels, selection],
+  );
   // Filters that belong to a section (the price check) render above it.
   const sidebarVariables = data.variables.filter((v) => !v.section);
   const activeFilters =
@@ -895,9 +932,7 @@ function App() {
                   key={panel.id}
                   panel={panel}
                   rows={data.rows[panel.key] || EMPTY}
-                  selected={
-                    panel.type === "bar" ? cross[panel.category] : undefined
-                  }
+                  selected={cross[selectsBy(panel)]}
                   onSelect={onSelect}
                   lang={lang}
                 />

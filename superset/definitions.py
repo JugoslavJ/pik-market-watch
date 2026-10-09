@@ -89,6 +89,12 @@ def filters(dashboard):
     return dashboard.get("filters", [])
 
 
+def fits(panel, selected):
+    """Whether a panel applies to the selection; a sales chart does not under Deal: rent."""
+    return all(set(selected.get(name, ["All"])) <= set(allowed)
+               for name, allowed in panel.get("when", {}).items())
+
+
 def expand_time(sql, start, end, predicate="({column} BETWEEN {start} AND {end})"):
     sql = TIME_FILTER_MACRO.sub(lambda m: predicate.format(column=m[1], start=start, end=end), sql)
     return sql.replace("${time_from}", start).replace("${time_to}", end)
@@ -108,13 +114,11 @@ def source_sql(dashboard, panel):
 def dataset_name(dashboard, panel):
     # Big numbers that reuse a panel share its summary query and result rows.
     source_id = panel.get("source_panel", panel["id"])
-    if dashboard["uid"] == "olx-exits" and panel["id"] in (1, 2, 3, 4):
-        source_id = 1
     return f"source_{dashboard['uid'].replace('-', '_')}_{source_id}"
 
 
 def shared_source_sql(dashboard, panel):
-    """Fold the four exit cards into one aggregate over their identical base."""
+    """Swap in hand-tuned summaries where a definition's SQL would scan too much."""
     source_id = panel.get("source_panel", panel["id"])
     if dashboard["uid"] == "olx-home" and source_id == 9:
         # The newest complete run via its index, not an aggregate over every run.
@@ -125,39 +129,22 @@ def shared_source_sql(dashboard, panel):
           ORDER BY finished_at DESC LIMIT 1) last_success"""
     if dashboard["uid"] == "olx-health" and source_id == 2:
         summary = """WITH recent AS (
-          SELECT count(*) FILTER (WHERE status = 'error') AS failed_24h,
-            count(*) FILTER (WHERE status = 'ok') AS ok_24h,
-            count(*) FILTER (WHERE status IN ('ok', 'error')) AS finished_24h,
-            coalesce(sum(cards) FILTER (WHERE status = 'ok'), 0) AS cards_24h,
+          SELECT count(*) FILTER (WHERE status = 'error') AS failed_runs,
+            count(*) FILTER (WHERE status = 'ok') AS ok_runs,
+            count(*) FILTER (WHERE status IN ('ok', 'error')) AS finished_runs,
+            coalesce(sum(cards) FILTER (WHERE status = 'ok'), 0) AS cards,
             count(*) FILTER (WHERE NOT is_complete AND status IN ('ok', 'error')
               AND finished_at IS NOT NULL) AS incomplete
-          FROM lean.scrape_runs WHERE started_at > now() - INTERVAL '24 hours'
+          FROM lean.scrape_runs WHERE started_at > ${time_from}
         ), last_success AS (
           SELECT finished_at FROM lean.scrape_runs
           WHERE status = 'ok' AND is_complete AND finished_at IS NOT NULL
           ORDER BY finished_at DESC LIMIT 1
-        ) SELECT failed_24h, round(100.0 * ok_24h / NULLIF(finished_24h, 0), 0)
+        ) SELECT failed_runs, round(100.0 * ok_runs / NULLIF(finished_runs, 0), 0)
               AS success_rate, round(EXTRACT(EPOCH FROM (now() - finished_at)))::bigint
-              AS seconds_since_success, cards_24h, incomplete"""
+              AS seconds_since_success, cards, incomplete"""
         return summary + " FROM recent LEFT JOIN last_success ON true"
-    if dashboard["uid"] != "olx-exits" or panel["id"] not in (1, 2, 3, 4):
-        return source_sql(dashboard, panel)
-    source = next(p for p in panels(dashboard) if p["id"] == 1)
-    marker = " SELECT count(*) AS closed_30d FROM base WHERE "
-    prefix, separator, predicate = source_sql(dashboard, source).partition(marker)
-    if not separator:
-        raise ValueError("Exit summary source changed; review the shared aggregation")
-    return prefix + """, summary AS (
-      SELECT count(*) AS closed_30d,
-        round(percentile_cont(0.5) WITHIN GROUP (ORDER BY closing_ppm2)
-          FILTER (WHERE closing_ppm2 > 0)::numeric, 0) AS median_exit_ppm2,
-        round(percentile_cont(0.5) WITHIN GROUP (ORDER BY days_listed)::numeric, 1)
-          AS median_days_on_market
-      FROM base WHERE """ + predicate + """
-    ) SELECT summary.*,
-      round(100.0 * closed_30d /
-        NULLIF(closed_30d + (SELECT count(*) FROM active), 0), 1) AS exit_ratio
-    FROM summary"""
+    return source_sql(dashboard, panel)
 
 
 def default_days(dashboard):
