@@ -1,7 +1,13 @@
 // Viewer language: English is the source; definition text for other languages
 // arrives with the dashboard payload (superset/dashboards/i18n/<lang>.json).
-export const LANGUAGES = { en: "EN", sr: "SR" };
-const LOCALES = { en: "en-GB", sr: "sr-Latn-BA" };
+// Serbian Cyrillic is transliterated from the Serbian (Latin) text.
+export const LANGUAGES = { en: "EN", sr: "SR", "sr-Cyrl": "СР" };
+export const LANGUAGE_NAMES = {
+  en: "English",
+  sr: "Srpski (latinica)",
+  "sr-Cyrl": "Српски (ћирилица)",
+};
+const LOCALES = { en: "en-GB", sr: "sr-Latn-BA", "sr-Cyrl": "sr-Cyrl-BA" };
 
 const UI = {
   sr: {
@@ -81,6 +87,47 @@ const UI = {
   },
 };
 
+const LETTERS = Object.fromEntries(
+  [..."abvgdđežzijklmnoprstćufhcčš", "lj", "nj", "dž"].map((latin, index) => [
+    latin,
+    "абвгдђежзијклмнопрстћуфхцчшљњџ"[index],
+  ]),
+);
+// Names and abbreviations that stay in Latin script.
+const KEEP_LATIN = /(OLX(?:\.ba)?|PDF|https?:\/\/\S+)/;
+
+export function toCyrillic(text) {
+  return text
+    .split(KEEP_LATIN)
+    .map((part, index) =>
+      index % 2
+        ? part
+        : part.replace(/dž|lj|nj|[a-zčćđšž]/gi, (latin) => {
+            const cyrillic = LETTERS[latin.toLowerCase()];
+            return latin[0] === latin[0].toLowerCase()
+              ? cyrillic
+              : cyrillic.toUpperCase();
+          }),
+    )
+    .join("");
+}
+
+const transliterate = (value) =>
+  typeof value === "string"
+    ? toCyrillic(value)
+    : Object.fromEntries(
+        Object.entries(value).map(([key, item]) => [key, transliterate(item)]),
+      );
+
+UI["sr-Cyrl"] = transliterate(UI.sr);
+
+const cyrillicCache = new WeakMap();
+function cyrillicTexts(latin) {
+  if (!latin) return {};
+  if (!cyrillicCache.has(latin)) cyrillicCache.set(latin, transliterate(latin));
+  return cyrillicCache.get(latin);
+}
+
 let current = "en";
 let texts = {};
 
@@ -92,18 +139,25 @@ export function initialLanguage() {
   } catch {
     // Storage can be unavailable (private windows); fall back to the browser.
   }
-  const browser = navigator.language?.slice(0, 2);
+  const browser = navigator.language || "";
   const candidate = [
     fromUrl,
     stored,
-    ["sr", "bs", "hr"].includes(browser) ? "sr" : "en",
+    /^sr-Cyrl/i.test(browser)
+      ? "sr-Cyrl"
+      : ["sr", "bs", "hr"].includes(browser.slice(0, 2))
+        ? "sr"
+        : "en",
   ].find((value) => value && LANGUAGES[value]);
   return candidate || "en";
 }
 
 export function setLanguage(language, translations) {
   current = LANGUAGES[language] ? language : "en";
-  texts = translations?.[current] || {};
+  texts =
+    current === "sr-Cyrl"
+      ? cyrillicTexts(translations?.sr)
+      : translations?.[current] || {};
   document.documentElement.lang = current;
   try {
     localStorage.setItem("olx-viewer-lang", current);
@@ -155,9 +209,18 @@ export function columnLabel(column) {
   return board().columns?.[column] ?? common().columns?.[column];
 }
 
-export function valueLabel(value) {
+// Neighborhood names are data, not translations; Cyrillic spells them in its
+// own script. Other data (listing titles, run errors) stays as written.
+const PLACE_COLUMNS = new Set(["neighborhood", "location"]);
+
+export function valueLabel(value, column) {
   if (value == null) return value;
-  return common().values?.[String(value)] ?? String(value);
+  const text = String(value);
+  const own = common().values?.[text];
+  if (own) return own;
+  return current === "sr-Cyrl" && PLACE_COLUMNS.has(column)
+    ? toCyrillic(text)
+    : text;
 }
 
 export function navTitle(board) {

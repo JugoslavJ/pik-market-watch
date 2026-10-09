@@ -10,7 +10,7 @@
     "test": "npm run test --workspaces --if-present && npm run test:contracts && npm run test:dashboards",
     "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=\"collector/src/**\" --test-coverage-include=\"db/src/**\" --test-coverage-lines=75 --test-coverage-branches=80 --test-coverage-functions=74 \"collector/test/unit/*.test.js\" \"db/test/unit/*.test.js\"",
     "test:contracts": "node --test \"tests/contracts/*.test.js\"",
-    "test:dashboards": "node --test superset/tests/test_dashboard_contract.cjs dashboard-viewer/tests/test_links.cjs dashboard-viewer/tests/test_table.cjs",
+    "test:dashboards": "node --test superset/tests/test_dashboard_contract.cjs dashboard-viewer/tests/test_i18n.cjs dashboard-viewer/tests/test_links.cjs dashboard-viewer/tests/test_table.cjs",
     "test:integration": "npm run test:integration --workspace @pik-market-watch/db",
     "test:reporting": "node db/scripts/run-integration-tests.js --reporting-only",
     "check:docs": "node scripts/check-markdown-links.js",

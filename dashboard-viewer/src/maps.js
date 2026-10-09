@@ -65,9 +65,11 @@ export function createMap(container, { print = false } = {}) {
       const detail = document.createElement("dd");
       term.textContent = label(name);
       detail.textContent = cell(
-        typeof value === "string" && /^-?\d+(\.\d+)?$/.test(value)
-          ? Number(value)
-          : value,
+        typeof value !== "string"
+          ? value
+          : /^-?\d+(\.\d+)?$/.test(value)
+            ? Number(value)
+            : valueLabel(value, name),
       );
       list.append(term, detail);
     }
@@ -205,7 +207,7 @@ export function updateAreas(map, shapes, rows, scale, fit, onSelect) {
       map.getCanvas().style.cursor = "pointer";
       const content = document.createElement("div");
       const title = document.createElement("strong");
-      title.textContent = valueLabel(properties.neighborhood);
+      title.textContent = valueLabel(properties.neighborhood, "neighborhood");
       const list = document.createElement("dl");
       for (const [name, value] of Object.entries(properties)) {
         if (name === "neighborhood" || value == null || value === "null")

@@ -200,15 +200,17 @@ const namesOf = (rows, dimension) =>
 const activeSet = (selected) =>
   selected?.length ? new Set(selected.map(String)) : null;
 
-function categoryAxisFor(names, vertical) {
+// Place names follow the viewer script, so labels pass their column along.
+function categoryAxisFor(names, vertical, column) {
+  const name = (value) => valueLabel(value, column);
   return {
     type: "category",
     data: names,
     axisLabel: vertical
-      ? { ...axisLabel, interval: 0, hideOverlap: true, formatter: valueLabel }
+      ? { ...axisLabel, interval: 0, hideOverlap: true, formatter: name }
       : {
           ...axisLabel,
-          formatter: valueLabel,
+          formatter: name,
           color: INK.secondary,
           width: 120,
           overflow: "truncate",
@@ -223,8 +225,9 @@ function barOption(panel, rows, base, selected) {
   const { category: dimension, value: measure } = panel;
   const vertical = isOrdinal(panel);
   const names = namesOf(rows, dimension);
+  const name = (value) => valueLabel(value, dimension);
   const extras = extrasOf(rows, [dimension, measure]);
-  const categoryAxis = categoryAxisFor(names, vertical);
+  const categoryAxis = categoryAxisFor(names, vertical, dimension);
   const active = activeSet(selected);
   return {
     ...base,
@@ -235,7 +238,7 @@ function barOption(panel, rows, base, selected) {
       formatter: (params) => {
         const row = rows[params.dataIndex] || {};
         return [
-          valueLabel(names[params.dataIndex]),
+          name(names[params.dataIndex]),
           `${label(measure)}: ${withUnit(row[measure], panel)}`,
           ...extraLines(row, extras),
         ].join("\n");
@@ -298,7 +301,7 @@ function pieOption(panel, rows, base, selected) {
   const active = activeSet(selected);
   const data = slices.map((slice, n) => ({
     ...slice,
-    name: valueLabel(slice.name),
+    name: valueLabel(slice.name, dimension),
     itemStyle: {
       color: SERIES[n],
       opacity: active && !active.has(slice.name) ? 0.3 : 1,
@@ -367,7 +370,7 @@ function boxOption(panel, rows, base, selected) {
   const high = (row) => row.p90 ?? row.p75;
   const at = (index, value) =>
     vertical ? [names[index], value] : [value, names[index]];
-  const categoryAxis = categoryAxisFor(names, vertical);
+  const categoryAxis = categoryAxisFor(names, vertical, dimension);
   const range = (a, b) => `${plain(a)} – ${plain(b)}`;
   return {
     ...base,
@@ -378,7 +381,7 @@ function boxOption(panel, rows, base, selected) {
       formatter: (params) => {
         const row = rows[params.dataIndex] || {};
         return [
-          valueLabel(names[params.dataIndex]),
+          valueLabel(names[params.dataIndex], dimension),
           `${label(measure)}: ${withUnit(row[measure], panel)}`,
           `${t("Middle half")}: ${range(row.p25, row.p75)}`,
           ...(row.p10 != null && row.p90 != null
@@ -458,21 +461,21 @@ function heatmapOption(panel, rows, base) {
       formatter: (params) => {
         const row = rows[params.data.index] || {};
         return [
-          `${valueLabel(String(row[y] ?? "unknown"))} · ${valueLabel(String(row[x] ?? "unknown"))}`,
+          `${valueLabel(String(row[y] ?? "unknown"), y)} · ${valueLabel(String(row[x] ?? "unknown"), x)}`,
           `${label(measure)}: ${withUnit(row[measure], panel)}`,
           ...extraLines(row, extras),
         ].join("\n");
       },
     },
     xAxis: {
-      ...categoryAxisFor(xs, true),
+      ...categoryAxisFor(xs, true, x),
       name: label(x),
       nameLocation: "middle",
       nameGap: 24,
       nameTextStyle: { color: INK.muted, fontSize: 11 },
       splitArea: { show: false },
     },
-    yAxis: { ...categoryAxisFor(ys, false), inverse: true },
+    yAxis: { ...categoryAxisFor(ys, false, y), inverse: true },
     visualMap: {
       type: "continuous",
       min,

@@ -54,8 +54,10 @@ async function assignNeighborhoods(client, ids) {
        SELECT s.article_id,
          COALESCE(
            (SELECT n.name FROM lean.neighborhoods n
-             WHERE n.name = NULLIF(BTRIM(s.extra->>'location'), '')
-             LIMIT 1),
+             WHERE NULLIF(BTRIM(s.extra->>'location'), '') IN (n.name,
+               -- Older locations spell names without diacritics.
+               replace(translate(n.name, 'čćšžČĆŠŽ', 'ccszCCSZ'), 'đ', 'dj'))
+             ORDER BY n.name LIMIT 1),
            (SELECT n.name FROM lean.neighborhoods n
              WHERE ST_Covers(n.boundary, pt.p) ORDER BY n.name LIMIT 1),
            (SELECT n.name FROM lean.neighborhoods n
