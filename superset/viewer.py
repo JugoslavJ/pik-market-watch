@@ -162,9 +162,10 @@ def areas():
 
 
 def page_language():
-    """The viewer switches language client-side; the document follows ?lang= when known."""
+    """The viewer switches language client-side; the document follows ?lang= when known.
+    Serbian Cyrillic is transliterated from the Serbian (Latin) text in the viewer."""
     language = request.args.get("lang", "en")
-    return language if language in TRANSLATIONS else "en"
+    return language if language in TRANSLATIONS or language == "sr-Cyrl" else "en"
 
 
 @blueprint.route("/dashboard/<uid>/")

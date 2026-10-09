@@ -37,7 +37,7 @@ use CARTO vector tiles, and update pins without recreating the map.
 
 Filters with a `section` (the price-check inputs) render above that section instead of in the Filters panel. A `text` filter accepts an OLX.ba link or listing id. Area maps (`view.layer: "areas"`) color neighborhoods by the panel `value` and filter the page on click.
 
-The header switches between English and Serbian; the choice is kept in the URL (`lang`) and the browser. **Report** opens `?report=1`: a fixed-width page with a cover (scope in words, data date, the exits caveat), every panel drawn, tables capped at 25 rows, and a print/PDF button. An optional "Prepared by" block (name, company, contact, logo) stays in browser storage and is never sent to the server.
+The header switches between English and Serbian in Latin or Cyrillic script (Cyrillic is transliterated from the Latin translation); the choice is kept in the URL (`lang`) and the browser. **Report** opens `?report=1`: a fixed-width page with a cover (scope in words, data date, the exits caveat), every panel drawn, tables capped at 25 rows, and a print/PDF button. An optional "Prepared by" block (name, company, contact, logo) stays in browser storage and is never sent to the server.
 
 The Filters panel starts collapsed, supports search/reset/Escape and becomes a phone drawer. Controls cover BAM price, area, building details and amenities; missing values appear as Unknown. Home/Health listing charts use property filters; run statistics retain their operational scope. Exit prices use event snapshots, while amenities use current listing details.
 

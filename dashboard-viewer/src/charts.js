@@ -165,6 +165,7 @@ function barOption(panel, rows, base, selected) {
   const { category: dimension, value: measure } = panel;
   const vertical = isOrdinal(panel);
   const names = rows.map((row) => String(row[dimension] ?? "unknown"));
+  const name = (value) => valueLabel(value, dimension);
   const extras = Object.keys(rows[0] || {}).filter(
     (key) =>
       key !== dimension && key !== measure && typeof rows[0][key] === "number",
@@ -173,10 +174,10 @@ function barOption(panel, rows, base, selected) {
     type: "category",
     data: names,
     axisLabel: vertical
-      ? { ...axisLabel, interval: 0, hideOverlap: true, formatter: valueLabel }
+      ? { ...axisLabel, interval: 0, hideOverlap: true, formatter: name }
       : {
           ...axisLabel,
-          formatter: valueLabel,
+          formatter: name,
           color: INK.secondary,
           width: 120,
           overflow: "truncate",
@@ -195,7 +196,7 @@ function barOption(panel, rows, base, selected) {
       formatter: (params) => {
         const row = rows[params.dataIndex] || {};
         return [
-          valueLabel(names[params.dataIndex]),
+          name(names[params.dataIndex]),
           `${label(measure)}: ${withUnit(row[measure], panel)}`,
           ...extras.map((key) => `${label(key)}: ${plain(row[key])}`),
         ].join("\n");

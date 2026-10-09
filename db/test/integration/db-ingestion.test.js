@@ -231,7 +231,7 @@ needsDb(
     const result = await db.pool.query(
       "SELECT neighborhood FROM lean.listings WHERE article_id=9107",
     );
-    assert.equal(result.rows[0].neighborhood, "Laus 2");
+    assert.equal(result.rows[0].neighborhood, "Lauš 2");
   },
 );
 
@@ -250,11 +250,11 @@ needsDb(
       return result.rows[0].neighborhood;
     };
     await commit(SEARCH_A, [card(9108)]);
-    assert.equal(await neighborhoodAt(44.78554, 17.167138), "Laus 2");
+    assert.equal(await neighborhoodAt(44.78554, 17.167138), "Lauš 2");
     // About 1 km outside the nearest boundary.
-    assert.equal(await neighborhoodAt(44.853589, 17.248978), "Prijecani");
+    assert.equal(await neighborhoodAt(44.853589, 17.248978), "Priječani");
     // Over 25 km from every boundary keeps the previous classification.
-    assert.equal(await neighborhoodAt(44.5, 17.6), "Prijecani");
+    assert.equal(await neighborhoodAt(44.5, 17.6), "Priječani");
   },
 );
 
