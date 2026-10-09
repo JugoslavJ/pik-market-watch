@@ -34,6 +34,7 @@ import {
 } from "./format";
 import {
   LANGUAGES,
+  LANGUAGE_NAMES,
   boardTitle,
   filterLabel,
   initialLanguage,
@@ -254,7 +255,7 @@ function Cell({ column, row, onSelect }) {
   if (FILTER_COLUMNS.has(column))
     return (
       <button className="cell-filter" onClick={() => onSelect(column, value)}>
-        {valueLabel(value ?? "unknown")}
+        {valueLabel(value ?? "unknown", column)}
       </button>
     );
   if (STATUS_COLUMNS.has(column) && value != null)
@@ -262,7 +263,7 @@ function Cell({ column, row, onSelect }) {
       <span className={"pill pill-" + String(value)}>{valueLabel(value)}</span>
     );
   const text =
-    typeof value === "string" ? cell(valueLabel(value)) : cell(value);
+    typeof value === "string" ? cell(valueLabel(value, column)) : cell(value);
   return typeof value === "string" && value.length > 60 ? (
     <span className="long" title={value}>
       {text}
@@ -587,7 +588,7 @@ function FilterControl({ variable, selection, options, onChange }) {
         .filter((v) => v !== "All")
         .map((value) => (
           <option key={String(value)} value={String(value)}>
-            {valueLabel(value)}
+            {valueLabel(value, variable.name)}
           </option>
         ))}
     </select>
@@ -607,11 +608,15 @@ function selectionSummary(variables, selection, cross, days) {
         (variable) =>
           filterLabel(variable) +
           ": " +
-          selection[variable.name].map(valueLabel).join(", "),
+          selection[variable.name]
+            .map((value) => valueLabel(value, variable.name))
+            .join(", "),
       ),
     ...Object.entries(cross).map(
       ([dimension, values]) =>
-        label(dimension) + ": " + values.map(valueLabel).join(", "),
+        label(dimension) +
+        ": " +
+        values.map((value) => valueLabel(value, dimension)).join(", "),
     ),
   ];
   const window =
@@ -953,6 +958,8 @@ function App() {
             <button
               key={code}
               aria-pressed={lang === code}
+              title={LANGUAGE_NAMES[code]}
+              lang={code}
               onClick={() => changeLanguage(code)}
             >
               {text}
@@ -1114,7 +1121,10 @@ function App() {
                       })
                     }
                   >
-                    {label(dimension)}: {values.map(valueLabel).join(", ")}{" "}
+                    {label(dimension)}:{" "}
+                    {values
+                      .map((value) => valueLabel(value, dimension))
+                      .join(", ")}{" "}
                     <span aria-hidden="true">×</span>
                   </button>
                 ))}
