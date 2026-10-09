@@ -58,7 +58,8 @@ class ReportingRules(unittest.TestCase):
                          (4,current_date-7,140000,'BAM','api_price_history'),
                          (4,current_date-5,130000,'BAM','api_price_history');
                 INSERT INTO lean.scrape_runs(search_key,started_at,finished_at,status,is_complete,cards)
-                  VALUES ('a',now()-interval '1 hour',now()-interval '59 minutes','ok',true,4),
+                  VALUES ('a',now()-interval '100 days',now()-interval '100 days'+interval '1 minute','ok',true,4),
+                         ('a',now()-interval '1 hour',now()-interval '59 minutes','ok',true,4),
                          ('b',now()-interval '30 minutes',now()-interval '29 minutes','error',false,0);
             """)
 
@@ -67,8 +68,8 @@ class ReportingRules(unittest.TestCase):
         cls.reporting.close()
         cls.seed.close()
 
-    def query(self, uid, selected=None, cross=None):
-        sql, params, _ = compile_dashboard(BOARDS[uid], selected, cross)
+    def query(self, uid, selected=None, cross=None, days=None):
+        sql, params, _ = compile_dashboard(BOARDS[uid], selected, cross, days=days)
         statement = text(sql)
         compiled = statement.bindparams(**{k: v for k, v in params.items() if k in statement._bindparams}).compile(dialect=postgresql.dialect())
         with self.reporting.cursor() as cursor:
@@ -82,7 +83,9 @@ class ReportingRules(unittest.TestCase):
     def test_every_panel_executes_against_empty_and_populated_markets(self):
         for uid in BOARDS:
             with self.subTest(uid=uid):
-                rows = self.query(uid)
+                # Every visibility rule allows All, so this selection shows every panel.
+                shown = {name: ["All"] for panel in panels(BOARDS[uid]) for name in panel.get("when", {})}
+                rows = self.query(uid, shown)
                 for panel in panels(BOARDS[uid]):
                     self.assertIsInstance(rows[dataset_name(BOARDS[uid], panel)], list)
                 empty = self.query(uid, cross={"rooms": ["no-such-room"]})
@@ -100,6 +103,49 @@ class ReportingRules(unittest.TestCase):
         self.assertEqual(self.panel("olx-overview", overview, 1)[0]["active"], 4)
         self.assertEqual(self.panel("olx-overview", overview, 3)[0]["drops"], 2)
 
+    def test_history_panels_follow_the_time_window(self):
+        # Seven days hold exits on days -5 and -2; the week before holds day -8.
+        summary = self.panel("olx-exits", self.query("olx-exits", days=7), 1)[0]
+        self.assertEqual((summary["exits"], summary["exits_prev"]), (2, 1))
+        self.assertEqual(summary["median_days_on_market"], 10)
+        overview = self.query("olx-overview", days=7)
+        # No apartment listing appeared this week; the rental appeared on day -10.
+        tiles = self.panel("olx-overview", overview, 1)[0]
+        self.assertEqual((tiles["new_n"], tiles["new_prev"]), (0, 1))
+        # Listing 1 was cut on days -6, -4 and -2 and listing 4 on day -5; listing 4 also on day -8.
+        cuts = self.panel("olx-overview", overview, 3)[0]
+        self.assertEqual((cuts["drops"], cuts["drops_prev"]), (2, 1))
+        self.assertEqual(cuts["cut_share_pct"], 50)
+        # Collection began 100 days ago, so the window before the default 90 days is not covered.
+        default = self.panel("olx-exits", self.query("olx-exits"), 1)[0]
+        self.assertIsNone(default["exits_prev"])
+
+    def test_deal_specific_panels_are_left_out_for_the_other_deal(self):
+        board = BOARDS["olx-overview"]
+        rent = self.query("olx-overview", {"deal": ["rent"]})
+        keys = lambda ids: {dataset_name(board, p) for p in panels(board) if p["id"] in ids}
+        # Sales charts are not computed; the rent tile and shared summary still are.
+        self.assertFalse(keys([21, 26, 33]) & set(rent))
+        self.assertTrue(keys([5]) <= set(rent))
+        self.assertEqual(self.panel("olx-overview", rent, 1)[0]["median_rent"], 600)
+        # The property-type mix needs every category.
+        self.assertNotIn(dataset_name(board, next(p for p in panels(board) if p["id"] == 22)), self.query("olx-overview"))
+        mix = self.panel("olx-overview", self.query("olx-overview", {"category": ["All"]}), 22)
+        self.assertEqual([(row["segment"], row["listings"]) for row in mix], [("apartments", 3), ("land", 1)])
+
+    def test_box_and_pie_panels_have_known_values(self):
+        overview = self.query("olx-overview")
+        rooms = {row["rooms"]: row for row in self.panel("olx-overview", overview, 21)}
+        self.assertEqual({k: (v["listings"], v["p25"], v["median_ppm2"], v["p75"]) for k, v in rooms.items()},
+                         {"2": (2, 2000, 2000, 2000), "3": (1, 4000, 4000, 4000)})
+        exits = self.query("olx-exits")
+        # Listing 5 has no price history, so only listing 4's two exits have an opening ask.
+        self.assertEqual([(row["direction"], row["listings"]) for row in self.panel("olx-exits", exits, 15)],
+                         [("lower", 2)])
+        days = {row["rooms"]: row for row in self.panel("olx-exits", exits, 10)}
+        self.assertEqual({k: (v["exits"], v["p25"], v["median_days"], v["p75"]) for k, v in days.items()},
+                         {"2": (2, 7, 12, 17), "3": (1, 18, 18, 18)})
+
     def test_categories_follow_olx_and_intersecting_filters_do_not_multiply_inventory(self):
         rows = self.query("olx-overview", {"category": ["apartments"]})
         self.assertEqual(self.panel("olx-overview", rows, 1)[0]["active"], 4)
@@ -116,15 +162,16 @@ class ReportingRules(unittest.TestCase):
     def test_reopened_listings_keep_every_exit_and_filter_both_event_and_active_populations(self):
         exits = self.query("olx-exits")
         summary = self.panel("olx-exits", exits, 1)[0]
-        self.assertEqual(summary["closed_30d"], 3)
-        self.assertAlmostEqual(summary["exit_ratio"], 42.9)
+        self.assertEqual(summary["exits"], 3)
+        # Four actives against three exits per 90 days: one a month.
+        self.assertEqual(summary["months_of_inventory"], 4)
         self.assertEqual(summary["median_days_on_market"], 18)
         recent = self.panel("olx-exits", exits, 9)
         self.assertEqual(sum(row["title"] == "Reopened" for row in recent), 2)
         exits = self.query("olx-exits", cross={"rooms": ["2"]})
         summary = self.panel("olx-exits", exits, 1)[0]
-        self.assertEqual(summary["closed_30d"], 2)
-        self.assertEqual(summary["exit_ratio"], 40)
+        self.assertEqual(summary["exits"], 2)
+        self.assertEqual(summary["months_of_inventory"], 4.5)
 
     def test_price_check_ranges_comparables_and_ignores_page_filters(self):
         # Sale comparables for 55 m²: actives 1, 2, 4 (2000, 4000, 2000 KM/m²) and exit 5 (3000).
@@ -156,8 +203,9 @@ class ReportingRules(unittest.TestCase):
 
     def test_audience_market_figures_have_known_values(self):
         pro = self.panel("olx-pro", self.query("olx-pro"), 1)[0]
-        self.assertEqual((pro["active"], pro["exits_30d"]), (3, 3))
-        self.assertEqual(pro["months_of_inventory"], 1)
+        self.assertEqual((pro["active"], pro["exits"]), (3, 3))
+        # Three exits in the 90-day window are one a month against three actives.
+        self.assertEqual(pro["months_of_inventory"], 3)
         buyer = self.query("olx-buyer")
         self.assertEqual(self.panel("olx-buyer", buyer, 10)[0]["active"], 3)
         # Listing 1 (120000 → 100000) and 4 (160000 → 120000) sit below their peak; 2 has no history.
@@ -169,6 +217,27 @@ class ReportingRules(unittest.TestCase):
         amenities = {row["amenity"]: row for row in self.panel("olx-renter", self.query("olx-renter"), 30)}
         self.assertEqual((amenities["Lift"]["with_amenity"], amenities["Lift"]["median_rent_with"]), (1, 600))
         self.assertEqual(amenities["Pets allowed"]["with_amenity"], 0)
+
+    def test_daily_rentals_measure_activity_by_repricing(self):
+        # Hosts reprice the same ad: listed at 45 KM a night on day -3, then 40 KM from day -1.
+        with self.seed, self.seed.cursor() as cursor:
+            cursor.execute("""INSERT INTO lean.price_history(article_id,price_date,price,currency,source)
+                VALUES (7,current_date-3,45,'BAM','api_price_history'),
+                       (7,current_date-1,40,'BAM','api_price_history')""")
+        try:
+            daily = self.query("olx-daily")
+            summary = self.panel("olx-daily", daily, 10)[0]
+            self.assertEqual((summary["repriced_pct"], summary["repriced_pct_prev"]), (100, 0))
+            nights = {row["time"][:10]: row["median"] for row in self.panel("olx-daily", daily, 31)}
+            prices = sorted(set(nights.values()))
+            self.assertEqual(prices, [40, 45])
+            self.assertEqual(nights[max(nights)], 40)
+            # A seven-day window holds the change; the week before it does not.
+            week = self.panel("olx-daily", self.query("olx-daily", days=7), 10)[0]
+            self.assertEqual((week["repriced_pct"], week["repriced_pct_prev"]), (100, 0))
+        finally:
+            with self.seed, self.seed.cursor() as cursor:
+                cursor.execute("DELETE FROM lean.price_history WHERE article_id = 7")
 
     def test_daily_rentals_stay_apart_from_monthly_rent(self):
         for category in ("apartments", "All"):
@@ -207,7 +276,7 @@ class ReportingRules(unittest.TestCase):
         health = self.query("olx-health")
         self.assertEqual(self.panel("olx-health", health, 1)[0]["searches"], 2)
         summary = self.panel("olx-health", health, 2)[0]
-        self.assertEqual(summary["failed_24h"], 1)
+        self.assertEqual(summary["failed_runs"], 1)
         self.assertEqual(summary["success_rate"], 50)
-        self.assertEqual(summary["cards_24h"], 4)
+        self.assertEqual(summary["cards"], 4)
         self.assertEqual(summary["incomplete"], 1)

@@ -29,7 +29,6 @@ const LABELS = {
   age_min: "Age (min)",
   avg_s: "Avg (s)",
   max_s: "Max (s)",
-  exits_30d: "Exits · 30 d",
   exit_ratio: "Exit share (%)",
   olx_says: "OLX says",
   we_say: "We say",
@@ -37,6 +36,10 @@ const LABELS = {
   seller_type: "Seller",
   failure_pattern: "Failure pattern",
   location: "Neighborhood",
+  opening_price: "Opening ask",
+  vs_median_pct: "vs neighborhood median (%)",
+  cut_pct: "Cut (%)",
+  floor_band: "Floor",
 };
 
 export function label(column) {

@@ -33,7 +33,7 @@ class DefinitionContracts(unittest.TestCase):
         return next(b for b in self.boards if b["uid"] == uid)
 
     def test_every_dashboard_keeps_its_panels(self):
-        expected = {"olx-home": 8, "olx-overview": 20, "olx-exits": 13, "olx-health": 20,
+        expected = {"olx-home": 8, "olx-overview": 23, "olx-exits": 14, "olx-health": 20,
                     "olx-buyer": 24, "olx-renter": 21, "olx-daily": 12, "olx-pro": 24}
         self.assertEqual({b["uid"]: len(definitions.panels(b)) for b in self.boards}, expected)
 

@@ -9,7 +9,7 @@ from functools import lru_cache
 from jinja2 import Environment, pass_context
 from listing_filters import options_sql, viewer_variables
 from definitions import (TABLE_DIMENSIONS, TABLE_SCAN, cross_filter_columns, dataset_name,
-                         default_days, expand_filters, expand_time, filters, panels, push_cross_filters,
+                         default_days, expand_filters, expand_time, filters, fits, panels, push_cross_filters,
                          shared_source_sql, SOURCE_DIR)
 
 BOARDS = {board["uid"]: board for path in sorted(SOURCE_DIR.glob("*.json"))
@@ -122,9 +122,11 @@ def compile_dashboard(board, supplied=None, cross=None, days=None, until=None, i
             get_filters=lambda column, **_: filters.get(column, []),
         )
 
+    # Skip result groups that only hidden panels read.
+    needed = {dataset_name(board, panel) for panel in panels(board) if fits(panel, selected)}
     for panel in panels(board):
         key = dataset_name(board, panel)
-        if key in groups:
+        if key in groups or key not in needed:
             continue
         sql = shared_source_sql(board, panel).strip().rstrip(";")
         sql = expand_filters(sql, lambda name: ",".join(bind(v) for v in selected[name]))
@@ -183,7 +185,7 @@ def compile_dashboard(board, supplied=None, cross=None, days=None, until=None, i
     return statement, {key: value for key, value in params.items() if key in used}, len(groups)
 
 
-PRESENTED_FIELDS = ("description", "section", "field", "category", "value", "x", "y", "bars", "suffix", "view",
+PRESENTED_FIELDS = ("description", "section", "when", "field", "compare", "category", "value", "x", "y", "bars", "suffix", "view",
                     "decimals")
 
 

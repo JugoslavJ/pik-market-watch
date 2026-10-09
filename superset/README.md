@@ -33,7 +33,7 @@ docker compose --profile superset --profile superset-ops run --rm --no-deps supe
 
 ## Definitions
 
-The eight JSON files in `dashboards/` define 142 panels, scoped filter variables, SQL, time windows, units and layouts. `definitions.py` reads them and pushes chart selections and property filters into source table scans. `viewer_queries.py` binds viewer selections as SQL parameters and batches shared facts into one dashboard data statement.
+The eight JSON files in `dashboards/` define 146 panels, scoped filter variables, SQL, time windows, units and layouts. `definitions.py` reads them and pushes chart selections and property filters into source table scans. `viewer_queries.py` binds viewer selections as SQL parameters and batches shared facts into one dashboard data statement.
 
 A closure is an observed listing exit, not a confirmed sale. Its price is the last observed asking price. `listing_filters.py` defines property controls, including price bounds, amenities and explicit Unknown values. Listing filters apply before aggregation; operational run statistics keep their own scope. Exit prices use event snapshots, while amenities use the latest listing details. Market and exit results cache for ten minutes; Home and Health are uncached.
 

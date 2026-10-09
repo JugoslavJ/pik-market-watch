@@ -22,7 +22,7 @@
     },
     {
       "id": 3,
-      "title": "Success rate · 24 h",
+      "title": "Success rate",
       "section": "Status",
       "type": "big_number",
       "layout": {
@@ -37,7 +37,7 @@
     },
     {
       "id": 2,
-      "title": "Failed runs · 24 h",
+      "title": "Failed runs",
       "section": "Status",
       "type": "big_number",
       "layout": {
@@ -46,12 +46,12 @@
         "w": 6,
         "h": 4
       },
-      "sql": "WITH a AS (\n  SELECT count(*) FILTER (WHERE status='error' AND started_at>now()-INTERVAL '24 hours') AS failed_24h,\n    count(*) FILTER (WHERE status='ok' AND started_at>now()-INTERVAL '24 hours') AS ok_24h,\n    count(*) FILTER (WHERE status IN ('ok','error') AND started_at>now()-INTERVAL '24 hours') AS finished_24h,\n    max(finished_at) FILTER (WHERE status='ok' AND is_complete) AS last_success,\n    coalesce(sum(cards) FILTER (WHERE status='ok' AND started_at>now()-INTERVAL '24 hours'),0) AS cards_24h,\n    count(*) FILTER (WHERE NOT is_complete AND status IN ('ok','error') AND finished_at IS NOT NULL AND started_at>now()-INTERVAL '24 hours') AS incomplete\n  FROM lean.scrape_runs\n)\nSELECT failed_24h,\n  round(100.0*ok_24h/NULLIF(finished_24h,0),0) AS success_rate,\n  round(EXTRACT(EPOCH FROM (now()-last_success)))::bigint AS seconds_since_success,\n  cards_24h, incomplete\nFROM a",
-      "field": "failed_24h"
+      "sql": "WITH a AS (\n  SELECT count(*) FILTER (WHERE status='error' AND started_at>${time_from}) AS failed_runs,\n    count(*) FILTER (WHERE status='ok' AND started_at>${time_from}) AS ok_runs,\n    count(*) FILTER (WHERE status IN ('ok','error') AND started_at>${time_from}) AS finished_runs,\n    max(finished_at) FILTER (WHERE status='ok' AND is_complete) AS last_success,\n    coalesce(sum(cards) FILTER (WHERE status='ok' AND started_at>${time_from}),0) AS cards,\n    count(*) FILTER (WHERE NOT is_complete AND status IN ('ok','error') AND finished_at IS NOT NULL AND started_at>${time_from}) AS incomplete\n  FROM lean.scrape_runs\n)\nSELECT failed_runs,\n  round(100.0*ok_runs/NULLIF(finished_runs,0),0) AS success_rate,\n  round(EXTRACT(EPOCH FROM (now()-last_success)))::bigint AS seconds_since_success,\n  cards, incomplete\nFROM a",
+      "field": "failed_runs"
     },
     {
       "id": 24,
-      "title": "Incomplete searches · 24 h",
+      "title": "Incomplete searches",
       "section": "Status",
       "type": "big_number",
       "layout": {
@@ -65,7 +65,7 @@
     },
     {
       "id": 5,
-      "title": "Cards scraped · 24 h",
+      "title": "Cards scraped",
       "section": "Status",
       "type": "big_number",
       "layout": {
@@ -75,7 +75,7 @@
         "h": 4
       },
       "source_panel": 2,
-      "field": "cards_24h"
+      "field": "cards"
     },
     {
       "id": 1,
@@ -107,7 +107,7 @@
     },
     {
       "id": 26,
-      "title": "Invalid latest price · 30 d",
+      "title": "Invalid latest price",
       "section": "Status",
       "type": "big_number",
       "layout": {
@@ -116,8 +116,9 @@
         "w": 6,
         "h": 4
       },
-      "sql": "SELECT count(*) AS invalid_latest FROM lean.listings WHERE extra->>'latest_price_state' IN ('invalid','conflict') AND last_seen>now()-INTERVAL '30 days'",
-      "field": "invalid_latest"
+      "sql": "SELECT count(*) AS invalid_latest FROM lean.listings WHERE extra->>'latest_price_state' IN ('invalid','conflict') AND last_seen>${time_from}",
+      "field": "invalid_latest",
+      "description": "Listings seen in the selected time window whose latest price OLX reported as invalid or conflicting."
     },
     {
       "id": 7,
@@ -226,7 +227,7 @@
     },
     {
       "id": 18,
-      "title": "OLX status vs closure state · seen in 14 d",
+      "title": "OLX status vs closure state",
       "section": "Coverage of active listings",
       "type": "table",
       "layout": {
@@ -235,7 +236,8 @@
         "w": 24,
         "h": 8
       },
-      "sql": "SELECT coalesce(api_status,'(not exposed)') AS olx_says,CASE WHEN closed_at IS NOT NULL THEN 'closed' ELSE 'open' END AS we_say,count(*) AS listings FROM lean.listings WHERE last_seen>now()-INTERVAL '14 days' GROUP BY 1,2 ORDER BY 3 DESC"
+      "sql": "SELECT coalesce(api_status,'(not exposed)') AS olx_says,CASE WHEN closed_at IS NOT NULL THEN 'closed' ELSE 'open' END AS we_say,count(*) AS listings FROM lean.listings WHERE last_seen>${time_from} GROUP BY 1,2 ORDER BY 3 DESC",
+      "description": "Listings seen in the selected time window."
     },
     {
       "id": 28,
@@ -265,7 +267,7 @@
     },
     {
       "id": 21,
-      "title": "Errors grouped · 7 d",
+      "title": "Errors grouped",
       "section": "Errors",
       "type": "table",
       "layout": {
@@ -274,7 +276,7 @@
         "w": 24,
         "h": 10
       },
-      "sql": "SELECT count(*)::int AS runs,left(regexp_replace(coalesce(error,'(no message)'), '[0-9]+','#','g'),120) AS failure_pattern,max(started_at) AS last_seen FROM lean.scrape_runs WHERE status='error' AND started_at>now()-INTERVAL '7 days' GROUP BY 2 ORDER BY 1 DESC"
+      "sql": "SELECT count(*)::int AS runs,left(regexp_replace(coalesce(error,'(no message)'), '[0-9]+','#','g'),120) AS failure_pattern,max(started_at) AS last_seen FROM lean.scrape_runs WHERE status='error' AND started_at>${time_from} GROUP BY 2 ORDER BY 1 DESC"
     },
     {
       "id": 12,
