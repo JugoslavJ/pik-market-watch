@@ -14,9 +14,9 @@ from psycopg2.extras import RealDictCursor
 from jinja2 import Environment
 
 from client import SupersetAPI
-from definitions import dataset_name, expand_filters, expand_time, filters, panels, push_cross_filters, source_sql
+from definitions import dataset_name, expand_filters, expand_time, filters, fits, panels, push_cross_filters, source_sql
 from viewer_queries import BOARDS
-from viewer_queries import compile_dashboard
+from viewer_queries import compile_dashboard, selections
 from listing_filters import PREFIX, viewer_variables
 from sqlalchemy import text
 from sqlalchemy.dialects import postgresql
@@ -93,6 +93,10 @@ def main():
                 states += [({'deal':['sell']}, {}), ({'deal':['rent']}, {}),
                            ({'deal':['sell'], 'min_sqm':['40'], 'max_sqm':['100']}, {}),
                            ({}, {'rooms':['2']}), ({'deal':['sell']}, {'rooms':['2']})]
+            # Every visibility rule allows All, so this selection shows every panel.
+            shows_all = {name: ['All'] for panel in panels(board) for name in panel.get('when', {})}
+            if shows_all:
+                states += [(shows_all, {})]
             for selected, cross in states:
                 started = time.monotonic()
                 params = urllib.parse.urlencode({'s':json.dumps(selected), 'c':json.dumps(cross), 'force':'true'})
@@ -105,7 +109,16 @@ def main():
                 cursor.execute(str(statement), statement.params)
                 packet['rows'] = cursor.fetchone()['jsonb_build_object']['rows']
                 since = until - timedelta(days=packet['days'])
+                # Panels the selection hides (a sales chart under Deal: rent) are not computed.
+                full = selections(board, selected)
+                shown = [panel for panel in panels(board) if fits(panel, full)]
+                needed = {dataset_name(board, panel) for panel in shown}
                 for panel in panels(board):
+                    if panel not in shown:
+                        key = dataset_name(board, panel)
+                        if key not in needed and key in packet['rows']:
+                            raise RuntimeError(f'{uid}/{panel["id"]}: hidden panel was computed')
+                for panel in shown:
                     sql = reference_sql(board, panel, selected, since, until)
                     predicates = {name: [{'op': 'IN', 'val': values}] for name, values in cross.items()}
                     for variable in viewer_variables(board):
@@ -121,9 +134,9 @@ def main():
                     compare(expected, packet['rows'][dataset_name(board, panel)],
                             f'{uid}/{panel["id"]}', time.monotonic() - started)
                     checked += 1
-                print(f'Compared {uid}: {len(list(panels(board)))} panels, selection={selected}, cross={cross}')
+                print(f'Compared {uid}: {len(shown)} panels, selection={selected}, cross={cross}')
     connection.close()
-    print(f'Passed {checked} viewer/source comparisons across 63 panels.')
+    print(f'Passed {checked} viewer/source comparisons.')
 
 
 if __name__ == '__main__':
