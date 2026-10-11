@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 
 from jinja2 import Environment, pass_context
-from listing_filters import options_sql, viewer_variables
+from listing_filters import options_sql, predicate, viewer_variables
 from definitions import (TABLE_DIMENSIONS, TABLE_SCAN, cross_filter_columns, dataset_name,
                          default_days, expand_filters, expand_time, filters, fits, panels, push_cross_filters,
                          shared_source_sql, SOURCE_DIR)
@@ -97,11 +97,8 @@ def compile_dashboard(board, supplied=None, cross=None, days=None, until=None, i
     variables = viewer_variables(board)
     property_filters = {}
     for variable in variables:
-        value = selected[variable["name"]]
-        if value[0] in ("All", ""):
-            continue
-        property_filters.setdefault(variable["column"], []).append({
-            "op": variable["op"], "val": value if variable["op"] == "IN" else float(value[0])})
+        if (condition := predicate(variable, selected[variable["name"]])) is not None:
+            property_filters.setdefault(variable["column"], []).append(condition)
     until = until or datetime.now(timezone.utc)
     days = float(days if days is not None else default_days(board))
     if not 0 < days <= 365:

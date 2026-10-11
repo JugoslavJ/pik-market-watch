@@ -70,6 +70,9 @@ const UI = {
     "Selection: whole market": "Izbor: cijelo tržište",
     Selection: "Izbor",
     "Time window:": "Period:",
+    min: "od",
+    max: "do",
+    "Contains…": "Sadrži…",
     "Paste an OLX.ba link or listing id":
       "Zalijepite OLX.ba link ili broj oglasa",
     "Use an OLX.ba listing link or number.":
@@ -202,6 +205,17 @@ export function filterLabel(variable) {
       ? common().bounds?.maximum
       : null;
   return bound ? `${property} ${bound}` : property;
+}
+
+// One heading for a min/max pair; the board's own Min/Max m² pair is the area.
+export function rangeLabel(variable) {
+  const name = variable.property
+    ? variable.column.replace(/^__property_/, "")
+    : "sqm";
+  return (
+    common().properties?.[name] ??
+    (variable.property ? variable.label.replace(/ minimum$/, "") : "Area (m²)")
+  );
 }
 
 // Column headers and axis names; undefined falls back to the English label.

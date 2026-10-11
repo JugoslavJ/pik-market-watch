@@ -43,6 +43,7 @@ import {
   locale,
   navTitle,
   panelText,
+  rangeLabel,
   sectionName,
   setLanguage,
   t,
@@ -113,7 +114,14 @@ const LISTING_REFERENCE =
   /^(\d{1,12}|https?:\/\/(www\.)?olx\.ba\/artikal\/\d{1,12}([/?#]\S*)?)$/i;
 
 // Commits on blur or Enter, so typing does not refetch on every keystroke.
-function DraftInput({ value, label, onCommit, type = "number", min = 0 }) {
+function DraftInput({
+  value,
+  label,
+  onCommit,
+  type = "number",
+  min = 0,
+  placeholder,
+}) {
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
   const text = String(draft ?? "").trim();
@@ -125,7 +133,8 @@ function DraftInput({ value, label, onCommit, type = "number", min = 0 }) {
       aria-invalid={invalid || undefined}
       title={invalid ? t("Use an OLX.ba listing link or number.") : undefined}
       placeholder={
-        type === "text" ? t("Paste an OLX.ba link or listing id") : undefined
+        placeholder ??
+        (type === "text" ? t("Paste an OLX.ba link or listing id") : undefined)
       }
       type={type}
       min={type === "number" ? min : undefined}
@@ -582,15 +591,32 @@ function sectionsOf(panels) {
   return groups;
 }
 
-// One control per filter; text filters take an OLX link or id.
-function FilterControl({ variable, selection, options, onChange }) {
+// Floors and rooms read 1, 2, … 10 rather than 1, 10, 2; Unknown goes last.
+const naturally = new Intl.Collator(undefined, { numeric: true });
+const UNKNOWN = new Set(["Unknown", "unknown"]);
+const optionOrder = (a, b) =>
+  UNKNOWN.has(a) - UNKNOWN.has(b) || naturally.compare(String(a), String(b));
+
+// One control per filter; text filters take an OLX link or id, search
+// filters match part of a free-text field such as the address.
+function FilterControl({
+  variable,
+  selection,
+  options,
+  onChange,
+  placeholder,
+}) {
   const name = filterLabel(variable);
-  if (variable.type === "number" || variable.type === "text")
+  if (["number", "text", "search"].includes(variable.type))
     return (
       <DraftInput
         label={name}
         type={variable.type}
         min={variable.min ?? 0}
+        placeholder={
+          placeholder ??
+          (variable.type === "search" ? t("Contains…") : undefined)
+        }
         value={selection[variable.name]?.[0] ?? variable.default}
         onCommit={(value) => onChange([value])}
       />
@@ -620,12 +646,67 @@ function FilterControl({ variable, selection, options, onChange }) {
       <option value="All">{t("All")}</option>
       {(options[variable.name] || variable.choices)
         .filter((v) => v !== "All")
+        .toSorted(optionOrder)
         .map((value) => (
           <option key={String(value)} value={String(value)}>
             {valueLabel(value, variable.name)}
           </option>
         ))}
     </select>
+  );
+}
+
+// Sidebar rows: a minimum and its maximum share one row under one heading.
+function filterRows(variables) {
+  const rows = [];
+  for (const variable of variables) {
+    const last = rows[rows.length - 1];
+    const upper =
+      last?.variables.length === 1 &&
+      (last.variables[0].name === "min_sqm"
+        ? variable.name === "max_sqm"
+        : last.variables[0].name.endsWith("_min") &&
+          variable.name === last.variables[0].name.slice(0, -4) + "_max");
+    if (upper) last.variables.push(variable);
+    else rows.push({ key: variable.name, variables: [variable] });
+  }
+  return rows.map((row) => ({
+    ...row,
+    label:
+      row.variables.length === 2
+        ? rangeLabel(row.variables[0])
+        : filterLabel(row.variables[0]),
+  }));
+}
+
+function FilterRow({ row, setVariable, ...props }) {
+  const [first] = row.variables;
+  if (row.variables.length === 1)
+    return (
+      <label>
+        {row.label}
+        <FilterControl
+          variable={first}
+          onChange={setVariable(first.name)}
+          {...props}
+        />
+      </label>
+    );
+  return (
+    <div className="filter-range" role="group" aria-label={row.label}>
+      <span>{row.label}</span>
+      <div>
+        {row.variables.map((variable, index) => (
+          <FilterControl
+            key={variable.name}
+            variable={variable}
+            placeholder={t(index ? "max" : "min")}
+            onChange={setVariable(variable.name)}
+            {...props}
+          />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -1110,22 +1191,20 @@ function App() {
               onChange={(e) => setFilterSearch(e.target.value)}
             />
             <div className="filters">
-              {sidebarVariables
-                .filter((variable) =>
-                  filterLabel(variable)
-                    .toLowerCase()
-                    .includes(filterSearch.toLowerCase()),
+              {filterRows(sidebarVariables)
+                .filter((row) =>
+                  [row.label, ...row.variables.map(filterLabel)].some((text) =>
+                    text.toLowerCase().includes(filterSearch.toLowerCase()),
+                  ),
                 )
-                .map((variable) => (
-                  <label key={variable.name}>
-                    {filterLabel(variable)}
-                    <FilterControl
-                      variable={variable}
-                      selection={selection}
-                      options={data.options}
-                      onChange={setVariable(variable.name)}
-                    />
-                  </label>
+                .map((row) => (
+                  <FilterRow
+                    key={row.key}
+                    row={row}
+                    selection={selection}
+                    options={data.options}
+                    setVariable={setVariable}
+                  />
                 ))}
               <button
                 onClick={() => {

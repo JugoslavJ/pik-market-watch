@@ -652,6 +652,19 @@ footer {
   width: 100%;
   min-width: 0;
 }
+.filter-range {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-secondary);
+  min-width: 0;
+}
+.filter-range > div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
 .filters input,
 .filters select {
   width: 100%;

@@ -3,6 +3,7 @@
   "title": "OLX.ba Buy",
   "description": "For people buying a home: what a fair asking price is, how much room sellers leave to negotiate, and where listings are priced below their neighborhood.",
   "time_range": "180d",
+  "fixed": ["deal"],
   "filters": [
     {
       "name": "category",

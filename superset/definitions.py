@@ -70,6 +70,8 @@ def push_cross_filters(sql, columns=None):
                            "{% elif f.op in ['=', '==', '!=', '<>', '>', '>=', '<', '<='] and f.val is not none %} AND "
                            + expression + " {{ '=' if f.op == '==' else f.op }} "
                            "{{ [f.val | string] | where_in }}"
+                           "{% elif f.op == 'LIKE' and f.val %} AND " + expression
+                           + " LIKE {{ [f.val | string] | where_in }}"
                            "{% elif f.op == 'IS NULL' %} AND " + expression + " IS NULL"
                            "{% elif f.op == 'IS NOT NULL' %} AND " + expression + " IS NOT NULL"
                            "{% endif %}{% endfor %}")

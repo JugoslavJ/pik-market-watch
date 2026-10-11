@@ -48,7 +48,6 @@
       "balcony_sqm": "Površina balkona (m²)",
       "views": "Pregledi oglasa",
       "favorites": "Oglas sačuvan",
-      "price_state": "Dostupnost cijene",
       "balcony": "Balkon",
       "air_conditioning": "Klima",
       "electricity": "Struja",
@@ -72,8 +71,6 @@
       "recently_renovated": "Nedavno renovirano",
       "flooring": "Vrsta poda",
       "address": "Adresa",
-      "property_kind": "OLX kategorija nekretnine",
-      "ad_kind": "OLX vrsta oglasa",
       "agent_license": "Agent / licenca",
       "agency_contract": "Broj posredničkog ugovora"
     },

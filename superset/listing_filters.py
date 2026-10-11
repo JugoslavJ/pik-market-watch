@@ -5,11 +5,27 @@ Unknown is distinct from No. Event prices use the event snapshot; amenities
 use the latest fetched listing details because events do not snapshot them.
 """
 
+import re
+
 PREFIX = "__property_"
+FOLD_FROM, FOLD_TO = "čćžš", "cczs"
 
 
 def text_value(expression):
-    return f"coalesce(nullif(({expression})::text, ''), 'Unknown')"
+    # A lone letter (A, z, k) is stray OLX form input, not a category.
+    return (f"coalesce(CASE WHEN ({expression})::text !~ '^([A-Za-z]|)$' "
+            f"THEN ({expression})::text END, 'Unknown')")
+
+
+def renamed(expression, pairs):
+    """Merge OLX spellings of one value (true / Namješten) into a single option."""
+    return ("CASE (" + expression + ")::text " + " ".join(f"WHEN '{old}' THEN '{new}'" for old, new in pairs)
+            + " ELSE (" + expression + ")::text END")
+
+
+def folded(expression):
+    """Lower case without Bosnian diacritics, so 'dzemala' finds 'Džemala' and 'sladjana' 'Slađana'."""
+    return f"translate(replace(lower(({expression})::text), 'đ', 'dj'), '{FOLD_FROM}', '{FOLD_TO}')"
 
 
 def numeric_value(expression):
@@ -43,20 +59,24 @@ FILTERS = [
     ("floor_num", "Floor", "select", text_value("coalesce(cf.floor_num::text, " + attribute("sprat") + ")")),
     ("year_built", "Year built", "range", "cf.year_built"),
     ("elevator", "Lift available", "select", boolean_value("coalesce(cf.elevator::text, " + attribute("lift") + ")")),
-    ("heating", "Heating", "select", text_value("coalesce(cf.extra->>'heating', " + attribute("vrsta-grijanja", "grijanje") + ")")),
-    ("condition", "Apartment / property condition", "select", text_value("coalesce(cf.condition, " + attribute("stanje") + ")")),
+    ("heating", "Heating", "select", text_value(renamed(
+        "coalesce(cf.extra->>'heating', " + attribute("vrsta-grijanja", "grijanje") + ")", [("Drugo", "Ostalo")]))),
+    ("condition", "Apartment / property condition", "select", text_value(renamed(
+        "coalesce(cf.condition, " + attribute("stanje") + ")", [("Renovirana", "Renoviran")]))),
     ("parking", "Parking", "select", boolean_value("coalesce(cf.parking::text, " + attribute("parking") + ")")),
-    ("furnished", "Furnishing", "select", text_value("coalesce(" + attribute("opremljenost", "namjesten", "namjestena") + ", cf.extra->>'furnished')")),
+    ("furnished", "Furnishing", "select", text_value(renamed(
+        "coalesce(" + attribute("opremljenost", "namjesten", "namjestena") + ", cf.extra->>'furnished')",
+        [("true", "Namješten"), ("false", "Nenamješten")]))),
     ("garage", "Garage", "select", boolean_value("coalesce(cf.extra->>'garage', " + attribute("gara-a", "garaza") + ")")),
     ("bathrooms", "Bathrooms", "range", numeric_value("coalesce(cf.extra->>'bathrooms', " + attribute("broj-kupatila", "broj-kupatil") + ")")),
     ("floors_total", "Building floors", "range", numeric_value("coalesce(cf.extra->>'floors_total', " + attribute("broj-spratova", "ukupno-spratova") + ")")),
     ("unit_levels", "Property levels", "range", numeric_value("coalesce(cf.extra->>'unit_levels', " + attribute("broj-etaza") + ")")),
     ("plot_sqm", "Plot area (m²)", "range", numeric_value("coalesce(cf.extra->>'plot_sqm', " + attribute("okucnica-kvadratura") + ")")),
     ("orientation", "Orientation", "select", text_value("coalesce(cf.extra->>'orientation', " + attribute("primarna-orjentacija") + ")")),
+    ("flooring", "Flooring", "select", text_value(attribute("vrsta-poda"))),
     ("balcony_sqm", "Balcony area (m²)", "range", numeric_value(attribute("kvadratura-balkona"))),
     ("views", "Ad views", "range", numeric_value("cf.extra->>'views'")),
     ("favorites", "Ad favourites", "range", numeric_value("cf.extra->>'favorites'")),
-    ("price_state", "Price availability", "select", text_value("cf.extra->>'latest_price_state'")),
 ]
 
 for name, label, codes in [
@@ -84,15 +104,16 @@ for name, label, codes in [
 ]:
     FILTERS.append((name, label, "select", boolean_value(attribute(*codes))))
 
+# Nearly one value per listing: typed and matched anywhere in the text.
 for name, label, codes in [
-    ("flooring", "Flooring", ["vrsta-poda"]),
     ("address", "Address", ["adresa"]),
-    ("property_kind", "OLX property category", ["vrsta-nekretnine"]),
-    ("ad_kind", "OLX ad type", ["vrsta-oglasa"]),
     ("agent_license", "Agent name / licence", ["ime-i-broj-licence-agenta"]),
     ("agency_contract", "Agency contract number", ["broj-posrednickog-ugovora"]),
 ]:
-    FILTERS.append((name, label, "select", text_value(attribute(*codes))))
+    FILTERS.append((name, label, "search", folded(attribute(*codes))))
+
+# Board controls that already cover a property (Category is the property type).
+COVERED_BY = {"property_type": "category", "sqm": "min_sqm"}
 
 EXPRESSIONS = {PREFIX + name: expression for name, _, _, expression in FILTERS}
 EVENT_EXPRESSIONS = {
@@ -107,15 +128,29 @@ EVENT_EXPRESSIONS = {
 
 def options_sql():
     return "SELECT " + ",\n".join(
-        expression + ' AS "' + PREFIX + name + '"' for name, _, _, expression in FILTERS
+        expression + ' AS "' + PREFIX + name + '"' for name, _, kind, expression in FILTERS if kind == "select"
     ) + " FROM lean.listings cf"
 
 
+def predicate(variable, value):
+    """The operator and value one property control adds, or None while it is unset."""
+    if value[0] in ("All", ""):
+        return None
+    if variable["op"] == "IN":
+        return {"op": "IN", "val": value}
+    if variable["op"] == "LIKE":
+        text = value[0].strip().lower().replace("đ", "dj").translate(str.maketrans(FOLD_FROM, FOLD_TO))
+        # Typed % and _ match themselves.
+        return {"op": "LIKE", "val": "%" + re.sub(r"([\\%_])", r"\\\1", text) + "%"} if text else None
+    return {"op": variable["op"], "val": float(value[0])}
+
+
 def viewer_variables(board):
-    existing = {v["name"] for v in board.get("filters", [])}
+    # A board scoped to one deal ("fixed") offers no control for it.
+    existing = {v["name"] for v in board.get("filters", [])} | set(board.get("fixed", []))
     result = []
     for name, label, kind, _ in FILTERS:
-        if name in existing or (name == "sqm" and "min_sqm" in existing):
+        if name in existing or COVERED_BY.get(name) in existing:
             continue
         column = PREFIX + name
         if kind == "range":
@@ -124,6 +159,9 @@ def viewer_variables(board):
                            "multi": False, "min": 0,
                            "choices": [], "property": True}
                           for suffix, op, bound in [("_min", ">=", "minimum"), ("_max", "<=", "maximum")])
+        elif kind == "search":
+            result.append({"name": column, "column": column, "op": "LIKE", "label": label,
+                           "type": "search", "multi": False, "default": "", "choices": [], "property": True})
         else:
             result.append({"name": column, "column": column, "op": "IN", "label": label,
                            "type": "select", "multi": True, "default": "All", "choices": [], "property": True})

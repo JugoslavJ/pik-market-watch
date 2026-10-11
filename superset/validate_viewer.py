@@ -17,7 +17,7 @@ from client import SupersetAPI
 from definitions import dataset_name, expand_filters, expand_time, filters, panels, push_cross_filters, source_sql
 from viewer_queries import BOARDS
 from viewer_queries import compile_dashboard
-from listing_filters import PREFIX, viewer_variables
+from listing_filters import PREFIX, predicate, viewer_variables
 from sqlalchemy import text
 from sqlalchemy.dialects import postgresql
 
@@ -109,10 +109,8 @@ def main():
                     sql = reference_sql(board, panel, selected, since, until)
                     predicates = {name: [{'op': 'IN', 'val': values}] for name, values in cross.items()}
                     for variable in viewer_variables(board):
-                        if variable['name'] in selected:
-                            value = selected[variable['name']]
-                            predicates.setdefault(variable['column'], []).append({
-                                'op': variable['op'], 'val': value if variable['op'] == 'IN' else float(value[0])})
+                        if (condition := predicate(variable, selected.get(variable['name'], ['All']))) is not None:
+                            predicates.setdefault(variable['column'], []).append(condition)
                     if predicates:
                         sql = env.from_string(push_cross_filters(sql, columns=set(predicates))).render(
                             get_filters=lambda name, **_: predicates.get(name, []))
