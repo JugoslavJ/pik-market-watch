@@ -115,6 +115,12 @@ for name, label, codes in [
 # Board controls that already cover a property (Category is the property type).
 COVERED_BY = {"property_type": "category", "sqm": "min_sqm"}
 
+# Rarely decisive controls the viewer folds behind "More filters".
+MORE = {"garage", "bathrooms", "floors_total", "unit_levels", "plot_sqm", "orientation", "flooring",
+        "balcony_sqm", "views", "favorites", "electricity", "water", "sewerage", "gas", "internet",
+        "cable_tv", "security_door", "telephone", "video_surveillance", "storage", "basement_attic",
+        "alarm", "students", "pool", "recently_renovated", "agent_license", "agency_contract"}
+
 EXPRESSIONS = {PREFIX + name: expression for name, _, _, expression in FILTERS}
 EVENT_EXPRESSIONS = {
     column: (expression if column in {PREFIX + n for n in ("deal", "property_type", "neighborhood", "rooms", "sqm")}
@@ -153,16 +159,17 @@ def viewer_variables(board):
         if name in existing or COVERED_BY.get(name) in existing:
             continue
         column = PREFIX + name
+        flags = {"property": True, **({"more": True} if name in MORE else {})}
         if kind == "range":
             result.extend({"name": column + suffix, "column": column, "op": op,
                            "label": label + " " + bound, "type": "number", "default": "",
                            "multi": False, "min": 0,
-                           "choices": [], "property": True}
+                           "choices": [], **flags}
                           for suffix, op, bound in [("_min", ">=", "minimum"), ("_max", "<=", "maximum")])
         elif kind == "search":
             result.append({"name": column, "column": column, "op": "LIKE", "label": label,
-                           "type": "search", "multi": False, "default": "", "choices": [], "property": True})
+                           "type": "search", "multi": False, "default": "", "choices": [], **flags})
         else:
             result.append({"name": column, "column": column, "op": "IN", "label": label,
-                           "type": "select", "multi": True, "default": "All", "choices": [], "property": True})
+                           "type": "select", "multi": True, "default": "All", "choices": [], **flags})
     return result

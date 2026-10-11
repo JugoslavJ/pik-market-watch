@@ -622,14 +622,47 @@ function FilterControl({
       />
     );
   return (
+    <OptionSelect
+      variable={variable}
+      name={name}
+      selection={selection}
+      options={options}
+      onChange={onChange}
+    />
+  );
+}
+
+// Long multi-select lists (neighborhoods) get a box that narrows them as you
+// type; "bocac" finds Bočac. Picked options stay listed so narrowing never
+// drops them from the selection.
+const NARROW_FROM = 12;
+const folded = (text) =>
+  String(text)
+    .toLowerCase()
+    .replaceAll("đ", "dj")
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "");
+
+function OptionSelect({ variable, name, selection, options, onChange }) {
+  const [narrow, setNarrow] = useState("");
+  const picked = selection[variable.name] || [];
+  const values = (options[variable.name] || variable.choices)
+    .filter((v) => v !== "All")
+    .toSorted(optionOrder);
+  const typed = folded(narrow.trim());
+  const shown = typed
+    ? values.filter(
+        (value) =>
+          picked.includes(String(value)) ||
+          folded(value).includes(typed) ||
+          folded(valueLabel(value, variable.name)).includes(typed),
+      )
+    : values;
+  const select = (
     <select
       aria-label={name}
       multiple={variable.multi}
-      value={
-        variable.multi
-          ? selection[variable.name]
-          : selection[variable.name]?.[0]
-      }
+      value={variable.multi ? picked : picked[0]}
       onChange={(e) => {
         const values = [...e.target.selectedOptions].map(
           (option) => option.value,
@@ -644,15 +677,26 @@ function FilterControl({
       }}
     >
       <option value="All">{t("All")}</option>
-      {(options[variable.name] || variable.choices)
-        .filter((v) => v !== "All")
-        .toSorted(optionOrder)
-        .map((value) => (
-          <option key={String(value)} value={String(value)}>
-            {valueLabel(value, variable.name)}
-          </option>
-        ))}
+      {shown.map((value) => (
+        <option key={String(value)} value={String(value)}>
+          {valueLabel(value, variable.name)}
+        </option>
+      ))}
     </select>
+  );
+  if (!variable.multi || values.length < NARROW_FROM) return select;
+  return (
+    <>
+      <input
+        type="search"
+        className="option-search"
+        aria-label={t("Search") + " " + name}
+        placeholder={t("Search…")}
+        value={narrow}
+        onChange={(e) => setNarrow(e.target.value)}
+      />
+      {select}
+    </>
   );
 }
 
@@ -707,6 +751,38 @@ function FilterRow({ row, setVariable, ...props }) {
         ))}
       </div>
     </div>
+  );
+}
+
+// Rarely decisive controls (cable TV, ad views) wait behind "More filters";
+// a search reaches them all, and the toggle counts the ones in use.
+function FilterList({ variables, search, ...props }) {
+  const [expanded, setExpanded] = useState(false);
+  const rows = filterRows(variables).filter((row) =>
+    [row.label, ...row.variables.map(filterLabel)].some((text) =>
+      text.toLowerCase().includes(search.toLowerCase()),
+    ),
+  );
+  const more = rows.filter((row) => row.variables[0].more);
+  const active = more
+    .flatMap((row) => row.variables)
+    .filter((variable) => changed(variable, props.selection)).length;
+  const render = (row) => <FilterRow key={row.key} row={row} {...props} />;
+  return (
+    <>
+      {rows.filter((row) => !row.variables[0].more).map(render)}
+      {!!more.length && !search && (
+        <button
+          className="more-filters"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((open) => !open)}
+        >
+          {t(expanded ? "Fewer filters" : "More filters")}
+          {active ? ` (${active})` : ""}
+        </button>
+      )}
+      {(expanded || search) && more.map(render)}
+    </>
   );
 }
 
@@ -1191,21 +1267,13 @@ function App() {
             onChange={(e) => setFilterSearch(e.target.value)}
           />
           <div className="filters">
-            {filterRows(sidebarVariables)
-              .filter((row) =>
-                [row.label, ...row.variables.map(filterLabel)].some((text) =>
-                  text.toLowerCase().includes(filterSearch.toLowerCase()),
-                ),
-              )
-              .map((row) => (
-                <FilterRow
-                  key={row.key}
-                  row={row}
-                  selection={selection}
-                  options={data.options}
-                  setVariable={setVariable}
-                />
-              ))}
+            <FilterList
+              variables={sidebarVariables}
+              search={filterSearch}
+              selection={selection}
+              options={data.options}
+              setVariable={setVariable}
+            />
             <button
               onClick={() => {
                 setCross({});
