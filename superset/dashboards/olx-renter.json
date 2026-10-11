@@ -3,6 +3,7 @@
   "title": "OLX.ba Rent",
   "description": "For people renting a home: what a fair monthly rent is, what amenities add, and how quickly rentals leave OLX.",
   "time_range": "90d",
+  "fixed": ["deal"],
   "filters": [
     {
       "name": "category",

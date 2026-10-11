@@ -15,6 +15,7 @@ const DASHBOARD_KEYS = [
   "title",
   "description",
   "time_range",
+  "fixed",
   "filters",
   "panels",
 ];
@@ -72,6 +73,9 @@ test("dashboard definitions keep eight identities and a strict format", () => {
     keysWithin(dashboard, DASHBOARD_KEYS, file);
     assert.equal(file, `${dashboard.uid}.json`);
     assert.match(dashboard.time_range, /^\d+[dhm]$/);
+    // Property controls a board's scope makes meaningless (Deal on Buy).
+    for (const name of dashboard.fixed ?? [])
+      assert.ok(["deal", "property_type"].includes(name), `${file}: ${name}`);
     for (const filter of dashboard.filters) {
       keysWithin(filter, FILTER_KEYS, `${file}:${filter.name}`);
       assert.ok(
@@ -173,7 +177,7 @@ const languages = fs
 const propertyNames = [
   ...fs
     .readFileSync(path.resolve(__dirname, "../listing_filters.py"), "utf8")
-    .matchAll(/^\s*\("([a-z_]+)", "[^"]+", (?:"(?:select|range)"|\[)/gm),
+    .matchAll(/^\s*\("([a-z0-9_]+)", "[^"]+", (?:"(?:select|range)"|\[)/gm),
 ].map((match) => match[1]);
 
 test("every viewer language translates every board string", () => {

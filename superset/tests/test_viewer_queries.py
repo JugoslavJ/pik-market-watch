@@ -110,6 +110,32 @@ class ViewerQueryTests(unittest.TestCase):
             self.assertIn('SELECT DISTINCT "__property_heating"', sql)
             self.assertIn("'Unknown'", sql)
 
+    def test_free_text_properties_are_searched_by_bound_fragment(self):
+        sql, params, _ = compile_dashboard(BOARDS['olx-pro'], {
+            PREFIX + 'address': [' Džemala_50% '], PREFIX + 'agent_license': ['']})
+        self.assertIn('%dzemala\\_50\\%%', params.values())
+        self.assertIn("translate(replace(lower(", sql)
+        _, params, _ = compile_dashboard(BOARDS['olx-pro'], {PREFIX + 'agent_license': ['Slađana']})
+        self.assertIn('%sladjana%', params.values())
+        self.assertNotIn('dzemala', sql)
+        self.assertNotIn('ime-i-broj-licence-agenta', sql.split('property_options')[0])
+        names = {v['name']: v for v in presentation(BOARDS['olx-pro'])['variables']}
+        self.assertEqual(names[PREFIX + 'address']['type'], 'search')
+        self.assertNotIn('SELECT DISTINCT "__property_address"', sql)
+
+    def test_each_control_appears_once_per_board(self):
+        for uid, board in BOARDS.items():
+            names = {v['name'] for v in presentation(board)['variables']}
+            for gone in ('price_state', 'property_kind', 'ad_kind'):
+                self.assertNotIn(PREFIX + gone, names, uid)
+            if 'category' in names:
+                self.assertNotIn(PREFIX + 'property_type', names, uid)
+            if 'min_sqm' in names:
+                self.assertNotIn(PREFIX + 'sqm_min', names, uid)
+            if 'deal' in names or 'deal' in board.get('fixed', []):
+                self.assertNotIn(PREFIX + 'deal', names, uid)
+        self.assertEqual(BOARDS['olx-buyer'].get('fixed'), ['deal'])
+
     def test_invalid_property_ranges_cannot_reach_the_database(self):
         for value in ('nan', 'inf', '-1', 'not a number'):
             with self.assertRaises(ValueError):

@@ -62,6 +62,25 @@ async function main() {
           uid + ": " + label,
         );
       }
+      // A minimum and its maximum share one row; free text is typed, not picked.
+      const price = page.getByRole("group", {
+        name: "Asking price (BAM)",
+        exact: true,
+      });
+      assert.equal(await price.locator("input").count(), 2, uid);
+      const [low, high] = await Promise.all(
+        [0, 1].map((n) => price.locator("input").nth(n).boundingBox()),
+      );
+      assert.ok(Math.abs(low.y - high.y) < 2, uid + ": price range on one row");
+      assert.equal(
+        await page
+          .getByRole("searchbox", { name: "Address", exact: true })
+          .count(),
+        1,
+        uid,
+      );
+      for (const gone of ["Price availability", "OLX ad type"])
+        assert.equal(await page.getByLabel(gone, { exact: true }).count(), 0);
       const lift = page.getByLabel("Lift available", { exact: true });
       assert.ok(
         (await lift.locator("option").allTextContents()).includes("Unknown"),

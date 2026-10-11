@@ -3,6 +3,7 @@
   "title": "OLX.ba Daily Rent",
   "description": "For hosts and short-stay investors: what homes let by the night ask (Stan na dan apartments and holiday cottages at nightly prices), where they are, and how supply moves. Nightly prices are kept apart from monthly rent.",
   "time_range": "90d",
+  "fixed": ["deal"],
   "filters": [
     {
       "name": "rooms",
