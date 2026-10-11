@@ -970,6 +970,19 @@ function App() {
   return (
     <>
       <header>
+        <button
+          className="filters-toggle"
+          ref={filtersButton}
+          aria-expanded={filtersOpen}
+          aria-controls="dashboard-filters"
+          onClick={() => setFiltersOpen((open) => !open)}
+        >
+          <span className="filters-icon" aria-hidden="true" />
+          {t("Filters")}
+          {activeFilters ? (
+            <span className="filters-count">{activeFilters}</span>
+          ) : null}
+        </button>
         <a className="brand" href="/olx/dashboard/olx-home/">
           <span className="brand-mark" aria-hidden="true" />
           OLX Market Watch
@@ -1053,16 +1066,6 @@ function App() {
                 </button>
               ))}
             </div>
-            <button
-              className="filters-toggle"
-              ref={filtersButton}
-              aria-expanded={filtersOpen}
-              aria-controls="dashboard-filters"
-              onClick={() => setFiltersOpen((open) => !open)}
-            >
-              {t("Filters")}
-              {activeFilters ? ` (${activeFilters})` : ""}
-            </button>
             <a
               className="button"
               href={"?" + pageParams(selection, cross, days, lang, true)}
@@ -1080,104 +1083,100 @@ function App() {
             </button>
           </div>
         </div>
-        <div
-          className={"dashboard-layout" + (filtersOpen ? " filters-open" : "")}
+        {filtersOpen && (
+          <button
+            className="filter-backdrop"
+            aria-label={t("Close filter panel")}
+            onClick={closeFilters}
+          />
+        )}
+        <aside
+          id="dashboard-filters"
+          className="filter-panel"
+          aria-label={t("Dashboard filters")}
+          hidden={!filtersOpen}
         >
-          {filtersOpen && (
-            <button
-              className="filter-backdrop"
-              aria-label={t("Close filter panel")}
-              onClick={closeFilters}
-            />
-          )}
-          <aside
-            id="dashboard-filters"
-            className="filter-panel"
-            aria-label={t("Dashboard filters")}
-            hidden={!filtersOpen}
-          >
-            <div className="filter-panel-heading">
-              <h2>{t("Filters")}</h2>
-              <button aria-label={t("Collapse filters")} onClick={closeFilters}>
-                ×
-              </button>
-            </div>
-            <input
-              className="filter-search"
-              aria-label={t("Find a filter")}
-              placeholder={t("Find a filter…")}
-              value={filterSearch}
-              onChange={(e) => setFilterSearch(e.target.value)}
-            />
-            <div className="filters">
-              {sidebarVariables
-                .filter((variable) =>
-                  filterLabel(variable)
-                    .toLowerCase()
-                    .includes(filterSearch.toLowerCase()),
-                )
-                .map((variable) => (
-                  <label key={variable.name}>
-                    {filterLabel(variable)}
-                    <FilterControl
-                      variable={variable}
-                      selection={selection}
-                      options={data.options}
-                      onChange={setVariable(variable.name)}
-                    />
-                  </label>
-                ))}
-              <button
-                onClick={() => {
-                  setCross({});
-                  setDays(DEFAULT_DAYS);
-                  setSelection(
-                    Object.fromEntries(
-                      data.variables.map((v) => [v.name, asArray(v.default)]),
-                    ),
-                  );
-                }}
-              >
-                {t("Reset filters")}
-              </button>
-            </div>
-          </aside>
-          <div className="dashboard-content">
-            {!!Object.keys(cross).length && (
-              <div className="selections">
-                {Object.entries(cross).map(([dimension, values]) => (
-                  <button
-                    key={dimension}
-                    onClick={() =>
-                      setCross((previous) => {
-                        const next = { ...previous };
-                        delete next[dimension];
-                        return next;
-                      })
-                    }
-                  >
-                    {label(dimension)}:{" "}
-                    {values
-                      .map((value) => valueLabel(value, dimension))
-                      .join(", ")}{" "}
-                    <span aria-hidden="true">×</span>
-                  </button>
-                ))}
-              </div>
-            )}
-            {query.error && (
-              <p role="alert" className="error">
-                {query.error.message}
-                {query.error.loginUrl && (
-                  <>
-                    {" "}
-                    <a href={query.error.loginUrl}>{t("Sign in")}</a>
-                  </>
-                )}
-              </p>
-            )}
-            {sectionList}
+          <div className="filter-panel-heading">
+            <h2>{t("Filters")}</h2>
+            <button aria-label={t("Collapse filters")} onClick={closeFilters}>
+              ×
+            </button>
           </div>
+          <input
+            className="filter-search"
+            aria-label={t("Find a filter")}
+            placeholder={t("Find a filter…")}
+            value={filterSearch}
+            onChange={(e) => setFilterSearch(e.target.value)}
+          />
+          <div className="filters">
+            {sidebarVariables
+              .filter((variable) =>
+                filterLabel(variable)
+                  .toLowerCase()
+                  .includes(filterSearch.toLowerCase()),
+              )
+              .map((variable) => (
+                <label key={variable.name}>
+                  {filterLabel(variable)}
+                  <FilterControl
+                    variable={variable}
+                    selection={selection}
+                    options={data.options}
+                    onChange={setVariable(variable.name)}
+                  />
+                </label>
+              ))}
+            <button
+              onClick={() => {
+                setCross({});
+                setDays(DEFAULT_DAYS);
+                setSelection(
+                  Object.fromEntries(
+                    data.variables.map((v) => [v.name, asArray(v.default)]),
+                  ),
+                );
+              }}
+            >
+              {t("Reset filters")}
+            </button>
+          </div>
+        </aside>
+        <div className="dashboard-content">
+          {!!Object.keys(cross).length && (
+            <div className="selections">
+              {Object.entries(cross).map(([dimension, values]) => (
+                <button
+                  key={dimension}
+                  onClick={() =>
+                    setCross((previous) => {
+                      const next = { ...previous };
+                      delete next[dimension];
+                      return next;
+                    })
+                  }
+                >
+                  {label(dimension)}:{" "}
+                  {values
+                    .map((value) => valueLabel(value, dimension))
+                    .join(", ")}{" "}
+                  <span aria-hidden="true">×</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {query.error && (
+            <p role="alert" className="error">
+              {query.error.message}
+              {query.error.loginUrl && (
+                <>
+                  {" "}
+                  <a href={query.error.loginUrl}>{t("Sign in")}</a>
+                </>
+              )}
+            </p>
+          )}
+          {sectionList}
         </div>
       </main>
       <footer>{t(FOOTER)}</footer>

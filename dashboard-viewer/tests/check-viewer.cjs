@@ -230,7 +230,7 @@ async function main() {
     await page.locator('[data-panel="16"] button', { hasText: "CSV" }).click();
     assert.equal(
       (await downloadPromise).suggestedFilename(),
-      "best-value-lowest-km-m-sales.csv",
+      "best-value-furthest-below-the-neighborhood-median.csv",
     );
     assert.deepEqual(errors, []);
     assert.deepEqual(await page.evaluate(() => window.__csp), []);
