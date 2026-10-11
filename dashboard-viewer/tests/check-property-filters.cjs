@@ -68,10 +68,13 @@ async function main() {
         exact: true,
       });
       assert.equal(await price.locator("input").count(), 2, uid);
-      const [low, high] = await Promise.all(
-        [0, 1].map((n) => price.locator("input").nth(n).boundingBox()),
+      // Read both in one frame: the panel unfolds with an animation.
+      const [low, high] = await price.evaluate((group) =>
+        [...group.querySelectorAll("input")].map(
+          (input) => input.getBoundingClientRect().top,
+        ),
       );
-      assert.ok(Math.abs(low.y - high.y) < 2, uid + ": price range on one row");
+      assert.ok(Math.abs(low - high) < 2, uid + ": price range on one row");
       assert.equal(
         await page
           .getByRole("searchbox", { name: "Address", exact: true })
@@ -79,6 +82,36 @@ async function main() {
         1,
         uid,
       );
+      // Rarely decisive controls wait behind "More filters".
+      const cable = page.getByLabel("Cable TV", { exact: true });
+      assert.equal(await cable.count(), 0, uid + ": cable TV folded");
+      await page.getByRole("button", { name: "More filters" }).click();
+      assert.equal(await cable.count(), 1, uid + ": cable TV unfolded");
+      await page.getByRole("button", { name: "Fewer filters" }).click();
+      if (uid === "olx-overview") {
+        const both = page.waitForResponse((response) =>
+          response.url().includes("/olx/api/dashboard/" + uid),
+        );
+        await page
+          .getByLabel("Rooms", { exact: true })
+          .selectOption(["2", "3"]);
+        assert.deepEqual((await (await both).json()).selection.rooms, [
+          "2",
+          "3",
+        ]);
+        await page.waitForFunction(() => !window.__olxViewer.fetching);
+        assert.equal(await page.getByRole("alert").count(), 0);
+        // Typing narrows a long list, with or without diacritics.
+        const places = page.getByLabel("Neighborhood", { exact: true });
+        await page
+          .getByLabel("Search Neighborhood", { exact: true })
+          .fill("bocac");
+        assert.deepEqual(await places.locator("option").allTextContents(), [
+          "All",
+          "Bočac",
+        ]);
+        await page.getByLabel("Search Neighborhood", { exact: true }).fill("");
+      }
       for (const gone of ["Price availability", "OLX ad type"])
         assert.equal(await page.getByLabel(gone, { exact: true }).count(), 0);
       const lift = page.getByLabel("Lift available", { exact: true });

@@ -6,7 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from viewer_queries import (BOARDS, TRANSLATIONS, compile_dashboard, filter_template, listing_reference,
                             presentation, selections)
-from listing_filters import PREFIX
+from listing_filters import FILTERS, MORE, PREFIX
 
 
 class ViewerQueryTests(unittest.TestCase):
@@ -50,7 +50,7 @@ class ViewerQueryTests(unittest.TestCase):
                 sql, _, _ = compile_dashboard(board, include_options=False)
                 self.assertNotIn('property_options', sql)
                 self.assertNotIn("'options'", sql)
-                self.assertNotRegex(sql, r'^s*WITHs+SELECT')
+                self.assertNotRegex(sql, r'^\s*WITH\s+SELECT')
                 self.assertIn("'options'", compile_dashboard(board)[0])
 
     def test_filter_values_are_parameters_not_sql(self):
@@ -135,6 +135,25 @@ class ViewerQueryTests(unittest.TestCase):
             if 'deal' in names or 'deal' in board.get('fixed', []):
                 self.assertNotIn(PREFIX + 'deal', names, uid)
         self.assertEqual(BOARDS['olx-buyer'].get('fixed'), ['deal'])
+
+    def test_low_value_controls_fold_behind_more_filters(self):
+        self.assertLessEqual(MORE, {name for name, *_ in FILTERS})
+        variables = {v['name']: v for v in presentation(BOARDS['olx-overview'])['variables']}
+        self.assertTrue(variables[PREFIX + 'cable_tv']['more'])
+        self.assertTrue(variables[PREFIX + 'views_min']['more'])
+        self.assertNotIn('more', variables[PREFIX + 'elevator'])
+        self.assertNotIn('more', variables['category'])
+
+    def test_category_and_rooms_take_several_values(self):
+        board = BOARDS['olx-overview']
+        picked = selections(board, {'category': ['apartments', 'houses'], 'rooms': ['2', '3']})
+        self.assertEqual(picked['category'], ['apartments', 'houses'])
+        sql, params, _ = compile_dashboard(board, {'category': ['apartments', 'houses'], 'rooms': ['2', '3']})
+        self.assertIn('property_type = ANY(ARRAY[', sql)
+        self.assertIn('houses', params.values())
+        for uid, board in BOARDS.items():
+            for panel in board['panels']:
+                self.assertNotRegex(panel.get('sql', ''), r"(?<!ARRAY\[)\$\{(category|rooms)\}", f'{uid}/{panel["id"]}')
 
     def test_invalid_property_ranges_cannot_reach_the_database(self):
         for value in ('nan', 'inf', '-1', 'not a number'):

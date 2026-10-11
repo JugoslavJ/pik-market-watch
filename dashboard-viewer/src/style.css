@@ -696,6 +696,20 @@ footer {
   width: 100%;
   min-width: 0;
 }
+.more-filters {
+  align-self: flex-start;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--accent-ink);
+  font-size: 12px;
+}
+.more-filters::before {
+  content: "+ ";
+}
+.more-filters[aria-expanded="true"]::before {
+  content: "− ";
+}
 .filter-range {
   display: flex;
   flex-direction: column;
