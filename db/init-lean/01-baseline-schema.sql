@@ -4,38 +4,48 @@ BEGIN;
 
 CREATE SCHEMA lean;
 
+-- Area maps read each boundary as GeoJSON, but the reporting role has no
+-- access to the public schema, where PostGIS keeps its functions and
+-- spatial_ref_sys, so the outline is stored when a boundary is written.
 CREATE TABLE lean.neighborhoods (
   name text PRIMARY KEY,
-  boundary public.geometry(MultiPolygon, 4326) NOT NULL
+  boundary public.geometry(MultiPolygon, 4326) NOT NULL,
+  outline jsonb GENERATED ALWAYS AS (public.ST_AsGeoJSON(boundary)::jsonb) STORED
 );
 CREATE INDEX lean_neighborhoods_boundary_gist ON lean.neighborhoods USING gist (boundary);
 
+-- Searches dropped from the configuration keep their run history but are
+-- marked retired, so they never read as stale.
 CREATE TABLE lean.saved_searches (
   search_key text PRIMARY KEY,
   name text NOT NULL,
   url text NOT NULL,
-  category text,
   created_at timestamptz NOT NULL DEFAULT now(),
   last_scraped_at timestamptz,
   listing_count integer,
   median_ppm2 integer,
   new_count integer,
-  drop_count integer
+  drop_count integer,
+  retired_at timestamptz
 );
 
+-- Property types come from each listing's OLX subcategory. Daily rentals
+-- ("Stan na dan") have their own deal: OLX posts them as sales with nightly
+-- prices, and they must never mix with monthly rent. Deal and currency
+-- evidence that is missing stays 'unknown' instead of asserting a sale or BAM.
 CREATE TABLE lean.listings (
   article_id bigint PRIMARY KEY,
   url text NOT NULL,
   title text NOT NULL,
-  deal text NOT NULL CHECK (deal IN ('sale', 'rent')),
+  deal text NOT NULL CHECK (deal IN ('sale', 'rent', 'daily_rent', 'unknown')),
   property_type text,
   sqm numeric(8,2),
   rooms text,
   price numeric(12,2),
   price_text text,
-  currency text NOT NULL DEFAULT 'BAM',
+  currency text NOT NULL DEFAULT 'unknown',
   ppm2 integer,
-  neighborhood text REFERENCES lean.neighborhoods(name),
+  neighborhood text REFERENCES lean.neighborhoods(name) ON UPDATE CASCADE,
   latitude double precision,
   longitude double precision,
   seller_type text,
@@ -61,9 +71,6 @@ CREATE INDEX lean_listings_active_filter_idx
   WHERE closed_at IS NULL;
 CREATE INDEX lean_listings_price_idx
   ON lean.listings (deal, price) WHERE closed_at IS NULL;
-CREATE INDEX lean_listings_geo_idx
-  ON lean.listings (latitude, longitude) WHERE latitude IS NOT NULL;
-CREATE INDEX lean_listings_search_keys_idx ON lean.listings USING gin (search_keys);
 CREATE INDEX lean_listings_first_seen_idx ON lean.listings (first_seen);
 
 -- Publication and lifecycle evidence use Banja Luka calendar dates; scraper
@@ -73,7 +80,7 @@ CREATE TABLE lean.price_history (
   article_id bigint NOT NULL REFERENCES lean.listings(article_id),
   price_date date NOT NULL DEFAULT ((now() AT TIME ZONE 'Europe/Sarajevo')::date),
   price numeric(12,2),
-  currency text NOT NULL DEFAULT 'BAM',
+  currency text NOT NULL DEFAULT 'unknown',
   source text NOT NULL DEFAULT 'search'
 );
 CREATE UNIQUE INDEX lean_price_history_article_date_source_uidx
@@ -93,7 +100,7 @@ CREATE TABLE lean.listing_lifecycle_events (
   occurred_at date NOT NULL,
   opened_at date,
   price numeric(12,2),
-  deal text CHECK (deal IN ('sale', 'rent', 'unknown')),
+  deal text CHECK (deal IN ('sale', 'rent', 'daily_rent', 'unknown')),
   property_type text,
   neighborhood text,
   sqm numeric(8,2),
@@ -152,8 +159,6 @@ CREATE TABLE lean.raw_api_responses (
 );
 CREATE INDEX lean_raw_api_responses_stream_idx
   ON lean.raw_api_responses (request_kind, request_url, fetched_at DESC, id DESC);
-CREATE INDEX lean_raw_api_responses_article_idx
-  ON lean.raw_api_responses (article_id, fetched_at DESC) WHERE article_id IS NOT NULL;
 
 CREATE TABLE lean.scrape_run_pages (
   run_id bigint NOT NULL REFERENCES lean.scrape_runs(id) ON DELETE CASCADE,

@@ -66,7 +66,7 @@ See [viewer details](../dashboard-viewer/README.md) and [deployment](DEPLOYMENT.
 
 ## Geography
 
-`db/init-lean/02-lean-neighborhoods.sql` seeds approximate Banja Luka
+`db/init-lean/02-baseline-neighborhoods.sql` seeds approximate Banja Luka
 neighborhood boundaries. The PostGIS polygons support point containment and a
 nearest-boundary fallback within five kilometres. The seed is an applied
 baseline; ship boundary changes as a new ordered migration. See

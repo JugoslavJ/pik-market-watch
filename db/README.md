@@ -17,20 +17,16 @@ Integration tests use disposable databases. Migration and maintenance jobs requi
 
 The numbered SQL files run in lexical order:
 
-| File                           | Responsibility                                                                                                    |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| `00-extensions.sql`            | Required PostGIS and statistics extensions                                                                        |
-| `01-lean-schema.sql`           | Complete schema, including daily prices and lifecycle events, raw archives, page manifests, and dashboard indexes |
-| `02-lean-neighborhoods.sql`    | Generated neighborhood boundaries                                                                                 |
-| `03-price-evidence.sql`        | Allows explicit `unknown` deal and currency values                                                                |
-| `04-drop-unused-indexes.sql`   | Drops coordinate, search-key and archive-article indexes that no query uses                                       |
-| `05-declared-deal-type.sql`    | Reclassifies deals by the ad's declared kind                                                                      |
-| `06-olx-categories.sql`        | Adds the `daily_rent` deal, drops the saved-search category label and retires unconfigured searches               |
-| `07-neighborhood-outlines.sql` | Stores each boundary as GeoJSON for area maps, which the reporting role reads without PostGIS                     |
-| `08-detail-area-and-rooms.sql` | Fills area and rooms from fetched details that name them differently                                              |
-| `zz-database-roles.sh`         | Runtime, migration, reporting, Superset metadata and backup roles                                                 |
+| File                            | Responsibility                                                                                                    |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `00-extensions.sql`             | Required PostGIS and statistics extensions                                                                        |
+| `01-baseline-schema.sql`        | Complete schema, including daily prices and lifecycle events, raw archives, page manifests, and dashboard indexes |
+| `02-baseline-neighborhoods.sql` | Neighborhood boundaries                                                                                           |
+| `zz-database-roles.sh`          | Runtime, migration, reporting, Superset metadata and backup roles                                                 |
 
-The migrator records checksums in `public.schema_migrations` and rejects changed files. When Docker has already initialized a database from the `00`–`02` baseline, the migrator records those files without replaying them; later files run normally. Keep applied SQL files immutable and append new ordered migrations under `init-lean/`.
+The `00`–`02` baseline creates the current schema directly. It replaced migrations `01-lean-schema.sql` through `10-html-attribute-placeholders.sql` on 2026-10-13. A database whose ledger records all of those files has its ledger rows replaced by the baseline files. One that recorded only some of them is rejected and must first run commit `5ae7d28`.
+
+The migrator records checksums in `public.schema_migrations` and rejects changed files. When Docker has already initialized a database from the baseline, the migrator records those files without replaying them; later files run normally. Keep applied SQL files immutable and append new ordered migrations under `init-lean/`. New files must not reuse a filename already in a ledger, including pre-lean names such as `02-neighborhoods.sql`.
 
 `remote-restore.sh` handles synchronized lean database restores. PostgreSQL
 extension objects in `public` remain installed by the database bootstrap.

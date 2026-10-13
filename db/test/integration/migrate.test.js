@@ -117,58 +117,45 @@ needsDb(
 );
 
 needsDb(
-  "HTML-era variable names are removed; real values and typed placeholders stay",
+  "consolidated history is re-recorded as the baseline only when complete",
   async () => {
     const pool = new Pool({
-      connectionString: await recreateDatabase("mig_lean_placeholders"),
+      connectionString: await recreateDatabase("mig_lean_consolidated"),
     });
-    const target = "10-html-attribute-placeholders.sql";
     try {
-      for (const file of SQL_FILES.filter((name) => name < target))
+      for (const file of SQL_FILES)
         await pool.query(fs.readFileSync(path.join(LEAN_DIR, file), "utf8"));
+      await pool.query(`
+        CREATE TABLE public.schema_migrations (
+          filename text PRIMARY KEY,
+          applied_at timestamptz NOT NULL DEFAULT now(),
+          checksum text
+        )`);
+      const history = [...applyMigrations.CONSOLIDATED_MIGRATIONS];
       await pool.query(
-        `INSERT INTO lean.listings(article_id, title, url, deal, condition, extra) VALUES
-         (1, 'HTML era', 'https://olx.ba/artikal/1', 'sale', 'A', $1),
-         (2, 'API era', 'https://olx.ba/artikal/2', 'sale', 'Novogradnja', $2)`,
+        "INSERT INTO public.schema_migrations (filename, checksum) SELECT * FROM unnest($1::text[], $2::text[])",
         [
-          {
-            orientation: "k",
-            rooms_detail: "z",
-            views: 5,
-            characteristics: {
-              "vrsta-grijanja": "C",
-              lift: "f",
-              sprat: 3,
-              stanje: "Novogradnja",
-              "ime-i-broj-licence-agenta": "x",
-            },
-          },
-          {
-            orientation: "Jug",
-            characteristics: { "vrsta-grijanja": "Struja", lift: "Da" },
-          },
+          history.slice(0, -1).map(([f]) => f),
+          history.slice(0, -1).map(([, c]) => c),
         ],
       );
-      await pool.query(fs.readFileSync(path.join(LEAN_DIR, target), "utf8"));
-      const rows = (
-        await pool.query(
-          "SELECT article_id, condition, extra FROM lean.listings ORDER BY 1",
-        )
-      ).rows;
-      assert.equal(rows[0].condition, null);
-      assert.deepEqual(rows[0].extra, {
-        views: 5,
-        characteristics: {
-          sprat: 3,
-          stanje: "Novogradnja",
-          "ime-i-broj-licence-agenta": "x",
-        },
-      });
-      assert.equal(rows[1].condition, "Novogradnja");
-      assert.deepEqual(rows[1].extra, {
-        orientation: "Jug",
-        characteristics: { "vrsta-grijanja": "Struja", lift: "Da" },
-      });
+      await assert.rejects(
+        applyMigrations(pool, LEAN_DIR, log),
+        /10-html-attribute-placeholders\.sql/,
+      );
+
+      await pool.query(
+        "INSERT INTO public.schema_migrations (filename, checksum) VALUES ($1, $2), ('99-unrelated.sql', 'kept')",
+        history.at(-1),
+      );
+      await applyMigrations(pool, LEAN_DIR, log);
+      assert.deepEqual(await recordedFiles(pool), [
+        ...SQL_FILES,
+        "99-unrelated.sql",
+      ]);
+      await applyMigrations(pool, LEAN_DIR, () =>
+        assert.fail("adopted history must be a no-op"),
+      );
     } finally {
       await pool.end();
     }
