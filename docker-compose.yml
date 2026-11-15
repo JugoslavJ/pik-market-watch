@@ -48,7 +48,7 @@ x-reporting-environment: &reporting-environment
 services:
   db:
     # Update the image tag and digest together.
-    image: ghcr.io/baosystems/postgis:18-3.6@sha256:4727a569e6d80185d490bad091abcbb9fad344c8c58e7ee547c0098b30b7dcb0
+    image: ghcr.io/baosystems/postgis:18-3.6@sha256:a018b2e910dcae6c5390c438187b260732218866d4b4aa4d0650cbab58ed4e81
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
@@ -315,7 +315,7 @@ services:
 
   db-backup:
     # Match pg_dump to the database major version.
-    image: ghcr.io/baosystems/postgis:18-3.6@sha256:4727a569e6d80185d490bad091abcbb9fad344c8c58e7ee547c0098b30b7dcb0
+    image: ghcr.io/baosystems/postgis:18-3.6@sha256:a018b2e910dcae6c5390c438187b260732218866d4b4aa4d0650cbab58ed4e81
     user: "${BACKUP_UID:-1000}:${BACKUP_GID:-989}"
     restart: unless-stopped
     security_opt:
